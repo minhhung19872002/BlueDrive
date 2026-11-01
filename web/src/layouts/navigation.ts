@@ -17,6 +17,7 @@ import {
   HistoryOutlined,
   HomeOutlined,
   LaptopOutlined,
+  MonitorOutlined,
   PieChartOutlined,
   SafetyCertificateOutlined,
   SettingOutlined,
@@ -70,6 +71,7 @@ export const adminNav: NavItem[] = [
   { path: '/admin/backups', labelKey: 'menu.backups', icon: CloudServerOutlined, perm: 'backup.view' },
   { path: '/admin/tickets', labelKey: 'menu.tickets', icon: CustomerServiceOutlined, perm: 'ticket.view' },
   { path: '/admin/change-logs', labelKey: 'menu.changeLogs', icon: HistoryOutlined, perm: 'changelog.view' },
+  { path: '/admin/system-status', labelKey: 'ops.menu.systemStatus', icon: MonitorOutlined, perm: 'settings.view' },
   { path: '/admin/settings', labelKey: 'menu.settings', icon: SettingOutlined, perm: 'settings.view' },
 ]
 
@@ -83,6 +85,7 @@ export const routeLabels: Record<string, string> = {
   '/change-password': 'header.changePassword',
   '/sessions': 'header.mySessions',
   '/support': 'header.support',
+  '/reports': 'ops.menu.reports',
 }
 
 /** Return the nav path that best matches the current pathname (longest prefix). */

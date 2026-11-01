@@ -3,6 +3,7 @@ import { Button, Drawer, Grid, Result, Space, Spin, Tabs, Tooltip, Typography, t
 import {
   ArrowLeftOutlined,
   DownloadOutlined,
+  FormOutlined,
   InfoCircleOutlined,
   LeftOutlined,
   RightOutlined,
@@ -11,9 +12,11 @@ import {
   StarOutlined,
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { getDownloadUrl, setFavorite, startDownload } from '@/api/drive'
 import { getErrorMessage } from '@/api/errors'
 import { qk } from '@/api/queryKeys'
+import { editorUrl, isOfficeEditable, isOfficeFile } from '@/features/office/officeFiles'
 import AccessDialog, { type AccessTarget } from '@/features/sharing/AccessDialog'
 import ShareDialog from '@/features/sharing/ShareDialog'
 import { useApiMutation } from '@/hooks/useApiMutation'
@@ -36,21 +39,25 @@ export interface FileViewerProps {
    * (versions, discussion): pass antd Tabs items.
    */
   extraTabs?: TabsProps['items']
+  /** Side tab opened first (deep link ?tab=discussion); also opens the side panel on phones. */
+  defaultTab?: string
 }
 
 /** Full viewer: top bar (back, name, download, share, star, info) + preview by type + side info panel. */
-export default function FileViewer({ fileId, onBack, prevId, nextId, onNavigate, extraTabs }: FileViewerProps) {
+export default function FileViewer({ fileId, onBack, prevId, nextId, onNavigate, extraTabs, defaultTab }: FileViewerProps) {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const screens = Grid.useBreakpoint()
   const isMobile = screens.md === false
   // null = default (open on desktop, closed on phones).
   const [sideChoice, setSideOpen] = useState<boolean | null>(null)
-  const sideOpen = sideChoice ?? !isMobile
+  const sideOpen = sideChoice ?? (!isMobile || !!defaultTab)
   const [sharing, setSharing] = useState(false)
   const [accessTarget, setAccessTarget] = useState<AccessTarget | null>(null)
   const [original, setOriginal] = useState(false)
 
-  const detail = useFileDetail(fileId)
+  // Opening the viewer records the file in "Gần đây".
+  const detail = useFileDetail(fileId, true)
   const f = detail.data
   const kind = f ? previewKind(f.mimeType, f.mediaType, f.extension) : 'none'
   // Images use the server-generated preview JPEG when available; the original is loaded on demand.
@@ -64,9 +71,15 @@ export default function FileViewer({ fileId, onBack, prevId, nextId, onNavigate,
   })
   const download = useApiMutation(() => getDownloadUrl(fileId, false), { onSuccess: (r) => startDownload(r.url) })
 
+  const office = !!f && isOfficeFile(f.extension) && f.scanStatus !== 'infected'
+  const officeEditable = office && isOfficeEditable(f.extension) && f.access.canEdit && !f.access.workspaceLocked
+  const openEditor = () => f && navigate(editorUrl(f.id, !officeEditable))
+  const officeLabel = officeEditable ? t('collab.office.openInEditor') : t('collab.office.openInViewer')
+
   const side = (
     <Tabs
       size="small"
+      defaultActiveKey={defaultTab}
       items={[
         {
           key: 'info',
@@ -94,12 +107,18 @@ export default function FileViewer({ fileId, onBack, prevId, nextId, onNavigate,
         </span>
       }
       extra={
-        f.access.canDownload &&
-        f.scanStatus !== 'infected' && (
-          <Button type="primary" icon={<DownloadOutlined />} onClick={() => download.mutate()} loading={download.isPending}>
-            {t('actions.download')}
-          </Button>
-        )
+        <Space wrap style={{ justifyContent: 'center' }}>
+          {office && (
+            <Button type="primary" icon={<FormOutlined />} onClick={openEditor}>
+              {officeLabel}
+            </Button>
+          )}
+          {f.access.canDownload && f.scanStatus !== 'infected' && (
+            <Button type={office ? 'default' : 'primary'} icon={<DownloadOutlined />} onClick={() => download.mutate()} loading={download.isPending}>
+              {t('actions.download')}
+            </Button>
+          )}
+        </Space>
       }
     />
   )
@@ -150,6 +169,13 @@ export default function FileViewer({ fileId, onBack, prevId, nextId, onNavigate,
                 <Button type="text" icon={<RightOutlined />} disabled={!nextId} onClick={() => nextId && onNavigate(nextId)} />
               </Tooltip>
             </>
+          )}
+          {office && (
+            <Tooltip title={officeLabel}>
+              <Button type="primary" icon={<FormOutlined />} onClick={openEditor}>
+                {!isMobile && officeLabel}
+              </Button>
+            </Tooltip>
           )}
           {f?.access.canDownload && (
             <Tooltip title={t('actions.download')}>

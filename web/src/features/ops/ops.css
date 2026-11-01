@@ -1,0 +1,64 @@
+/* Monitoring / dashboards / operations screens (Phase 7–9). */
+
+.bd-json-block {
+  margin: 8px 0 0;
+  padding: 12px;
+  max-height: 420px;
+  overflow: auto;
+  background: #f6f8fa;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bd-dash-quick {
+  height: 100%;
+}
+
+.bd-dash-quick .ant-card-body {
+  padding: 12px;
+}
+
+/* Highlighted report job (/reports?id=...). */
+.bd-row-highlight > td {
+  background: #e6f4ff !important;
+  transition: background 0.6s;
+}
+
+/* Overdue support tickets. */
+.bd-row-overdue > td {
+  background: #fff1f0 !important;
+}
+
+.bd-row-overdue:hover > td {
+  background: #ffe1de !important;
+}
+
+.bd-form-actions .ant-form-item-label > label {
+  visibility: hidden;
+}
+
+.bd-status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.bd-code-inline {
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+@media (max-width: 575px) {
+  .bd-form-actions .ant-form-item-label {
+    display: none;
+  }
+}

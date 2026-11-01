@@ -16,6 +16,7 @@ import {
 import {
   AppstoreOutlined,
   CustomerServiceOutlined,
+  FileDoneOutlined,
   FolderAddOutlined,
   FolderOutlined,
   HomeOutlined,
@@ -34,10 +35,12 @@ import { useTranslation } from 'react-i18next'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import IdleLogout from '@/components/IdleLogout'
 import NotificationBell from '@/components/NotificationBell'
+import AlertsMenuLabel from '@/features/ops/AlertsMenuLabel'
 import PageLoading from '@/components/PageLoading'
 import StorageUsage from '@/components/StorageUsage'
 import { useMyWorkspaces } from '@/features/drive/hooks'
 import DriveGlobalHost from '@/features/drive/upload/DriveGlobalHost'
+import { useOfficeHeaderMenu } from '@/features/office/useOfficeNewMenu'
 import { useUploadLauncher } from '@/features/drive/upload/useUploadLauncher'
 import { useBranding } from '@/hooks/useLookups'
 import { useLogout } from '@/hooks/useLogout'
@@ -102,10 +105,15 @@ export default function MainLayout() {
 
   const workspaces = useMyWorkspaces()
   const { pickAndUpload, createFolder } = useUploadLauncher()
+  const officeMenu = useOfficeHeaderMenu()
 
   const menuItems = useMemo<MenuProps['items']>(() => {
     const permissions = user?.permissions ?? []
-    const toItem = (n: (typeof mainNav)[number]) => ({ key: n.path, icon: <n.icon />, label: t(n.labelKey) })
+    const toItem = (n: (typeof mainNav)[number]) => ({
+      key: n.path,
+      icon: <n.icon />,
+      label: n.path === '/admin/alerts' ? <AlertsMenuLabel label={t(n.labelKey)} /> : t(n.labelKey),
+    })
     const groups = (workspaces.data ?? []).filter((w) => w.type !== 'personal')
     const items: NonNullable<MenuProps['items']> = mainNav
       .filter((n) => !n.perm || permissions.includes(n.perm))
@@ -179,8 +187,11 @@ export default function MainLayout() {
       { type: 'divider' },
       { key: 'upload-files', icon: <UploadOutlined />, label: t('drive.uploadFiles') },
       { key: 'upload-folder', icon: <FolderOutlined />, label: t('drive.uploadFolder') },
+      { type: 'divider' },
+      ...officeMenu.items,
     ],
     onClick: ({ key }) => {
+      if (officeMenu.handle(key)) return
       if (key === 'folder') createFolder()
       else void pickAndUpload(key === 'upload-folder')
     },
@@ -192,6 +203,7 @@ export default function MainLayout() {
       { key: '/change-password', icon: <KeyOutlined />, label: t('header.changePassword') },
       { key: '/sessions', icon: <LaptopOutlined />, label: t('header.mySessions') },
       { key: '/support', icon: <CustomerServiceOutlined />, label: t('header.support') },
+      { key: '/reports', icon: <FileDoneOutlined />, label: t('ops.menu.reports') },
       { type: 'divider' },
       { key: 'logout', icon: <LogoutOutlined />, label: t('header.logout'), danger: true },
     ],

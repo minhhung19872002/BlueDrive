@@ -1,89 +1,110 @@
 # Ma trận truy vết chức năng HSMT (mục 3.2)
 
-Mỗi dòng ánh xạ 1 chức năng trong HSMT với API, màn hình, quyền (permission) và test kiểm chứng. HSMT không có mục 25.
+Mỗi dòng ánh xạ một chức năng trong HSMT với API, màn hình, quyền (permission) và kiểm thử tự động. HSMT không có mục 25.
 
-| STT HSMT | Nhóm | Chức năng | API | Màn hình | Permission | Test | Phase |
-|---|---|---|---|---|---|---|---|
-| 1 | Quản lý cơ cấu tổ chức (đơn vị, phòng/ban) | Thêm mới, sửa, xóa thông tin đơn vị/phòng ban. | _(phase 2)_ | | | | 2 |
-| 2 | Quản lý cơ cấu tổ chức (đơn vị, phòng/ban) | Xem danh sách, tra cứu, tìm kiếm thông tin tổ chức. | _(phase 2)_ | | | | 2 |
-| 3 | Quản lý cơ cấu tổ chức (đơn vị, phòng/ban) | In, kết xuất danh sách ra Excel, PDF. | _(phase 2)_ | | | | 2 |
-| 4 | Quản lý người dùng, nhóm người dùng | Thêm mới, sửa, xóa tài khoản người dùng và nhóm người dùng. | _(phase 2)_ | | | | 2 |
-| 5 | Quản lý người dùng, nhóm người dùng | Gán người dùng vào đơn vị/phòng ban và vai trò cụ thể. | _(phase 2)_ | | | | 2 |
-| 6 | Quản lý người dùng, nhóm người dùng | Tra cứu, tìm kiếm, xuất danh sách ra Excel, PDF. | _(phase 2)_ | | | | 2 |
-| 7 | Thiết lập vai trò, phân quyền chức năng | Thêm mới, sửa, xóa vai trò trong hệ thống. | _(phase 2)_ | | | | 2 |
-| 8 | Thiết lập vai trò, phân quyền chức năng | Cấu hình phân quyền chi tiết theo từng vai trò (xem, tải lên, chỉnh sửa, xóa, chia sẻ, phê duyệt, quản trị). | _(phase 2)_ | | | | 2 |
-| 9 | Thiết lập vai trò, phân quyền chức năng | Hiển thị toàn bộ chức năng và vai trò hiện có trên hệ thống để đối chiếu khi phân quyền. | _(phase 2)_ | | | | 2 |
-| 10 | Danh mục dùng chung | Quản lý các danh mục động phục vụ quản lý sản phẩm truyền thông (hình ảnh, video, âm thanh, tài liệu, infographic, ấn phẩm điện tử)... | _(phase 2)_ | | | | 2 |
-| 11 | Giám sát hoạt động của hệ thống | Ghi nhật ký (log) đăng nhập/đăng xuất và các thao tác tải lên, tải xuống, chỉnh sửa, chia sẻ, xóa tư liệu. | _(phase 7)_ | | | | 7 |
-| 12 | Giám sát hoạt động của hệ thống | Tra cứu, lọc tìm kiếm nhật ký theo người dùng, thời gian, hành động. | _(phase 7)_ | | | | 7 |
-| 13 | Giám sát hoạt động của hệ thống | Thống kê dung lượng lưu trữ đã sử dụng/còn lại theo tài khoản, đơn vị. | _(phase 7)_ | | | | 7 |
-| 14 | Giám sát hoạt động của hệ thống | Cảnh báo bất thường (đăng nhập sai nhiều lần, dung lượng vượt ngưỡng cho phép). | _(phase 7)_ | | | | 7 |
-| 15 | Giám sát hoạt động của hệ thống | In, kết xuất báo cáo giám sát ra Excel, PDF. | _(phase 7)_ | | | | 7 |
-| 16 | Xác thực và kiểm soát truy cập | Đăng nhập bằng tài khoản/mật khẩu; hỗ trợ đổi mật khẩu, khôi phục mật khẩu. | _(phase 2)_ | | | | 2 |
-| 17 | Xác thực và kiểm soát truy cập | Ghi nhận, kiểm soát phiên đăng nhập; cho phép thu hồi quyền truy cập khi cần. | _(phase 2)_ | | | | 2 |
-| 18 | Quản lý tư liệu theo cá nhân | Xem tài liệu của tôi, tài liệu gần đây. | _(phase 3)_ | | | | 3 |
-| 19 | Quản lý tư liệu theo cá nhân | Xem tài liệu được chia sẻ, tệp đính kèm. | _(phase 3)_ | | | | 3 |
-| 20 | Quản lý tư liệu theo cá nhân | Tìm kiếm, tra cứu, lọc tài liệu theo từ khóa, loại tài liệu, thời gian. | _(phase 6)_ | | | | 6 |
-| 21 | Quản lý tư liệu theo cá nhân | Tạo mới tài liệu (Word, Excel, PowerPoint, văn bản). | _(phase 5)_ | | | | 5 |
-| 22 | Quản lý tư liệu theo cá nhân | Tải lên tệp/thư mục từ máy tính. | _(phase 3)_ | | | | 3 |
-| 23 | Quản lý tư liệu theo cá nhân | Mở, chia sẻ, tải xuống, đánh dấu quan trọng tài liệu. | _(phase 3)_ | | | | 3 |
-| 24 | Quản lý tư liệu theo cá nhân | Đổi tên, sao chép, cắt, sao chép tới, xem thông tin, xóa tài liệu. | _(phase 3)_ | | | | 3 |
-| 26 | Quản lý tư liệu theo cá nhân | Quản lý, cập nhật, theo dõi phiên bản của tài liệu. | _(phase 5)_ | | | | 5 |
-| 27 | Quản lý tư liệu theo cá nhân | Trao đổi thảo luận trong màn hình chi tiết tài liệu ngay khi được chia sẻ | _(phase 5)_ | | | | 5 |
-| 28 | Quản lý tư liệu theo nhóm/đơn vị | Tạo, quản lý thư mục/tư liệu dùng chung theo nhóm, đơn vị. | _(phase 3)_ | | | | 3 |
-| 29 | Quản lý tư liệu theo nhóm/đơn vị | Tổng hợp tư liệu của các thành viên trong nhóm. | _(phase 5)_ | | | | 5 |
-| 30 | Quản lý tư liệu theo nhóm/đơn vị | Phân quyền tư liệu cho từng thành viên trong nhóm. | _(phase 4)_ | | | | 4 |
-| 31 | Quản lý tư liệu theo nhóm/đơn vị | Ghi nhận lịch sử chỉnh sửa tư liệu theo từng thành viên. | _(phase 5)_ | | | | 5 |
-| 32 | Quản lý tư liệu theo nhóm/đơn vị | Tìm kiếm, tra cứu, lọc tài liệu theo từ khóa, loại tài liệu, thời gian. | _(phase 6)_ | | | | 6 |
-| 33 | Quản lý tư liệu theo nhóm/đơn vị | Tạo mới tài liệu (Word, Excel, PowerPoint, văn bản). | _(phase 5)_ | | | | 5 |
-| 34 | Quản lý tư liệu theo nhóm/đơn vị | Tải lên tệp/thư mục từ máy tính. | _(phase 5)_ | | | | 5 |
-| 35 | Quản lý tư liệu theo nhóm/đơn vị | Mở, chia sẻ, tải xuống, đánh dấu quan trọng tài liệu. | _(phase 5)_ | | | | 5 |
-| 36 | Quản lý tư liệu theo nhóm/đơn vị | Đổi tên, sao chép, cắt, sao chép tới, xem thông tin, xóa tài liệu. | _(phase 5)_ | | | | 5 |
-| 37 | Quản lý tư liệu theo nhóm/đơn vị | Quản lý, cập nhật, theo dõi phiên bản của tài liệu. | _(phase 5)_ | | | | 5 |
-| 38 | Quản lý tư liệu theo nhóm/đơn vị | Trao đổi thảo luận trong màn hình chi tiết tài liệu ngay khi được chia sẻ | _(phase 5)_ | | | | 5 |
-| 39 | Tải lên, biên tập tư liệu | Tải lên theo từng tệp từ máy tính, hỗ trợ định dạng: hình ảnh, video, âm thanh, văn bản, infographic, ấn phẩm điện tử. | _(phase 3)_ | | | | 3 |
-| 40 | Tải lên, biên tập tư liệu | Tải lên cả thư mục từ máy tính. | _(phase 3)_ | | | | 3 |
-| 41 | Tải lên, biên tập tư liệu | Tạo mới tài liệu văn bản/bảng tính/trình chiếu. | _(phase 5)_ | | | | 5 |
-| 42 | Tải lên, biên tập tư liệu | Chỉnh sửa tài liệu trực tuyến (online). | _(phase 5)_ | | | | 5 |
-| 43 | Tải lên, biên tập tư liệu | Quản lý phiên bản (version), cho phép cập nhật phiên bản mới đối với tài liệu văn bản. | _(phase 5)_ | | | | 5 |
-| 44 | Thao tác trên thư mục/tệp tư liệu | Xem, mở tài liệu. | _(phase 3)_ | | | | 3 |
-| 45 | Thao tác trên thư mục/tệp tư liệu | Chia sẻ, tải xuống tài liệu. | _(phase 3)_ | | | | 3 |
-| 46 | Thao tác trên thư mục/tệp tư liệu | Đổi tên, sao chép, cắt/di chuyển tài liệu. | _(phase 3)_ | | | | 3 |
-| 47 | Thao tác trên thư mục/tệp tư liệu | Đánh dấu quan trọng, xem thông tin tài liệu. | _(phase 3)_ | | | | 3 |
-| 48 | Thao tác trên thư mục/tệp tư liệu | Xóa tài liệu. | _(phase 3)_ | | | | 3 |
-| 49 | Thao tác trên thư mục/tệp tư liệu | Chia sẻ nội bộ hoặc chia sẻ ra ngoài qua liên kết (link), có thể giới hạn quyền xem/tải xuống. | _(phase 4)_ | | | | 4 |
-| 50 | Tra cứu, tìm kiếm, khai thác tư liệu | Tra cứu, tìm kiếm tư liệu theo từ khóa, loại tư liệu. | _(phase 6)_ | | | | 6 |
-| 51 | Tra cứu, tìm kiếm, khai thác tư liệu | Lọc tư liệu theo đơn vị đăng tải, khoảng thời gian. | _(phase 6)_ | | | | 6 |
-| 52 | Tra cứu, tìm kiếm, khai thác tư liệu | Truy cập, khai thác tư liệu từ nhiều thiết bị, nhiều địa điểm khác nhau (đăng nhập từ xa qua Internet). | _(phase 6)_ | | | | 6 |
-| 53 | Tra cứu, tìm kiếm, khai thác tư liệu | Chia sẻ tư liệu khi truy cập từ xa. | _(phase 4)_ | | | | 4 |
-| 54 | Phân quyền theo vai trò | Phân quyền chi tiết theo vai trò: quản trị, biên tập/tải lên, phê duyệt, chỉ xem. | _(phase 4)_ | | | | 4 |
-| 55 | Phân quyền theo vai trò | Phân quyền truy cập tư liệu theo đơn vị hoặc nhóm. | _(phase 4)_ | | | | 4 |
-| 56 | Phân quyền theo vai trò | Phân quyền truy cập tư liệu theo từng thư mục/tệp cụ thể. | _(phase 4)_ | | | | 4 |
-| 57 | Cấu hình | Thêm, xóa thành viên nhóm tài nguyên. | _(phase 3)_ | | | | 3 |
-| 58 | Cấu hình | Phân quyền sử dụng, khóa nhóm tài nguyên. | _(phase 3)_ | | | | 3 |
-| 59 | Cấu hình | Cấu hình dung lượng cá nhân. | _(phase 3)_ | | | | 3 |
-| 60 | Cấu hình | Cấu hình dung lượng nhóm. | _(phase 3)_ | | | | 3 |
-| 61 | Cấu hình | Xem thùng rác theo nhóm. | _(phase 3)_ | | | | 3 |
-| 62 | Cấu hình | Khôi phục, xóa vĩnh viễn tệp tại thùng rác. | _(phase 3)_ | | | | 3 |
-| 63 | Tổng quan dung lượng cá nhân | Hiển thị dung lượng cá nhân đã sử dụng trên tổng dung lượng được cấp, kèm liên kết nhanh. | _(phase 8)_ | | | | 8 |
-| 64 | Biểu đồ phân bổ dung lượng theo loại file cá nhân | Biểu đồ tròn thể hiện tỷ lệ dung lượng theo từng loại file. | _(phase 8)_ | | | | 8 |
-| 65 | Biểu đồ top thư mục cá nhân chiếm nhiều dung lượng nhất | Biểu đồ xếp hạng các thư mục cá nhân theo dung lượng sử dụng. | _(phase 8)_ | | | | 8 |
-| 66 | Hiển thị danh sách tài liệu cá nhân gần đây | Hiển thị tên tài liệu, người sở hữu, dung lượng, thời gian sửa gần nhất. | _(phase 8)_ | | | | 8 |
-| 67 | Tổng quan nhóm tài liệu | Hiển thị số nhóm đang là thành viên, số nhóm đang làm trưởng nhóm, kèm liên kết nhanh. | _(phase 8)_ | | | | 8 |
-| 68 | Biểu đồ dung lượng sử dụng theo nhóm | Biểu đồ cột ngang thể hiện dung lượng sử dụng của từng nhóm. | _(phase 8)_ | | | | 8 |
-| 69 | Biểu đồ phân bổ loại file trong từng nhóm | Biểu đồ thể hiện tỷ lệ % các loại file trong từng nhóm. | _(phase 8)_ | | | | 8 |
-| 70 | Hiển thị danh sách tài liệu nhóm gần đây | Hiển thị tên tài liệu, tên nhóm, dung lượng, thời gian sửa gần nhất. | _(phase 8)_ | | | | 8 |
-| 71 | Xem tài liệu của tôi | Xem danh sách các tài liệu do người dùng tạo, tải lên hoặc đang được quản lý. | _(phase 10)_ | | | | 10 |
-| 72 | Xem tài liệu được chia sẻ. | Xem các tài liệu được người khác chia sẻ cho người dùng. | _(phase 10)_ | | | | 10 |
-| 73 | Xem tài liệu gần đây | Xem danh sách các tài liệu được truy cập, cập nhật hoặc thao tác gần đây. | _(phase 10)_ | | | | 10 |
-| 74 | Xem tài liệu nhóm | Xem các tài liệu thuộc nhóm mà người dùng tham gia hoặc được phân quyền truy cập. | _(phase 10)_ | | | | 10 |
-| 75 | Tìm kiếm tài liệu | Tìm kiếm tài liệu theo tên, từ khóa hoặc các thông tin liên quan. | _(phase 10)_ | | | | 10 |
-| 76 | Mở tài liệu | Mở và xem nội dung tài liệu trên hệ thống. | _(phase 10)_ | | | | 10 |
-| 77 | Đổi tên tài liệu | Thay đổi tên tài liệu theo nhu cầu của người dùng. | _(phase 10)_ | | | | 10 |
-| 78 | Đánh dấu quan trọng | Đánh dấu tài liệu là quan trọng để dễ nhận biết và truy cập nhanh. | _(phase 10)_ | | | | 10 |
-| 79 | Sao chép | Tạo một bản sao của tài liệu và lưu tại vị trí được lựa chọn. | _(phase 10)_ | | | | 10 |
-| 80 | Di chuyển | Di chuyển tài liệu sang thư mục hoặc vị trí lưu trữ khác. | _(phase 10)_ | | | | 10 |
-| 81 | Xóa | Xóa tài liệu khỏi vị trí lưu trữ hiện tại. | _(phase 10)_ | | | | 10 |
-| 82 | Xem cây thư mục | Xem cấu trúc thư mục/tư liệu theo phân quyền được cấp | _(phase 10)_ | | | | 10 |
-| 83 | Xem chi tiết tệp | Xem thông tin, nội dung chi tiết của tệp tư liệu | _(phase 10)_ | | | | 10 |
-| 84 | Tải xuống tư liệu | Tải xuống tệp tư liệu về thiết bị di động. | _(phase 10)_ | | | | 10 |
+- API: tiền tố `/api/v1` (trừ khi ghi khác). Tài liệu API trực tuyến: `/api/swagger`.
+- Màn hình web: đường dẫn trong ứng dụng (`web/src/routes.tsx`). Màn hình mobile: `mobile/` (Expo).
+- Permission: mã quyền chức năng (`src/BlueDrive.Application/Security/Permissions.cs`); "ACL" = kiểm tra thêm quyền trên tài nguyên (`ResourceAuthorizationService`).
+- Test: lớp/phương thức trong `tests/BlueDrive.IntegrationTests` (IT) hoặc `tests/BlueDrive.UnitTests` (UT); kiểm thử E2E giao diện trong `web/e2e` (E2E).
+
+| STT HSMT | Chức năng | API | Màn hình | Permission | Test |
+|---|---|---|---|---|---|
+| 1 | Thêm, sửa, xóa đơn vị/phòng ban | `POST/PUT/DELETE /organizations`, `POST /organizations/{id}/move` | `/admin/organizations` (cây kéo thả + bảng) | `org.upload`, `org.edit`, `org.delete` | IT `AdminTests.Organization_crud_tree_search_unaccented_and_delete_rules` |
+| 2 | Xem danh sách, tra cứu tổ chức | `GET /organizations?q=&isActive=&type=&parentId=`, `GET /organizations/tree` | `/admin/organizations` | `org.view` | IT `AdminTests.Organization_crud_tree_search_unaccented_and_delete_rules` |
+| 3 | In, xuất Excel, PDF danh sách tổ chức | `GET /organizations/export?format=xlsx\|pdf` | `/admin/organizations` (Xuất/In), `/print/organizations` | `org.view` | IT `AdminTests.Organization_crud_tree_search_unaccented_and_delete_rules` (xlsx+pdf) |
+| 4 | Thêm, sửa, xóa tài khoản và nhóm người dùng | `POST/PUT/DELETE /users`, `/users/{id}/lock\|unlock\|reset-password`, `GET /users/import-template`, `POST /users/import`, `POST/PUT/DELETE /user-groups` | `/admin/users`, `/admin/user-groups` | `user.upload/edit/delete/admin`, `usergroup.*` | IT `AdminTests.User_crud_lock_reset_bulk_assign_and_export`, `AdminTests.Import_users_from_excel_reports_errors_per_row` |
+| 5 | Gán người dùng vào đơn vị/phòng ban và vai trò | `PUT /users/{id}` (organizationId, roleIds), `POST /users/bulk-assign` | `/admin/users` (Gán hàng loạt) | `user.edit` | IT `AdminTests.User_crud_lock_reset_bulk_assign_and_export` |
+| 6 | Tra cứu, tìm kiếm, xuất danh sách người dùng | `GET /users?q=&organizationId=&includeSubOrganizations=&roleId=&groupId=&status=`, `GET /users/export` | `/admin/users`, `/print/users` | `user.view` | IT `AdminTests.User_crud_lock_reset_bulk_assign_and_export` |
+| 7 | Thêm, sửa, xóa vai trò | `GET/POST/PUT/DELETE /roles` | `/admin/roles` | `role.upload/edit/delete` | IT `AdminTests.Role_permission_matrix_changes_are_audited_and_enforced` |
+| 8 | Cấu hình phân quyền chi tiết theo vai trò | `GET/PUT /roles/{id}/permissions` | `/admin/roles` (ma trận chức năng × hành động) | `role.view`, `role.admin` | IT `AdminTests.Role_permission_matrix_changes_are_audited_and_enforced`; UT `FoundationTests.Permission_catalog_is_consistent` |
+| 9 | Hiển thị toàn bộ chức năng và vai trò để đối chiếu | `GET /permissions`, `GET /permissions/comparison`, `GET /permissions/comparison/export` | `/admin/permission-matrix` | `role.view` | IT `AdminTests.Role_permission_matrix_changes_are_audited_and_enforced` |
+| 10 | Danh mục dùng chung | `GET/POST/PUT/DELETE /catalogs`, `/catalogs/{id}/items`, `/catalogs/{id}/items/import\|export`, `GET /catalogs/options` | `/admin/catalogs` | `catalog.*` | IT `AdminTests.Catalogs_seeded_and_items_crud_with_import_export` |
+| 11 | Ghi nhật ký đăng nhập/đăng xuất, tải lên/xuống, sửa, chia sẻ, xóa... | `IAuditLogger` (mọi lệnh), bảng `audit_logs` chỉ ghi thêm, chuỗi băm | `/admin/audit-logs` | `audit.view` | IT `MonitoringTests.Every_operation_is_logged_and_filterable`, `FoundationTests.Audit_log_is_append_only_and_hash_chained`; UT `FoundationTests.Audit_hash_chain_is_deterministic_and_detects_tampering` |
+| 12 | Tra cứu, lọc nhật ký | `POST /audit-logs/search`, `GET /audit-logs/verify` | `/admin/audit-logs` | `audit.view`, `audit.admin` | IT `MonitoringTests.Every_operation_is_logged_and_filterable` |
+| 13 | Thống kê dung lượng theo tài khoản, đơn vị | `GET /storage-stats?by=user\|organization\|workspace`, `GET /storage-stats/totals` | `/admin/storage-stats` | `stats.view` | IT `MonitoringTests.Storage_statistics_by_user_unit_and_workspace` |
+| 14 | Cảnh báo bất thường | `POST /alerts/search`, `POST /alerts/acknowledge`, `GET /alerts/unacknowledged-count`; SignalR `/hubs/notifications` | `/admin/alerts`, chuông thông báo | `alert.view`, `alert.edit` | IT `AuthTests.Five_wrong_passwords_lock_the_account_and_raise_brute_force_alert`, `MonitoringTests.Unusual_downloads_raise_an_alert_that_can_be_acknowledged`, `StorageTests.Quota_is_enforced_before_upload` |
+| 15 | In, xuất báo cáo giám sát | `POST /reports/export`, `GET /reports`, `GET /reports/{id}/download-url` | `/admin/audit-logs`, `/admin/storage-stats`, `/admin/alerts` (Xuất/In), `/reports` | `audit.view` / `stats.view` / `alert.view` | IT `MonitoringTests.Large_reports_run_in_background_and_notify_when_ready` |
+| 16 | Đăng nhập, đổi mật khẩu, khôi phục mật khẩu | `POST /auth/login\|refresh\|logout\|change-password\|forgot-password\|reset-password`, `GET /auth/password-policy` | `/login`, `/change-password`, `/forgot-password`, `/reset-password` | (công khai / đã đăng nhập) | IT `AuthTests.*` (6 kịch bản) |
+| 17 | Ghi nhận, kiểm soát phiên; thu hồi quyền truy cập | `GET /sessions/mine`, `POST /sessions/mine/revoke-others`, `GET /sessions`, `DELETE /sessions/{id}`, `POST /sessions/users/{id}/revoke-all` | `/sessions`, `/admin/sessions` | `session.view`, `session.admin` | IT `AuthTests.Admin_can_revoke_all_access_and_access_token_stops_working`, `AuthTests.User_can_list_and_revoke_own_sessions` |
+| 18 | Xem tài liệu của tôi, gần đây | `GET /workspaces/{personal}/items`, `GET /recent` | `/my-drive`, `/recent` | `doc.view` + ACL | IT `StorageTests.Folder_upload_keeps_tree_and_drive_operations_work` |
+| 19 | Xem tài liệu được chia sẻ, tệp đính kèm | `GET /shares/with-me`, `GET /shares/with-me/sharers`, `GET /comments/attachments` | `/shared` (tab Tệp đính kèm) | `doc.view` + ACL | IT `SharingTests.Internal_share_appears_in_shared_with_me_and_can_be_revoked`, `CollaborationTests.Comments_with_mentions_attachments_edit_and_delete` |
+| 20 | Tìm kiếm, lọc tài liệu cá nhân | `POST /search` (workspaceId cá nhân), `GET /workspaces/{id}/items?q=&mediaType=` | `/my-drive` (ô tìm kiếm), `/search` | `search.view` + ACL | IT `SearchTests.Unaccented_query_finds_vietnamese_names_and_respects_access` |
+| 21 | Tạo mới Word, Excel, PowerPoint, văn bản | `POST /office/new`, `GET /office/config/{id}` | `/my-drive` (Mới), `/files/:id/edit` | `doc.upload` + ACL | IT `CollaborationTests.New_document_opens_in_editor_and_callback_saves_a_new_version_then_restore` |
+| 22 | Tải lên tệp/thư mục | tus `/tus` + `POST /uploads/{id}/complete`, `POST /files/upload` (relativePath giữ cây) | `/my-drive` (kéo thả, Tải lên tệp/thư mục, hàng đợi) | `doc.upload` + ACL | IT `StorageTests.Tus_resumable_upload_then_complete_creates_encrypted_file`, `StorageTests.Folder_upload_keeps_tree_and_drive_operations_work`; `scripts/test-large-upload.ps1` |
+| 23 | Mở, chia sẻ, tải xuống, đánh dấu quan trọng | `GET /files/{id}/download-url?inline=`, `GET /content/{token}` (Range), `POST /downloads/zip`, `POST /shares`, `PUT /favorites` | `/files/:id`, `/starred`, hộp thoại Chia sẻ | `doc.view`, `doc.share` + ACL | IT `StorageTests.Folder_upload_keeps_tree_and_drive_operations_work`, `StorageTests.Tus_resumable_upload...` (Range) |
+| 24 | Đổi tên, sao chép, cắt, sao chép tới, xem thông tin, xóa | `PUT /files/{id}/name`, `PUT /folders/{id}`, `POST /items/copy\|move\|delete`, `GET /files/{id}`, `GET /access/file/{id}` | `/my-drive` (menu chuột phải, F2, Ctrl+C/X/V, Del, panel thông tin) | `doc.edit`, `doc.delete` + ACL | IT `StorageTests.Folder_upload_keeps_tree_and_drive_operations_work`, `StorageTests.Trash_restore_purge_and_quota_release` |
+| 26 | Quản lý, cập nhật, theo dõi phiên bản | `GET /files/{id}/versions`, `POST /files/{id}/versions/{v}/restore`, tải lên với `targetFileId` | `/files/:id` (tab Phiên bản) | `doc.edit` + ACL | IT `CollaborationTests.New_document_opens_in_editor_and_callback_saves_a_new_version_then_restore`, `StorageTests.Group_workspace_members_lock_and_new_version` |
+| 27 | Thảo luận trong màn hình chi tiết tài liệu | `GET/POST /files/{id}/comments`, `PUT/DELETE /comments/{id}`, `GET /comments/{id}/attachments/{fileId}/url`; SignalR `JoinFile` | `/files/:id?tab=discussion` | `doc.view` + ACL | IT `CollaborationTests.Comments_with_mentions_attachments_edit_and_delete` |
+| 28 | Tạo, quản lý thư mục/tư liệu dùng chung theo nhóm, đơn vị | `GET/POST/PUT/DELETE /workspaces`, `POST /folders` | `/workspaces`, `/workspaces/:id` | `workspace.upload`, `workspace.view` | IT `StorageTests.Group_workspace_members_lock_and_new_version` |
+| 29 | Tổng hợp tư liệu của các thành viên trong nhóm | `GET /workspaces/{id}/summary?memberId=` | `/workspaces/:id` (tab Tổng hợp tư liệu) | `workspace.view` + ACL | IT `CollaborationTests.Group_summary_and_member_activity` |
+| 30 | Phân quyền tư liệu cho từng thành viên nhóm | `GET/PUT /access/{folder\|file}/{id}`, `POST /workspaces/{id}/members` | Hộp thoại Quản lý quyền truy cập, ngăn Thành viên | `doc.share` + ACL Manage | IT `SharingTests.Folder_acl_inherits_and_break_inheritance_stops_it`; UT `ResourceAuthorizationMatrixTests` |
+| 31 | Lịch sử chỉnh sửa theo từng thành viên | `GET /workspaces/{id}/activity?userId=&action=&from=&to=` | `/workspaces/:id` (tab Lịch sử chỉnh sửa) | `workspace.view` + ACL | IT `CollaborationTests.Group_summary_and_member_activity` |
+| 32 | Tìm kiếm, lọc tài liệu nhóm | `POST /search` (workspaceId nhóm) | `/workspaces/:id` (ô tìm kiếm), `/search` | `search.view` + ACL | IT `SearchTests.Filters_by_type_catalog_unit_date_and_saved_searches` |
+| 33 | Tạo mới tài liệu (nhóm) | `POST /office/new` (workspaceId nhóm) | `/workspaces/:id` (Mới) | `doc.upload` + ACL | IT `CollaborationTests.New_document...` |
+| 34 | Tải lên tệp/thư mục (nhóm) | như #22 với workspaceId nhóm | `/workspaces/:id` | `doc.upload` + ACL | IT `StorageTests.Group_workspace_members_lock_and_new_version` |
+| 35 | Mở, chia sẻ, tải xuống, quan trọng (nhóm) | như #23 | `/workspaces/:id`, `/files/:id` | `doc.view`, `doc.share` + ACL | IT `SharingTests.*` |
+| 36 | Đổi tên, sao chép, cắt, sao chép tới, thông tin, xóa (nhóm) | như #24 | `/workspaces/:id` | `doc.edit`, `doc.delete` + ACL | IT `StorageTests.Group_workspace_members_lock_and_new_version` |
+| 37 | Phiên bản tài liệu (nhóm) | như #26 | `/files/:id` (tab Phiên bản) | `doc.edit` + ACL | IT `StorageTests.Group_workspace_members_lock_and_new_version` |
+| 38 | Thảo luận (nhóm) | như #27 | `/files/:id?tab=discussion` | `doc.view` + ACL | IT `CollaborationTests.Comments_with_mentions_attachments_edit_and_delete` |
+| 39 | Tải lên từng tệp, đủ định dạng | tus + `POST /uploads/{id}/complete` (title, description, tags, catalogItemIds), `PUT /files/metadata` (hàng loạt) | Hộp thoại thông tin tải lên, hàng đợi | `doc.upload` + ACL | IT `StorageTests.Blocked_and_mismatched_files_are_rejected`; UT `StorageTests.Magic_bytes_are_verified`; IT `OperationsTests.Demo_seed_creates_users_groups_and_sample_files_of_every_kind` |
+| 40 | Tải lên cả thư mục | `relativePath` khi tải lên | Tải lên thư mục / kéo thả thư mục | `doc.upload` + ACL | IT `StorageTests.Folder_upload_keeps_tree_and_drive_operations_work` |
+| 41 | Tạo mới văn bản/bảng tính/trình chiếu | `POST /office/new` | Menu Mới | `doc.upload` | IT `CollaborationTests.New_document...` |
+| 42 | Chỉnh sửa trực tuyến (đồng soạn thảo) | `GET /office/config/{id}`, callback `POST /api/office/callback/{id}` (JWT) | `/files/:id/edit` (ONLYOFFICE) | `doc.edit` + ACL | IT `CollaborationTests.New_document...` (ký JWT, callback, chế độ xem cho vai trò Chỉ xem) |
+| 43 | Quản lý phiên bản; luồng phê duyệt | như #26; `GET /approvals`, `POST /approvals/{id}/approve\|reject\|submit`, `PUT /folders/{id}` (requiresApproval) | `/files/:id`, `/approvals` | `doc.edit`, `doc.approve` | IT `SharingTests.Approval_flow_hides_pending_files_from_viewers` |
+| 44 | Xem, mở tài liệu | `GET /files/{id}`, `GET /files/{id}/download-url?inline=true`, thumbnailUrl | `/files/:id` (ảnh, video, âm thanh, PDF, Office), lưới/danh sách | `doc.view` + ACL | IT `CollaborationTests.Image_thumbnail_is_generated_and_served_through_signed_url` |
+| 45 | Chia sẻ, tải xuống | `POST /shares`, `POST /share-links`, `GET /files/{id}/download-url` | Hộp thoại Chia sẻ, Tải xuống | `doc.share`, `doc.view` + ACL Download | IT `SharingTests.Internal_share_appears...` |
+| 46 | Đổi tên, sao chép, cắt/di chuyển | `PUT /files/{id}/name`, `POST /items/copy\|move` (kéo thả) | `/my-drive`, `/workspaces/:id` | `doc.edit` + ACL | IT `StorageTests.Folder_upload_keeps_tree_and_drive_operations_work` |
+| 47 | Đánh dấu quan trọng, xem thông tin | `PUT /favorites`, `GET /favorites`, `GET /files/{id}` | `/starred`, panel thông tin | `doc.view` + ACL | IT `StorageTests.Folder_upload_keeps_tree_and_drive_operations_work` |
+| 48 | Xóa tài liệu | `POST /items/delete` | Del / menu Xóa | `doc.delete` + ACL Edit | IT `StorageTests.Trash_restore_purge_and_quota_release` |
+| 49 | Chia sẻ nội bộ hoặc qua liên kết | `POST/GET/DELETE /shares`, `POST/PUT/DELETE /share-links`, `GET /share-links/{id}/qr`, `GET/POST /public/s/{token}`, `/public/s/{token}/items\|content`, `GET /office/public-config/{token}` | Hộp thoại Chia sẻ (2 tab), trang công khai `/s/:token` | `doc.share` | IT `SharingTests.Public_link_with_password_limit_and_revoke`, `SharingTests.Public_folder_link_lists_and_streams_children_and_require_login` |
+| 50 | Tra cứu theo từ khóa, loại tư liệu | `POST /search` (q, mediaTypes, extensions, catalogItemIds) | `/search` | `search.view` + ACL | IT `SearchTests.*`; UT `SearchTextTests` |
+| 51 | Lọc theo đơn vị đăng tải, khoảng thời gian | `POST /search` (organizationId, includeSubOrganizations, from, to), `GET/POST/DELETE /search/saved` | `/search` (lưu bộ lọc) | `search.view` | IT `SearchTests.Filters_by_type_catalog_unit_date_and_saved_searches` |
+| 52 | Truy cập từ nhiều thiết bị, địa điểm qua Internet | Toàn bộ API qua HTTPS (Caddy), JWT | Web responsive (≥ 375 px) + ứng dụng mobile | — | k6 `tests/load/k6-list-search.js`; E2E `web/e2e/mobile.spec.ts` |
+| 53 | Chia sẻ tư liệu khi truy cập từ xa | `POST /share-links` | Web mobile (hộp thoại Chia sẻ), app mobile (Chia sẻ liên kết) | `doc.share` | IT `SharingTests.Public_link_with_password_limit_and_revoke` |
+| 54 | Phân quyền theo vai trò quản trị, biên tập/tải lên, phê duyệt, chỉ xem | Seed 4 vai trò + RBAC động `perm:*` | `/admin/roles` | — | IT `AdminTests.Viewer_role_cannot_access_admin_functions`, `SharingTests.Approval_flow_hides_pending_files_from_viewers`; UT `FoundationTests.Permission_catalog_is_consistent` |
+| 55 | Phân quyền truy cập tư liệu theo đơn vị hoặc nhóm | `PUT /access/{type}/{id}` (principal organization/group), quyền mặc định nhóm đơn vị | Hộp thoại Quản lý quyền truy cập | `doc.share` + ACL Manage | UT `ResourceAuthorizationMatrixTests` (GroupMember, OrgMember) |
+| 56 | Phân quyền theo từng thư mục/tệp | `GET/PUT /access/{folder\|file}/{id}` (inherit, breakInheritance, copyInheritedOnBreak, expiresAt) | Hộp thoại Quản lý quyền truy cập | `doc.share` + ACL Manage | IT `SharingTests.Folder_acl_inherits_and_break_inheritance_stops_it`; UT `ResourceAuthorizationMatrixTests` |
+| 57 | Thêm, xóa thành viên nhóm tài nguyên | `GET/POST /workspaces/{id}/members`, `DELETE /workspaces/{id}/members/{userId}`, `POST /workspaces/{id}/transfer-owner` | `/workspaces/:id` (Thành viên) | ACL Manage | IT `StorageTests.Group_workspace_members_lock_and_new_version` |
+| 58 | Phân quyền sử dụng, khóa nhóm tài nguyên | `POST /workspaces/{id}/members` (role), `POST /workspaces/{id}/lock\|unlock` | `/workspaces/:id`, `/admin/workspaces` | ACL Manage / `workspace.admin` | IT `StorageTests.Group_workspace_members_lock_and_new_version`; UT `ResourceAuthorizationMatrixTests.Locked_workspace_caps_writes_but_keeps_reads` |
+| 59 | Cấu hình dung lượng cá nhân | `PUT /quotas/personal`, `PUT /users/{id}` (quotaGb), cấu hình mặc định | `/admin/workspaces` (Cấu hình dung lượng cá nhân), `/admin/users` | `workspace.admin` | IT `StorageTests.Quota_is_enforced_before_upload` |
+| 60 | Cấu hình dung lượng nhóm | `PUT /workspaces/{id}/quota` | `/admin/workspaces` | `workspace.admin` | IT `StorageTests.Group_workspace_members_lock_and_new_version` |
+| 61 | Xem thùng rác theo nhóm | `GET /workspaces/{id}/trash` | `/trash` (chọn nhóm) | `trash.view` + ACL | IT `StorageTests.Trash_restore_purge_and_quota_release` |
+| 62 | Khôi phục, xóa vĩnh viễn tệp tại thùng rác | `POST /trash/restore`, `POST /trash/purge`, `POST /workspaces/{id}/trash/empty`; job tự xóa sau N ngày | `/trash` | `trash.edit`, `trash.delete` | IT `StorageTests.Trash_restore_purge_and_quota_release` |
+| 63 | Tổng quan dung lượng cá nhân + liên kết nhanh | `GET /dashboards/personal` | `/` (Trang chủ) | đã đăng nhập | IT `DashboardTests.Personal_dashboard_shows_quota_types_top_folders_and_recent` |
+| 64 | Biểu đồ phân bổ dung lượng theo loại file | `GET /dashboards/personal` (byType) | `/` (biểu đồ tròn) | đã đăng nhập | IT `DashboardTests.Personal_dashboard...` |
+| 65 | Biểu đồ top thư mục cá nhân | `GET /dashboards/personal` (topFolders) | `/` (biểu đồ cột, bấm mở thư mục) | đã đăng nhập | IT `DashboardTests.Personal_dashboard...` |
+| 66 | Danh sách tài liệu cá nhân gần đây | `GET /dashboards/personal` (recent) | `/` (bảng) | đã đăng nhập | IT `DashboardTests.Personal_dashboard...` |
+| 67 | Tổng quan nhóm tài liệu | `GET /dashboards/group` (memberOf, leaderOf, groups) | `/` (phần nhóm) | đã đăng nhập | IT `DashboardTests.Group_dashboard_counts_membership_leadership_usage_and_recent` |
+| 68 | Biểu đồ dung lượng sử dụng theo nhóm | `GET /dashboards/group` (groups.usedBytes/quotaBytes) | `/` (cột ngang) | đã đăng nhập | IT `DashboardTests.Group_dashboard...` |
+| 69 | Biểu đồ phân bổ loại file trong từng nhóm | `GET /dashboards/group` (typesByGroup) | `/` (cột chồng 100% / tròn) | đã đăng nhập | IT `DashboardTests.Group_dashboard...` |
+| 70 | Danh sách tài liệu nhóm gần đây | `GET /dashboards/group` (recent) | `/` (bảng) | đã đăng nhập | IT `DashboardTests.Group_dashboard...` |
+| 71 | Mobile: xem tài liệu của tôi | `GET /workspaces/{personal}/items` | App: tab Tài liệu | `doc.view` | `mobile` (tsc + expo export), IT `StorageTests.*` |
+| 72 | Mobile: xem tài liệu được chia sẻ | `GET /shares/with-me` | App: tab Chia sẻ | `doc.view` | IT `SharingTests.Internal_share_appears...` |
+| 73 | Mobile: xem tài liệu gần đây | `GET /recent` | App: Gần đây | `doc.view` | IT `StorageTests.Folder_upload...` |
+| 74 | Mobile: xem tài liệu nhóm | `GET /workspaces?type=group\|organization`, `GET /workspaces/{id}/items` | App: tab Nhóm | `workspace.view` | IT `StorageTests.Group_workspace...` |
+| 75 | Mobile: tìm kiếm | `GET /search?q=` | App: Tìm kiếm | `search.view` | IT `SearchTests.Unaccented_query...` |
+| 76 | Mobile: mở tài liệu | `GET /files/{id}/download-url?inline=true`, `GET /office/config/{id}?view=true` | App: Chi tiết tệp (ảnh, video, âm thanh, PDF/Office qua ONLYOFFICE) | `doc.view` | IT `CollaborationTests.*` |
+| 77 | Mobile: đổi tên | `PUT /files/{id}/name`, `PUT /folders/{id}` | App: menu ⋯ | `doc.edit` | IT `StorageTests.Folder_upload...` |
+| 78 | Mobile: đánh dấu quan trọng | `PUT /favorites` | App: menu ⋯ | `doc.view` | IT `StorageTests.Folder_upload...` |
+| 79 | Mobile: sao chép | `POST /items/copy` + `GET /workspaces/{id}/folder-tree` | App: Sao chép tới (chọn thư mục) | `doc.upload` | IT `StorageTests.Folder_upload...` |
+| 80 | Mobile: di chuyển | `POST /items/move` | App: Di chuyển tới | `doc.edit` | IT `StorageTests.Folder_upload...` |
+| 81 | Mobile: xóa | `POST /items/delete` | App: menu ⋯ > Xóa | `doc.delete` | IT `StorageTests.Trash_restore...` |
+| 82 | Mobile: xem cây thư mục | `GET /workspaces/{id}/folder-tree`, `GET /workspaces/{id}/folder-info` | App: duyệt thư mục, cây thư mục | `doc.view` | IT `StorageTests.Folder_upload...` |
+| 83 | Mobile: xem chi tiết tệp | `GET /files/{id}?recordView=true` | App: Chi tiết tệp | `doc.view` | IT `CollaborationTests.Image_thumbnail...` |
+| 84 | Mobile: tải xuống | `GET /files/{id}/download-url` | App: Tải xuống (Thư viện ảnh / chia sẻ tệp) | `doc.view` + ACL Download | IT `StorageTests.Tus_resumable_upload...` |
+
+## Yêu cầu chất lượng (mục 3.1) và phi chức năng
+
+| Mục | Nội dung | Cách đáp ứng | Kiểm chứng |
+|---|---|---|---|
+| 2.1 | Thời gian xử lý < 10 giây (mục tiêu < 2 giây), báo cáo lớn có thông báo | Phân trang server, chỉ mục GIN/trigram, cache dashboard, báo cáo chạy nền | k6: 50 người dùng, p95 danh sách 88 ms, tìm kiếm 103 ms; IT `MonitoringTests.Large_reports...` |
+| 3.1 | Xác thực, phân quyền | JWT + refresh xoay vòng, RBAC + ACL | `AuthTests`, `ResourceAuthorizationMatrixTests` |
+| 3.2 | Mã hóa khi truyền và khi lưu | TLS (Caddy), AES-256-GCM theo tệp + envelope, PII mã hóa | UT `StorageTests`, IT `StorageTests.Tus_resumable_upload...` |
+| 3.3 | Ghi nhật ký | Nhật ký chỉ ghi thêm + chuỗi băm | `MonitoringTests`, `FoundationTests` |
+| 3.4 | Lỗ hổng, mã độc, bất thường | ClamAV, chặn tệp thực thi, cảnh báo | `docs/attt-742.md` |
+| 3.5 | Sao lưu định kỳ/đột xuất, dữ liệu thuộc tính + tệp số hóa | pg_dump + tar tăng dần, lịch cron, `restore.ps1` | IT `OperationsTests.Backup_schedule...`; kiểm thử phục hồi thực tế trên Docker |
+| 4.1 | Kiểm tra đầu vào, tiếng Việt, Unicode, trình duyệt, tài liệu | FluentValidation, i18n `vi`, font Be Vietnam Pro | `docs/huong-dan-*.md` |
+| 4.2 | Dữ liệu bàn giao định dạng thông dụng | Gói ZIP + JSON/CSV | IT `OperationsTests.Full_data_export_package_contains_files_and_metadata`, `docs/data-export-format.md` |
+| 5.1 | Hỗ trợ, xử lý sự cố, SLA | Ticket 4 giờ/24 giờ | IT `OperationsTests.Support_ticket_lifecycle_with_sla` |
+| 5.2 | Giám sát, thay đổi, báo cáo | Nhật ký thay đổi, trạng thái hệ thống | IT `OperationsTests.Change_log_and_system_status` |
+| 3.6 | Bàn giao và xóa dữ liệu | Xuất toàn bộ dữ liệu, `secure-wipe.ps1` (biên bản) | `docs/huong-dan-quan-tri.md` |

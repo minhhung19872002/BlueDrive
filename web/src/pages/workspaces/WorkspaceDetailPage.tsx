@@ -1,14 +1,17 @@
 import { useState } from 'react'
-import { App, Button, Space, Tag, Typography } from 'antd'
-import { EditOutlined, LockOutlined, TeamOutlined, UnlockOutlined } from '@ant-design/icons'
+import { App, Button, Space, Tabs, Tag, Typography } from 'antd'
+import { BarChartOutlined, EditOutlined, FolderOutlined, HistoryOutlined, LockOutlined, TeamOutlined, UnlockOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { qk } from '@/api/queryKeys'
 import { getWorkspace, setWorkspaceLock } from '@/api/workspaces'
 import PageHeader from '@/components/PageHeader'
 import FileExplorer from '@/features/drive/explorer/FileExplorer'
 import { useFolderSearchParam } from '@/features/drive/useFolderSearchParam'
+import { useOfficeNewExtensions } from '@/features/office/useOfficeNewMenu'
+import WorkspaceActivityTab from '@/features/workspaces/WorkspaceActivityTab'
+import WorkspaceSummaryTab from '@/features/workspaces/WorkspaceSummaryTab'
 import { ROLE_COLORS } from '@/features/workspaces/roles'
 import WorkspaceFormModal from '@/features/workspaces/WorkspaceFormModal'
 import WorkspaceMembersDrawer from '@/features/workspaces/WorkspaceMembersDrawer'
@@ -25,6 +28,10 @@ export default function WorkspaceDetailPage() {
   const [folderId, setFolderId] = useFolderSearchParam()
   const [membersOpen, setMembersOpen] = useState(false)
   const [editing, setEditing] = useState(false)
+  const officeItems = useOfficeNewExtensions()
+  const [search, setSearch] = useSearchParams()
+  const tabParam = search.get('tab')
+  const tab = tabParam === 'summary' || tabParam === 'activity' ? tabParam : 'files'
   // A user who only received a shared folder may not read the workspace itself: the explorer still works.
   const ws = useQuery({ queryKey: qk.workspace(id), queryFn: () => getWorkspace(id), retry: 0, enabled: !!id })
   const w = ws.data
@@ -88,9 +95,47 @@ export default function WorkspaceDetailPage() {
     />
   )
 
+  const explorer = (
+    <FileExplorer
+      workspaceId={id}
+      folderId={folderId}
+      onFolderChange={setFolderId}
+      header={w && w.type !== 'personal' ? undefined : header}
+      extraNewMenuItems={officeItems}
+    />
+  )
+
   return (
     <>
-      <FileExplorer workspaceId={id} folderId={folderId} onFolderChange={setFolderId} header={header} />
+      {w && w.type !== 'personal' ? (
+        <>
+          {header}
+          <Tabs
+            activeKey={tab}
+            onChange={(k) =>
+              setSearch(
+                (prev) => {
+                  const next = new URLSearchParams(prev)
+                  if (k === 'files') next.delete('tab')
+                  else next.set('tab', k)
+                  return next
+                },
+                { replace: true },
+              )
+            }
+            items={[
+              { key: 'files', label: <span><FolderOutlined /> {t('collab.workspaceTabs.files')}</span> },
+              { key: 'summary', label: <span><BarChartOutlined /> {t('collab.workspaceTabs.summary')}</span> },
+              { key: 'activity', label: <span><HistoryOutlined /> {t('collab.workspaceTabs.activity')}</span> },
+            ]}
+          />
+          {tab === 'files' && explorer}
+          {tab === 'summary' && <WorkspaceSummaryTab workspaceId={id} />}
+          {tab === 'activity' && <WorkspaceActivityTab workspaceId={id} />}
+        </>
+      ) : (
+        explorer
+      )}
       {w && <WorkspaceMembersDrawer workspace={w} open={membersOpen} onClose={() => setMembersOpen(false)} />}
       {editing && w && <WorkspaceFormModal workspace={w} onClose={() => setEditing(false)} />}
     </>

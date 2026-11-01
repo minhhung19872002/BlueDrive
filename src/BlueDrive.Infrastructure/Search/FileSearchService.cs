@@ -93,7 +93,9 @@ public sealed class FileSearchService(AppDbContext db, TimeProvider clock) : IFi
                 "-createdAt" => ranked.OrderByDescending(x => x.CreatedAt),
                 "createdAt" => ranked.OrderBy(x => x.CreatedAt),
                 "name" => ranked.OrderBy(x => x.Name),
+                "-name" => ranked.OrderByDescending(x => x.Name),
                 "-size" => ranked.OrderByDescending(x => x.SizeBytes),
+                "size" => ranked.OrderBy(x => x.SizeBytes),
                 _ => ranked.OrderByDescending(x => x.Rank).ThenByDescending(x => x.CreatedAt),
             };
             var rows = await ranked.Skip((page - 1) * size).Take(size).ToListAsync(ct);
@@ -106,7 +108,9 @@ public sealed class FileSearchService(AppDbContext db, TimeProvider clock) : IFi
             {
                 "createdAt" => q.OrderBy(f => f.CreatedAt),
                 "name" => q.OrderBy(f => f.Name),
+                "-name" => q.OrderByDescending(f => f.Name),
                 "-size" => q.OrderByDescending(f => f.SizeBytes),
+                "size" => q.OrderBy(f => f.SizeBytes),
                 _ => q.OrderByDescending(f => f.CreatedAt),
             };
             var rows = await q.Skip((page - 1) * size).Take(size).Select(f => f.Id).ToListAsync(ct);

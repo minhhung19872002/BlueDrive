@@ -7,7 +7,7 @@ import { API_BASE_URL, refreshSession } from './client'
  * Client for the anonymous /public/s/{token} endpoints. It sends the bearer token when the visitor is
  * signed in (links that require login) but never forces a logout/redirect on 401 like the main client.
  */
-const publicApi = axios.create({ baseURL: API_BASE_URL })
+export const publicApi = axios.create({ baseURL: API_BASE_URL })
 
 publicApi.interceptors.request.use((config) => {
   const token = useAuthStore.getState().accessToken

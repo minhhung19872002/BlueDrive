@@ -28,10 +28,11 @@ export function useFolderInfo(workspaceId: string | null | undefined, folderId: 
   })
 }
 
-export function useFileDetail(fileId: string | null | undefined) {
+/** File details; `recordView` only from the viewer (the file was really opened). */
+export function useFileDetail(fileId: string | null | undefined, recordView = false) {
   return useQuery({
     queryKey: qk.file(fileId ?? ''),
-    queryFn: () => getFile(fileId!),
+    queryFn: () => getFile(fileId!, recordView),
     enabled: !!fileId,
     retry: 0,
   })

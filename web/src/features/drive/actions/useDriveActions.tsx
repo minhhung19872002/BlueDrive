@@ -7,6 +7,7 @@ import {
   EditOutlined,
   EyeOutlined,
   FolderOpenOutlined,
+  FormOutlined,
   InfoCircleOutlined,
   SafetyOutlined,
   ScissorOutlined,
@@ -20,6 +21,7 @@ import { useNavigate } from 'react-router-dom'
 import { deleteItems, getDownloadUrl, getZipUrl, renameFile, setFavorite, startDownload, updateFolder } from '@/api/drive'
 import { showApiError } from '@/api/errors'
 import { qk } from '@/api/queryKeys'
+import { editorUrl, isOfficeEditable, isOfficeFile } from '@/features/office/officeFiles'
 import AccessDialog, { type AccessTarget } from '@/features/sharing/AccessDialog'
 import ShareDialog, { type ShareTarget } from '@/features/sharing/ShareDialog'
 import { useApiMutation } from '@/hooks/useApiMutation'
@@ -58,6 +60,8 @@ export interface ItemFlags {
 
 export type ItemAction =
   | 'open'
+  | 'openEditor'
+  | 'openEditorView'
   | 'download'
   | 'share'
   | 'rename'
@@ -206,6 +210,14 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
       const list: NonNullable<MenuProps['items']> = []
       if (single && shown('open'))
         list.push({ key: 'open', icon: single.type === 'folder' ? <FolderOpenOutlined /> : <EyeOutlined />, label: t('actions.open') })
+      if (single && single.type === 'file' && isOfficeFile(single.extension) && shown('openEditor')) {
+        const editable = canEdit && isOfficeEditable(single.extension)
+        list.push({
+          key: editable ? 'openEditor' : 'openEditorView',
+          icon: <FormOutlined />,
+          label: editable ? t('collab.office.openInEditor') : t('collab.office.openInViewer'),
+        })
+      }
       if (canDownload && shown('download')) list.push({ key: 'download', icon: <DownloadOutlined />, label: t('actions.download') })
       if (single && can('doc.share') && shown('share')) list.push({ key: 'share', icon: <ShareAltOutlined />, label: t('actions.share') })
       list.push({ type: 'divider' })
@@ -234,6 +246,9 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
       switch (action as ItemAction) {
         case 'open':
           return open(single)
+        case 'openEditor':
+        case 'openEditorView':
+          return navigate(editorUrl(single.id, action === 'openEditorView'))
         case 'download':
           return void download(items)
         case 'share':
@@ -256,7 +271,7 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
           return remove(items)
       }
     },
-    [copyTo, download, info, manageAccess, moveTo, open, remove, setStar, share],
+    [copyTo, download, info, manageAccess, moveTo, navigate, open, remove, setStar, share],
   )
 
   const dialogs: ReactNode = (

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
-import { Alert, Button, Drawer, Empty, Grid, Modal, Pagination, Result } from 'antd'
-import { LockOutlined } from '@ant-design/icons'
+import { Alert, Button, Drawer, Empty, Grid, Input, Modal, Pagination, Result } from 'antd'
+import { LockOutlined, SearchOutlined } from '@ant-design/icons'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { copyItems, listItems, moveItems } from '@/api/drive'
 import { getErrorMessage } from '@/api/errors'
 import { qk } from '@/api/queryKeys'
+import ScopedSearchResults from '@/features/search/ScopedSearchResults'
 import { useApiMutation } from '@/hooks/useApiMutation'
 import { useCan } from '@/hooks/usePermissions'
 import { usePersistentState } from '@/hooks/usePersistentState'
@@ -76,6 +77,13 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const [osDragging, setOsDragging] = useState(false)
   const [bulkEdit, setBulkEdit] = useState<string[] | null>(null)
+  /** Workspace-wide full-text search (#20 / #32); results replace the folder listing while set. */
+  const [scopeQ, setScopeQ] = useState('')
+  const [scopeInput, setScopeInput] = useState('')
+  const closeScoped = () => {
+    setScopeQ('')
+    setScopeInput('')
+  }
 
   const clipboard = useDriveUi((s) => s.clipboard)
   const setClipboard = useDriveUi((s) => s.setClipboard)
@@ -367,6 +375,11 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
   }
 
   const pasteCount = clipboard && canUpload ? clipboard.items.length : 0
+  const scopeName = folderInfo.data
+    ? folderInfo.data.workspaceType === 'personal'
+      ? t('menu.myDrive')
+      : folderInfo.data.workspaceName
+    : ''
 
   return (
     <div className="bd-explorer" tabIndex={-1} onKeyDown={onKeyDown} {...rootDrag}>
@@ -383,6 +396,23 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
       {locked && (
         <Alert type="warning" showIcon icon={<LockOutlined />} message={t('drive.workspaceLocked')} style={{ marginBottom: 12 }} />
       )}
+      <Input.Search
+        className="bd-scoped-search"
+        allowClear
+        enterButton={<SearchOutlined />}
+        placeholder={scopeName ? t('collab.search.scopedPlaceholder', { scope: scopeName }) : t('common.search')}
+        value={scopeInput}
+        onSearch={(v) => setScopeQ(v.trim())}
+        onChange={(e) => {
+          setScopeInput(e.target.value)
+          if (!e.target.value) setScopeQ('')
+        }}
+        aria-label={t('collab.search.scopedPlaceholder', { scope: scopeName })}
+      />
+      {scopeQ ? (
+        <ScopedSearchResults workspaceId={workspaceId} scopeName={scopeName} q={scopeQ} onClose={closeScoped} />
+      ) : (
+      <>
       <ExplorerToolbar
         isMobile={isMobile}
         canUpload={canUpload}
@@ -463,6 +493,8 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
         </div>
         {infoOpen && !isMobile && <aside className="bd-explorer-info">{infoPanel}</aside>}
       </div>
+      </>
+      )}
 
       {isMobile && (
         <Drawer open={infoOpen} onClose={() => setInfoOpen(false)} placement="bottom" height="80%" title={t('actions.info')}>

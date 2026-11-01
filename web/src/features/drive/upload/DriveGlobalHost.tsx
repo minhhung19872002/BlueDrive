@@ -1,3 +1,4 @@
+import OfficeNewHost from '@/features/office/OfficeNewHost'
 import CreateFolderHost from './CreateFolderHost'
 import UploadMetaModal from './UploadMetaModal'
 import UploadQueuePanel from './UploadQueuePanel'
@@ -9,6 +10,7 @@ export default function DriveGlobalHost() {
       <UploadMetaModal />
       <UploadQueuePanel />
       <CreateFolderHost />
+      <OfficeNewHost />
     </>
   )
 }

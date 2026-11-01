@@ -10,6 +10,8 @@ import { getPublicShare, openPublicShare, publicContentUrl } from '@/api/publicS
 import FileTypeIcon from '@/features/drive/components/FileTypeIcon'
 import { previewKind } from '@/features/drive/utils'
 import MediaPreview from '@/features/drive/viewer/MediaPreview'
+import { needsOfficeViewer } from '@/features/office/officeFiles'
+import PublicOfficeViewer from '@/features/office/PublicOfficeViewer'
 import { useBranding } from '@/hooks/useLookups'
 import { useAuthStore } from '@/stores/auth'
 import type { PublicShareInfo } from '@/types/sharing'
@@ -36,6 +38,12 @@ function FileView({ token, access, info }: { token: string; access: string; info
       {t('actions.download')}
     </Button>
   ) : null
+  if (needsOfficeViewer(info.extension))
+    return (
+      <div className="bd-public-stage">
+        <PublicOfficeViewer token={token} access={access} extra={download} />
+      </div>
+    )
   return (
     <div className="bd-public-stage">
       <MediaPreview

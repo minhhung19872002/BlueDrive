@@ -1,10 +1,11 @@
 import { useState, type ReactNode } from 'react'
-import { Alert, Button, Descriptions, Empty, Result, Skeleton, Space, Tag, Typography } from 'antd'
-import { EditOutlined } from '@ant-design/icons'
+import { Alert, Button, Descriptions, Drawer, Empty, Result, Skeleton, Space, Tag, Typography } from 'antd'
+import { EditOutlined, HistoryOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { getErrorMessage } from '@/api/errors'
 import type { AccessTarget } from '@/features/sharing/AccessDialog'
+import VersionsPanel from '@/features/versions/VersionsPanel'
 import { useAuthStore } from '@/stores/auth'
 import type { BreadcrumbItem, DriveItem, FolderInfo } from '@/types/drive'
 import { formatBytes, formatDateTime } from '@/utils/format'
@@ -59,6 +60,7 @@ function LocationLinks({ workspaceId, crumbs }: { workspaceId: string; crumbs: B
 function FileInfo({ id, onManageAccess }: { id: string; onManageAccess?: InfoPanelProps['onManageAccess'] }) {
   const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
+  const [versionsOpen, setVersionsOpen] = useState(false)
   const detail = useFileDetail(id)
   if (detail.isLoading) return <Skeleton active />
   if (detail.isError || !detail.data) return <Result status="warning" subTitle={getErrorMessage(detail.error)} />
@@ -111,7 +113,10 @@ function FileInfo({ id, onManageAccess }: { id: string; onManageAccess?: InfoPan
               <LocationLinks workspaceId={f.workspaceId} crumbs={f.location} />
             </Descriptions.Item>
             <Descriptions.Item label={t('info.versions')}>
-              {t('info.versionsValue', { count: f.versions.length, current: current?.versionNo ?? 1 })}
+              {t('info.versionsValue', { count: f.versions.length, current: current?.versionNo ?? 1 })}{' '}
+              <Button type="link" size="small" icon={<HistoryOutlined />} onClick={() => setVersionsOpen(true)} style={{ padding: 0, height: 'auto' }}>
+                {t('collab.versions.history')}
+              </Button>
             </Descriptions.Item>
             <Descriptions.Item label={t('info.approval')}>
               <Tag color={APPROVAL_COLORS[f.approvalStatus]}>{t(`approval.status.${f.approvalStatus}`)}</Tag>
@@ -151,6 +156,15 @@ function FileInfo({ id, onManageAccess }: { id: string; onManageAccess?: InfoPan
           )}
         </>
       )}
+      <Drawer
+        open={versionsOpen}
+        onClose={() => setVersionsOpen(false)}
+        title={t('collab.versions.historyOf', { name: f.name })}
+        width="min(420px, 100vw)"
+        destroyOnHidden
+      >
+        <VersionsPanel fileId={f.id} />
+      </Drawer>
       <AccessSummary
         type="file"
         id={f.id}

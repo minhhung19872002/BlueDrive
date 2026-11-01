@@ -57,8 +57,9 @@ export async function updateFolder(id: string, body: { name?: string | null; req
   await api.put(`/folders/${id}`, { name: body.name ?? null, requiresApproval: body.requiresApproval ?? null })
 }
 
-export async function getFile(id: string): Promise<FileDetail> {
-  const { data } = await api.get<FileDetail>(`/files/${id}`)
+/** `recordView` = the user actually opened the file (adds it to "Gần đây"); false for info panels. */
+export async function getFile(id: string, recordView = false): Promise<FileDetail> {
+  const { data } = await api.get<FileDetail>(`/files/${id}`, { params: recordView ? { recordView: true } : undefined })
   return data
 }
 

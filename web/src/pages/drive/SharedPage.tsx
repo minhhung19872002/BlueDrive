@@ -1,10 +1,12 @@
-import { Button, Card, DatePicker, Empty, Input, Select, Space, Tag, Tooltip } from 'antd'
+import { Button, Card, DatePicker, Empty, Input, Select, Space, Tabs, Tag, Tooltip } from 'antd'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import type { Dayjs } from 'dayjs'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 import { qk } from '@/api/queryKeys'
 import { listSharedWithMe, listSharers } from '@/api/sharing'
 import PageHeader from '@/components/PageHeader'
+import SharedAttachmentsList from '@/features/comments/SharedAttachmentsList'
 import { useDriveActions } from '@/features/drive/actions/useDriveActions'
 import DriveItemTable, { type DriveRow } from '@/features/drive/lists/DriveItemTable'
 import { LEVEL_COLORS } from '@/features/sharing/levels'
@@ -19,6 +21,8 @@ interface Filter extends SharedWithMeFilter {
 /** "Được chia sẻ với tôi" (#19): filter by sharer, date range, media type and keyword. */
 export default function SharedPage() {
   const { t } = useTranslation()
+  const [search, setSearch] = useSearchParams()
+  const tab = search.get('tab') === 'attachments' ? 'attachments' : 'items'
   const table = useServerTable<Filter>({})
   const { range, ...rest } = table.params
   const params = {
@@ -41,6 +45,19 @@ export default function SharedPage() {
   return (
     <>
       <PageHeader title={t('menu.shared')} description={t('drive.sharedHint')} />
+      <Tabs
+        activeKey={tab}
+        onChange={(k) => setSearch(k === 'attachments' ? { tab: k } : {}, { replace: true })}
+        items={[
+          { key: 'items', label: t('collab.attachments.tabShared') },
+          { key: 'attachments', label: t('collab.attachments.tab') },
+        ]}
+      />
+      {tab === 'attachments' ? (
+        <Card styles={{ body: { padding: 0 } }}>
+          <SharedAttachmentsList />
+        </Card>
+      ) : (
       <Card styles={{ body: { padding: 0 } }}>
         <Space wrap style={{ padding: 16 }}>
           <Input.Search
@@ -113,6 +130,7 @@ export default function SharedPage() {
           empty={<Empty description={filtered ? t('common.noMatch') : t('empty.shared')} style={{ padding: '32px 0' }} />}
         />
       </Card>
+      )}
       {actions.dialogs}
     </>
   )

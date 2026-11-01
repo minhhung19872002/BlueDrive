@@ -8,6 +8,8 @@ import { listPublicItems, publicContentUrl } from '@/api/publicShare'
 import FileTypeIcon from '@/features/drive/components/FileTypeIcon'
 import { previewKind } from '@/features/drive/utils'
 import MediaPreview from '@/features/drive/viewer/MediaPreview'
+import { needsOfficeViewer } from '@/features/office/officeFiles'
+import PublicOfficeViewer from '@/features/office/PublicOfficeViewer'
 import type { DriveItem } from '@/types/drive'
 import { formatBytes, formatDateTime } from '@/utils/format'
 
@@ -116,7 +118,12 @@ export default function PublicFolderView({ token, access, allowDownload, rootNam
           ) : null
         }
       >
-        {preview && (
+        {preview && needsOfficeViewer(preview.extension) && (
+          <div className="bd-public-preview">
+            <PublicOfficeViewer token={token} access={access} fileId={preview.id} />
+          </div>
+        )}
+        {preview && !needsOfficeViewer(preview.extension) && (
           <div className="bd-public-preview">
             <MediaPreview
               kind={kind}

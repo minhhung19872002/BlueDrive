@@ -23,6 +23,9 @@ export interface BatchMetadata {
   description?: string | null
   tags?: string[]
   catalogItemIds?: string[]
+  /** Upload as a new version of this existing file (#26/#43) instead of creating a file. */
+  targetFileId?: string | null
+  changeNote?: string | null
 }
 
 export interface UploadTask {
@@ -55,6 +58,8 @@ interface UploadState {
   requestUpload: (files: PickedFile[], target: DriveTarget, targetName: string) => void
   cancelBatch: () => void
   confirmBatch: (meta: BatchMetadata) => void
+  /** Queue files directly with the given metadata, without the metadata dialog (e.g. new version upload). */
+  enqueue: (files: PickedFile[], target: DriveTarget, meta: BatchMetadata) => void
   pause: (id: string) => void
   resume: (id: string) => void
   cancel: (id: string) => void
@@ -118,12 +123,12 @@ function finishComplete(id: string, tusId: string) {
         workspaceId: current.target.workspaceId,
         folderId: current.target.folderId,
         relativePath: current.relativePath,
-        targetFileId: null,
+        targetFileId: current.meta.targetFileId ?? null,
         title: current.meta.title || null,
         description: current.meta.description || null,
         tags: current.meta.tags?.length ? current.meta.tags : null,
         catalogItemIds: current.meta.catalogItemIds?.length ? current.meta.catalogItemIds : null,
-        changeNote: null,
+        changeNote: current.meta.changeNote || null,
       })
       patch(id, { status: 'done', result, error: null })
       files.delete(id)
@@ -152,6 +157,8 @@ function createUpload(task: UploadTask, file: File): Upload {
   if (task.meta.description) metadata.description = task.meta.description
   if (task.meta.tags?.length) metadata.tags = task.meta.tags.join(',')
   if (task.meta.catalogItemIds?.length) metadata.catalogItemIds = task.meta.catalogItemIds.join(',')
+  if (task.meta.targetFileId) metadata.targetFileId = task.meta.targetFileId
+  if (task.meta.changeNote) metadata.changeNote = task.meta.changeNote
 
   const upload: Upload = new Upload(file, {
     endpoint: TUS_ENDPOINT,
@@ -167,6 +174,7 @@ function createUpload(task: UploadTask, file: File): Upload {
         userId,
         task.target.workspaceId,
         task.target.folderId ?? 'root',
+        task.meta.targetFileId ?? 'new',
         task.relativePath ?? f.name,
         f.size,
         f.lastModified,
@@ -268,7 +276,13 @@ export const useUploadStore = create<UploadState>()((set, get) => ({
   confirmBatch: (meta) => {
     const batch = get().pendingBatch
     if (!batch) return
-    const tasks: UploadTask[] = batch.files.map(({ file, relativePath }) => {
+    set({ pendingBatch: null })
+    get().enqueue(batch.files, batch.target, meta)
+  },
+
+  enqueue: (picked, target, meta) => {
+    if (picked.length === 0) return
+    const tasks: UploadTask[] = picked.map(({ file, relativePath }) => {
       const id = `u${Date.now().toString(36)}${(seq++).toString(36)}`
       files.set(id, file)
       return {
@@ -276,7 +290,7 @@ export const useUploadStore = create<UploadState>()((set, get) => ({
         name: file.name,
         relativePath,
         size: file.size,
-        target: batch.target,
+        target,
         meta,
         status: 'queued',
         uploaded: 0,
@@ -285,7 +299,7 @@ export const useUploadStore = create<UploadState>()((set, get) => ({
         result: null,
       }
     })
-    set((s) => ({ pendingBatch: null, collapsed: false, tasks: [...s.tasks, ...tasks] }))
+    set((s) => ({ collapsed: false, tasks: [...s.tasks, ...tasks] }))
     pump()
   },
 

@@ -9,6 +9,9 @@ const ForgotPasswordPage = lazy(() => import('@/pages/ForgotPasswordPage'))
 const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage'))
 const PrintOrganizationsPage = lazy(() => import('@/pages/print/PrintOrganizationsPage'))
 const PrintUsersPage = lazy(() => import('@/pages/print/PrintUsersPage'))
+const PrintAuditLogsPage = lazy(() => import('@/pages/print/PrintAuditLogsPage'))
+const PrintStorageStatsPage = lazy(() => import('@/pages/print/PrintStorageStatsPage'))
+const PrintAlertsPage = lazy(() => import('@/pages/print/PrintAlertsPage'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 const PublicSharePage = lazy(() => import('@/pages/public/PublicSharePage'))
 
@@ -29,12 +32,14 @@ const layoutRoutes: AppRoute[] = [
   { path: 'workspaces', Component: lazy(() => import('@/pages/workspaces/WorkspacesPage')) },
   { path: 'workspaces/:id', Component: lazy(() => import('@/pages/workspaces/WorkspaceDetailPage')) },
   { path: 'files/:id', Component: lazy(() => import('@/pages/drive/FileViewerPage')) },
+  { path: 'files/:id/edit', Component: lazy(() => import('@/pages/drive/OfficeEditorPage')) },
   { path: 'approvals', perm: 'doc.approve', Component: lazy(() => import('@/pages/drive/ApprovalsPage')) },
   { path: 'search', Component: lazy(() => import('@/pages/search/SearchPage')) },
   { path: 'profile', Component: lazy(() => import('@/pages/account/ProfilePage')) },
   { path: 'change-password', Component: lazy(() => import('@/pages/account/ChangePasswordPage')) },
   { path: 'sessions', Component: lazy(() => import('@/pages/account/MySessionsPage')) },
   { path: 'support', Component: lazy(() => import('@/pages/account/SupportPage')) },
+  { path: 'reports', Component: lazy(() => import('@/pages/ops/ReportsPage')) },
 
   { path: 'admin/dashboard', perm: 'dashboard.view', Component: lazy(() => import('@/pages/admin/AdminDashboardPage')) },
   { path: 'admin/organizations', perm: 'org.view', Component: lazy(() => import('@/pages/admin/organizations/OrganizationsPage')) },
@@ -59,6 +64,7 @@ const layoutRoutes: AppRoute[] = [
   { path: 'admin/backups', perm: 'backup.view', Component: lazy(() => import('@/pages/admin/BackupsPage')) },
   { path: 'admin/tickets', perm: 'ticket.view', Component: lazy(() => import('@/pages/admin/TicketsPage')) },
   { path: 'admin/change-logs', perm: 'changelog.view', Component: lazy(() => import('@/pages/admin/ChangeLogsPage')) },
+  { path: 'admin/system-status', perm: 'settings.view', Component: lazy(() => import('@/pages/admin/SystemStatusPage')) },
   { path: 'admin/settings', perm: 'settings.view', Component: lazy(() => import('@/pages/admin/SettingsPage')) },
 ]
 
@@ -89,6 +95,9 @@ export default function AppRoutes() {
             </RequireAuth>
           }
         />
+        <Route path="/print/audit-logs" element={<RequireAuth perm="audit.view"><PrintAuditLogsPage /></RequireAuth>} />
+        <Route path="/print/storage-stats" element={<RequireAuth perm="stats.view"><PrintStorageStatsPage /></RequireAuth>} />
+        <Route path="/print/alerts" element={<RequireAuth perm="alert.view"><PrintAlertsPage /></RequireAuth>} />
         <Route
           path="/"
           element={

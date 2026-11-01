@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Modal } from 'antd'
+import { useCollabViewerTabs } from '@/features/collab/useCollabViewerTabs'
 import FileViewer from './FileViewer'
 
 interface FileViewerModalProps {
@@ -13,6 +14,7 @@ interface FileViewerModalProps {
 export default function FileViewerModal({ fileId, siblings, onClose }: FileViewerModalProps) {
   const [current, setCurrent] = useState(fileId)
   const index = siblings ? siblings.indexOf(current) : -1
+  const extraTabs = useCollabViewerTabs(current)
   return (
     <Modal
       open
@@ -31,6 +33,7 @@ export default function FileViewerModal({ fileId, siblings, onClose }: FileViewe
         prevId={index > 0 ? siblings![index - 1] : null}
         nextId={index >= 0 && index < siblings!.length - 1 ? siblings![index + 1] : null}
         onNavigate={siblings && siblings.length > 1 ? setCurrent : undefined}
+        extraTabs={extraTabs}
       />
     </Modal>
   )
