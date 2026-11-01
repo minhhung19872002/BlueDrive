@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging;
 namespace BlueDrive.Application.Features.Office;
 
 /// <summary>#42: editor config for the current version; edit mode when the user may edit (co-editing shares the key).</summary>
-public sealed record GetOfficeConfigQuery(Guid FileId, bool ForceView = false) : IRequest<OfficeEditorConfig>;
+public sealed record GetOfficeConfigQuery(Guid FileId, bool ForceView = false, bool Mobile = false) : IRequest<OfficeEditorConfig>;
 
 public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms,
     IOfficeEditorProvider office, IContentTicketService tickets, IAuditLogger audit, TimeProvider clock) : IRequestHandler<GetOfficeConfigQuery, OfficeEditorConfig>
@@ -29,7 +29,7 @@ public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IR
         var docTicket = tickets.Issue(new ContentTicket(uid, "file", f.Id, f.CurrentVersionId, true, null, null), TimeSpan.FromHours(24));
         var config = office.BuildConfig(new OfficeEditorRequest(f.Id, f.CurrentVersionId!.Value, f.Name, f.Extension,
             $"{office.CallbackBaseUrl}/api/v1/content/{Uri.EscapeDataString(docTicket)}", $"{office.CallbackBaseUrl}/api/office/callback/{f.Id}",
-            canEdit, access.CanDownload, uid, name, false));
+            canEdit, access.CanDownload, uid, name, false, q.Mobile));
         await RecentTracker.TouchAsync(db, uid, f.Id, canEdit ? "edit" : "view", clock.GetUtcNow().UtcDateTime, ct);
         await audit.LogAsync(new AuditEntry(AuditAction.View, ResourceType.File, f.Id, f.Name, f.WorkspaceId, new { office = config.Mode }), ct);
         return config;

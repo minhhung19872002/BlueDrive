@@ -15,7 +15,8 @@ public class OfficeController : ApiControllerBase
 {
     /// <summary>Cấu hình mở trình soạn thảo cho phiên bản hiện tại (chế độ sửa nếu có quyền; nhiều người đồng soạn thảo).</summary>
     [HttpGet("config/{fileId:guid}")]
-    public Task<OfficeEditorConfig> Config(Guid fileId, [FromQuery] bool view = false) => Mediator.Send(new GetOfficeConfigQuery(fileId, view));
+    /// <param name="mobile">true: giao diện ONLYOFFICE cho điện thoại (ứng dụng di động).</param>
+    public Task<OfficeEditorConfig> Config(Guid fileId, [FromQuery] bool view = false, [FromQuery] bool mobile = false) => Mediator.Send(new GetOfficeConfigQuery(fileId, view, mobile));
 
     /// <summary>Cấu hình chỉ xem cho trang liên kết công khai.</summary>
     [HttpGet("public-config/{token}"), AllowAnonymous]

@@ -55,7 +55,7 @@ public sealed class OnlyOfficeProvider(IOptions<OnlyOfficeOptions> options, IHtt
         var config = new JsonObject
         {
             ["documentType"] = DocumentType(r.Extension),
-            ["type"] = r.Embedded ? "embedded" : "desktop",
+            ["type"] = r.Mobile ? "mobile" : r.Embedded ? "embedded" : "desktop",
             ["width"] = "100%",
             ["height"] = "100%",
             ["document"] = new JsonObject
