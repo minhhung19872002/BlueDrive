@@ -33,6 +33,17 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 }
 
+/**
+ * Refresh the access token once (shared with concurrent callers). Used by non-axios transports
+ * (tus uploads, public share page). Resolves to the new token, or null when the session cannot be renewed.
+ */
+export function refreshSession(): Promise<string | null> {
+  refreshPromise ??= refreshAccessToken().finally(() => {
+    refreshPromise = null
+  })
+  return refreshPromise
+}
+
 /** Clear the session and send the user to the login page. */
 export function forceLogout(): void {
   useAuthStore.getState().logout()
@@ -51,10 +62,7 @@ api.interceptors.response.use(
     }
 
     original._retry = true
-    refreshPromise ??= refreshAccessToken().finally(() => {
-      refreshPromise = null
-    })
-    const newToken = await refreshPromise
+    const newToken = await refreshSession()
     if (!newToken) {
       forceLogout()
       return Promise.reject(error)

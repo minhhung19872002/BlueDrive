@@ -301,3 +301,11 @@ export interface SessionFilter {
   q?: string
   activeOnly?: boolean
 }
+
+/** GET /catalogs/options: active catalogs with their items (metadata pickers, filters). */
+export interface CatalogWithItemsDto {
+  id: string
+  code: string
+  name: string
+  items: CatalogItemDto[]
+}

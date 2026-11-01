@@ -4,6 +4,7 @@ import {
   ApartmentOutlined,
   AppstoreOutlined,
   AuditOutlined,
+  CheckSquareOutlined,
   ClockCircleOutlined,
   CloudServerOutlined,
   ClusterOutlined,
@@ -47,7 +48,11 @@ export const mainNav: NavItem[] = [
   { path: '/workspaces', labelKey: 'menu.workspaces', icon: TeamOutlined },
   { path: '/search', labelKey: 'menu.search', icon: FileSearchOutlined },
   { path: '/trash', labelKey: 'menu.trash', icon: DeleteOutlined },
+  { path: '/approvals', labelKey: 'menu.approvals', icon: CheckSquareOutlined, perm: 'doc.approve' },
 ]
+
+/** Key of the "Nhóm của tôi" submenu (children: every group workspace + the overview page). */
+export const WORKSPACES_MENU_KEY = 'workspaces-menu'
 
 export const adminNav: NavItem[] = [
   { path: '/admin/dashboard', labelKey: 'menu.adminDashboard', icon: DashboardOutlined, perm: 'dashboard.view' },

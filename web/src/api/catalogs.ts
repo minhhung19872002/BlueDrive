@@ -4,6 +4,7 @@ import type {
   CatalogDto,
   CatalogImportResult,
   CatalogItemDto,
+  CatalogWithItemsDto,
   SaveCatalogItemRequest,
   SaveCatalogRequest,
 } from '@/types/admin'
@@ -58,4 +59,9 @@ export function importCatalogItems(catalogId: string, file: File): Promise<Catal
 
 export function exportCatalogItems(catalogId: string, format: ExportFormat): Promise<void> {
   return downloadFile(`/catalogs/${catalogId}/items/export`, { format }, `danh-muc.${format}`)
+}
+
+export async function getCatalogOptions(): Promise<CatalogWithItemsDto[]> {
+  const { data } = await api.get<CatalogWithItemsDto[]>('/catalogs/options')
+  return data
 }

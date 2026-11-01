@@ -10,6 +10,7 @@ const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage'))
 const PrintOrganizationsPage = lazy(() => import('@/pages/print/PrintOrganizationsPage'))
 const PrintUsersPage = lazy(() => import('@/pages/print/PrintUsersPage'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
+const PublicSharePage = lazy(() => import('@/pages/public/PublicSharePage'))
 
 interface AppRoute {
   path: string
@@ -26,6 +27,9 @@ const layoutRoutes: AppRoute[] = [
   { path: 'starred', Component: lazy(() => import('@/pages/drive/StarredPage')) },
   { path: 'trash', Component: lazy(() => import('@/pages/drive/TrashPage')) },
   { path: 'workspaces', Component: lazy(() => import('@/pages/workspaces/WorkspacesPage')) },
+  { path: 'workspaces/:id', Component: lazy(() => import('@/pages/workspaces/WorkspaceDetailPage')) },
+  { path: 'files/:id', Component: lazy(() => import('@/pages/drive/FileViewerPage')) },
+  { path: 'approvals', perm: 'doc.approve', Component: lazy(() => import('@/pages/drive/ApprovalsPage')) },
   { path: 'search', Component: lazy(() => import('@/pages/search/SearchPage')) },
   { path: 'profile', Component: lazy(() => import('@/pages/account/ProfilePage')) },
   { path: 'change-password', Component: lazy(() => import('@/pages/account/ChangePasswordPage')) },
@@ -67,6 +71,8 @@ export default function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        {/* Public share links: anonymous, outside the authenticated layout. */}
+        <Route path="/s/:token" element={<PublicSharePage />} />
         <Route
           path="/print/organizations"
           element={

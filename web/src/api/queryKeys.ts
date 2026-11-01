@@ -22,4 +22,30 @@ export const qk = {
   notifications: ['notifications'] as const,
   notificationList: ['notifications', 'list'] as const,
   unreadCount: ['notifications', 'unread-count'] as const,
+  catalogOptions: ['catalogs', 'options'] as const,
+
+  // ---------- Drive (every key starts with "drive" so one invalidation refreshes all listings) ----------
+  drive: ['drive'] as const,
+  items: (workspaceId: string, params: object) => ['drive', 'items', workspaceId, params] as const,
+  folderInfo: (workspaceId: string, folderId: string | null) => ['drive', 'folder-info', workspaceId, folderId] as const,
+  folderTree: (workspaceId: string) => ['drive', 'folder-tree', workspaceId] as const,
+  file: (id: string) => ['drive', 'file', id] as const,
+  recent: ['drive', 'recent'] as const,
+  favorites: ['drive', 'favorites'] as const,
+  trash: (workspaceId: string) => ['drive', 'trash', workspaceId] as const,
+  sharedWithMe: ['drive', 'shared-with-me'] as const,
+  sharers: ['drive', 'sharers'] as const,
+  approvals: ['drive', 'approvals'] as const,
+  access: (type: string, id: string) => ['drive', 'access', type, id] as const,
+  shares: (type: string, id: string) => ['drive', 'shares', type, id] as const,
+  shareLinks: (type: string, id: string) => ['drive', 'share-links', type, id] as const,
+  /** Signed content URL (not under "drive": it must not be refetched on every listing invalidation). */
+  contentUrl: (fileId: string, inline: boolean) => ['content-url', fileId, inline] as const,
+
+  // ---------- Workspaces ----------
+  workspaces: ['workspaces'] as const,
+  myWorkspaces: ['workspaces', 'mine'] as const,
+  allWorkspaces: ['workspaces', 'all'] as const,
+  workspace: (id: string) => ['workspaces', 'detail', id] as const,
+  workspaceMembers: (id: string) => ['workspaces', 'members', id] as const,
 }

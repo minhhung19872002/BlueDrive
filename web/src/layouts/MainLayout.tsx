@@ -14,12 +14,10 @@ import {
   type MenuProps,
 } from 'antd'
 import {
+  AppstoreOutlined,
   CustomerServiceOutlined,
-  FileExcelOutlined,
-  FilePptOutlined,
-  FileTextOutlined,
-  FileWordOutlined,
   FolderAddOutlined,
+  FolderOutlined,
   HomeOutlined,
   KeyOutlined,
   LaptopOutlined,
@@ -28,6 +26,7 @@ import {
   MenuOutlined,
   MenuUnfoldOutlined,
   PlusOutlined,
+  TeamOutlined,
   UploadOutlined,
   UserOutlined,
 } from '@ant-design/icons'
@@ -37,10 +36,21 @@ import IdleLogout from '@/components/IdleLogout'
 import NotificationBell from '@/components/NotificationBell'
 import PageLoading from '@/components/PageLoading'
 import StorageUsage from '@/components/StorageUsage'
+import { useMyWorkspaces } from '@/features/drive/hooks'
+import DriveGlobalHost from '@/features/drive/upload/DriveGlobalHost'
+import { useUploadLauncher } from '@/features/drive/upload/useUploadLauncher'
 import { useBranding } from '@/hooks/useLookups'
 import { useLogout } from '@/hooks/useLogout'
 import { useAuthStore } from '@/stores/auth'
-import { ADMIN_MENU_KEY, AdminGroupIcon, adminNav, mainNav, matchNavPath, routeLabels } from './navigation'
+import {
+  ADMIN_MENU_KEY,
+  AdminGroupIcon,
+  adminNav,
+  mainNav,
+  matchNavPath,
+  routeLabels,
+  WORKSPACES_MENU_KEY,
+} from './navigation'
 
 const { Header, Sider, Content } = Layout
 
@@ -90,20 +100,47 @@ export default function MainLayout() {
   const branding = useBranding()
   const appName = branding.data?.appName || t('common.appName')
 
+  const workspaces = useMyWorkspaces()
+  const { pickAndUpload, createFolder } = useUploadLauncher()
+
   const menuItems = useMemo<MenuProps['items']>(() => {
     const permissions = user?.permissions ?? []
     const toItem = (n: (typeof mainNav)[number]) => ({ key: n.path, icon: <n.icon />, label: t(n.labelKey) })
-    const items: NonNullable<MenuProps['items']> = mainNav.map(toItem)
+    const groups = (workspaces.data ?? []).filter((w) => w.type !== 'personal')
+    const items: NonNullable<MenuProps['items']> = mainNav
+      .filter((n) => !n.perm || permissions.includes(n.perm))
+      .map((n) =>
+        n.path === '/workspaces'
+          ? {
+              key: WORKSPACES_MENU_KEY,
+              icon: <n.icon />,
+              label: t(n.labelKey),
+              children: [
+                { key: '/workspaces', icon: <AppstoreOutlined />, label: t('workspace.allGroups') },
+                ...groups.map((w) => ({
+                  key: `/workspaces/${w.id}`,
+                  icon: <TeamOutlined />,
+                  label: <span title={w.name}>{w.name}</span>,
+                })),
+              ],
+            }
+          : toItem(n),
+      )
     const adminItems = adminNav.filter((n) => !n.perm || permissions.includes(n.perm)).map(toItem)
     if (adminItems.length > 0) {
       items.push({ type: 'divider' })
       items.push({ key: ADMIN_MENU_KEY, icon: <AdminGroupIcon />, label: t('menu.admin'), children: adminItems })
     }
     return items
-  }, [t, user])
+  }, [t, user, workspaces.data])
 
-  const selectedKey = matchNavPath(pathname)
-  const defaultOpenKeys = pathname.startsWith('/admin') ? [ADMIN_MENU_KEY] : []
+  const workspaceMatch = /^\/workspaces\/[^/]+/.exec(pathname)?.[0]
+  const selectedKey = workspaceMatch ?? matchNavPath(pathname)
+  const defaultOpenKeys = pathname.startsWith('/admin')
+    ? [ADMIN_MENU_KEY]
+    : pathname.startsWith('/workspaces')
+      ? [WORKSPACES_MENU_KEY]
+      : []
 
   const breadcrumbItems = useMemo(() => {
     const items: { key: string; title: ReactNode }[] = [
@@ -135,17 +172,18 @@ export default function MainLayout() {
   }
 
 
+  // Targets the folder shown by the current explorer, otherwise the personal root ("Tài liệu của tôi").
   const newMenu: MenuProps = {
     items: [
       { key: 'folder', icon: <FolderAddOutlined />, label: t('header.newFolder') },
       { type: 'divider' },
-      { key: 'docx', icon: <FileWordOutlined />, label: t('header.newWord') },
-      { key: 'xlsx', icon: <FileExcelOutlined />, label: t('header.newExcel') },
-      { key: 'pptx', icon: <FilePptOutlined />, label: t('header.newPowerPoint') },
-      { key: 'txt', icon: <FileTextOutlined />, label: t('header.newText') },
+      { key: 'upload-files', icon: <UploadOutlined />, label: t('drive.uploadFiles') },
+      { key: 'upload-folder', icon: <FolderOutlined />, label: t('drive.uploadFolder') },
     ],
-    // TODO(phase 2+): open create-folder dialog / create Office file from template in ONLYOFFICE.
-    onClick: () => navigate('/my-drive'),
+    onClick: ({ key }) => {
+      if (key === 'folder') createFolder()
+      else void pickAndUpload(key === 'upload-folder')
+    },
   }
 
   const userMenu: MenuProps = {
@@ -168,6 +206,7 @@ export default function MainLayout() {
   return (
     <Layout className="bd-root">
       <IdleLogout />
+      <DriveGlobalHost />
       <Header className="bd-header">
         <Button
           type="text"
@@ -190,8 +229,7 @@ export default function MainLayout() {
           }}
         />
         <Space size={isMobile ? 4 : 8} className="bd-header-actions">
-          {/* TODO(phase 2+): open upload dialog / tus upload queue. */}
-          <Button icon={<UploadOutlined />} onClick={() => navigate('/my-drive')}>
+          <Button icon={<UploadOutlined />} onClick={() => void pickAndUpload(false)}>
             {!isMobile && t('header.upload')}
           </Button>
           <Dropdown menu={newMenu} trigger={['click']}>

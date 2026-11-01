@@ -1,5 +1,22 @@
-import PagePlaceholder from '@/components/PagePlaceholder'
+import { Result } from 'antd'
+import { useTranslation } from 'react-i18next'
+import PageHeader from '@/components/PageHeader'
+import FileExplorer from '@/features/drive/explorer/FileExplorer'
+import { useFolderSearchParam } from '@/features/drive/useFolderSearchParam'
+import { useAuthStore } from '@/stores/auth'
 
+/** "Tài liệu của tôi": explorer of the personal workspace (#18). */
 export default function MyDrivePage() {
-  return <PagePlaceholder titleKey="menu.myDrive" descriptionKey="empty.myDrive" />
+  const { t } = useTranslation()
+  const workspaceId = useAuthStore((s) => s.user?.personalWorkspaceId)
+  const [folderId, setFolderId] = useFolderSearchParam()
+  if (!workspaceId) return <Result status="info" title={t('menu.myDrive')} subTitle={t('drive.noPersonalWorkspace')} />
+  return (
+    <FileExplorer
+      workspaceId={workspaceId}
+      folderId={folderId}
+      onFolderChange={setFolderId}
+      header={<PageHeader title={t('menu.myDrive')} />}
+    />
+  )
 }
