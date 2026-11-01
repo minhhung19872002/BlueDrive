@@ -1,0 +1,41 @@
+using BlueDrive.Application.Abstractions;
+using BlueDrive.Domain.Enums;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+
+namespace BlueDrive.Infrastructure.Media;
+
+public interface IFileProcessor
+{
+    Task ProcessAsync(Guid fileId, Guid versionId, CancellationToken ct);
+}
+
+/// <summary>Runs the configured steps (scan → metadata/thumbnails) for a stored version. Steps are pluggable.</summary>
+public sealed class FileProcessor(IAppDbContext db, IEnumerable<IFileProcessingStep> steps, ILogger<FileProcessor> logger) : IFileProcessor
+{
+    public async Task ProcessAsync(Guid fileId, Guid versionId, CancellationToken ct)
+    {
+        var file = await db.Files.FirstOrDefaultAsync(f => f.Id == fileId, ct);
+        var version = await db.FileVersions.FirstOrDefaultAsync(v => v.Id == versionId, ct);
+        if (file is null || version is null || file.CurrentVersionId != versionId)
+        {
+            logger.LogInformation("Bỏ qua xử lý {FileId}: tệp đã bị xóa hoặc có phiên bản mới hơn", fileId);
+            return;
+        }
+        foreach (var step in steps.OrderBy(s => s.Order))
+        {
+            var proceed = await step.RunAsync(file, version, ct);
+            await db.SaveChangesAsync(ct);
+            if (!proceed) break;
+        }
+        if (file.ScanStatus is ScanStatus.Pending or ScanStatus.Scanning) file.ScanStatus = ScanStatus.Skipped;
+        await db.SaveChangesAsync(ct);
+    }
+}
+
+public interface IFileProcessingStep
+{
+    int Order { get; }
+    /// <summary>Returns false to stop the pipeline (e.g. infected file).</summary>
+    Task<bool> RunAsync(Domain.Entities.StoredFile file, Domain.Entities.FileVersion version, CancellationToken ct);
+}

@@ -1,6 +1,7 @@
 using System.Reflection;
 using BlueDrive.Application.Abstractions;
 using BlueDrive.Infrastructure.Jobs;
+using BlueDrive.Api.Storage;
 using BlueDrive.Infrastructure.Persistence;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +25,7 @@ public static class ApiSetup
         services.AddBlueDriveSecurity(config);
         services.AddSignalR();
         services.AddHostedService<BlueDrive.Api.Realtime.RealtimeRelay>();
+        services.AddHostedService<BlueDrive.Api.Storage.TusCleanupService>();
         services.AddBlueDriveHangfire(config, runServer: false);
         services.AddProblemDetails();
         services.AddExceptionHandler<GlobalExceptionHandler>();
@@ -109,12 +111,20 @@ public static class ApiSetup
             o.DocumentTitle = "BlueDrive API - Tài liệu";
         });
 
+        // tus PATCH chunks may exceed Kestrel's default 30 MB body limit.
+        app.Use((ctx, next) =>
+        {
+            if (ctx.Request.Path.StartsWithSegments("/tus") && ctx.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } f)
+                f.MaxRequestBodySize = null;
+            return next(ctx);
+        });
         app.UseCors();
         app.UseAuthentication();
         app.UseAuthorization();
         app.UseRateLimiter();
         app.MapControllers();
         app.MapHub<BlueDrive.Api.Realtime.NotificationHub>("/hubs/notifications");
+        app.MapBlueDriveTus();
         app.MapBlueDriveHealthChecks();
         return app;
     }

@@ -48,7 +48,18 @@ public static class DependencyInjection
         services.AddScoped<ITableExporter, TableExporter>();
         services.AddSingleton<IExcelReader, ExcelReader>();
         services.AddScoped<INotificationPublisher, Realtime.DbNotificationPublisher>();
-        services.AddScoped<IDataSeeder, ReferenceDataSeeder>();
-        return services;
+        services.Configure<Storage.StorageOptions>(config.GetSection("Storage"));
+        if (string.Equals(config["Storage:Provider"], "s3", StringComparison.OrdinalIgnoreCase))
+            services.AddSingleton<IFileStorage, Storage.S3FileStorage>();
+        else
+            services.AddSingleton<IFileStorage, Storage.LocalFileStorage>();
+        services.AddSingleton<IFileContentService, Storage.FileContentService>();
+        services.AddSingleton<IFileTypeInspector, Storage.FileTypeInspector>();
+        services.AddScoped<IBackgroundJobs, Jobs.HangfireBackgroundJobs>();
+        services.AddScoped<Media.IFileProcessor, Media.FileProcessor>();
+        services.AddScoped<Jobs.FileProcessingJob>();
+        services.AddScoped<Jobs.TrashRetentionJob>();
+        services.AddScoped<Jobs.IRecurringJobRegistration, Jobs.StorageRecurringJobs>();
+        services.AddScoped<IDataSeeder, ReferenceDataSeeder>();        return services;
     }
 }

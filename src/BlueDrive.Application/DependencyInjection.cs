@@ -20,6 +20,11 @@ public static class DependencyInjection
         services.AddValidatorsFromAssembly(asm, includeInternalTypes: true);
         services.AddScoped<Features.Auth.SessionRevoker>();
         services.AddScoped<Features.Monitoring.IAlertService, Features.Monitoring.AlertService>();
+        services.AddScoped<Security.IResourceAuthorizationService, Security.ResourceAuthorizationService>();
+        services.AddScoped<Abstractions.IResourceAccessChecker, Security.ResourceAccessChecker>();
+        services.AddScoped<Features.Storage.QuotaService>();
+        services.AddScoped<Features.Storage.TrashPurger>();
+        services.AddSingleton<Features.Storage.IContentTicketService, Features.Storage.ContentTicketService>();
         ValidatorOptions.Global.LanguageManager.Culture = new System.Globalization.CultureInfo("vi");
         return services;
     }

@@ -86,6 +86,8 @@ public interface IFileStorage
 {
     Task WriteAsync(string key, Stream content, CancellationToken ct = default);
     Task<Stream> OpenReadAsync(string key, CancellationToken ct = default);
+    /// <summary>Opens the blob positioned at <paramref name="offset"/> (ranged GET for S3, seek for local files).</summary>
+    Task<Stream> OpenReadAtAsync(string key, long offset, CancellationToken ct = default);
     Task<bool> ExistsAsync(string key, CancellationToken ct = default);
     Task DeleteAsync(string key, CancellationToken ct = default);
     Task<long> GetSizeAsync(string key, CancellationToken ct = default);

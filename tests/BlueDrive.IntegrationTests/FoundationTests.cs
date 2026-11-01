@@ -26,7 +26,7 @@ public class FoundationTests(ApiFactory factory)
     public async Task Swagger_document_is_served()
     {
         var res = await factory.CreateClient().GetAsync("/api/swagger/v1/swagger.json");
-        res.StatusCode.Should().Be(HttpStatusCode.OK);
+        res.StatusCode.Should().Be(HttpStatusCode.OK, await res.Content.ReadAsStringAsync());
     }
 
     [Fact]
