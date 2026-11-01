@@ -69,6 +69,8 @@ public static class DependencyInjection
         services.AddScoped<Media.IFileProcessingStep, Media.MalwareScanStep>();
         services.AddScoped<Media.IFileProcessingStep, Media.ThumbnailStep>();
 
+        services.AddScoped<Application.Features.Search.IFileSearchService, Search.FileSearchService>();
+
         services.AddScoped<IDataSeeder, ReferenceDataSeeder>();
         return services;
     }

@@ -245,9 +245,10 @@ public static class EnumNames
 }
 
 public sealed class UtcDateTimeConverter() : ValueConverter<DateTime, DateTime>(
-    v => v.Kind == DateTimeKind.Utc ? v : v.ToUniversalTime(),
+    // Unspecified values are UTC by convention (never the server's local time zone).
+    v => v.Kind == DateTimeKind.Local ? v.ToUniversalTime() : DateTime.SpecifyKind(v, DateTimeKind.Utc),
     v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
 
 public sealed class NullableUtcDateTimeConverter() : ValueConverter<DateTime?, DateTime?>(
-    v => v.HasValue ? (v.Value.Kind == DateTimeKind.Utc ? v : v.Value.ToUniversalTime()) : v,
+    v => v.HasValue ? (v.Value.Kind == DateTimeKind.Local ? v.Value.ToUniversalTime() : DateTime.SpecifyKind(v.Value, DateTimeKind.Utc)) : v,
     v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
