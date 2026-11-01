@@ -44,3 +44,16 @@ public sealed class StorageRecurringJobs(IRecurringJobManager jobs) : IRecurring
         return Task.CompletedTask;
     }
 }
+
+public sealed class HangfireReportQueue(IBackgroundJobClient client) : Application.Features.Monitoring.IReportQueue
+{
+    public void Enqueue(Guid reportJobId)
+        => client.Create<ReportJobRunner>(j => j.RunAsync(reportJobId, CancellationToken.None), new Hangfire.States.EnqueuedState(HangfireSetup.QueueReports));
+}
+
+public sealed class ReportJobRunner(ISender mediator)
+{
+    [AutomaticRetry(Attempts = 1)]
+    [Queue(HangfireSetup.QueueReports)]
+    public Task RunAsync(Guid id, CancellationToken ct) => mediator.Send(new Application.Features.Monitoring.RunReportJobCommand(id), ct);
+}

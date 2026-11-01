@@ -233,6 +233,21 @@ public class ContentController(IContentTicketService tickets, IFileContentServic
             await StreamDerivedAsync(ticket);
             return;
         }
+        if (ticket.Kind == "report")
+        {
+            var job = await db.ReportJobs.AsNoTracking().FirstOrDefaultAsync(j => j.Id == ticket.FileId && j.RequestedBy == ticket.UserId);
+            if (job?.ResultKey is null)
+            {
+                Response.StatusCode = 404;
+                return;
+            }
+            var (key, encrypted, wrapped) = BlueDrive.Infrastructure.Media.DerivedKeys.Parse(job.ResultKey);
+            var stream = await content.OpenReadAsync(key, encrypted, wrapped, HttpContext.RequestAborted);
+            var mime = job.Format == "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            Response.Headers.ContentDisposition = new ContentDispositionHeaderValue("attachment") { FileNameStar = job.ResultFileName }.ToString();
+            await Results.File(stream, mime).ExecuteAsync(HttpContext);
+            return;
+        }
         // Access is re-checked on every request (revoked shares stop working immediately).
         var level = ticket.Inline ? AccessLevel.View : AccessLevel.Download;
         var allowed = ticket.Kind == "attachment"

@@ -70,6 +70,11 @@ public static class DependencyInjection
         services.AddScoped<Media.IFileProcessingStep, Media.ThumbnailStep>();
 
         services.AddScoped<Application.Features.Search.IFileSearchService, Search.FileSearchService>();
+        services.AddSingleton<IAuditObserver, UnusualDownloadObserver>();
+        services.AddScoped<Application.Features.Monitoring.IAuditChainVerifier, AuditChainVerifier>();
+        services.AddSingleton<Application.Features.Monitoring.IDiskInfo, DiskInfo>();
+        services.AddScoped<Application.Features.Monitoring.IReportQueue, Jobs.HangfireReportQueue>();
+        services.AddScoped<Jobs.ReportJobRunner>();
 
         services.AddScoped<IDataSeeder, ReferenceDataSeeder>();
         return services;
