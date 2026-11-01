@@ -37,6 +37,9 @@ public sealed class GetBrandingHandler(ISettingsService settings) : IRequestHand
         ["appName"] = await settings.GetAsync(SettingKeys.BrandingAppName, "BlueDrive", ct),
         ["orgName"] = await settings.GetAsync(SettingKeys.BrandingOrgName, "", ct),
         ["logoUrl"] = await settings.GetAsync(SettingKeys.BrandingLogoUrl, "", ct),
+        ["governingBody"] = await settings.GetAsync(SettingKeys.ReportGoverningBody, "CỤC DÂN SỐ - BỘ Y TẾ", ct),
+        ["showNationalHeader"] = (await settings.GetAsync(SettingKeys.ReportShowNationalHeader, true, ct)) ? "true" : "false",
+        ["sessionIdleMinutes"] = (await settings.GetAsync(SettingKeys.SessionIdleMinutes, 30, ct)).ToString(),
     };
 }
 

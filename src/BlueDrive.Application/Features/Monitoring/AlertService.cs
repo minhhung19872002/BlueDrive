@@ -16,7 +16,7 @@ public interface IAlertService
 }
 
 public sealed class AlertService(
-    IAppDbContext db, INotificationPublisher notifier, IEmailSender email, ISettingsService settings,
+    IAppDbContext db, IUserNotifier notifier, IEmailSender email, ISettingsService settings,
     ISensitiveDataProtector pii, TimeProvider clock, ILogger<AlertService> logger) : IAlertService
 {
     public static readonly IReadOnlyDictionary<AlertType, string> TypeNames = new Dictionary<AlertType, string>

@@ -84,7 +84,7 @@ public class SessionsController : ApiControllerBase
 
     /// <summary>Toàn bộ phiên trên hệ thống (quản trị).</summary>
     [HttpGet, HasPermission(Perm.SessionView)]
-    public Task<Application.Common.PagedResult<SessionDto>> All([FromQuery] ListAllSessionsQuery q) => Mediator.Send(q);
+    public Task<Application.Common.PagedResult<SessionDto>> All([FromQuery] ListAllSessionsQuery query) => Mediator.Send(query);
 
     /// <summary>Thu hồi một phiên (của mình, hoặc của người khác nếu có quyền quản trị phiên).</summary>
     [HttpDelete("{id:guid}")]

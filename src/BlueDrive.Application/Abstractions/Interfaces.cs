@@ -108,7 +108,7 @@ public interface ISettingsService
     Task<Dictionary<string, string>> GetAllAsync(CancellationToken ct = default);
 }
 
-public interface INotificationPublisher
+public interface IUserNotifier
 {
     Task NotifyUserAsync(Guid userId, string type, string title, string? body, string? link, CancellationToken ct = default);
     Task NotifyPermissionAsync(string permission, string type, string title, string? body, string? link, CancellationToken ct = default);

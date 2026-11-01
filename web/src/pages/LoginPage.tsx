@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useLocation, useNavigate, useSearchParams, type Location } from 'react-router-dom'
 import { login } from '@/api/auth'
 import { showApiError } from '@/api/errors'
+import AuthBrand from '@/components/AuthBrand'
 import { useAuthStore } from '@/stores/auth'
 import type { LoginRequest } from '@/types/auth'
 
@@ -25,27 +26,34 @@ export default function LoginPage() {
       setSession(data.accessToken, data.refreshToken, data.user)
       navigate(data.user.mustChangePassword ? '/change-password' : redirectTo, { replace: true })
     },
-    onError: (error) => showApiError(error, { 401: t('auth.invalidCredentials') }),
+    onError: (error) => showApiError(error),
   })
 
   if (token && !mutation.isPending) {
     return <Navigate to={redirectTo} replace />
   }
 
+  const notice = params.get('idle')
+    ? t('auth.idleLoggedOut')
+    : params.get('expired')
+      ? t('auth.sessionExpired')
+      : params.get('reset')
+        ? t('auth.resetDone')
+        : null
+
   return (
     <div className="bd-auth-page">
       <Card className="bd-auth-card">
-        <div className="bd-auth-brand">
-          <img src="/logo.svg" alt="" width={56} height={56} />
-          <Typography.Title level={3} style={{ margin: '12px 0 0' }}>
-            {t('common.appName')}
-          </Typography.Title>
-          <Typography.Text type="secondary">{t('common.appSlogan')}</Typography.Text>
-        </div>
+        <AuthBrand />
         <Typography.Title level={4}>{t('auth.loginTitle')}</Typography.Title>
         <Typography.Paragraph type="secondary">{t('auth.loginSubtitle')}</Typography.Paragraph>
-        {params.get('expired') && (
-          <Alert type="warning" showIcon message={t('auth.sessionExpired')} style={{ marginBottom: 16 }} />
+        {notice && (
+          <Alert
+            type={params.get('reset') ? 'success' : 'warning'}
+            showIcon
+            message={notice}
+            style={{ marginBottom: 16 }}
+          />
         )}
         <Form<LoginRequest> layout="vertical" size="large" onFinish={(values) => mutation.mutate(values)}>
           <Form.Item

@@ -16,7 +16,7 @@ public static class ApiSetup
     {
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, HttpCurrentUser>();
-        services.AddControllers()
+        services.AddControllers(o => o.ModelBinderProviders.Insert(0, new SnakeCaseEnumBinderProvider()))
             .AddJsonOptions(o =>
             {
                 o.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.SnakeCaseLower));

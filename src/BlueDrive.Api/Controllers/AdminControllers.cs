@@ -17,7 +17,7 @@ public class OrganizationsController : ApiControllerBase
 {
     /// <summary>Danh sách dạng bảng, lọc theo mã/tên (không dấu), trạng thái, đơn vị cha.</summary>
     [HttpGet, HasPermission(Perm.OrgView)]
-    public Task<PagedResult<OrganizationDto>> List([FromQuery] ListOrganizationsQuery q) => Mediator.Send(q);
+    public Task<PagedResult<OrganizationDto>> List([FromQuery] ListOrganizationsQuery query) => Mediator.Send(query);
 
     /// <summary>Danh sách dạng cây.</summary>
     [HttpGet("tree")]
@@ -28,8 +28,8 @@ public class OrganizationsController : ApiControllerBase
 
     /// <summary>Xuất Excel/PDF theo bộ lọc hiện tại.</summary>
     [HttpGet("export"), HasPermission(Perm.OrgView)]
-    public async Task<IActionResult> Export([FromQuery] ListOrganizationsQuery q, [FromQuery] string format = "xlsx")
-        => FileResult(await Mediator.Send(new ExportOrganizationsQuery(q, format, ExportedBy)));
+    public async Task<IActionResult> Export([FromQuery] ListOrganizationsQuery query, [FromQuery] string format = "xlsx")
+        => FileResult(await Mediator.Send(new ExportOrganizationsQuery(query, format, ExportedBy)));
 
     [HttpPost, HasPermission(Perm.OrgCreate)]
     public async Task<IActionResult> Create(SaveOrganizationCommand cmd) => Ok(new { id = await Mediator.Send(cmd with { Id = null }) });
@@ -56,7 +56,7 @@ public class OrganizationsController : ApiControllerBase
 public class UsersController : ApiControllerBase
 {
     [HttpGet, HasPermission(Perm.UserView)]
-    public Task<PagedResult<UserDto>> List([FromQuery] ListUsersQuery q) => Mediator.Send(q);
+    public Task<PagedResult<UserDto>> List([FromQuery] ListUsersQuery query) => Mediator.Send(query);
 
     /// <summary>Tra cứu nhanh người dùng (chọn người chia sẻ, @nhắc tên).</summary>
     [HttpGet("lookup")]
@@ -67,8 +67,8 @@ public class UsersController : ApiControllerBase
     public Task<UserDto> Get(Guid id) => Mediator.Send(new GetUserQuery(id));
 
     [HttpGet("export"), HasPermission(Perm.UserView)]
-    public async Task<IActionResult> Export([FromQuery] ListUsersQuery q, [FromQuery] string format = "xlsx")
-        => FileResult(await Mediator.Send(new ExportUsersQuery(q, format, ExportedBy)));
+    public async Task<IActionResult> Export([FromQuery] ListUsersQuery query, [FromQuery] string format = "xlsx")
+        => FileResult(await Mediator.Send(new ExportUsersQuery(query, format, ExportedBy)));
 
     [HttpPost, HasPermission(Perm.UserCreate)]
     public Task<SaveUserResult> Create(SaveUserCommand cmd) => Mediator.Send(cmd with { Id = null });
@@ -125,7 +125,7 @@ public class UsersController : ApiControllerBase
 public class UserGroupsController : ApiControllerBase
 {
     [HttpGet]
-    public Task<PagedResult<UserGroupDto>> List([FromQuery] ListUserGroupsQuery q) => Mediator.Send(q);
+    public Task<PagedResult<UserGroupDto>> List([FromQuery] ListUserGroupsQuery query) => Mediator.Send(query);
 
     [HttpGet("{id:guid}"), HasPermission(Perm.GroupView)]
     public Task<UserGroupDetailDto> Get(Guid id) => Mediator.Send(new GetUserGroupQuery(id));
@@ -262,7 +262,7 @@ public class SettingsController : ApiControllerBase
 public class NotificationsController : ApiControllerBase
 {
     [HttpGet]
-    public Task<PagedResult<NotificationDto>> List([FromQuery] ListNotificationsQuery q) => Mediator.Send(q);
+    public Task<PagedResult<NotificationDto>> List([FromQuery] ListNotificationsQuery query) => Mediator.Send(query);
 
     [HttpGet("unread-count")]
     public async Task<IActionResult> UnreadCount() => Ok(new { count = await Mediator.Send(new UnreadNotificationCountQuery()) });

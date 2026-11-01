@@ -1,23 +1,19 @@
 import { Suspense, useMemo, useState, type ReactNode } from 'react'
 import {
   Avatar,
-  Badge,
   Breadcrumb,
   Button,
   Drawer,
   Dropdown,
-  Empty,
   Grid,
   Input,
   Layout,
   Menu,
-  Popover,
   Space,
   Typography,
   type MenuProps,
 } from 'antd'
 import {
-  BellOutlined,
   CustomerServiceOutlined,
   FileExcelOutlined,
   FilePptOutlined,
@@ -37,9 +33,12 @@ import {
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { logout as logoutApi } from '@/api/auth'
+import IdleLogout from '@/components/IdleLogout'
+import NotificationBell from '@/components/NotificationBell'
 import PageLoading from '@/components/PageLoading'
 import StorageUsage from '@/components/StorageUsage'
+import { useBranding } from '@/hooks/useLookups'
+import { useLogout } from '@/hooks/useLogout'
 import { useAuthStore } from '@/stores/auth'
 import { ADMIN_MENU_KEY, AdminGroupIcon, adminNav, mainNav, matchNavPath, routeLabels } from './navigation'
 
@@ -87,8 +86,9 @@ export default function MainLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   const user = useAuthStore((s) => s.user)
-  const refreshToken = useAuthStore((s) => s.refreshToken)
-  const clearSession = useAuthStore((s) => s.logout)
+  const logout = useLogout()
+  const branding = useBranding()
+  const appName = branding.data?.appName || t('common.appName')
 
   const menuItems = useMemo<MenuProps['items']>(() => {
     const permissions = user?.permissions ?? []
@@ -134,15 +134,6 @@ export default function MainLayout() {
     setDrawerOpen(false)
   }
 
-  const handleLogout = async () => {
-    try {
-      await logoutApi(refreshToken)
-    } catch {
-      // Ignore: local session is cleared regardless.
-    }
-    clearSession()
-    navigate('/login', { replace: true })
-  }
 
   const newMenu: MenuProps = {
     items: [
@@ -167,7 +158,7 @@ export default function MainLayout() {
       { key: 'logout', icon: <LogoutOutlined />, label: t('header.logout'), danger: true },
     ],
     onClick: ({ key }) => {
-      if (key === 'logout') void handleLogout()
+      if (key === 'logout') void logout()
       else navigate(key)
     },
   }
@@ -176,6 +167,7 @@ export default function MainLayout() {
 
   return (
     <Layout className="bd-root">
+      <IdleLogout />
       <Header className="bd-header">
         <Button
           type="text"
@@ -185,8 +177,8 @@ export default function MainLayout() {
           onClick={() => (isMobile ? setDrawerOpen(true) : setCollapsed((c) => !c))}
         />
         <Link to="/" className="bd-logo">
-          <img src="/logo.svg" alt="" width={32} height={32} />
-          {!isMobile && <span className="bd-logo-text">{t('common.appName')}</span>}
+          <img src={branding.data?.logoUrl || '/logo.svg'} alt="" width={32} height={32} style={{ objectFit: 'contain' }} />
+          {!isMobile && <span className="bd-logo-text">{appName}</span>}
         </Link>
         <Input.Search
           className="bd-header-search"
@@ -207,16 +199,7 @@ export default function MainLayout() {
               {!isMobile && t('header.new')}
             </Button>
           </Dropdown>
-          <Popover
-            trigger="click"
-            placement="bottomRight"
-            title={t('header.notifications')}
-            content={<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('header.noNotifications')} />}
-          >
-            <Badge count={0} size="small">
-              <Button type="text" shape="circle" aria-label={t('header.notifications')} icon={<BellOutlined />} />
-            </Badge>
-          </Popover>
+          <NotificationBell />
           <Dropdown menu={userMenu} trigger={['click']} placement="bottomRight">
             <Button type="text" className="bd-user-button">
               <Avatar size="small" style={{ backgroundColor: 'var(--bd-primary)' }} icon={<UserOutlined />} />
@@ -233,7 +216,7 @@ export default function MainLayout() {
             open={drawerOpen}
             onClose={() => setDrawerOpen(false)}
             width={SIDER_WIDTH + 16}
-            title={t('common.appName')}
+            title={appName}
             rootClassName="bd-sider-drawer"
             styles={{ body: { padding: 0 } }}
           >

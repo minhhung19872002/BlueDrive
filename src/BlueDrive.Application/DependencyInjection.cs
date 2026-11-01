@@ -25,6 +25,7 @@ public static class DependencyInjection
         services.AddScoped<Features.Storage.QuotaService>();
         services.AddScoped<Features.Storage.TrashPurger>();
         services.AddSingleton<Features.Storage.IContentTicketService, Features.Storage.ContentTicketService>();
+        services.AddSingleton<Features.Sharing.IPublicLinkTickets, Features.Sharing.PublicLinkTickets>();
         ValidatorOptions.Global.LanguageManager.Culture = new System.Globalization.CultureInfo("vi");
         return services;
     }

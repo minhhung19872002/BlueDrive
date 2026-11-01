@@ -65,7 +65,7 @@ public sealed record CompleteUploadCommand(string TempFilePath, UploadMetadata M
 
 public sealed class CompleteUploadHandler(
     IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IFileTypeInspector types, ISettingsService settings,
-    QuotaService quota, IFileContentService content, IBackgroundJobs jobs, IAuditLogger audit, TimeProvider clock) : IRequestHandler<CompleteUploadCommand, UploadResult>
+    QuotaService quota, IFileContentService content, IBackgroundJobs jobs, IUserNotifier notify, IAuditLogger audit, TimeProvider clock) : IRequestHandler<CompleteUploadCommand, UploadResult>
 {
     public async Task<UploadResult> Handle(CompleteUploadCommand cmd, CancellationToken ct)
     {
@@ -127,6 +127,7 @@ public sealed class CompleteUploadHandler(
             await db.SaveChangesAsync(ct);
             await audit.LogAsync(new AuditEntry(AuditAction.Upload, ResourceType.File, file.Id, file.Name, file.WorkspaceId,
                 new { size = stored.SizeBytes, folder = folder?.Id, relativePath = cmd.Meta.RelativePath, approval = file.ApprovalStatus }), ct);
+            if (needsApproval) await notify.NotifyPermissionAsync(Perm.DocApprove, "approval", $"Tư liệu \"{file.Name}\" chờ phê duyệt", null, "/approvals", ct);
         }
         await quota.AddUsageAsync(file.WorkspaceId, stored.SizeBytes, ct);
         await RecentTracker.TouchAsync(db, uid, file.Id, "upload", now, ct);

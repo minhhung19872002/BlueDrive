@@ -13,7 +13,7 @@ public sealed record RealtimeEnvelope(string Group, string Method, JsonElement P
 /// Persists notifications and publishes them on the "bluedrive_realtime" channel; the API's RealtimeRelay
 /// LISTENs and forwards to SignalR groups ("user:{id}", "file:{id}"...). Works without Redis.
 /// </summary>
-public sealed class DbNotificationPublisher(IAppDbContext db, NpgsqlDataSource dataSource, TimeProvider clock) : INotificationPublisher
+public sealed class DbNotificationPublisher(IAppDbContext db, NpgsqlDataSource dataSource, TimeProvider clock) : IUserNotifier
 {
     public const string Channel = "bluedrive_realtime";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);

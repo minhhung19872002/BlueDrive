@@ -67,3 +67,142 @@
     text-decoration: none !important;
   }
 }
+
+/* ---------- Print view pages (PrintLayout) ---------- */
+.bd-print-page {
+  min-height: 100vh;
+  background: #e9edf2;
+  padding: 0 0 24px;
+}
+
+.bd-print-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #fff;
+  border-bottom: 1px solid #d9d9d9;
+}
+
+.bd-print-toolbar-hint {
+  color: #8c8c8c;
+  font-size: 13px;
+}
+
+.bd-print-sheet {
+  max-width: 1100px;
+  margin: 16px auto 0;
+  padding: 24px 28px;
+  background: #fff;
+  color: #000;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 13pt;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  overflow-x: auto;
+}
+
+.bd-print-national {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+}
+
+.bd-print-national td {
+  width: 50%;
+  vertical-align: top;
+  text-align: center;
+  padding: 0 8px;
+}
+
+.bd-print-org,
+.bd-print-nation {
+  font-weight: 700;
+  font-size: 12pt;
+  text-transform: uppercase;
+}
+
+.bd-print-motto {
+  font-weight: 700;
+  font-size: 13pt;
+}
+
+.bd-print-underline {
+  width: 40%;
+  margin: 4px auto 0;
+  border-top: 1px solid #000;
+}
+
+.bd-print-title {
+  margin: 20px 0 6px;
+  text-align: center;
+  font-size: 16pt;
+  font-weight: 700;
+}
+
+.bd-print-filter,
+.bd-print-meta {
+  text-align: center;
+  font-style: italic;
+  font-size: 11pt;
+  margin-bottom: 4px;
+}
+
+.bd-print-meta {
+  margin-bottom: 16px;
+}
+
+.bd-print-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11pt;
+}
+
+.bd-print-table th,
+.bd-print-table td {
+  border: 1px solid #000;
+  padding: 4px 6px;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.bd-print-table th {
+  background: #f0f0f0;
+  font-weight: 700;
+  text-align: center;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.bd-print-table thead {
+  display: table-header-group;
+}
+
+.bd-print-summary {
+  margin-top: 8px;
+  font-style: italic;
+  font-size: 11pt;
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 12mm;
+  }
+
+  .bd-print-page {
+    background: #fff !important;
+    padding: 0 !important;
+  }
+
+  .bd-print-sheet {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+}

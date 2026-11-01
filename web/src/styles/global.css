@@ -178,3 +178,100 @@ body {
     margin: 12px 0;
   }
 }
+
+.bd-page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+}
+
+/* ---------- Password policy checklist ---------- */
+.bd-policy-checklist {
+  padding: 10px 12px;
+  border: 1px solid var(--bd-border);
+  border-radius: 6px;
+  background: #fafbfc;
+}
+
+/* ---------- Notifications ---------- */
+.bd-notif-panel {
+  width: min(360px, calc(100vw - 32px));
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.bd-notif-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bd-notif-item {
+  padding-inline: 8px !important;
+  border-radius: 6px;
+}
+
+.bd-notif-item:hover {
+  background: #f5f7fa;
+}
+
+.bd-notif-unread {
+  background: #f0f6ff;
+}
+
+/* ---------- Selectable side lists (roles, catalogs) ---------- */
+.bd-select-item {
+  cursor: pointer;
+  padding-inline: 8px !important;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.bd-select-item:hover {
+  background: #f5f7fa;
+}
+
+.bd-select-item-active,
+.bd-select-item-active:hover {
+  background: #e6f0fa;
+}
+
+/* ---------- Organization tree ---------- */
+.bd-org-tree {
+  max-height: calc(100vh - 340px);
+  min-height: 240px;
+  overflow: auto;
+}
+
+/* ---------- Permission matrix ---------- */
+.bd-matrix-module-row > td {
+  background: #f0f4f9 !important;
+}
+
+/* ---------- Settings ---------- */
+.bd-sticky-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid var(--bd-border);
+  border-radius: 8px;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.04);
+}
+
+@media (max-width: 575px) {
+  .bd-page-actions,
+  .bd-page-actions > .ant-space {
+    width: 100%;
+  }
+
+  .bd-sticky-actions {
+    justify-content: center;
+  }
+}

@@ -2,10 +2,13 @@ import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from 're
 import { Navigate, Route, Routes } from 'react-router-dom'
 import PageLoading from '@/components/PageLoading'
 import RequireAuth from '@/components/RequireAuth'
-import MainLayout from '@/layouts/MainLayout'
+import AppShell from '@/layouts/AppShell'
 
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
 const ForgotPasswordPage = lazy(() => import('@/pages/ForgotPasswordPage'))
+const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage'))
+const PrintOrganizationsPage = lazy(() => import('@/pages/print/PrintOrganizationsPage'))
+const PrintUsersPage = lazy(() => import('@/pages/print/PrintUsersPage'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 
 interface AppRoute {
@@ -30,16 +33,16 @@ const layoutRoutes: AppRoute[] = [
   { path: 'support', Component: lazy(() => import('@/pages/account/SupportPage')) },
 
   { path: 'admin/dashboard', perm: 'dashboard.view', Component: lazy(() => import('@/pages/admin/AdminDashboardPage')) },
-  { path: 'admin/organizations', perm: 'org.view', Component: lazy(() => import('@/pages/admin/OrganizationsPage')) },
-  { path: 'admin/users', perm: 'user.view', Component: lazy(() => import('@/pages/admin/UsersPage')) },
-  { path: 'admin/user-groups', perm: 'usergroup.view', Component: lazy(() => import('@/pages/admin/UserGroupsPage')) },
-  { path: 'admin/roles', perm: 'role.view', Component: lazy(() => import('@/pages/admin/RolesPage')) },
+  { path: 'admin/organizations', perm: 'org.view', Component: lazy(() => import('@/pages/admin/organizations/OrganizationsPage')) },
+  { path: 'admin/users', perm: 'user.view', Component: lazy(() => import('@/pages/admin/users/UsersPage')) },
+  { path: 'admin/user-groups', perm: 'usergroup.view', Component: lazy(() => import('@/pages/admin/userGroups/UserGroupsPage')) },
+  { path: 'admin/roles', perm: 'role.view', Component: lazy(() => import('@/pages/admin/roles/RolesPage')) },
   {
     path: 'admin/permission-matrix',
     perm: 'role.view',
     Component: lazy(() => import('@/pages/admin/PermissionMatrixPage')),
   },
-  { path: 'admin/catalogs', perm: 'catalog.view', Component: lazy(() => import('@/pages/admin/CatalogsPage')) },
+  { path: 'admin/catalogs', perm: 'catalog.view', Component: lazy(() => import('@/pages/admin/catalogs/CatalogsPage')) },
   {
     path: 'admin/workspaces',
     perm: 'workspace.admin',
@@ -63,11 +66,28 @@ export default function AppRoutes() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route
+          path="/print/organizations"
+          element={
+            <RequireAuth perm="org.view">
+              <PrintOrganizationsPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/print/users"
+          element={
+            <RequireAuth perm="user.view">
+              <PrintUsersPage />
+            </RequireAuth>
+          }
+        />
         <Route
           path="/"
           element={
             <RequireAuth>
-              <MainLayout />
+              <AppShell />
             </RequireAuth>
           }
         >

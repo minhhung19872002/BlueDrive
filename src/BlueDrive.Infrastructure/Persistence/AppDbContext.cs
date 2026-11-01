@@ -155,8 +155,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Name).HasMaxLength(255);
             e.Property(x => x.Extension).HasMaxLength(20);
             e.Property(x => x.MimeType).HasMaxLength(150);
-            e.Property<NpgsqlTsVector>("SearchVector");
-            e.HasIndex("SearchVector").HasMethod("GIN");
+            if (Database.IsNpgsql())
+            {
+                e.Property<NpgsqlTsVector>("SearchVector");
+                e.HasIndex("SearchVector").HasMethod("GIN");
+            }
             e.HasIndex(x => x.Name).HasMethod("GIN").HasOperators("gin_trgm_ops");
             e.HasOne(x => x.Workspace).WithMany().HasForeignKey(x => x.WorkspaceId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.Folder).WithMany().HasForeignKey(x => x.FolderId).OnDelete(DeleteBehavior.NoAction);

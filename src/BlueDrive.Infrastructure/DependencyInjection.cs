@@ -47,7 +47,7 @@ public static class DependencyInjection
         services.AddScoped<IEmailSender, SmtpEmailSender>();
         services.AddScoped<ITableExporter, TableExporter>();
         services.AddSingleton<IExcelReader, ExcelReader>();
-        services.AddScoped<INotificationPublisher, Realtime.DbNotificationPublisher>();
+        services.AddScoped<IUserNotifier, Realtime.DbNotificationPublisher>();
         services.Configure<Storage.StorageOptions>(config.GetSection("Storage"));
         if (string.Equals(config["Storage:Provider"], "s3", StringComparison.OrdinalIgnoreCase))
             services.AddSingleton<IFileStorage, Storage.S3FileStorage>();

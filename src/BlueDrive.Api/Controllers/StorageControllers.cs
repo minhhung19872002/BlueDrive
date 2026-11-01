@@ -27,7 +27,7 @@ public class WorkspacesController : ApiControllerBase
 
     /// <summary>Toàn bộ nhóm tài nguyên (màn hình Cấu hình nhóm tài nguyên).</summary>
     [HttpGet("all"), HasPermission(Perm.WorkspaceAdmin)]
-    public Task<PagedResult<WorkspaceDto>> All([FromQuery] ListAllWorkspacesQuery q) => Mediator.Send(q);
+    public Task<PagedResult<WorkspaceDto>> All([FromQuery] ListAllWorkspacesQuery query) => Mediator.Send(query);
 
     [HttpGet("{id:guid}")]
     public Task<WorkspaceDto> Get(Guid id) => Mediator.Send(new GetWorkspaceQuery(id));
@@ -71,7 +71,7 @@ public class WorkspacesController : ApiControllerBase
 
     /// <summary>Danh sách thư mục/tệp trong thư mục (folderId trống = gốc).</summary>
     [HttpGet("{id:guid}/items")]
-    public Task<PagedResult<DriveItemDto>> Items(Guid id, [FromQuery] ListItemsQuery q) => Mediator.Send(q with { WorkspaceId = id });
+    public Task<PagedResult<DriveItemDto>> Items(Guid id, [FromQuery] ListItemsQuery query) => Mediator.Send(query with { WorkspaceId = id });
 
     /// <summary>Thông tin thư mục hiện tại: đường dẫn, quyền.</summary>
     [HttpGet("{id:guid}/folder-info")]
@@ -83,7 +83,7 @@ public class WorkspacesController : ApiControllerBase
 
     /// <summary>Thùng rác của không gian (#61).</summary>
     [HttpGet("{id:guid}/trash"), HasPermission(Perm.TrashView)]
-    public Task<PagedResult<TrashItemDto>> Trash(Guid id, [FromQuery] ListTrashQuery q) => Mediator.Send(q with { WorkspaceId = id });
+    public Task<PagedResult<TrashItemDto>> Trash(Guid id, [FromQuery] ListTrashQuery query) => Mediator.Send(query with { WorkspaceId = id });
 
     /// <summary>Dọn sạch thùng rác.</summary>
     [HttpPost("{id:guid}/trash/empty"), HasPermission(Perm.TrashPurge)]

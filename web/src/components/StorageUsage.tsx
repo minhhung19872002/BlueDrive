@@ -1,7 +1,7 @@
 import { Progress, Tooltip, Typography } from 'antd'
 import { CloudOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
-import { useStorageStore } from '@/stores/storage'
+import { useAuthStore } from '@/stores/auth'
 import { formatBytes, percentOf } from '@/utils/format'
 
 interface StorageUsageProps {
@@ -17,8 +17,8 @@ function strokeColor(percent: number): string | undefined {
 
 export default function StorageUsage({ compact = false }: StorageUsageProps) {
   const { t } = useTranslation()
-  const usedBytes = useStorageStore((s) => s.usedBytes)
-  const quotaBytes = useStorageStore((s) => s.quotaBytes)
+  const usedBytes = useAuthStore((s) => s.user?.usedBytes ?? 0)
+  const quotaBytes = useAuthStore((s) => s.user?.quotaBytes ?? 0)
   const percent = percentOf(usedBytes, quotaBytes)
   const label = t('sider.storageUsed', { used: formatBytes(usedBytes), total: formatBytes(quotaBytes) })
 

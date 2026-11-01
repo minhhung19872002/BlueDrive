@@ -8,6 +8,7 @@ interface AuthState {
   user: AuthUser | null
   setSession: (accessToken: string, refreshToken: string, user: AuthUser) => void
   setTokens: (accessToken: string, refreshToken: string, user?: AuthUser) => void
+  setUser: (user: AuthUser) => void
   logout: () => void
   hasPerm: (code: string) => boolean
   hasAnyPerm: (codes: string[]) => boolean
@@ -22,6 +23,7 @@ export const useAuthStore = create<AuthState>()(
       setSession: (accessToken, refreshToken, user) => set({ accessToken, refreshToken, user }),
       setTokens: (accessToken, refreshToken, user) =>
         set((s) => ({ accessToken, refreshToken, user: user ?? s.user })),
+      setUser: (user) => set({ user }),
       logout: () => set({ accessToken: null, refreshToken: null, user: null }),
       hasPerm: (code) => get().user?.permissions?.includes(code) ?? false,
       hasAnyPerm: (codes) => codes.some((c) => get().hasPerm(c)),

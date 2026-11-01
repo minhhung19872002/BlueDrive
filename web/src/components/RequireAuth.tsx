@@ -30,10 +30,15 @@ function Forbidden() {
 export default function RequireAuth({ children, perm }: RequireAuthProps) {
   const token = useAuthStore((s) => s.accessToken)
   const permissions = useAuthStore((s) => s.user?.permissions)
+  const mustChangePassword = useAuthStore((s) => s.user?.mustChangePassword)
   const location = useLocation()
 
   if (!token) {
     return <Navigate to="/login" replace state={{ from: location }} />
+  }
+  // Every API except change-password returns 403 until the password is changed.
+  if (mustChangePassword && location.pathname !== '/change-password') {
+    return <Navigate to="/change-password" replace />
   }
   if (perm && !permissions?.includes(perm)) {
     return <Forbidden />
