@@ -11,7 +11,17 @@ namespace BlueDrive.Application.Features.Storage;
 public sealed record DriveItemDto(
     Guid Id, string Type, string Name, Guid WorkspaceId, Guid? ParentId, long SizeBytes, MediaType? MediaType, string? Extension, string? MimeType,
     DateTime CreatedAt, DateTime? UpdatedAt, Guid? CreatedBy, string? CreatedByName, bool IsStarred, bool HasThumbnail, ApprovalStatus? ApprovalStatus,
-    int? VersionNo, string? Title, IReadOnlyList<string>? Tags, string? WorkspaceName = null);
+    int? VersionNo, string? Title, IReadOnlyList<string>? Tags, string? WorkspaceName = null, string? ThumbnailUrl = null);
+
+/// <summary>Adds short-lived signed thumbnail URLs (usable in &lt;img src&gt;) to listing items.</summary>
+public static class ThumbnailUrls
+{
+    public static string For(IContentTicketService tickets, Guid userId, Guid fileId, bool large = false)
+        => $"/api/v1/content/{Uri.EscapeDataString(tickets.Issue(new ContentTicket(userId, large ? "preview" : "thumb", fileId, null, true, null, null), TimeSpan.FromHours(6)))}";
+
+    public static List<DriveItemDto> Apply(IEnumerable<DriveItemDto> items, IContentTicketService tickets, Guid userId)
+        => items.Select(i => i.HasThumbnail && i.Type == "file" ? i with { ThumbnailUrl = For(tickets, userId, i.Id) } : i).ToList();
+}
 
 public sealed record BreadcrumbItem(Guid? Id, string Name);
 
@@ -67,7 +77,7 @@ public static class DriveProjection
 /// <summary>Folder contents: sub-folders first, then files; server-side paging across both (#18, #44).</summary>
 public sealed record ListItemsQuery(Guid WorkspaceId, Guid? FolderId, MediaType? MediaType) : PageQuery, IRequest<PagedResult<DriveItemDto>>;
 
-public sealed class ListItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth) : IRequestHandler<ListItemsQuery, PagedResult<DriveItemDto>>
+public sealed class ListItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets) : IRequestHandler<ListItemsQuery, PagedResult<DriveItemDto>>
 {
     public async Task<PagedResult<DriveItemDto>> Handle(ListItemsQuery q, CancellationToken ct)
     {
@@ -119,7 +129,7 @@ public sealed class ListItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
             var fileSkip = Math.Max(0, skip - folderCount);
             items.AddRange(await DriveProjection.Files(db, DriveProjection.SortFiles(files, q.Sort).Skip(fileSkip).Take(remaining), uid).ToListAsync(ct));
         }
-        return new PagedResult<DriveItemDto>(items, folderCount + fileCount, q.SafePage, q.SafePageSize);
+        return new PagedResult<DriveItemDto>(ThumbnailUrls.Apply(items, tickets, uid), folderCount + fileCount, q.SafePage, q.SafePageSize);
     }
 }
 
@@ -177,11 +187,11 @@ public sealed record FileDetailDto(
     Guid? CreatedBy, string? CreatedByName, DateTime CreatedAt, Guid? UpdatedBy, string? UpdatedByName, DateTime? UpdatedAt,
     ApprovalStatus ApprovalStatus, string? RejectionReason, ScanStatus ScanStatus, int? Width, int? Height, double? DurationSeconds,
     bool HasThumbnail, bool HasPreview, string? ChecksumSha256, IReadOnlyList<CatalogTagDto> Catalogs, IReadOnlyList<FileVersionDto> Versions,
-    bool IsStarred, AccessFlags Access, bool IsDeleted);
+    bool IsStarred, AccessFlags Access, bool IsDeleted, string? ThumbnailUrl = null, string? PreviewUrl = null);
 
 public sealed record GetFileDetailQuery(Guid Id, bool RecordView = true) : IRequest<FileDetailDto>;
 
-public sealed class GetFileDetailHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, TimeProvider clock)
+public sealed class GetFileDetailHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets, TimeProvider clock)
     : IRequestHandler<GetFileDetailQuery, FileDetailDto>
 {
     public async Task<FileDetailDto> Handle(GetFileDetailQuery q, CancellationToken ct)
@@ -203,7 +213,8 @@ public sealed class GetFileDetailHandler(IAppDbContext db, ICurrentUser me, IRes
             f.WorkspaceId, location[0].Name, f.Workspace!.Type, f.FolderId, location, f.CreatedBy, f.CreatedBy is { } c ? users.GetValueOrDefault(c) : null, f.CreatedAt,
             f.UpdatedBy, f.UpdatedBy is { } u2 ? users.GetValueOrDefault(u2) : null, f.UpdatedAt, f.ApprovalStatus, f.RejectionReason, f.ScanStatus,
             f.Width, f.Height, f.DurationSeconds, f.ThumbnailKey != null, f.PreviewKey != null, f.ChecksumSha256, catalogs, versions, starred,
-            AccessFlags.From(access), f.IsDeleted);
+            AccessFlags.From(access), f.IsDeleted,
+            f.ThumbnailKey != null ? ThumbnailUrls.For(tickets, uid, f.Id) : null, f.PreviewKey != null ? ThumbnailUrls.For(tickets, uid, f.Id, large: true) : null);
     }
 }
 
@@ -226,7 +237,7 @@ public static class FileLocation
 // ---------- Recent (#18), starred (#23), favorites ----------
 public sealed record ListRecentQuery(int Take = 50) : IRequest<IReadOnlyList<DriveItemDto>>;
 
-public sealed class ListRecentHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth) : IRequestHandler<ListRecentQuery, IReadOnlyList<DriveItemDto>>
+public sealed class ListRecentHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets) : IRequestHandler<ListRecentQuery, IReadOnlyList<DriveItemDto>>
 {
     public async Task<IReadOnlyList<DriveItemDto>> Handle(ListRecentQuery q, CancellationToken ct)
     {
@@ -241,13 +252,13 @@ public sealed class ListRecentHandler(IAppDbContext db, ICurrentUser me, IResour
             if (result.Count >= q.Take) break;
             if (await auth.CanAsync(uid, ResourceType.File, it.Id, AccessLevel.View, ct)) result.Add(it);
         }
-        return result;
+        return ThumbnailUrls.Apply(result, tickets, uid);
     }
 }
 
 public sealed record ListStarredQuery : IRequest<IReadOnlyList<DriveItemDto>>;
 
-public sealed class ListStarredHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth) : IRequestHandler<ListStarredQuery, IReadOnlyList<DriveItemDto>>
+public sealed class ListStarredHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets) : IRequestHandler<ListStarredQuery, IReadOnlyList<DriveItemDto>>
 {
     public async Task<IReadOnlyList<DriveItemDto>> Handle(ListStarredQuery q, CancellationToken ct)
     {
@@ -260,7 +271,7 @@ public sealed class ListStarredHandler(IAppDbContext db, ICurrentUser me, IResou
         var result = new List<DriveItemDto>();
         foreach (var it in items)
             if (await auth.CanAsync(uid, it.Type == "file" ? ResourceType.File : ResourceType.Folder, it.Id, AccessLevel.View, ct)) result.Add(it);
-        return result;
+        return ThumbnailUrls.Apply(result, tickets, uid);
     }
 }
 

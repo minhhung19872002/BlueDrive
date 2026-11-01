@@ -228,9 +228,17 @@ public class ContentController(IContentTicketService tickets, IFileContentServic
             await StreamZipAsync(ticket);
             return;
         }
+        if (ticket.Kind is "thumb" or "preview")
+        {
+            await StreamDerivedAsync(ticket);
+            return;
+        }
         // Access is re-checked on every request (revoked shares stop working immediately).
         var level = ticket.Inline ? AccessLevel.View : AccessLevel.Download;
-        if (!await auth.CanAsync(ticket.UserId, ResourceType.File, ticket.FileId!.Value, level, HttpContext.RequestAborted))
+        var allowed = ticket.Kind == "attachment"
+            ? await CanSeeAttachmentAsync(ticket)
+            : await auth.CanAsync(ticket.UserId, ResourceType.File, ticket.FileId!.Value, level, HttpContext.RequestAborted);
+        if (!allowed)
         {
             Response.StatusCode = 403;
             await Response.WriteAsJsonAsync(ProblemFactory.Create(403, "Bạn không còn quyền truy cập tài liệu này."));
@@ -239,6 +247,35 @@ public class ContentController(IContentTicketService tickets, IFileContentServic
         var file = await db.Files.AsNoTracking().FirstAsync(f => f.Id == ticket.FileId);
         var version = await db.FileVersions.AsNoTracking().FirstAsync(v => v.Id == ticket.VersionId);
         await ContentStreaming.WriteFileAsync(HttpContext, content, version, file.Name, file.MimeType, ticket.Inline);
+    }
+
+    /// <summary>Comment attachments are visible to everyone who can view the commented file.</summary>
+    private async Task<bool> CanSeeAttachmentAsync(ContentTicket ticket)
+    {
+        var commentId = ticket.Items?.FirstOrDefault()?.Id;
+        var comment = await db.Comments.AsNoTracking().FirstOrDefaultAsync(c => c.Id == commentId && !c.IsDeleted);
+        return comment is not null && comment.AttachmentFileIds.Contains(ticket.FileId!.Value)
+               && await auth.CanAsync(ticket.UserId, ResourceType.File, comment.FileId, AccessLevel.View, HttpContext.RequestAborted);
+    }
+
+    private async Task StreamDerivedAsync(ContentTicket ticket)
+    {
+        if (!await auth.CanAsync(ticket.UserId, ResourceType.File, ticket.FileId!.Value, AccessLevel.View, HttpContext.RequestAborted))
+        {
+            Response.StatusCode = 403;
+            return;
+        }
+        var file = await db.Files.AsNoTracking().FirstAsync(f => f.Id == ticket.FileId);
+        var composed = ticket.Kind == "preview" ? file.PreviewKey ?? file.ThumbnailKey : file.ThumbnailKey;
+        if (composed is null)
+        {
+            Response.StatusCode = 404;
+            return;
+        }
+        var (key, encrypted, wrapped) = BlueDrive.Infrastructure.Media.DerivedKeys.Parse(composed);
+        var stream = await content.OpenReadAsync(key, encrypted, wrapped, HttpContext.RequestAborted);
+        Response.Headers.CacheControl = "private, max-age=21600";
+        await Results.File(stream, "image/jpeg").ExecuteAsync(HttpContext);
     }
 
     private async Task StreamZipAsync(ContentTicket ticket)

@@ -100,7 +100,7 @@ public sealed record ListSharedWithMeQuery(Guid? SharedBy, DateTime? From, DateT
 
 public sealed record SharedItemDto(DriveItemDto Item, Guid ShareId, Guid SharedBy, string SharedByName, AccessLevel AccessLevel, string? Message, DateTime SharedAt);
 
-public sealed class ListSharedWithMeHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth) : IRequestHandler<ListSharedWithMeQuery, PagedResult<SharedItemDto>>
+public sealed class ListSharedWithMeHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets) : IRequestHandler<ListSharedWithMeQuery, PagedResult<SharedItemDto>>
 {
     public async Task<PagedResult<SharedItemDto>> Handle(ListSharedWithMeQuery q, CancellationToken ct)
     {
@@ -130,10 +130,11 @@ public sealed class ListSharedWithMeHandler(IAppDbContext db, ICurrentUser me, I
         var folderIds = page.Where(r => r.ResourceType == ResourceType.Folder).Select(r => r.ResourceId).ToList();
         var items = (await DriveProjection.Files(db, db.Files.AsNoTracking().Where(f => fileIds.Contains(f.Id)), uid).ToListAsync(ct))
             .Concat(await DriveProjection.Folders(db, db.Folders.AsNoTracking().Where(f => folderIds.Contains(f.Id)), uid).ToListAsync(ct))
-            .ToDictionary(i => i.Id);
+            .ToList();
+        var itemsById = ThumbnailUrls.Apply(items, tickets, uid).ToDictionary(i => i.Id);
         var names = await PrincipalNames.ResolveAsync(db, page.Select(r => (PrincipalType.User, r.SharedBy)), ct);
-        return new PagedResult<SharedItemDto>(page.Where(r => items.ContainsKey(r.ResourceId))
-            .Select(r => new SharedItemDto(items[r.ResourceId], r.Id, r.SharedBy, names.GetValueOrDefault((PrincipalType.User, r.SharedBy), ""), r.AccessLevel, r.Message, r.CreatedAt)).ToList(),
+        return new PagedResult<SharedItemDto>(page.Where(r => itemsById.ContainsKey(r.ResourceId))
+            .Select(r => new SharedItemDto(itemsById[r.ResourceId], r.Id, r.SharedBy, names.GetValueOrDefault((PrincipalType.User, r.SharedBy), ""), r.AccessLevel, r.Message, r.CreatedAt)).ToList(),
             total, q.SafePage, q.SafePageSize);
     }
 }

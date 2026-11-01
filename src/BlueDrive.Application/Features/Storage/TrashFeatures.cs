@@ -198,7 +198,8 @@ public sealed class TrashPurger(IAppDbContext db, IFileContentService content, Q
         var stillUsedThumbs = await db.Files.Where(f => (f.ThumbnailKey != null && thumbKeys.Contains(f.ThumbnailKey)) || (f.PreviewKey != null && thumbKeys.Contains(f.PreviewKey)))
             .Select(f => new[] { f.ThumbnailKey, f.PreviewKey }).ToListAsync(ct);
         var usedThumbs = stillUsedThumbs.SelectMany(x => x).Where(x => x is not null).ToHashSet();
-        foreach (var key in keys.Except(stillUsed).Concat(thumbKeys.Where(k => !usedThumbs.Contains(k))))
+        // Derived keys may carry "#wrappedKey"; the blob key is the part before it.
+        foreach (var key in keys.Except(stillUsed).Concat(thumbKeys.Where(k => !usedThumbs.Contains(k)).Select(k => k.Split('#')[0])))
         {
             try { await content.DeleteAsync(key, ct); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { logger.LogWarning(ex, "Không xóa được dữ liệu {Key}", key); }

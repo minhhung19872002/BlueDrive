@@ -60,6 +60,16 @@ public static class DependencyInjection
         services.AddScoped<Jobs.FileProcessingJob>();
         services.AddScoped<Jobs.TrashRetentionJob>();
         services.AddScoped<Jobs.IRecurringJobRegistration, Jobs.StorageRecurringJobs>();
-        services.AddScoped<IDataSeeder, ReferenceDataSeeder>();        return services;
+        services.Configure<Office.OnlyOfficeOptions>(config.GetSection("OnlyOffice"));
+        services.Configure<Media.ClamAvOptions>(config.GetSection("ClamAv"));
+        services.AddHttpClient("onlyoffice", c => c.Timeout = TimeSpan.FromMinutes(5));
+        services.AddSingleton<IOfficeEditorProvider, Office.OnlyOfficeProvider>();
+        services.AddSingleton<Application.Features.Office.IFileStorageTemp, Storage.FileStorageTemp>();
+        services.AddScoped<Media.PlainCopy>();
+        services.AddScoped<Media.IFileProcessingStep, Media.MalwareScanStep>();
+        services.AddScoped<Media.IFileProcessingStep, Media.ThumbnailStep>();
+
+        services.AddScoped<IDataSeeder, ReferenceDataSeeder>();
+        return services;
     }
 }

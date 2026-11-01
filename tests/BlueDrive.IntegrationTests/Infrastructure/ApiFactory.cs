@@ -18,6 +18,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public string StorageRoot { get; } = Path.Combine(Path.GetTempPath(), "bluedrive-it-" + Guid.NewGuid().ToString("N"));
     public string ConnectionString => _pg.GetConnectionString();
     public const string AdminPassword = "Admin@12345";
+    public const string OnlyOfficeSecret = "integration_onlyoffice_secret_32_chars!!";
 
     public async Task InitializeAsync()
     {
@@ -39,11 +40,16 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Storage:LocalRoot", Path.Combine(StorageRoot, "storage"));
         builder.UseSetting("Storage:MasterKey", Convert.ToBase64String(new byte[32]));
         builder.UseSetting("Backup:Root", Path.Combine(StorageRoot, "backups"));
-        builder.UseSetting("OnlyOffice:JwtSecret", "integration_onlyoffice_secret_32_chars!!");
+        builder.UseSetting("OnlyOffice:JwtSecret", OnlyOfficeSecret);
+        builder.UseSetting("OnlyOffice:PublicUrl", "http://public.test/office");
+        builder.UseSetting("OnlyOffice:InternalUrl", "http://localhost");
+        builder.UseSetting("OnlyOffice:CallbackBaseUrl", "http://localhost");
         builder.UseSetting("RateLimit:Disabled", "true");
         builder.ConfigureServices(services =>
         {
             services.AddSingleton(this);
+            // Document Server downloads are routed back into the in-memory test server.
+            services.AddHttpClient("onlyoffice").ConfigurePrimaryHttpMessageHandler(() => Server.CreateHandler());
             services.AddSingleton<FakeEmailSender>();
             services.AddScoped<BlueDrive.Application.Abstractions.IEmailSender>(sp => sp.GetRequiredService<FakeEmailSender>());
         });
