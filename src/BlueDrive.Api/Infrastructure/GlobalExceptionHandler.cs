@@ -28,12 +28,12 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
             default:
                 logger.LogError(ex, "Lỗi không xử lý được khi gọi {Path}", ctx.Request.Path);
                 problem = ProblemFactory.Create(500, "Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau hoặc liên hệ quản trị viên.");
-                if (env.IsDevelopment()) problem.Extensions["debug"] = ex.ToString();
+                if (env.IsDevelopment() || env.IsEnvironment("Testing")) problem.Extensions["debug"] = ex.ToString();
                 break;
         }
         problem.Extensions["traceId"] = ctx.TraceIdentifier;
         ctx.Response.StatusCode = problem.Status ?? 500;
-        await ctx.Response.WriteAsJsonAsync(problem, (System.Text.Json.JsonSerializerOptions?)null, "application/problem+json", ct);
+        await ctx.Response.WriteAsJsonAsync(problem, problem.GetType(), (System.Text.Json.JsonSerializerOptions?)null, "application/problem+json", ct);
         return true;
     }
 }
@@ -56,6 +56,8 @@ public static class ProblemFactory
     public static ProblemDetails Create(int status, string detail, IDictionary<string, string[]>? errors = null)
     {
         var p = errors is { Count: > 0 } ? new ValidationProblemDetails(errors) : new ProblemDetails();
+        // Surface the concrete messages so clients can show them directly.
+        if (errors is { Count: > 0 } && status == 400) detail = string.Join(" ", errors.Values.SelectMany(v => v).Distinct());
         p.Status = status;
         p.Title = Titles.GetValueOrDefault(status, "Lỗi");
         p.Detail = detail;

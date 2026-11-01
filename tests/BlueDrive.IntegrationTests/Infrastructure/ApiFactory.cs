@@ -41,7 +41,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Backup:Root", Path.Combine(StorageRoot, "backups"));
         builder.UseSetting("OnlyOffice:JwtSecret", "integration_onlyoffice_secret_32_chars!!");
         builder.UseSetting("RateLimit:Disabled", "true");
-        builder.ConfigureServices(services => services.AddSingleton(this));
+        builder.ConfigureServices(services =>
+        {
+            services.AddSingleton(this);
+            services.AddSingleton<FakeEmailSender>();
+            services.AddScoped<BlueDrive.Application.Abstractions.IEmailSender>(sp => sp.GetRequiredService<FakeEmailSender>());
+        });
     }
 
     async Task IAsyncLifetime.DisposeAsync()

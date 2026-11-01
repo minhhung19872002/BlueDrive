@@ -2146,7 +2146,7 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.HasOne("BlueDrive.Domain.Entities.Folder", "Parent")
                         .WithMany()
                         .HasForeignKey("ParentId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .HasConstraintName("fk_folders_folders_parent_id");
 
                     b.HasOne("BlueDrive.Domain.Entities.Workspace", "Workspace")
@@ -2166,7 +2166,7 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.HasOne("BlueDrive.Domain.Entities.Organization", "Parent")
                         .WithMany("Children")
                         .HasForeignKey("ParentId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .HasConstraintName("fk_organizations_organizations_parent_id");
 
                     b.Navigation("Parent");
@@ -2196,7 +2196,7 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.HasOne("BlueDrive.Domain.Entities.Folder", "Folder")
                         .WithMany()
                         .HasForeignKey("FolderId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .HasConstraintName("fk_files_folders_folder_id");
 
                     b.HasOne("BlueDrive.Domain.Entities.Workspace", "Workspace")

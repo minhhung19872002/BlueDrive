@@ -21,8 +21,9 @@ public static class ApiSetup
                 o.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.SnakeCaseLower));
             })
             .ConfigureApiBehaviorOptions(o => o.InvalidModelStateResponseFactory = ctx => ProblemFactory.FromModelState(ctx));
-        services.AddAuthentication();
-        services.AddAuthorization();
+        services.AddBlueDriveSecurity(config);
+        services.AddSignalR();
+        services.AddHostedService<BlueDrive.Api.Realtime.RealtimeRelay>();
         services.AddBlueDriveHangfire(config, runServer: false);
         services.AddProblemDetails();
         services.AddExceptionHandler<GlobalExceptionHandler>();
@@ -111,7 +112,9 @@ public static class ApiSetup
         app.UseCors();
         app.UseAuthentication();
         app.UseAuthorization();
+        app.UseRateLimiter();
         app.MapControllers();
+        app.MapHub<BlueDrive.Api.Realtime.NotificationHub>("/hubs/notifications");
         app.MapBlueDriveHealthChecks();
         return app;
     }

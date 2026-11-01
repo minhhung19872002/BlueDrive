@@ -5,6 +5,7 @@ namespace BlueDrive.Api.Controllers;
 
 /// <summary>Thông tin phiên bản hệ thống.</summary>
 [ApiController]
+[Microsoft.AspNetCore.Authorization.AllowAnonymous]
 [Route("api/v1/system")]
 public class SystemController : ControllerBase
 {

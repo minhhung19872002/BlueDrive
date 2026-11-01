@@ -18,6 +18,8 @@ public static class DependencyInjection
             cfg.AddOpenBehavior(typeof(AuditBehavior<,>));
         });
         services.AddValidatorsFromAssembly(asm, includeInternalTypes: true);
+        services.AddScoped<Features.Auth.SessionRevoker>();
+        services.AddScoped<Features.Monitoring.IAlertService, Features.Monitoring.AlertService>();
         ValidatorOptions.Global.LanguageManager.Culture = new System.Globalization.CultureInfo("vi");
         return services;
     }

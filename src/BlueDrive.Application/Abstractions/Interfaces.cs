@@ -124,3 +124,9 @@ public interface ISensitiveDataProtector
     string? Unprotect(string? cipher);
     string? Hash(string? plain);
 }
+
+/// <summary>Minimal file visibility check used by realtime subscriptions.</summary>
+public interface IResourceAccessChecker
+{
+    Task<bool> CanViewFileAsync(Guid userId, Guid fileId, CancellationToken ct = default);
+}
