@@ -32,3 +32,4 @@ storage-data/
 !.vscode/extensions.json
 playwright-report/
 test-results/
+web/e2e/.auth/

@@ -212,7 +212,6 @@ public class UploadsController : ApiControllerBase
 /// <summary>Truyền nội dung tệp theo URL ký (hỗ trợ Range để tua video), hoặc zip nhiều mục.</summary>
 [Route("api/v1/content")]
 [AllowAnonymous]
-[EnableRateLimiting(SecuritySetup.PublicRateLimit)]
 public class ContentController(IContentTicketService tickets, IFileContentService content, IResourceAuthorizationService auth, IAppDbContext db) : ApiControllerBase
 {
     [HttpGet("{token}")]

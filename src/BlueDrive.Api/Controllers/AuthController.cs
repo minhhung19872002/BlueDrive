@@ -10,15 +10,14 @@ namespace BlueDrive.Api.Controllers;
 
 /// <summary>Xác thực: đăng nhập, làm mới token, đăng xuất, đổi/khôi phục mật khẩu (HSMT #16).</summary>
 [Route("api/v1/auth")]
-[EnableRateLimiting(SecuritySetup.AuthRateLimit)]
 public class AuthController : ApiControllerBase
 {
     /// <summary>Đăng nhập bằng tên đăng nhập/mật khẩu.</summary>
-    [HttpPost("login"), AllowAnonymous]
+    [HttpPost("login"), AllowAnonymous, EnableRateLimiting(SecuritySetup.AuthRateLimit)]
     public Task<AuthResult> Login(LoginCommand cmd) => Mediator.Send(cmd);
 
     /// <summary>Làm mới access token (refresh token xoay vòng, dùng một lần).</summary>
-    [HttpPost("refresh"), AllowAnonymous]
+    [HttpPost("refresh"), AllowAnonymous, EnableRateLimiting(SecuritySetup.RefreshRateLimit)]
     public Task<AuthResult> Refresh(RefreshCommand cmd) => Mediator.Send(cmd);
 
     /// <summary>Đăng xuất phiên hiện tại.</summary>
@@ -46,7 +45,7 @@ public class AuthController : ApiControllerBase
     public Task<AuthResult> ChangePassword(ChangePasswordCommand cmd) => Mediator.Send(cmd);
 
     /// <summary>Quên mật khẩu: gửi email chứa liên kết khôi phục (hết hạn sau 30 phút).</summary>
-    [HttpPost("forgot-password"), AllowAnonymous]
+    [HttpPost("forgot-password"), AllowAnonymous, EnableRateLimiting(SecuritySetup.AuthRateLimit)]
     public async Task<IActionResult> ForgotPassword(ForgotPasswordCommand cmd)
     {
         await Mediator.Send(cmd);
@@ -54,7 +53,7 @@ public class AuthController : ApiControllerBase
     }
 
     /// <summary>Đặt lại mật khẩu bằng token trong email.</summary>
-    [HttpPost("reset-password"), AllowAnonymous]
+    [HttpPost("reset-password"), AllowAnonymous, EnableRateLimiting(SecuritySetup.AuthRateLimit)]
     public async Task<IActionResult> ResetPassword(ResetPasswordCommand cmd)
     {
         await Mediator.Send(cmd);

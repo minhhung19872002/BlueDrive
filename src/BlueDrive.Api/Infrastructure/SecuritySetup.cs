@@ -16,6 +16,7 @@ public static class SecuritySetup
 {
     public const string AuthRateLimit = "auth";
     public const string PublicRateLimit = "public";
+    public const string RefreshRateLimit = "refresh";
 
     public static IServiceCollection AddBlueDriveSecurity(this IServiceCollection services, IConfiguration config)
     {
@@ -84,10 +85,14 @@ public static class SecuritySetup
             var disabled = config.GetValue("RateLimit:Disabled", false);
             o.AddPolicy(AuthRateLimit, ctx => disabled ? RateLimitPartition.GetNoLimiter("off")
                 : RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                    _ => new FixedWindowRateLimiterOptions { PermitLimit = config.GetValue("RateLimit:AuthPerMinute", 30), Window = TimeSpan.FromMinutes(1) }));
+                    _ => new FixedWindowRateLimiterOptions { PermitLimit = config.GetValue("RateLimit:AuthPerMinute", 60), Window = TimeSpan.FromMinutes(1) }));
+            // Token refresh happens every ~15 minutes per open tab; many users may share one office NAT address.
+            o.AddPolicy(RefreshRateLimit, ctx => disabled ? RateLimitPartition.GetNoLimiter("off")
+                : RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions { PermitLimit = config.GetValue("RateLimit:RefreshPerMinute", 600), Window = TimeSpan.FromMinutes(1) }));
             o.AddPolicy(PublicRateLimit, ctx => disabled ? RateLimitPartition.GetNoLimiter("off")
                 : RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                    _ => new FixedWindowRateLimiterOptions { PermitLimit = config.GetValue("RateLimit:PublicPerMinute", 120), Window = TimeSpan.FromMinutes(1) }));
+                    _ => new FixedWindowRateLimiterOptions { PermitLimit = config.GetValue("RateLimit:PublicPerMinute", 600), Window = TimeSpan.FromMinutes(1) }));
         });
 
         services.Configure<MvcOptions>(o => o.Filters.Add<PasswordChangeRequiredFilter>());
