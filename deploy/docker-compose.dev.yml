@@ -1,0 +1,36 @@
+# Dev dependencies only: run API/Worker with `dotnet run` and web with `npm run dev`.
+# Usage (from deploy/):  docker compose -f docker-compose.dev.yml up -d
+name: bluedrive-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: bluedrive
+      POSTGRES_USER: bluedrive
+      POSTGRES_PASSWORD: bluedrive_dev
+      TZ: Asia/Ho_Chi_Minh
+    ports: ["5432:5432"]
+    volumes: [pg_data_dev:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bluedrive -d bluedrive"]
+      interval: 5s
+      retries: 20
+
+  onlyoffice:
+    image: onlyoffice/documentserver:9.2
+    environment:
+      JWT_ENABLED: "true"
+      JWT_SECRET: dev_onlyoffice_secret
+      JWT_HEADER: Authorization
+      ALLOW_PRIVATE_IP_ADDRESS: "true"
+      ALLOW_META_IP_ADDRESS: "true"
+    ports: ["8082:80"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["8025:8025", "1025:1025"]
+
+volumes:
+  pg_data_dev:

@@ -1,0 +1,43 @@
+{
+	# Automatic HTTPS (Let's Encrypt) is enabled when SITE_ADDRESS is a real domain, e.g. drive.example.gov.vn.
+	# With SITE_ADDRESS=":80" (default, local) Caddy serves plain HTTP.
+	email {$ACME_EMAIL:admin@localhost}
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "geolocation=(), microphone=(), camera=()"
+		-Server
+	}
+
+	# ONLYOFFICE Document Server is published under /office (virtual path).
+	handle_path /office/* {
+		reverse_proxy onlyoffice:80 {
+			header_up X-Forwarded-Host {host}/office
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	handle {
+		reverse_proxy web:80 {
+			header_up X-Forwarded-Proto {scheme}
+			flush_interval -1
+			transport http {
+				read_timeout 1h
+				write_timeout 1h
+			}
+		}
+	}
+
+	request_body {
+		max_size 0
+	}
+}

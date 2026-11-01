@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BlueDrive.Api/BlueDrive.Api.csproj" />
+    <Project Path="src/BlueDrive.Application/BlueDrive.Application.csproj" />
+    <Project Path="src/BlueDrive.Domain/BlueDrive.Domain.csproj" />
+    <Project Path="src/BlueDrive.Infrastructure/BlueDrive.Infrastructure.csproj" />
+    <Project Path="src/BlueDrive.Worker/BlueDrive.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BlueDrive.IntegrationTests/BlueDrive.IntegrationTests.csproj" />
+    <Project Path="tests/BlueDrive.UnitTests/BlueDrive.UnitTests.csproj" />
+  </Folder>
+</Solution>

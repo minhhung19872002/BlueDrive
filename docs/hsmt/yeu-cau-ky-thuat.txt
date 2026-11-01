@@ -1,0 +1,173 @@
+Phần 2. YÊU CẦU VỀ KỸ THUẬT
+Chương V. YÊU CẦU VỀ KỸ THUẬT
+Yêu cầu về kỹ thuật mang tính kỹ thuật thuần túy và các yêu cầu khác liên quan đến việc cung cấp dịch vụ (trừ giá). Yêu cầu về kỹ thuật phải được nêu đầy đủ, rõ ràng và cụ thể để làm cơ sở cho nhà thầu lập E-HSDT. 
+Trong yêu cầu về kỹ thuật không được đưa ra các điều kiện nhằm hạn chế sự tham gia của nhà thầu hoặc nhằm tạo lợi thế cho một hoặc một số nhà thầu gây ra sự cạnh tranh không bình đẳng. 
+Yêu cầu về kỹ thuật bao gồm các nội dung cơ bản như sau: 
+1. Giới thiệu chung về dự án/dự toán mua sắm, gói thầu:
+Tên dự án: Thuê hệ thống phần mềm lưu trữ sản phẩm truyền thông dân số
+Tên chủ đầu tư: Trung tâm Thông tin, Chuyển đổi số và Dịch vụ dân số, Cục Dân số, Bộ Y tế.
+Nguồn vốn: Ngân sách nhà nước
+Thời gian thực hiện gói thầu: 12 tháng kể từ ngày hợp đồng có hiệu lực (trong đó thời gian thiết lập, cấu hình, vận hành thử và bàn giao dịch vụ phần mềm: Tối đa 10 ngày làm việc, kể từ ngày hợp đồng có hiệu lực).
+Mục tiêu: Các sản phẩm truyền thông về dân số được lưu trữ trên cloud server được vận hành ổn định, an toàn trong quá trình khai thác và sử dụng.
+2. Mục tiêu công việc:
+Nội dung hoạt động: 
+Thiết lập hệ thống phần mềm lưu trữ sản phẩm truyền thông số với các module chức năng gồm: quản trị hệ thống; kho tài liệu lưu trữ quản lý, tìm kiếm, khai thác và chia sẻ các sản phẩm truyền thông về dân số như hình ảnh, video, âm thanh, tài liệu, infographic, ấn phẩm điện tử; quản lý truy cập, phân quyền người dùng theo vai trò; giám sát hoạt động của hệ thống trên môi trường số.
+Máy chủ (cloud server) lưu trữ sản phẩm truyền thông dân số; triển khai các giải pháp bảo đảm an toàn, an ninh thông tin và bảo mật.
+Xây dựng cách thức tra cứu, khai thác và chia sẻ dữ liệu từ nhiều thiết bị, địa điểm khác nhau.
+Kết quả: Các sản phẩm truyền thông dân số được lưu trữ trên máy chủ được vận hành ổn định, an toàn trong quá trình khai thác và sử dụng.
+3. Yêu cầu kỹ thuật của gói thầu:
+3.1. YÊU CẦU VỀ CHẤT LƯỢNG DỊCH VỤ ĐƯỢC ÁP DỤNG
+TT | Tiêu chí đánh giá | Yêu cầu chất lượng cụ thể
+1 | Chức năng nghiệp vụ
+1.1 | Mức độ đáp ứng và tính chính xác của chức năng nghiệp vụ | Đáp ứng tất cả các yêu cầu chức năng phần mềm tại Mục II; chức năng xử lý, lưu trữ, tra cứu và xuất kết quả phải đúng với dữ liệu đầu vào và quy tắc nghiệp vụ, không làm sai lệch hoặc mất dữ liệu.
+2 | Hiệu năng vận hành
+2.1 | Hoạt động ổn định | - Kiểm tra bằng kịch bản gồm các tác vụ nghiệp vụ đại diện do Chủ đầu tư phê duyệt trước khi vận hành thử. Dịch vụ phải thực hiện được tất cả tác vụ trong kịch bản, không phát sinh lỗi chức năng, mất dữ liệu hoặc ngắt kết nối bất thường. Kết quả kiểm tra phải được ghi nhận trong hồ sơ vận hành thử. - Đảm bảo hoạt động ổn định, thời gian xử lý tối đa cho một giao dịch là dưới 10 giây, trừ  trường hợp báo cáo, thống kê dữ liệu khối lượng lớn (hệ thống cần có thông điệp hiển thị đến người dùng)
+3 | An toàn thông tin và dữ liệu
+3.1 | Xác thực và phân quyền | Có cơ chế xác thực, phân quyền theo vai trò, quản lý tài khoản quản trị và ngăn chặn truy cập, sửa đổi hoặc khai thác dữ liệu trái phép.
+3.2 | Bảo vệ dữ liệu | Dữ liệu được mã hóa khi truyền; dữ liệu cần bảo vệ được mã hóa khi lưu trữ theo quy định áp dụng. Việc xử lý dữ liệu cá nhân chỉ được thực hiện trong phạm vi hợp đồng và tuân thủ pháp luật hiện hành.
+3.3 | Ghi nhật ký và truy xuất | Ghi nhật ký (log) đăng nhập/đăng xuất và các thao tác tải lên, tải xuống, chỉnh sửa, chia sẻ, xóa tư liệu.
+3.4 | Quản lý lỗ hổng và sự cố an toàn thông tin | Có phương án phát hiện, phân loại, xử lý lỗ hổng, mã độc và dấu hiệu bất thường; thông báo, phối hợp ứng phó, khắc phục và lưu giữ hồ sơ sự cố theo quy trình được Chủ đầu tư chấp thuận.
+3.5 | Sao lưu và phục hồi dữ liệu | - Phải có cơ chế sao lưu dữ liệu định kỳ, đột xuất đảm bảo nhanh chóng đưa hệ thống hoạt động trở lại trong trường hợp có sự cố xảy ra. - Hệ thống có chức năng cài đặt sao lưu tự động, định kỳ, theo tần suất của người quản trị tự cài đặt - Nội dung sao lưu bao gồm: dữ liệu thuộc tính và file số hóa.
+4 | Khả năng sử dụng, tương thích và tích hợp
+4.1 | Sử dụng và tương thích | Có cơ chế kiểm tra dữ liệu đầu vào và thông báo lỗi rõ ràng; giao diện bằng tiếng Việt, sử dụng Unicode; sử dụng được trên các trình duyệt web phổ biến còn được nhà phát hành hỗ trợ tại thời điểm nghiệm thu; có tài liệu quản trị và hướng dẫn sử dụng bằng tiếng Việt.
+4.2 | Tích hợp, trích xuất và bàn giao dữ liệu | Dữ liệu bàn giao phải ở định dạng thông dụng, có thể đọc, kiểm tra và tái sử dụng, kèm cấu trúc và tài liệu mô tả cần thiết.
+5 | Quản lý và hỗ trợ dịch vụ
+5.1 | Hỗ trợ người sử dụng và xử lý sự cố dịch vụ | Có đầu mối, kênh tiếp nhận và quy trình phân loại, theo dõi, xử lý yêu cầu hỗ trợ hoặc sự cố; ghi nhận thời điểm tiếp nhận, nội dung, người xử lý, trạng thái và kết quả.
+5.2 | Giám sát, thay đổi và báo cáo | Có phương án theo dõi chất lượng, lưu giữ số liệu kiểm chứng và báo cáo; mọi thay đổi cấu hình, tính năng hoặc phiên bản có ảnh hưởng đến dịch vụ phải được ghi nhận, thông báo và thực hiện theo quy trình được Chủ đầu tư chấp thuận, bảo đảm toàn vẹn dữ liệu và khả năng khôi phục khi cần thiết.
+6 | Về môi trường kỹ thuật
+6.1 | Môi trường mạng | Mạng Internet
+6.2 | Font chữ | Sử dụng Font chữ Unicode, có thể tương thích trên nhiều hệ điều hành: Windows, Linux, Mac OS
+6.3 | Môi trường máy chủ | Cloud server
+3.2. YÊU CẦU VỀ TÍNH NĂNG PHẦN MỀM
+ | TÊN MODULE/ CHỨC NĂNG | MÔ TẢ CHI TIẾT
+I | Quản trị hệ thống
+1 | Quản lý cơ cấu tổ chức (đơn vị, phòng/ban) | Thêm mới, sửa, xóa thông tin đơn vị/phòng ban.
+2 |  | Xem danh sách, tra cứu, tìm kiếm thông tin tổ chức.
+3 |  | In, kết xuất danh sách ra Excel, PDF.
+4 | Quản lý người dùng, nhóm người dùng | Thêm mới, sửa, xóa tài khoản người dùng và nhóm người dùng.
+5 |  | Gán người dùng vào đơn vị/phòng ban và vai trò cụ thể.
+6 |  | Tra cứu, tìm kiếm, xuất danh sách ra Excel, PDF.
+7 | Thiết lập vai trò, phân quyền chức năng | Thêm mới, sửa, xóa vai trò trong hệ thống.
+8 |  | Cấu hình phân quyền chi tiết theo từng vai trò (xem, tải lên, chỉnh sửa, xóa, chia sẻ, phê duyệt, quản trị).
+9 |  | Hiển thị toàn bộ chức năng và vai trò hiện có trên hệ thống để đối chiếu khi phân quyền.
+10 | Danh mục dùng chung | Quản lý các danh mục động phục vụ quản lý sản phẩm truyền thông (hình ảnh, video, âm thanh, tài liệu, infographic, ấn phẩm điện tử)...
+11 | Giám sát hoạt động của hệ thống | Ghi nhật ký (log) đăng nhập/đăng xuất và các thao tác tải lên, tải xuống, chỉnh sửa, chia sẻ, xóa tư liệu.
+12 |  | Tra cứu, lọc tìm kiếm nhật ký theo người dùng, thời gian, hành động.
+13 |  | Thống kê dung lượng lưu trữ đã sử dụng/còn lại theo tài khoản, đơn vị.
+14 |  | Cảnh báo bất thường (đăng nhập sai nhiều lần, dung lượng vượt ngưỡng cho phép).
+15 |  | In, kết xuất báo cáo giám sát ra Excel, PDF.
+16 | Xác thực và kiểm soát truy cập | Đăng nhập bằng tài khoản/mật khẩu; hỗ trợ đổi mật khẩu, khôi phục mật khẩu.
+17 |  | Ghi nhận, kiểm soát phiên đăng nhập; cho phép thu hồi quyền truy cập khi cần.
+II | Hệ thống phần mềm lưu trữ sản phẩm truyền thông
+18 | Quản lý tư liệu theo cá nhân | Xem tài liệu của tôi, tài liệu gần đây.
+19 |  | Xem tài liệu được chia sẻ, tệp đính kèm.
+20 |  | Tìm kiếm, tra cứu, lọc tài liệu theo từ khóa, loại tài liệu, thời gian.
+21 |  | Tạo mới tài liệu (Word, Excel, PowerPoint, văn bản).
+22 |  | Tải lên tệp/thư mục từ máy tính.
+23 |  | Mở, chia sẻ, tải xuống, đánh dấu quan trọng tài liệu.
+24 |  | Đổi tên, sao chép, cắt, sao chép tới, xem thông tin, xóa tài liệu.
+26 |  | Quản lý, cập nhật, theo dõi phiên bản của tài liệu.
+27 |  | Trao đổi thảo luận trong màn hình chi tiết tài liệu ngay khi được chia sẻ
+28 | Quản lý tư liệu theo nhóm/đơn vị | Tạo, quản lý thư mục/tư liệu dùng chung theo nhóm, đơn vị.
+29 |  | Tổng hợp tư liệu của các thành viên trong nhóm.
+30 |  | Phân quyền tư liệu cho từng thành viên trong nhóm.
+31 |  | Ghi nhận lịch sử chỉnh sửa tư liệu theo từng thành viên.
+32 |  | Tìm kiếm, tra cứu, lọc tài liệu theo từ khóa, loại tài liệu, thời gian.
+33 |  | Tạo mới tài liệu (Word, Excel, PowerPoint, văn bản).
+34 |  | Tải lên tệp/thư mục từ máy tính.
+35 |  | Mở, chia sẻ, tải xuống, đánh dấu quan trọng tài liệu.
+36 |  | Đổi tên, sao chép, cắt, sao chép tới, xem thông tin, xóa tài liệu.
+37 |  | Quản lý, cập nhật, theo dõi phiên bản của tài liệu.
+38 |  | Trao đổi thảo luận trong màn hình chi tiết tài liệu ngay khi được chia sẻ
+39 | Tải lên, biên tập tư liệu | Tải lên theo từng tệp từ máy tính, hỗ trợ định dạng: hình ảnh, video, âm thanh, văn bản, infographic, ấn phẩm điện tử.
+40 |  | Tải lên cả thư mục từ máy tính.
+41 |  | Tạo mới tài liệu văn bản/bảng tính/trình chiếu.
+42 |  | Chỉnh sửa tài liệu trực tuyến (online).
+43 |  | Quản lý phiên bản (version), cho phép cập nhật phiên bản mới đối với tài liệu văn bản.
+44 | Thao tác trên thư mục/tệp tư liệu | Xem, mở tài liệu.
+45 |  | Chia sẻ, tải xuống tài liệu.
+46 |  | Đổi tên, sao chép, cắt/di chuyển tài liệu.
+47 |  | Đánh dấu quan trọng, xem thông tin tài liệu.
+48 |  | Xóa tài liệu.
+49 |  | Chia sẻ nội bộ hoặc chia sẻ ra ngoài qua liên kết (link), có thể giới hạn quyền xem/tải xuống.
+50 | Tra cứu, tìm kiếm, khai thác tư liệu | Tra cứu, tìm kiếm tư liệu theo từ khóa, loại tư liệu.
+51 |  | Lọc tư liệu theo đơn vị đăng tải, khoảng thời gian.
+52 |  | Truy cập, khai thác tư liệu từ nhiều thiết bị, nhiều địa điểm khác nhau (đăng nhập từ xa qua Internet).
+53 |  | Chia sẻ tư liệu khi truy cập từ xa.
+54 | Phân quyền theo vai trò | Phân quyền chi tiết theo vai trò: quản trị, biên tập/tải lên, phê duyệt, chỉ xem.
+55 |  | Phân quyền truy cập tư liệu theo đơn vị hoặc nhóm.
+56 |  | Phân quyền truy cập tư liệu theo từng thư mục/tệp cụ thể.
+57 | Cấu hình | Thêm, xóa thành viên nhóm tài nguyên.
+58 |  | Phân quyền sử dụng, khóa nhóm tài nguyên.
+59 |  | Cấu hình dung lượng cá nhân.
+60 |  | Cấu hình dung lượng nhóm.
+61 |  | Xem thùng rác theo nhóm.
+62 |  | Khôi phục, xóa vĩnh viễn tệp tại thùng rác.
+III | Dashboard cá nhân | 
+63 | Tổng quan dung lượng cá nhân | Hiển thị dung lượng cá nhân đã sử dụng trên tổng dung lượng được cấp, kèm liên kết nhanh.
+64 | Biểu đồ phân bổ dung lượng theo loại file cá nhân | Biểu đồ tròn thể hiện tỷ lệ dung lượng theo từng loại file.
+65 | Biểu đồ top thư mục cá nhân chiếm nhiều dung lượng nhất | Biểu đồ xếp hạng các thư mục cá nhân theo dung lượng sử dụng.
+66 | Hiển thị danh sách tài liệu cá nhân gần đây | Hiển thị tên tài liệu, người sở hữu, dung lượng, thời gian sửa gần nhất.
+IV | Dashboard nhóm
+67 | Tổng quan nhóm tài liệu | Hiển thị số nhóm đang là thành viên, số nhóm đang làm trưởng nhóm, kèm liên kết nhanh.
+68 | Biểu đồ dung lượng sử dụng theo nhóm | Biểu đồ cột ngang thể hiện dung lượng sử dụng của từng nhóm.
+69 | Biểu đồ phân bổ loại file trong từng nhóm | Biểu đồ thể hiện tỷ lệ % các loại file trong từng nhóm.
+70 | Hiển thị danh sách tài liệu nhóm gần đây | Hiển thị tên tài liệu, tên nhóm, dung lượng, thời gian sửa gần nhất.
+V | Ứng dụng Mobile (iOS/Android)
+71 | Xem tài liệu của tôi | Xem danh sách các tài liệu do người dùng tạo, tải lên hoặc đang được quản lý.
+72 | Xem tài liệu được chia sẻ. | Xem các tài liệu được người khác chia sẻ cho người dùng.
+73 | Xem tài liệu gần đây | Xem danh sách các tài liệu được truy cập, cập nhật hoặc thao tác gần đây.
+74 | Xem tài liệu nhóm | Xem các tài liệu thuộc nhóm mà người dùng tham gia hoặc được phân quyền truy cập.
+75 | Tìm kiếm tài liệu | Tìm kiếm tài liệu theo tên, từ khóa hoặc các thông tin liên quan.
+76 | Mở tài liệu | Mở và xem nội dung tài liệu trên hệ thống.
+77 | Đổi tên tài liệu | Thay đổi tên tài liệu theo nhu cầu của người dùng.
+78 | Đánh dấu quan trọng | Đánh dấu tài liệu là quan trọng để dễ nhận biết và truy cập nhanh.
+79 | Sao chép | Tạo một bản sao của tài liệu và lưu tại vị trí được lựa chọn.
+80 | Di chuyển | Di chuyển tài liệu sang thư mục hoặc vị trí lưu trữ khác.
+81 | Xóa | Xóa tài liệu khỏi vị trí lưu trữ hiện tại.
+82 | Xem cây thư mục | Xem cấu trúc thư mục/tư liệu theo phân quyền được cấp
+83 | Xem chi tiết tệp | Xem thông tin, nội dung chi tiết của tệp tư liệu
+84 | Tải xuống tư liệu | Tải xuống tệp tư liệu về thiết bị di động.
+3.3. YÊU CẦU VỀ BẢO HÀNH 
+STT | Hạng mục | Mô tả
+1 | Thời điểm bảo hành | Bắt đầu từ khi hai bên tiến hành nghiệm thu Hệ thống và đưa vào sử dụng.
+2 | Phạm vi bảo hành | Trong thời gian thuê dịch vụ: - Mọi lỗi phát sinh trong phần mềm phải được đơn vị cung cấp dịch vụ sửa chữa hoặc loại bỏ mà không phát sinh bất kỳ chi phí nào.  - Đơn vị cung cấp dịch vụ phải bảo đảm hỗ trợ 24/7 trong quá trình triển khai và vận hành.
+3 | Quy trình về thời gian phản hồi và giải quyết sự cố | Trong suốt thời gian thuê dịch vụ, Nhà thầu phải thực hiện kịp thời các công việc cần thiết để khắc phục nhược điểm hoặc hư hại trong vòng 24 giờ kể từ khi nhận được thông báo sự cố không khẩn cấp, hoặc trong vòng 4 giờ kể từ khi nhận được thông báo sự cố khẩn cấp. Nhà thầu phải nêu rõ phương án thực hiện và nhân sự thực hiện hỗ trợ kỹ thuật, xử lý sự cố trong thời gian bảo hành.
+3.4. YÊU CẦU VỀ HẠ TẦNG PHẦN CỨNG
+Để đảm bảo hệ thống phần mềm lưu trữ sản phẩm truyền thông dân số được vận hành và khai thác sử dụng một cách hiệu quả, yêu cầu tối thiểu về kỹ thuật đối với máy chủ như sau:
+STT | Mô tả dịch vụ | Thông số
+ | Máy chủ Cloud Server (01)
+1 | CPU | 08 Core
+2 | RAM | 16 GB
+3 | SSD | 520 GB
+4 | Băng thông internet ( Trong nước/quốc tế) | 300Mbps/10Mbps
+5 | Lưu lượng thông tin | Không giới hạn
+6 | Địa chỉ IP | 01
+7 | Hỗ trợ kỹ thuật | 24/7
+8 | Backup | 1 ngày/lần
+3.5. YÊU CẦU VỀ CÔNG TÁC VẬN HÀNH THỬ DỊCH VỤ
+Sau khi hoàn thành thiết lập, cấu hình và trước khi nghiệm thu đưa vào sử dụng, Chủ đầu tư tổ chức vận hành thử tại Trung tâm Thông tin, Chuyển đổi số và Dịch vụ dân số, Cục Dân số là đơn vị thụ hưởng trực tiếp. Trung tâm Thông tin, Chuyển đổi số và Dịch vụ dân số thực hiện các kịch bản nghiệp vụ, ghi nhận kết quả và phản ánh tồn tại. Nhà thầu lập kế hoạch, chuẩn bị môi trường, dữ liệu, tài liệu và nhân sự; phối hợp vận hành thử, xử lý lỗi và khắc phục tồn tại.
+3.6. GIÁM SÁT CHẤT LƯỢNG, BÀN GIAO VÀ XÓA DỮ LIỆU
+- Nhà thầu báo cáo kết quả cung cấp dịch vụ và cung cấp số liệu, tài liệu kiểm chứng khi có yêu cầu của Chủ đầu tư.
+- Khi kết thúc dịch vụ, Nhà thầu bàn giao toàn bộ dữ liệu thuộc phạm vi hợp đồng. Nhà thầu không được lưu giữ, sao chép, khai thác hoặc sử dụng dữ liệu ngoài phạm vi hợp đồng, trừ trường hợp pháp luật có quy định khác. 
+- Chủ đầu tư có quyền tiếp nhận, quản lý và khai thác dữ liệu hình thành trong quá trình sử dụng dịch vụ. 
+3.7 YÊU CẦU VỀ BẢN QUYỀN DỮ LIỆU VÀ SẢN PHẨM BÀN GIAO
+- Bản quyền dữ liệu: Sản phẩm dữ liệu tạo ra trên hệ thống phần mềm thuộc về Trung tâm Thông tin, Chuyển đổi số và Dịch vụ dân số, Cục Dân số, Bộ Y tế.
+-  Sản phẩm bàn giao: 
+Dịch vụ hệ thống phần mềm lưu trữ sản phẩm truyền thông dân số đã được thiết lập, cấu hình và phân quyền; dữ liệu thuộc phạm vi hợp đồng; tài liệu quản trị, vận hành và hướng dẫn sử dụng bằng tiếng Việt; hồ sơ vận hành thử; hồ sơ nghiệm thu kết quả cung cấp dịch vụ
+3.8. YÊU CẦU KHÁC CẦN ĐÁP ỨNG
+- Thông tư số 39/2017/TT-BTTTT ngày 15/12/2017 của Bộ Thông tin và Truyền thông về việc ban hành danh mục Tiêu chuẩn kỹ thuật về ứng dụng công nghệ thông tin trong cơ quan nhà nước;
+- Quyết định số 742/QĐ-BTTTT ngày 22/4/2022 của Bộ trưởng Bộ Thông tin và Truyền thông ban hành yêu cầu an toàn thông tin cơ bản đối với phần mềm nội bộ;
+- Nhà thầu được đề xuất công nghệ, kiến trúc và mô hình triển khai phù hợp; đồng thời phải bảo đảm hệ thống được thiết kế theo mô-đun, có khả năng kết nối và trao đổi dữ liệu, giám sát hoạt động, sao lưu, phục hồi, bảo đảm an toàn thông tin.
+- Thời gian thực hiện gói thầu: 12 tháng kể từ ngày hợp đồng có hiệu lực (trong đó thời gian thiết lập, cấu hình, vận hành thử và bàn giao dịch vụ phần mềm: Tối đa 10 ngày làm việc, kể từ ngày hợp đồng có hiệu lực).
+- Có cam kết hoàn thành tiến độ công việc theo khung thời gian đã thống nhất. 
+4. Giải pháp và phương pháp luận:
+Nhà thầu chuẩn bị đề xuất giải pháp, phương pháp luận tổng quát thực hiện dịch vụ theo các nội dung quy định tại Chương này, gồm các phần như sau: 
+1. Giải pháp và phương pháp luận;
+2.  Kế hoạch công tác.
+5. Quy định về kiểm tra, nghiệm thu sản phẩm:
+5.1. Kiểm tra
+Chủ đầu tư có quyền tiến hành các kiểm tra bổ sung. Nếu có kết quả không đúng theo hồ sơ mời thầu thì chi phí kiểm tra bổ sung nhà thầu phải chịu, cũng như mọi chi phí sửa chữa cho tới khi hoàn chỉnh.
+5.2. Nghiệm thu bàn giao
+Công việc chỉ được coi là hoàn thành khi Nhà thầu nhận được biên bản nghiệm thu bàn giao đưa vào sử dụng.
+Mọi thủ tục nghiệm thu bàn giao được thực hiện theo đúng quy định của Pháp luật. Nhà thầu có quyền đưa vào trong đề xuất tài chính toàn bộ các chi phí cần thiết để đảm bảo cho mình nhận được chứng chỉ hoàn thành công việc.
