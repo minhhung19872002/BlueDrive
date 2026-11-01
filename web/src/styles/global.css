@@ -1,0 +1,180 @@
+:root {
+  --bd-primary: #0b5394;
+  --bd-border: #e8ecf1;
+  --bd-header-height: 64px;
+  --bd-bg: #f5f7fa;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bd-bg);
+  font-family: 'Be Vietnam Pro', 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Layout ---------- */
+.bd-root {
+  min-height: 100vh;
+}
+
+.bd-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--bd-border);
+  line-height: normal;
+}
+
+.bd-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  color: var(--bd-primary);
+}
+
+.bd-logo-text {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.bd-header-search {
+  flex: 1;
+  max-width: 560px;
+  min-width: 0;
+  margin: 0 auto;
+}
+
+.bd-header-actions {
+  flex-shrink: 0;
+}
+
+.bd-user-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-inline: 6px;
+}
+
+.bd-user-name {
+  max-width: 160px;
+}
+
+.bd-sider {
+  position: sticky !important;
+  top: var(--bd-header-height);
+  height: calc(100vh - var(--bd-header-height));
+  border-right: 1px solid var(--bd-border);
+}
+
+.bd-sider-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.bd-sider-menu {
+  flex: 1;
+  overflow-y: auto;
+  border-inline-end: none !important;
+}
+
+.bd-sider-storage {
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--bd-border);
+}
+
+.bd-sider-storage-compact {
+  display: flex;
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.bd-sider-drawer .bd-sider-inner {
+  min-height: 100%;
+}
+
+.bd-main {
+  min-width: 0;
+  padding: 0 24px 24px;
+}
+
+.bd-breadcrumb {
+  margin: 16px 0;
+}
+
+.bd-content {
+  min-width: 0;
+}
+
+.bd-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.bd-page-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+}
+
+/* ---------- Auth pages ---------- */
+.bd-auth-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: linear-gradient(160deg, #e6eef7 0%, #f5f7fa 60%);
+}
+
+.bd-auth-card {
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 8px 24px rgba(11, 83, 148, 0.08);
+}
+
+.bd-auth-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.bd-auth-links {
+  display: flex;
+  justify-content: flex-end;
+  margin: -8px 0 16px;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 767px) {
+  .bd-header {
+    gap: 6px;
+    padding-inline: 8px !important;
+  }
+
+  .bd-main {
+    padding: 0 12px 16px;
+  }
+
+  .bd-breadcrumb {
+    margin: 12px 0;
+  }
+}
