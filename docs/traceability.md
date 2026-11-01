@@ -78,7 +78,7 @@ Mỗi dòng ánh xạ một chức năng trong HSMT với API, màn hình, quy�
 | 68 | Biểu đồ dung lượng sử dụng theo nhóm | `GET /dashboards/group` (groups.usedBytes/quotaBytes) | `/` (cột ngang) | đã đăng nhập | IT `DashboardTests.Group_dashboard...` |
 | 69 | Biểu đồ phân bổ loại file trong từng nhóm | `GET /dashboards/group` (typesByGroup) | `/` (cột chồng 100% / tròn) | đã đăng nhập | IT `DashboardTests.Group_dashboard...` |
 | 70 | Danh sách tài liệu nhóm gần đây | `GET /dashboards/group` (recent) | `/` (bảng) | đã đăng nhập | IT `DashboardTests.Group_dashboard...` |
-| 71 | Mobile: xem tài liệu của tôi | `GET /workspaces/{personal}/items` | App: tab Tài liệu | `doc.view` | `mobile` (tsc + expo export), IT `StorageTests.*` |
+| 71 | Mobile: xem tài liệu của tôi | `GET /workspaces/{personal}/items` | App: tab Tài liệu | `doc.view` | `mobile` (tsc, expo lint, `scripts/build-apk.ps1` → APK), IT `StorageTests.*` |
 | 72 | Mobile: xem tài liệu được chia sẻ | `GET /shares/with-me` | App: tab Chia sẻ | `doc.view` | IT `SharingTests.Internal_share_appears...` |
 | 73 | Mobile: xem tài liệu gần đây | `GET /recent` | App: Gần đây | `doc.view` | IT `StorageTests.Folder_upload...` |
 | 74 | Mobile: xem tài liệu nhóm | `GET /workspaces?type=group\|organization`, `GET /workspaces/{id}/items` | App: tab Nhóm | `workspace.view` | IT `StorageTests.Group_workspace...` |

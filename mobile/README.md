@@ -68,7 +68,16 @@ npx eas-cli@latest init        # gắn dự án với tài khoản Expo (ghi pro
 
 Các script tắt tương ứng: `npm run build:apk`, `npm run build:aab`, `npm run build:ios`. Các profile nằm trong `eas.json`. Tăng `version` (và `android.versionCode`, `ios.buildNumber`) trong `app.json` trước mỗi lần phát hành.
 
-## 5. Build Android cục bộ (không dùng EAS)
+## 5. Build APK bằng Docker (khuyến nghị, không cần Android SDK)
+
+```powershell
+pwsh -File scripts/build-apk.ps1            # → mobile/build-output/bluedrive-<version>.apk (arm64-v8a)
+pwsh -File scripts/build-apk.ps1 -AllAbis   # thêm armeabi-v7a, x86_64
+```
+
+Cần Docker có ≥ 8 GB RAM trống (dừng bớt dịch vụ khác nếu cần).
+
+## 6. Build Android cục bộ (không dùng EAS)
 
 Cần Android Studio (Android SDK + JDK 17).
 
@@ -79,6 +88,14 @@ cd android
 ./gradlew assembleRelease         # Windows PowerShell: .\gradlew.bat assembleRelease
 # APK: android/app/build/outputs/apk/release/app-release.apk
 ./gradlew bundleRelease           # AAB: android/app/build/outputs/bundle/release/app-release.aab
+```
+
+**Trên Windows**: dùng JDK 17+ (ví dụ JDK đi kèm Android Studio: `$env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'`). Nếu gặp lỗi `ninja: error: mkdir(... ) No such file or directory` do đường dẫn quá dài (giới hạn 260 ký tự của CMake), sao chép mã nguồn app sang một thư mục ngắn rồi build từ đó (không dùng `subst`/junction vì Node phân giải về đường dẫn thật, gây lỗi "different roots"):
+
+```powershell
+robocopy D:\duong\dan\BlueDrive\mobile C:\bdm /MIR /XD node_modules android .expo
+cd C:\bdm; npm ci; npx expo prebuild -p android --no-install
+cd android; .\gradlew.bat assembleRelease -PreactNativeArchitectures=arm64-v8a
 ```
 
 Mặc định bản release cục bộ được ký bằng khóa debug; để phát hành cần cấu hình keystore riêng trong `android/app/build.gradle` (hoặc dùng EAS để quản lý khóa). Thư mục `android/`, `ios/` được sinh tự động, không sửa tay (đã có trong `.gitignore`).
