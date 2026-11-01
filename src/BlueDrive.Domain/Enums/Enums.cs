@@ -34,7 +34,7 @@ public enum AlertSeverity { Info, Warning, Critical }
 
 public enum BackupType { Scheduled, Manual }
 
-public enum JobStatus { Queued, Running, Succeeded, Failed }
+public enum JobStatus { Queued, Running, Succeeded, Failed, Expired }
 
 public enum TicketPriority { KhanCap, KhongKhanCap }
 

@@ -1,0 +1,36 @@
+#!/usr/bin/env sh
+# Cài đặt trọn gói BlueDrive trên máy chủ Linux sạch (cần Docker + Docker Compose v2).
+# Dùng: ./scripts/install.sh [domain] [acme-email]   (ví dụ: ./scripts/install.sh drive.example.gov.vn admin@example.gov.vn)
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+DEPLOY="$ROOT/deploy"
+DOMAIN="${1:-}"
+ACME="${2:-}"
+rnd() { LC_ALL=C tr -dc 'A-HJ-NP-Za-km-z2-9' </dev/urandom | head -c "$1"; }
+docker version >/dev/null || { echo "Docker chưa chạy"; exit 1; }
+if [ ! -f "$DEPLOY/.env" ]; then
+  ADMIN_PW="Bd@$(rnd 12)"
+  if [ -n "$DOMAIN" ]; then SITE="$DOMAIN"; URL="https://$DOMAIN"; else SITE=":80"; URL="http://localhost"; fi
+  sed -e "s|^SITE_ADDRESS=.*|SITE_ADDRESS=$SITE|" \
+      -e "s|^PUBLIC_BASE_URL=.*|PUBLIC_BASE_URL=$URL|" \
+      -e "s|^ACME_EMAIL=.*|ACME_EMAIL=$ACME|" \
+      -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(rnd 32)|" \
+      -e "s|^JWT_SECRET=.*|JWT_SECRET=$(rnd 48)|" \
+      -e "s|^ONLYOFFICE_JWT_SECRET=.*|ONLYOFFICE_JWT_SECRET=$(rnd 40)|" \
+      -e "s|^STORAGE_MASTER_KEY=.*|STORAGE_MASTER_KEY=$(head -c 32 /dev/urandom | base64)|" \
+      -e "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=$ADMIN_PW|" \
+      -e "s|^GIT_SHA=.*|GIT_SHA=$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo dev)|" \
+      "$DEPLOY/.env.example" > "$DEPLOY/.env"
+  chmod 600 "$DEPLOY/.env"
+  echo "Mật khẩu quản trị ban đầu: $ADMIN_PW (bắt buộc đổi khi đăng nhập lần đầu)"
+  echo "QUAN TRỌNG: sao lưu deploy/.env — mất STORAGE_MASTER_KEY sẽ không giải mã được dữ liệu."
+fi
+cd "$DEPLOY"
+docker compose up -d --build
+PORT="$(grep '^HTTP_PORT=' .env | cut -d= -f2)"
+i=0
+until curl -fsS "http://localhost:${PORT:-80}/health" | grep -q Healthy; do
+  i=$((i+1)); [ "$i" -gt 90 ] && { echo "Hệ thống chưa sẵn sàng, xem: docker compose logs api"; exit 1; }
+  sleep 5
+done
+echo "BlueDrive đã sẵn sàng: $(grep '^PUBLIC_BASE_URL=' .env | cut -d= -f2)"

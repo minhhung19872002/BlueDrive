@@ -7,3 +7,7 @@ Caddyfile text eol=lf
 *.ttf binary
 *.docx binary
 *.png binary
+*.mp4 binary
+*.mp3 binary
+*.pptx binary
+*.xlsx binary

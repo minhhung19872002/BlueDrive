@@ -41,6 +41,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Fonts\*.ttf" />
     <EmbeddedResource Include="Office\Templates\*" />
+    <EmbeddedResource Include="Persistence\Seed\Samples\*" />
   </ItemGroup>
 
   <PropertyGroup>

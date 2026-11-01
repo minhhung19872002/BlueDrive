@@ -4,6 +4,7 @@ using BlueDrive.Api.Infrastructure;
 using BlueDrive.Api.Storage;
 using BlueDrive.Application.Abstractions;
 using BlueDrive.Application.Common;
+using BlueDrive.Application.Features.Operations;
 using BlueDrive.Application.Features.Storage;
 using BlueDrive.Application.Features.Workspaces;
 using BlueDrive.Application.Security;
@@ -113,7 +114,8 @@ public class DriveController : ApiControllerBase
 
     /// <summary>Chi tiết tệp (panel thông tin).</summary>
     [HttpGet("files/{id:guid}")]
-    public Task<FileDetailDto> File(Guid id) => Mediator.Send(new GetFileDetailQuery(id));
+    /// <param name="recordView">true khi mở xem tệp (ghi vào "Gần đây"); false khi chỉ mở panel thông tin.</param>
+    public Task<FileDetailDto> File(Guid id, [FromQuery] bool recordView = false) => Mediator.Send(new GetFileDetailQuery(id, recordView));
 
     [HttpPut("files/{id:guid}/name")]
     public async Task<IActionResult> RenameFile(Guid id, [FromBody] NameBody body) { await Mediator.Send(new RenameFileCommand(id, body.Name)); return NoContent(); }
@@ -241,11 +243,31 @@ public class ContentController(IContentTicketService tickets, IFileContentServic
                 Response.StatusCode = 404;
                 return;
             }
-            var (key, encrypted, wrapped) = BlueDrive.Infrastructure.Media.DerivedKeys.Parse(job.ResultKey);
-            var stream = await content.OpenReadAsync(key, encrypted, wrapped, HttpContext.RequestAborted);
-            var mime = job.Format == "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            Stream stream;
+            if (job.ResultKey.StartsWith(DataExport.KeyPrefix, StringComparison.Ordinal))
+                stream = HttpContext.RequestServices.GetRequiredService<IDataExporter>().Open(job.ResultKey[DataExport.KeyPrefix.Length..]);
+            else
+            {
+                var (key, encrypted, wrapped) = BlueDrive.Infrastructure.Media.DerivedKeys.Parse(job.ResultKey);
+                stream = await content.OpenReadAsync(key, encrypted, wrapped, HttpContext.RequestAborted);
+            }
+            var mime = job.Format switch { "pdf" => "application/pdf", "zip" => "application/zip", _ => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
             Response.Headers.ContentDisposition = new ContentDispositionHeaderValue("attachment") { FileNameStar = job.ResultFileName }.ToString();
-            await Results.File(stream, mime).ExecuteAsync(HttpContext);
+            await Results.File(stream, mime, enableRangeProcessing: stream.CanSeek).ExecuteAsync(HttpContext);
+            return;
+        }
+        if (ticket.Kind == "backup")
+        {
+            var backup = await db.BackupJobs.AsNoTracking().FirstOrDefaultAsync(b => b.Id == ticket.FileId);
+            if (backup is null || !await HttpContext.RequestServices.GetRequiredService<IPermissionService>().HasAsync(ticket.UserId, Perm.BackupAdmin))
+            {
+                Response.StatusCode = 404;
+                return;
+            }
+            var part = ticket.Items?.FirstOrDefault()?.Type ?? "db";
+            var stream = await HttpContext.RequestServices.GetRequiredService<IBackupRunner>().OpenArtifactAsync(backup, part, HttpContext.RequestAborted);
+            Response.Headers.ContentDisposition = new ContentDispositionHeaderValue("attachment") { FileNameStar = ticket.ZipName }.ToString();
+            await Results.File(stream, "application/octet-stream", enableRangeProcessing: true).ExecuteAsync(HttpContext);
             return;
         }
         // Access is re-checked on every request (revoked shares stop working immediately).

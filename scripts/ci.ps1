@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   BlueDrive CI: build + test backend, build + lint web, validate docker compose.
 .EXAMPLE

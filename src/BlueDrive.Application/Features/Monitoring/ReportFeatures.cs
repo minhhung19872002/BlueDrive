@@ -23,6 +23,7 @@ public static class ReportTypes
         [StorageOrganizations] = "Báo cáo dung lượng lưu trữ theo đơn vị",
         [StorageWorkspaces] = "Báo cáo dung lượng lưu trữ theo nhóm tài nguyên",
         [Alerts] = "Báo cáo cảnh báo bất thường",
+        [Operations.DataExport.Type] = "Gói dữ liệu bàn giao",
     };
 }
 
@@ -40,7 +41,7 @@ public sealed class CreateReportHandler(IAppDbContext db, ICurrentUser me, IRepo
 {
     public async Task<ReportJobDto> Handle(CreateReportCommand cmd, CancellationToken ct)
     {
-        if (!ReportTypes.Titles.ContainsKey(cmd.ReportType)) throw new AppException("Loại báo cáo không hợp lệ.");
+        if (!ReportTypes.Titles.ContainsKey(cmd.ReportType) || cmd.ReportType == Operations.DataExport.Type) throw new AppException("Loại báo cáo không hợp lệ.");
         var job = new ReportJob
         {
             RequestedBy = me.RequireUserId(), ReportType = cmd.ReportType, Format = ExportFormat.Normalize(cmd.Format),
@@ -105,7 +106,8 @@ public sealed class GetReportDownloadUrlHandler(IAppDbContext db, ICurrentUser m
 /// <summary>Builds a report file (runs in the Worker), stores it encrypted, and notifies the requester.</summary>
 public sealed record RunReportJobCommand(Guid Id) : IRequest<Unit>;
 
-public sealed class RunReportJobHandler(IAppDbContext db, ITableExporter exporter, IFileContentService content, IUserNotifier notify, IAuditLogger audit, TimeProvider clock)
+public sealed class RunReportJobHandler(IAppDbContext db, ITableExporter exporter, IFileContentService content, IUserNotifier notify, IAuditLogger audit, TimeProvider clock,
+    Operations.IDataExporter dataExporter)
     : IRequestHandler<RunReportJobCommand, Unit>
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) } };
@@ -120,6 +122,18 @@ public sealed class RunReportJobHandler(IAppDbContext db, ITableExporter exporte
         var requester = await db.Users.AsNoTracking().Where(u => u.Id == job.RequestedBy).Select(u => new { u.FullName, u.Username }).FirstAsync(ct);
         try
         {
+            if (job.ReportType == Operations.DataExport.Type)
+            {
+                var (key, name, size) = await dataExporter.ExportAsync(job, async p => { job.Progress = p; await db.SaveChangesAsync(ct); }, ct);
+                job.ResultKey = Operations.DataExport.KeyPrefix + key;
+                job.ResultFileName = name;
+                job.Status = JobStatus.Succeeded;
+                job.Progress = 100;
+                job.FinishedAt = clock.GetUtcNow().UtcDateTime;
+                await db.SaveChangesAsync(ct);
+                await notify.NotifyUserAsync(job.RequestedBy, "report", "Gói dữ liệu bàn giao đã sẵn sàng", $"{name} ({TextUtil.FormatBytes(size)})", $"/reports?id={job.Id}", ct);
+                return Unit.Value;
+            }
             var table = await BuildAsync(job, requester.FullName, ct);
             job.Progress = 70;
             await db.SaveChangesAsync(ct);

@@ -98,6 +98,7 @@ public static class ApiSetup
     {
         app.UseForwardedHeaders();
         app.UseExceptionHandler();
+        app.UseBlueDriveSecurityHeaders();
         app.UseSerilogRequestLogging(o => o.GetLevel = (ctx, _, ex) =>
             ex is not null || ctx.Response.StatusCode >= 500 ? Serilog.Events.LogEventLevel.Error
             : ctx.Request.Path.StartsWithSegments("/health") ? Serilog.Events.LogEventLevel.Verbose

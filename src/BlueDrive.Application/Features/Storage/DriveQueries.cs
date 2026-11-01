@@ -69,6 +69,7 @@ public static class DriveProjection
     {
         "-name" => q.OrderByDescending(f => f.Name),
         "createdAt" => q.OrderBy(f => f.CreatedAt),
+        "updatedAt" => q.OrderBy(f => f.UpdatedAt ?? f.CreatedAt),
         "-createdAt" or "-updatedAt" => q.OrderByDescending(f => f.UpdatedAt ?? f.CreatedAt),
         _ => q.OrderBy(f => f.Name),
     };

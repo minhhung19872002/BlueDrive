@@ -36,6 +36,9 @@ public static class DependencyInjection
         services.Configure<JwtOptions>(config.GetSection("Jwt"));
         services.Configure<SmtpOptions>(config.GetSection("Smtp"));
         services.AddDataProtection().SetApplicationName("BlueDrive").PersistKeysToDbContext<AppDbContext>();
+        // Key XML is encrypted with the storage master key when one is configured.
+        if (Storage.FileContentService.LoadMasterKey(config.GetSection("Storage").Get<Storage.StorageOptions>() ?? new()) is { } masterKey)
+            services.Configure<Microsoft.AspNetCore.DataProtection.KeyManagement.KeyManagementOptions>(o => o.XmlEncryptor = new Operations.MasterKeyXmlEncryptor(masterKey));
 
         services.AddScoped<IAuditLogger, AuditLogger>();
         services.AddScoped<ISettingsService, SettingsService>();
@@ -75,8 +78,17 @@ public static class DependencyInjection
         services.AddSingleton<Application.Features.Monitoring.IDiskInfo, DiskInfo>();
         services.AddScoped<Application.Features.Monitoring.IReportQueue, Jobs.HangfireReportQueue>();
         services.AddScoped<Jobs.ReportJobRunner>();
+        services.Configure<Operations.BackupOptions>(config.GetSection("Backup"));
+        services.AddScoped<Application.Features.Operations.IBackupRunner, Operations.BackupRunner>();
+        services.AddScoped<Application.Features.Operations.IBackupScheduler, Operations.HangfireBackupScheduler>();
+        services.AddScoped<Operations.BackupJobRunner>();
+        services.AddScoped<Operations.RestoreRunner>();
+        services.AddScoped<Jobs.IRecurringJobRegistration, Operations.BackupRecurringRegistration>();
+        services.AddScoped<Application.Features.Operations.IDataExporter, Operations.DataExporter>();
+        services.AddScoped<Application.Features.Operations.ISystemStatusService, Operations.SystemStatusService>();
 
         services.AddScoped<IDataSeeder, ReferenceDataSeeder>();
+        services.AddScoped<IDataSeeder, DemoDataSeeder>();
         return services;
     }
 }
