@@ -8,7 +8,9 @@
 param(
     [switch]$SkipIntegration,
     [switch]$SkipWeb,
-    [switch]$SkipDocker
+    [switch]$SkipMobile,
+    [switch]$SkipDocker,
+    [switch]$E2E
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -30,6 +32,18 @@ if (-not $SkipWeb) {
     Step 'npm ci' { npm ci --no-audit --no-fund }
     Step 'npm run lint' { npm run lint }
     Step 'npm run build' { npm run build }
+    Pop-Location
+}
+if (-not $SkipMobile) {
+    Push-Location mobile
+    Step 'mobile npm ci' { npm ci --no-audit --no-fund }
+    Step 'mobile typecheck' { npx tsc --noEmit }
+    Step 'mobile lint' { npx expo lint }
+    Pop-Location
+}
+if ($E2E) {
+    Push-Location web
+    Step 'Playwright E2E (cần stack đang chạy, E2E_BASE_URL/E2E_USERNAME/E2E_PASSWORD)' { npx playwright test }
     Pop-Location
 }
 if (-not $SkipDocker) {

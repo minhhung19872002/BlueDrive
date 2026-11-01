@@ -34,4 +34,13 @@ cd web; npm run dev | npm run build | npm run lint
 docker compose -f deploy/docker-compose.dev.yml up -d   # postgres + onlyoffice + mailpit cho dev
 cd deploy; docker compose up -d --build                 # toàn bộ stack
 powershell -File scripts/ci.ps1
+cd web; npm run test:e2e                                # Playwright, cần stack chạy (E2E_BASE_URL, E2E_USERNAME, E2E_PASSWORD)
+cd mobile; npx tsc --noEmit; npx expo lint              # app Expo SDK 58 (đọc mobile/AGENTS.md trước khi sửa)
 ```
+
+## Lưu ý đã gặp
+- Tham số action tên `q` + query `?q=` làm MVC coi là prefix → luôn đặt tên tham số complex `query`.
+- Rate limit chỉ áp cho login/forgot/reset; không áp cho `/auth/me`, `/content/*` (nhiều người dùng chung IP NAT).
+- `DateTime` không có Kind được coi là UTC (`UtcDateTimeConverter`); lọc theo ngày dùng giờ Việt Nam (UTC+7).
+- ONLYOFFICE: secret ≥ 32 ký tự (HS256), URL Document Server trả về được chuyển sang InternalUrl trước khi tải.
+- nginx phải khớp `location /tus` (không có dấu `/`) vì tạo phiên tus là `POST /tus`.

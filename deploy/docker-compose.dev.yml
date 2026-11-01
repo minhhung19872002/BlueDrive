@@ -21,7 +21,7 @@ services:
     image: onlyoffice/documentserver:9.2
     environment:
       JWT_ENABLED: "true"
-      JWT_SECRET: dev_onlyoffice_secret
+      JWT_SECRET: dev_onlyoffice_secret_dev_onlyoffice_secret
       JWT_HEADER: Authorization
       ALLOW_PRIVATE_IP_ADDRESS: "true"
       ALLOW_META_IP_ADDRESS: "true"
