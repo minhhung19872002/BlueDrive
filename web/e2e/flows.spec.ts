@@ -27,11 +27,10 @@ test.describe.serial('Tư liệu cá nhân', () => {
     const tệp = page.getByRole('menuitem', { name: /Tải lên tệp/ })
     if (await tệp.isVisible().catch(() => false)) await tệp.click()
     await (await chooser).setFiles({ name: fileName, mimeType: 'text/plain', buffer: Buffer.from('Báo cáo công tác dân số và phát triển') })
-    // Optional metadata dialog before the upload starts.
-    const start = page.getByRole('dialog').getByRole('button', { name: /Bắt đầu tải lên|Tải lên$/ })
-    if (await start.isVisible({ timeout: 3000 }).catch(() => false)) await start.click()
+    // Uploads start right away: no metadata dialog (edited later in "Thông tin").
     const fileRow = page.getByRole('row', { name: new RegExp(fileName) })
     await expect(fileRow).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByRole('dialog')).toHaveCount(0)
 
     await fileRow.getByText(fileName).click({ button: 'right' })
     await page.getByRole('menuitem', { name: /Đánh dấu quan trọng/ }).click()
@@ -83,7 +82,18 @@ test('tạo tài liệu Word mới và mở trình soạn thảo ONLYOFFICE', as
   // Close (top right, like SharePoint) leaves the editor for the folder listing.
   await page.getByRole('button', { name: 'Đóng' }).click()
   await expect(page).toHaveURL(/\/my-drive/)
-  await expect(page.getByRole('row', { name: new RegExp(`${docName}\\.docx`) })).toBeVisible()
+  const docRow = page.getByRole('row', { name: new RegExp(`${docName}\\.docx`) })
+  await expect(docRow).toBeVisible()
+  // Versions / discussion live in the context menu (the viewer side panel is closed by default).
+  await page.waitForLoadState('networkidle')
+  await docRow.getByText(`${docName}.docx`).click({ button: 'right' })
+  await page.getByRole('menuitem', { name: /Phiên bản$/ }).click()
+  await expect(page.locator('.ant-drawer').getByRole('tab', { name: 'Phiên bản', selected: true })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.ant-drawer-open')).toHaveCount(0)
+  // Opening an Office document goes straight to the editor.
+  await docRow.getByText(`${docName}.docx`).dblclick()
+  await expect(page).toHaveURL(/\/files\/.+\/edit/)
 })
 
 test('chia sẻ qua liên kết công khai có mật khẩu', async ({ page, browser }) => {

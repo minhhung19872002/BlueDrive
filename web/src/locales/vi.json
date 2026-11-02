@@ -682,13 +682,6 @@
     "rightApprove": "Phê duyệt"
   },
   "upload": {
-    "metaTitle": "Tải lên {{count}} tệp vào \"{{target}}\"",
-    "summary": "{{count}} tệp, tổng dung lượng {{size}}.",
-    "summaryFolders": "{{count}} tệp trong thư mục {{folders}}, tổng dung lượng {{size}}. Cấu trúc thư mục được giữ nguyên.",
-    "andMore": "... và {{count}} tệp khác",
-    "metaHint": "Thông tin dưới đây (không bắt buộc) được áp dụng cho tất cả tệp trong lần tải lên này.",
-    "titleBulkHint": "Để trống để dùng tên tệp làm tiêu đề.",
-    "start": "Tải lên",
     "panelLabel": "Hàng đợi tải lên",
     "panelRunning": "Đang tải lên {{count}} tệp",
     "panelDone": "Đã tải lên {{count}} tệp",

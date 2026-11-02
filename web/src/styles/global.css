@@ -663,14 +663,6 @@ body {
   font-size: 12px;
 }
 
-.bd-upload-preview {
-  max-height: 120px;
-  overflow-y: auto;
-  margin: 0;
-  padding-inline-start: 20px;
-  font-size: 13px;
-}
-
 /* ---------- Workspaces ---------- */
 .bd-workspace-card {
   height: 100%;

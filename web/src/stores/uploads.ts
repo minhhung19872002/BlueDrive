@@ -43,22 +43,10 @@ export interface UploadTask {
   result: UploadResult | null
 }
 
-/** Files picked or dropped, waiting for the optional metadata dialog. */
-export interface PendingBatch {
-  files: PickedFile[]
-  target: DriveTarget
-  targetName: string
-}
-
 interface UploadState {
   tasks: UploadTask[]
-  pendingBatch: PendingBatch | null
   collapsed: boolean
-  /** Show the metadata dialog for these files (no-op for an empty list). */
-  requestUpload: (files: PickedFile[], target: DriveTarget, targetName: string) => void
-  cancelBatch: () => void
-  confirmBatch: (meta: BatchMetadata) => void
-  /** Queue files directly with the given metadata, without the metadata dialog (e.g. new version upload). */
+  /** Queue files with the given metadata (no-op for an empty list). */
   enqueue: (files: PickedFile[], target: DriveTarget, meta: BatchMetadata) => void
   pause: (id: string) => void
   resume: (id: string) => void
@@ -263,22 +251,7 @@ function pump() {
 
 export const useUploadStore = create<UploadState>()((set, get) => ({
   tasks: [],
-  pendingBatch: null,
   collapsed: false,
-
-  requestUpload: (picked, target, targetName) => {
-    if (picked.length === 0) return
-    set({ pendingBatch: { files: picked, target, targetName } })
-  },
-
-  cancelBatch: () => set({ pendingBatch: null }),
-
-  confirmBatch: (meta) => {
-    const batch = get().pendingBatch
-    if (!batch) return
-    set({ pendingBatch: null })
-    get().enqueue(batch.files, batch.target, meta)
-  },
 
   enqueue: (picked, target, meta) => {
     if (picked.length === 0) return

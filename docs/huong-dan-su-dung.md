@@ -32,7 +32,7 @@ BlueDrive là hệ thống lưu trữ, tìm kiếm, khai thác và chia sẻ s�
 
 - Chuyển chế độ xem **danh sách / lưới (ảnh thu nhỏ)**, sắp xếp theo tên, kích thước, ngày sửa; lọc theo loại tư liệu; tìm trong thư mục hoặc trong toàn bộ Tài liệu của tôi (gõ có dấu hoặc không dấu).
 - **Mới**: Thư mục, Tài liệu Word, Bảng tính Excel, Trình chiếu PowerPoint, Văn bản (.txt). Tài liệu mới mở ngay trong trình soạn thảo trực tuyến.
-- **Tải lên**: tệp hoặc cả thư mục (giữ nguyên cây thư mục), hoặc **kéo thả** từ máy tính vào cửa sổ. Trước khi tải có thể nhập tiêu đề, mô tả, thẻ, danh mục áp dụng cho cả lô. Hàng đợi tải lên ở góc phải dưới: xem tiến độ, **tạm dừng / tiếp tục**, hủy, thử lại. Tệp lớn (vài GB) tiếp tục được từ chỗ dừng khi mạng gián đoạn.
+- **Tải lên**: tệp hoặc cả thư mục (giữ nguyên cây thư mục), hoặc **kéo thả** từ máy tính vào cửa sổ. Chọn tệp xong là tải lên ngay; tiêu đề, mô tả, thẻ, danh mục nhập sau trong **Thông tin** của tệp (chuột phải → Thông tin), hoặc chọn nhiều tệp → **Cập nhật thông tin hàng loạt**. Hàng đợi tải lên ở góc phải dưới: xem tiến độ, **tạm dừng / tiếp tục**, hủy, thử lại. Tệp lớn (vài GB) tiếp tục được từ chỗ dừng khi mạng gián đoạn.
 - Chọn nhiều mục (ô chọn, Ctrl/Shift + nhấp), **chuột phải** để mở menu: Mở, Tải xuống, Chia sẻ, Đổi tên, Sao chép tới..., Di chuyển tới..., Đánh dấu quan trọng, Thông tin, Quản lý quyền truy cập, Xóa.
 - **Phím tắt**: `Del` xóa, `F2` đổi tên, `Ctrl+C` / `Ctrl+X` rồi `Ctrl+V` để sao chép/di chuyển vào thư mục đang mở, `Enter` mở. **Kéo thả** tệp vào một thư mục để di chuyển.
 - Tải nhiều tệp/thư mục cùng lúc: hệ thống nén thành một tệp ZIP.

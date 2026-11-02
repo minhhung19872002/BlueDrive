@@ -52,7 +52,7 @@ Cột "Kết quả mong đợi" ghi "Thành công" nghĩa là thao tác thực h
 | 36 | Đổi tên, sao chép, cắt, sao chép tới, thông tin, xóa (nhóm) | Như #24 trong nhóm; xóa vào thùng rác nhóm | | Như #24 | ☐ | ☐ | |
 | 37 | Phiên bản tài liệu nhóm | Như #26 với tài liệu nhóm | | Như #26 | ☐ | ☐ | |
 | 38 | Thảo luận tài liệu nhóm | Như #27 với tài liệu nhóm | | Như #27 | ☐ | ☐ | |
-| 39 | Tải lên từng tệp các định dạng | Tải ảnh (jpg, png, heic), video (mp4, mov), âm thanh (mp3, wav), văn bản (docx, pdf), infographic, ấn phẩm (epub); nhập tiêu đề, mô tả, danh mục, thẻ áp dụng hàng loạt; thử tệp .exe đổi tên .jpg | Bộ tệp mẫu | Thành công, có ảnh thu nhỏ; tệp giả mạo bị chặn với thông báo rõ | ☐ | ☐ | |
+| 39 | Tải lên từng tệp các định dạng | Tải ảnh (jpg, png, heic), video (mp4, mov), âm thanh (mp3, wav), văn bản (docx, pdf), infographic, ấn phẩm (epub); tệp tải lên ngay khi chọn; chọn nhiều tệp → "Cập nhật thông tin hàng loạt" nhập tiêu đề, mô tả, danh mục, thẻ; thử tệp .exe đổi tên .jpg | Bộ tệp mẫu | Thành công, có ảnh thu nhỏ; tệp giả mạo bị chặn với thông báo rõ | ☐ | ☐ | |
 | 40 | Tải lên cả thư mục | Tải lên thư mục nhiều cấp | | Giữ nguyên cây | ☐ | ☐ | |
 | 41 | Tạo mới văn bản/bảng tính/trình chiếu | Như #21 | | Thành công | ☐ | ☐ | |
 | 42 | Chỉnh sửa trực tuyến | 2 người cùng mở một tài liệu Word và cùng gõ | | Đồng soạn thảo thời gian thực; lưu tạo phiên bản mới | ☐ | ☐ | |

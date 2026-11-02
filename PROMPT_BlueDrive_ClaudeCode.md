@@ -241,7 +241,7 @@ Mọi bảng có `id uuid` (UUIDv7), `created_at`, `created_by`, `updated_at`, `
 - #32–38: Đầy đủ các chức năng như #20–#27 nhưng trong ngữ cảnh workspace nhóm. **Tái sử dụng chung component/API**, chỉ khác tham số workspace.
 
 **Tải lên, biên tập tư liệu (#39–43)**
-- #39: Upload từng tệp, hỗ trợ đầy đủ định dạng ở mục 5. Khi upload cho phép nhập metadata (tiêu đề, mô tả, danh mục, tags) và áp dụng hàng loạt.
+- #39: Upload từng tệp, hỗ trợ đầy đủ định dạng ở mục 5. Chọn/kéo thả tệp là tải lên ngay (không hiện hộp thoại nhập thông tin); metadata (tiêu đề, mô tả, danh mục, tags) nhập sau trong khung "Thông tin" của tệp, hoặc áp dụng hàng loạt cho nhiều tệp đã chọn ("Cập nhật thông tin hàng loạt").
 - #40: Upload cả thư mục.
 - #41: Tạo mới văn bản/bảng tính/trình chiếu.
 - #42: Chỉnh sửa online qua ONLYOFFICE, cho phép nhiều người đồng soạn thảo.

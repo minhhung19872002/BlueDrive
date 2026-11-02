@@ -1,6 +1,7 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { App, Drawer, type MenuProps } from 'antd'
 import {
+  CommentOutlined,
   CopyOutlined,
   DeleteOutlined,
   DownloadOutlined,
@@ -8,6 +9,7 @@ import {
   EyeOutlined,
   FolderOpenOutlined,
   FormOutlined,
+  HistoryOutlined,
   InfoCircleOutlined,
   SafetyOutlined,
   ScissorOutlined,
@@ -31,6 +33,7 @@ import type { DriveItem } from '@/types/drive'
 import { getMessage } from '@/utils/antdStatic'
 import CopyMoveModal, { type CopyMoveRequest } from '../dialogs/CopyMoveModal'
 import NameModal from '../dialogs/NameModal'
+import FileDetailsTabs, { type DetailsTab } from '../info/FileDetailsTabs'
 import InfoPanel from '../info/InfoPanel'
 import { useClearClipboardIfContains } from '../useClipboard'
 import { folderUrl, toRef } from '../utils'
@@ -70,6 +73,8 @@ export type ItemAction =
   | 'star'
   | 'unstar'
   | 'info'
+  | 'versions'
+  | 'discussion'
   | 'access'
   | 'delete'
 
@@ -104,6 +109,7 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
   const [renaming, setRenaming] = useState<DriveItem | null>(null)
   const [copyMove, setCopyMove] = useState<CopyMoveRequest | null>(null)
   const [infoItem, setInfoItem] = useState<DriveItem | null>(null)
+  const [infoTab, setInfoTab] = useState<DetailsTab>('info')
 
   const invalidate = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: qk.drive })
@@ -120,7 +126,10 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
       if (item.type === 'folder') {
         if (onOpenFolder) onOpenFolder(item)
         else navigate(folderUrl(item.workspaceId, item.id, personalWorkspaceId))
-      } else setViewerId(item.id)
+      }
+      // Office documents open straight in ONLYOFFICE (edit when allowed, otherwise read-only), like SharePoint.
+      else if (isOfficeFile(item.extension)) navigate(editorUrl(item.id))
+      else setViewerId(item.id)
     },
     [navigate, onOpenFolder, personalWorkspaceId],
   )
@@ -182,7 +191,12 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
     [clearClipboard, invalidate, modal, t],
   )
 
-  const info = useCallback((item: DriveItem) => (onShowInfo ? onShowInfo(item) : setInfoItem(item)), [onShowInfo])
+  /** Details drawer opened on a tab ("Thông tin", "Phiên bản", "Thảo luận"). */
+  const details = useCallback((item: DriveItem, tab: DetailsTab) => {
+    setInfoTab(tab)
+    setInfoItem(item)
+  }, [])
+  const info = useCallback((item: DriveItem) => (onShowInfo ? onShowInfo(item) : details(item, 'info')), [details, onShowInfo])
   const share = useCallback((item: DriveItem) => setShareTarget({ type: item.type, id: item.id, name: item.name }), [])
   const manageAccess = useCallback(
     (item: DriveItem) => setAccessTarget({ type: item.type, id: item.id, name: item.name, workspaceId: item.workspaceId }),
@@ -232,6 +246,10 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
         )
       list.push({ type: 'divider' })
       if (single && shown('info')) list.push({ key: 'info', icon: <InfoCircleOutlined />, label: t('actions.info') })
+      if (single?.type === 'file' && shown('info')) {
+        list.push({ key: 'versions', icon: <HistoryOutlined />, label: t('collab.versions.tab') })
+        list.push({ key: 'discussion', icon: <CommentOutlined />, label: t('collab.discussion.tab') })
+      }
       if (single && canManage && shown('access')) list.push({ key: 'access', icon: <SafetyOutlined />, label: t('actions.manageAccess') })
       if (canEdit && can('doc.delete') && shown('delete'))
         list.push({ key: 'delete', icon: <DeleteOutlined />, label: t('actions.delete'), danger: true, extra: 'Del' })
@@ -265,13 +283,16 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
           return void setStar(items, false)
         case 'info':
           return info(single)
+        case 'versions':
+        case 'discussion':
+          return details(single, action as DetailsTab)
         case 'access':
           return manageAccess(single)
         case 'delete':
           return remove(items)
       }
     },
-    [copyTo, download, info, manageAccess, moveTo, navigate, open, remove, setStar, share],
+    [copyTo, details, download, info, manageAccess, moveTo, navigate, open, remove, setStar, share],
   )
 
   const dialogs: ReactNode = (
@@ -290,12 +311,11 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
           onClose={() => setRenaming(null)}
         />
       )}
-      <Drawer open={!!infoItem} onClose={() => setInfoItem(null)} title={t('actions.info')} width={380} destroyOnHidden>
-        {infoItem && (
-          <InfoPanel
-            subject={infoItem.type === 'file' ? { kind: 'file', id: infoItem.id } : { kind: 'folder', item: infoItem }}
-            onManageAccess={setAccessTarget}
-          />
+      <Drawer open={!!infoItem} onClose={() => setInfoItem(null)} title={infoItem?.name ?? t('actions.info')} width={420} destroyOnHidden>
+        {infoItem?.type === 'file' ? (
+          <FileDetailsTabs fileId={infoItem.id} tab={infoTab} onTab={setInfoTab} onManageAccess={setAccessTarget} />
+        ) : (
+          infoItem && <InfoPanel subject={{ kind: 'folder', item: infoItem }} onManageAccess={setAccessTarget} />
         )}
       </Drawer>
     </>

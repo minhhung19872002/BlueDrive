@@ -15,7 +15,8 @@ export default function LoginScreen() {
   const c = useColors();
   const savedServer = useAuth((s) => s.serverUrl);
   const lastUsername = useAuth((s) => s.lastUsername);
-  const [server, setServer] = useState(savedServer);
+  // First launch: the server baked in at build time (scripts/build-apk.ps1 -DefaultServer), if any.
+  const [server, setServer] = useState(savedServer || process.env.EXPO_PUBLIC_DEFAULT_SERVER_URL || '');
   const [username, setUsername] = useState(lastUsername);
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);

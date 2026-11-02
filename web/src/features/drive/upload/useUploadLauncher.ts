@@ -39,12 +39,13 @@ export function useUploadLauncher() {
     (files: PickedFile[], target?: NamedTarget | null) => {
       const tgt = target ?? resolveTarget()
       if (!tgt || files.length === 0) return
-      useUploadStore.getState().requestUpload(files, { workspaceId: tgt.workspaceId, folderId: tgt.folderId }, tgt.name)
+      // Starts right away; title, description, tags and catalogs are edited later in the file's "Thông tin" panel.
+      useUploadStore.getState().enqueue(files, { workspaceId: tgt.workspaceId, folderId: tgt.folderId }, {})
     },
     [resolveTarget],
   )
 
-  /** Open the OS file (or folder) chooser, then the metadata dialog. Call from a click handler. */
+  /** Open the OS file (or folder) chooser, then upload. Call from a click handler. */
   const pickAndUpload = useCallback(
     async (directory: boolean, target?: NamedTarget) => {
       const tgt = target ?? resolveTarget()

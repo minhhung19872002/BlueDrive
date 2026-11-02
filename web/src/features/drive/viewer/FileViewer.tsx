@@ -50,9 +50,9 @@ export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate
   const navigate = useNavigate()
   const screens = Grid.useBreakpoint()
   const isMobile = screens.md === false
-  // null = default (open on desktop, closed on phones).
+  // Closed by default (the file takes the whole stage); a deep link to a tab (?tab=discussion) opens it.
   const [sideChoice, setSideOpen] = useState<boolean | null>(null)
-  const sideOpen = sideChoice ?? (!isMobile || !!defaultTab)
+  const sideOpen = sideChoice ?? !!defaultTab
   const [sharing, setSharing] = useState(false)
   const [accessTarget, setAccessTarget] = useState<AccessTarget | null>(null)
   const [original, setOriginal] = useState(false)
