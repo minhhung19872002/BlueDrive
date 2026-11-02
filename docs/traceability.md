@@ -116,10 +116,10 @@ Mỗi dòng ánh xạ một chức năng trong HSMT với API, màn hình, quy�
 | Tiêu chí | Kết quả | Bằng chứng |
 |---|---|---|
 | 84/84 chức năng trong bảng truy vết | Đạt | 83 dòng #1–#84 (HSMT không có #25), không ô trống |
-| Chạy bằng `docker compose up -d`, đăng nhập admin, tạo/sửa Word online | Đạt | `POST /office/new` tạo `.docx`; ONLYOFFICE mở chế độ sửa, gõ nội dung, đóng trình soạn thảo → phiên bản 2 được lưu sau 6 giây, tệp tải về chứa đúng nội dung |
+| Chạy bằng `docker compose up -d` trên máy sạch, đăng nhập admin, tạo/sửa Word online | Đạt | `git clone` từ GitHub vào thư mục mới, chưa có `.env`, volume trống (project `bdclean`) → `scripts/install.ps1 -Demo` sinh `.env` ngẫu nhiên, build và khởi động, health `Healthy`; admin bắt buộc đổi mật khẩu; dữ liệu mẫu nạp bằng `DEMO_PASSWORD`; tạo `.docx` mới, sửa trong ONLYOFFICE → phiên bản 2 sau 6 giây. Trên stack dev: `POST /office/new` tạo `.docx`; ONLYOFFICE mở chế độ sửa, gõ nội dung, đóng trình soạn thảo → phiên bản 2 được lưu sau 6 giây, tệp tải về chứa đúng nội dung |
 | Upload video 2 GB resumable, tua được | Đạt | `scripts/test-large-upload.ps1`: tạm dừng ở 850 MB, tiếp tục đúng offset, 2048 MB trong 24 giây; tua tới 1536 MB → HTTP 206 trong 41 ms |
 | Tìm "dan so" ra "Dân số" | Đạt | Web (E2E) và app mobile (tìm kiếm không dấu có tô sáng) |
-| Sai mật khẩu 5 lần → khóa + cảnh báo | Đạt | Lần 5: "Tài khoản bị tạm khóa 15 phút"; mật khẩu đúng vẫn bị chặn; cảnh báo `brute_force` được tạo và đẩy realtime (SignalR, `docs/images/canh-bao-thoi-gian-thuc.png`) |
+| Sai mật khẩu 5 lần → khóa + cảnh báo | Đạt | Lần 5: "Tài khoản bị tạm khóa 15 phút"; mật khẩu đúng vẫn bị chặn; cảnh báo `brute_force` được tạo; trên bản cài mới, trang web của admin đang mở tự hiện thông báo "Cảnh báo: Đăng nhập sai nhiều lần" và chuông "1 chưa đọc" ngay khi client khác nhập sai lần thứ 5 (SignalR, không tải lại trang) |
 | Thao tác #11 vào nhật ký, lọc được | Đạt | `POST /audit-logs/search` lọc `login_failed` theo thời gian; `GET /audit-logs/verify`: chuỗi hash toàn vẹn |
 | Sao lưu đột xuất + phục hồi | Đạt | Sao lưu đầy đủ (CSDL + tệp) thành công; xóa một tệp → `scripts/restore.ps1` → tệp trở lại, tải được, chuỗi nhật ký vẫn toàn vẹn |
 | Xuất toàn bộ dữ liệu có metadata | Đạt | Gói ZIP: `metadata.json`, `metadata.csv`, `audit-logs.csv`, `README.md`, thư mục `files/` |
