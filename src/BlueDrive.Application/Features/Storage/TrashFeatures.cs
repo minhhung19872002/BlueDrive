@@ -39,9 +39,12 @@ public sealed class ListTrashHandler(IAppDbContext db, ICurrentUser me, IResourc
             folders = folders.Where(f => DbFn.Unaccent(f.Name).Contains(term));
             files = files.Where(f => DbFn.Unaccent(f.Name).Contains(term));
         }
-        var rows = await folders.Select(f => new { f.Id, Type = "folder", f.Name, Size = db.Files.Where(x => x.Folder != null && x.Folder.Path.StartsWith(f.Path) && x.IsDeleted).Sum(x => (long?)x.SizeBytes) ?? 0, MediaType = (MediaType?)null, DeletedAt = f.DeletedAt!.Value, f.DeletedBy, ParentId = f.OriginalParentId })
-            .Concat(files.Select(f => new { f.Id, Type = "file", f.Name, Size = f.SizeBytes, MediaType = (MediaType?)f.MediaType, DeletedAt = f.DeletedAt!.Value, f.DeletedBy, ParentId = f.OriginalFolderId }))
-            .OrderByDescending(x => x.DeletedAt).ToListAsync(ct);
+        // Two queries merged in memory: a SQL UNION types the folders' NULL media type as int, which breaks reading files' text-stored enum.
+        var folderRows = await folders.Select(f => new { f.Id, Type = "folder", f.Name, Size = db.Files.Where(x => x.Folder != null && x.Folder.Path.StartsWith(f.Path) && x.IsDeleted).Sum(x => (long?)x.SizeBytes) ?? 0, MediaType = (MediaType?)null, DeletedAt = f.DeletedAt!.Value, f.DeletedBy, ParentId = f.OriginalParentId })
+            .ToListAsync(ct);
+        var fileRows = await files.Select(f => new { f.Id, Type = "file", f.Name, Size = f.SizeBytes, MediaType = (MediaType?)f.MediaType, DeletedAt = f.DeletedAt!.Value, f.DeletedBy, ParentId = f.OriginalFolderId })
+            .ToListAsync(ct);
+        var rows = folderRows.Concat(fileRows).OrderByDescending(x => x.DeletedAt).ToList();
         var total = rows.Count;
         var page = rows.Skip((q.SafePage - 1) * q.SafePageSize).Take(q.SafePageSize).ToList();
         var parentIds = page.Where(r => r.ParentId.HasValue).Select(r => r.ParentId!.Value).Distinct().ToList();

@@ -173,6 +173,10 @@ public class StorageTests(ApiFactory factory)
 
         await (await c.PostAsJsonAsync("/api/v1/items/delete", new { items = new[] { new { type = "file", id = fileId } } })).ReadJsonAsync();
         await (await c.PostAsJsonAsync("/api/v1/items/delete", new { items = new[] { new { type = "folder", id = folderId } } })).ReadJsonAsync();
+        // Trash holding both a file (media type stored as text) and a folder (no media type) lists both.
+        var mixed = (await (await c.GetAsync($"/api/v1/workspaces/{ws}/trash")).ReadJsonAsync()).GetProperty("items").EnumerateArray().ToList();
+        mixed.Single(i => i.GetProperty("id").GetGuid() == fileId).GetProperty("mediaType").GetString().Should().Be("image");
+        mixed.Single(i => i.GetProperty("id").GetGuid() == folderId).GetProperty("mediaType").ValueKind.Should().Be(JsonValueKind.Null);
         // File's parent is gone: restoring the file puts it at the root.
         await (await c.PostAsJsonAsync("/api/v1/trash/restore", new { items = new[] { new { type = "file", id = fileId } } })).ReadJsonAsync();
         (await (await c.GetAsync($"/api/v1/files/{fileId}")).ReadJsonAsync()).GetProperty("folderId").ValueKind.Should().Be(JsonValueKind.Null);

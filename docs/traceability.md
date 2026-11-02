@@ -126,3 +126,4 @@ Mỗi dòng ánh xạ một chức năng trong HSMT với API, màn hình, quy�
 | App mobile build APK, chạy #71–84 | Đạt | Xem mục "Kiểm thử thủ công app mobile" ở trên |
 | UI, thông báo, tài liệu tiếng Việt | Đạt | Toàn bộ thông báo lỗi/màn hình trong lần kiểm chứng là tiếng Việt |
 | Không TODO/stub, test xanh, không hard-code secret | Đạt | `git grep` TODO/FIXME/NotImplementedException: 0; mật khẩu admin/demo, JWT, ONLYOFFICE đọc từ `deploy/.env`; `scripts/ci.ps1`: build 0 cảnh báo, 59 unit + 49 integration test xanh, web/mobile lint |
+| Phase 11: Playwright E2E và k6 | Đạt | `npm run test:e2e`: 39/39 (luồng chính, mọi trang quản trị, cảnh báo realtime, giao diện điện thoại); lần chạy đầu phát hiện lỗi 500 ở Thùng rác khi có tệp (UNION làm sai kiểu cột `media_type`) — đã sửa và bổ sung integration test; k6 50 người dùng × 2 phút: p95 danh sách 75 ms, tìm kiếm 69 ms, dashboard 11 ms, 0% lỗi trên 21.565 request |
