@@ -61,6 +61,8 @@ if (-not (Test-Path $envFile)) {
     }
     foreach ($k in $replacements.Keys) { $content = [regex]::Replace($content, $k, $replacements[$k]) }
     Set-Content -Path $envFile -Value $content -Encoding utf8
+    # Secrets file readable by the owner only (Linux/macOS; Windows PowerShell 5.1 has no $IsWindows).
+    if ($PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) { chmod 600 $envFile }
     Write-Host "    Mật khẩu quản trị ban đầu (đổi ngay khi đăng nhập lần đầu): $AdminPassword" -ForegroundColor Yellow
     Write-Host '    QUAN TRỌNG: sao lưu deploy/.env ở nơi an toàn — mất STORAGE_MASTER_KEY sẽ không giải mã được dữ liệu.' -ForegroundColor Yellow
 } else {
