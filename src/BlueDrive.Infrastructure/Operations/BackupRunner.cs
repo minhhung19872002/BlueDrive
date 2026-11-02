@@ -146,7 +146,13 @@ public sealed class BackupRunner(
     {
         var s3 = storageOptions.Value.S3;
         if (string.IsNullOrWhiteSpace(s3.Bucket)) throw new InvalidOperationException("Đã bật sao lưu lên S3 nhưng chưa cấu hình Storage:S3.");
-        var cfg = new AmazonS3Config { ForcePathStyle = true, AuthenticationRegion = s3.Region };
+        // Same as S3FileStorage: no default aws-chunked checksums, which some S3-compatible servers store verbatim.
+        var cfg = new AmazonS3Config
+        {
+            ForcePathStyle = true, AuthenticationRegion = s3.Region,
+            RequestChecksumCalculation = Amazon.Runtime.RequestChecksumCalculation.WHEN_REQUIRED,
+            ResponseChecksumValidation = Amazon.Runtime.ResponseChecksumValidation.WHEN_REQUIRED,
+        };
         if (!string.IsNullOrWhiteSpace(s3.ServiceUrl)) cfg.ServiceURL = s3.ServiceUrl;
         using var client = new AmazonS3Client(s3.AccessKey, s3.SecretKey, cfg);
         foreach (var f in Directory.EnumerateFiles(dir))

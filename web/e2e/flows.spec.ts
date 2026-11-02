@@ -77,6 +77,9 @@ test('tạo tài liệu Word mới và mở trình soạn thảo ONLYOFFICE', as
   await expect(page.getByRole('main').getByText(`${docName}.docx`).first()).toBeVisible()
   // The Document Server injects an iframe for the editor.
   await expect(page.locator('iframe[name="frameEditor"], iframe[src*="/office/"]').first()).toBeAttached({ timeout: 45_000 })
+  // Deep link /files/{id}/edit (reload, links in notifications) is an SPA route, not proxied to the API.
+  expect((await page.reload())?.status()).toBe(200)
+  await expect(page.locator('iframe[name="frameEditor"], iframe[src*="/office/"]').first()).toBeAttached({ timeout: 45_000 })
 })
 
 test('chia sẻ qua liên kết công khai có mật khẩu', async ({ page, browser }) => {

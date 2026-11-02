@@ -7,26 +7,34 @@ using DotNet.Testcontainers.Builders;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Testcontainers.Minio;
 
 namespace BlueDrive.IntegrationTests;
 
-/// <summary>Real S3-compatible storage (MinIO) and real SMTP delivery (Mailpit).</summary>
+/// <summary>Real S3-compatible storage (SeaweedFS) and real SMTP delivery (Mailpit).</summary>
 public class ExternalServicesTests
 {
     [Fact]
     public async Task S3_storage_with_encryption_supports_write_ranged_read_list_and_delete()
     {
-        await using var minio = new MinioBuilder("minio/minio:latest").Build();
-        await minio.StartAsync();
+        // SeaweedFS (pinned) as the S3 server: MinIO no longer publishes container images (minio/minio is gone from Docker Hub).
+        const string accessKey = "bdtest", secretKey = "bdtest-secret-key";
+        var s3Config = $$"""{"identities":[{"name":"bd","credentials":[{"accessKey":"{{accessKey}}","secretKey":"{{secretKey}}"}],"actions":["Admin","Read","Write","List","Tagging"]}]}""";
+        await using var server = new ContainerBuilder("chrislusf/seaweedfs:3.97")
+            .WithResourceMapping(System.Text.Encoding.UTF8.GetBytes(s3Config), "/etc/seaweedfs/s3.json")
+            .WithCommand("server", "-dir=/data", "-s3", "-s3.port=8333", "-s3.config=/etc/seaweedfs/s3.json")
+            .WithPortBinding(8333, true)
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r.ForPort(8333).ForStatusCodeMatching(_ => true)))
+            .Build();
+        await server.StartAsync();
+        var serviceUrl = $"http://{server.Hostname}:{server.GetMappedPublicPort(8333)}";
         var options = Options.Create(new StorageOptions
         {
             Provider = "s3", EncryptAtRest = true, MasterKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
             LocalRoot = Path.Combine(Path.GetTempPath(), "bd-s3-" + Guid.NewGuid().ToString("N")),
-            S3 = new S3Options { ServiceUrl = minio.GetConnectionString(), Bucket = "bluedrive", AccessKey = minio.GetAccessKey(), SecretKey = minio.GetSecretKey() },
+            S3 = new S3Options { ServiceUrl = serviceUrl, Bucket = "bluedrive", AccessKey = accessKey, SecretKey = secretKey },
         });
-        using (var admin = new Amazon.S3.AmazonS3Client(minio.GetAccessKey(), minio.GetSecretKey(),
-                   new Amazon.S3.AmazonS3Config { ServiceURL = minio.GetConnectionString(), ForcePathStyle = true, AuthenticationRegion = "us-east-1" }))
+        using (var admin = new Amazon.S3.AmazonS3Client(accessKey, secretKey,
+                   new Amazon.S3.AmazonS3Config { ServiceURL = serviceUrl, ForcePathStyle = true, AuthenticationRegion = "us-east-1" }))
             await admin.PutBucketAsync("bluedrive");
         using var s3 = new S3FileStorage(options);
         var content = new FileContentService(s3, options);

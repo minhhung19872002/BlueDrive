@@ -119,7 +119,14 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
     {
         var o = options.Value.S3;
         _bucket = o.Bucket ?? throw new InvalidOperationException("Thiếu cấu hình Storage:S3:Bucket.");
-        var cfg = new AmazonS3Config { ForcePathStyle = true, AuthenticationRegion = o.Region };
+        // Checksums only when the operation requires them: the SDK's default aws-chunked trailing checksums are stored
+        // verbatim (corrupting the object) by several S3-compatible servers, e.g. SeaweedFS.
+        var cfg = new AmazonS3Config
+        {
+            ForcePathStyle = true, AuthenticationRegion = o.Region,
+            RequestChecksumCalculation = Amazon.Runtime.RequestChecksumCalculation.WHEN_REQUIRED,
+            ResponseChecksumValidation = Amazon.Runtime.ResponseChecksumValidation.WHEN_REQUIRED,
+        };
         if (!string.IsNullOrWhiteSpace(o.ServiceUrl)) cfg.ServiceURL = o.ServiceUrl; else cfg.RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(o.Region);
         _client = new AmazonS3Client(o.AccessKey, o.SecretKey, cfg);
         _tempDir = options.Value.TempDirectory;

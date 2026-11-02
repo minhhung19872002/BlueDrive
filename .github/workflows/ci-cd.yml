@@ -92,7 +92,7 @@ jobs:
     timeout-minutes: 30
     environment:
       name: production
-      url: https://bluedrive.14-225-83-93.nip.io
+      url: https://bluedrive.bluestar.com.vn
     concurrency:
       group: deploy-production
       cancel-in-progress: false
@@ -110,7 +110,7 @@ jobs:
       - name: Public health check
         run: |
           for i in $(seq 1 30); do
-            curl -fsS https://bluedrive.14-225-83-93.nip.io/health | grep -q Healthy && exit 0
+            curl -fsS https://bluedrive.bluestar.com.vn/health | grep -q Healthy && exit 0
             sleep 10
           done
           echo "BlueDrive chưa sẵn sàng sau khi deploy" >&2; exit 1
