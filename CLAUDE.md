@@ -8,6 +8,7 @@ Spec đầy đủ: `PROMPT_BlueDrive_ClaudeCode.md` (đặc tả) và `docs/hsmt
 - Không để TODO/stub trong code bàn giao. Không hard-code secret (chỉ đọc từ `deploy/.env`).
 - UI, thông báo lỗi, tài liệu: 100% tiếng Việt. Code, tên file, commit: tiếng Anh.
 - Sau mỗi phase: `scripts/ci.ps1` xanh → commit `phase-N: ...` → push `origin main` (https://github.com/minhhung19872002/BlueDrive).
+- Push `main` → GitHub Actions (`.github/workflows/ci-cd.yml`) chạy CI rồi tự deploy lên VM 14.225.83.93 (`~/apps/bluedrive-deploy.sh` = `scripts/deploy-vm.sh`, khóa SSH bị ghim `command=`) → https://bluedrive.14-225-83-93.nip.io. Sửa `scripts/deploy-vm.sh` thì chép lại lên VM.
 
 ## Stack
 - .NET 10 (SDK 10.0.403), Clean Architecture: `src/BlueDrive.{Domain,Application,Infrastructure,Api,Worker}`.

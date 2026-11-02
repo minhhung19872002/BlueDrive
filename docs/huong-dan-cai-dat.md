@@ -92,6 +92,18 @@ cd deploy && docker compose up -d --build
 
 Migration CSDL chạy tự động khi API khởi động; mỗi lần triển khai được ghi vào *Nhật ký thay đổi hệ thống*. Nên chạy `scripts/backup-now.ps1 -Full` trước khi nâng cấp.
 
+### Tự động (CI/CD — GitHub Actions)
+
+`.github/workflows/ci-cd.yml`: mỗi lần push / pull request chạy CI (build + unit/integration test .NET, lint + build web, typecheck + lint mobile, kiểm tra `docker compose config`). Push lên `main` và CI xanh → tự triển khai lên máy chủ qua SSH rồi kiểm tra `/health` công khai.
+
+Thiết lập một lần trên máy chủ (đang dùng cho VM 14.225.83.93):
+1. Chép `scripts/deploy-vm.sh` thành `~/apps/bluedrive-deploy.sh` (`chmod 755`); script cập nhật `~/BlueDrive` đúng commit được đẩy, `docker compose up -d --build --wait`, chờ `/health`, không đụng tới `deploy/.env`.
+2. Tạo cặp khóa riêng cho GitHub Actions, thêm khóa công khai vào `~/.ssh/authorized_keys` **kèm giới hạn** để khóa chỉ chạy được script triển khai:
+   `command="/home/hung/apps/bluedrive-deploy.sh",restrict ssh-ed25519 AAAA… github-actions-deploy-bluedrive`
+3. Secret của repo GitHub: `DEPLOY_SSH_KEY` (khóa bí mật), `DEPLOY_KNOWN_HOSTS` (`ssh-keyscan <ip>`), `DEPLOY_TARGET` (`hung@<ip>`).
+
+Triển khai tay một commit: `~/apps/bluedrive-deploy.sh <sha>`; commit đang chạy ghi ở `~/apps/bluedrive.REVISION`.
+
 ## 8. Gỡ cài đặt / kết thúc hợp đồng
 
 1. *Quản trị > Sao lưu > Xuất toàn bộ dữ liệu* → tải gói bàn giao cho Chủ đầu tư (định dạng: `docs/data-export-format.md`).

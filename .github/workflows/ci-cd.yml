@@ -1,0 +1,116 @@
+# BlueDrive CI/CD
+#   CI  (push, pull request): backend build + unit/integration tests (Testcontainers), web lint + build,
+#        mobile typecheck + lint, docker compose config.
+#   CD  (push to main, CI green): deploy to the VM over SSH. The deploy key is pinned on the VM to
+#        ~/apps/bluedrive-deploy.sh (command= in ~/.ssh/authorized_keys), which receives the commit SHA only.
+#   Secrets: DEPLOY_SSH_KEY (private key), DEPLOY_KNOWN_HOSTS (ssh-keyscan of the VM), DEPLOY_TARGET (user@host).
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (.NET build + tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Build + unit + integration tests
+        shell: pwsh
+        run: ./scripts/ci.ps1 -SkipWeb -SkipMobile -SkipDocker
+
+  web:
+    name: Web (lint + build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run build
+
+  mobile:
+    name: Mobile (typecheck + lint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsc --noEmit
+      - run: npx expo lint
+
+  compose:
+    name: Docker compose config
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate deploy/docker-compose.yml
+        env:
+          POSTGRES_PASSWORD: ci
+          JWT_SECRET: ci_secret_ci_secret_ci_secret_ci_secret
+          ADMIN_PASSWORD: Ci@12345
+          STORAGE_MASTER_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          ONLYOFFICE_JWT_SECRET: ci
+        run: docker compose -f deploy/docker-compose.yml config --quiet
+
+  deploy:
+    name: Deploy to VM
+    needs: [backend, web, mobile, compose]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: https://bluedrive.14-225-83-93.nip.io
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Deploy ${{ github.sha }}
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_TARGET: ${{ secrets.DEPLOY_TARGET }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key && chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ServerAliveInterval=30 "$DEPLOY_TARGET" "$GITHUB_SHA"
+      - name: Public health check
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS https://bluedrive.14-225-83-93.nip.io/health | grep -q Healthy && exit 0
+            sleep 10
+          done
+          echo "BlueDrive chưa sẵn sàng sau khi deploy" >&2; exit 1
