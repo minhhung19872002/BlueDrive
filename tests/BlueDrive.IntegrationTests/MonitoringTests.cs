@@ -21,16 +21,36 @@ public class MonitoringTests(ApiFactory factory)
         var admin = await factory.AdminClientAsync();
         var (c, userId, username) = await factory.CreateUserClientAsync("bien_tap");
         var ws = await StorageTests.PersonalWorkspaceAsync(c);
+        var (_, otherId, _) = await factory.CreateUserClientAsync("xem");
         var fileId = (await StorageTests.UploadAsync(c, ws, null, "nhat-ky.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var item = new[] { new { type = "file", id = fileId } };
         await (await c.GetAsync($"/api/v1/files/{fileId}/download-url")).ReadJsonAsync();
-        await (await c.PutAsJsonAsync($"/api/v1/files/{fileId}/name", new { name = "doi-ten" })).Content.ReadAsStringAsync();
-        await (await c.PostAsJsonAsync("/api/v1/items/delete", new { items = new[] { new { type = "file", id = fileId } } })).ReadJsonAsync();
-        await (await c.PostAsJsonAsync("/api/v1/trash/restore", new { items = new[] { new { type = "file", id = fileId } } })).ReadJsonAsync();
+        (await c.PutAsJsonAsync("/api/v1/files/metadata", new { fileIds = new[] { fileId }, title = "Nhật ký" })).EnsureSuccessStatusCode();
+        (await c.PutAsJsonAsync($"/api/v1/files/{fileId}/name", new { name = "doi-ten" })).EnsureSuccessStatusCode();
+        var folderId = (await (await c.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Đích" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        await (await c.PostAsJsonAsync("/api/v1/items/copy", new { items = item, targetWorkspaceId = ws, targetFolderId = folderId })).ReadJsonAsync();
+        await (await c.PostAsJsonAsync("/api/v1/items/move", new { items = item, targetWorkspaceId = ws, targetFolderId = folderId })).ReadJsonAsync();
+        await (await c.PostAsJsonAsync("/api/v1/shares", new { resourceType = "file", resourceId = fileId, targets = new[] { new { type = "user", id = otherId } }, accessLevel = "download" })).ReadJsonAsync();
+        var shareId = (await (await c.GetAsync($"/api/v1/shares?resourceType=file&resourceId={fileId}")).ReadJsonAsync()).EnumerateArray().First().GetProperty("id").GetGuid();
+        (await c.DeleteAsync($"/api/v1/shares/{shareId}")).EnsureSuccessStatusCode();
+        (await c.PutAsJsonAsync($"/api/v1/access/file/{fileId}", new { entries = new[] { new { principalType = "user", principalId = otherId, accessLevel = "view" } } })).EnsureSuccessStatusCode();
+        await (await c.PostAsJsonAsync("/api/v1/items/delete", new { items = item })).ReadJsonAsync();
+        await (await c.PostAsJsonAsync("/api/v1/trash/restore", new { items = item })).ReadJsonAsync();
+        await (await c.PostAsJsonAsync("/api/v1/items/delete", new { items = item })).ReadJsonAsync();
+        await (await c.PostAsJsonAsync("/api/v1/trash/purge", item)).ReadJsonAsync();
         await c.PostAsync("/api/v1/auth/logout", null);
 
+        // Operating scenario #11 (docs/kich-ban-van-hanh-thu.md): every action is logged and can be filtered on its own.
+        string[] scenario = ["login", "upload", "download", "edit", "rename", "copy", "move", "share", "unshare", "permission_change", "delete", "restore", "purge", "logout"];
+        foreach (var action in scenario)
+        {
+            var page = await (await admin.PostAsJsonAsync("/api/v1/audit-logs/search?pageSize=100", new { userId, actions = new[] { action } })).ReadJsonAsync();
+            var rows = page.GetProperty("items").EnumerateArray().ToList();
+            rows.Should().NotBeEmpty($"thao tác '{action}' phải có trong nhật ký");
+            rows.Should().OnlyContain(i => i.GetProperty("action").GetString() == action && i.GetProperty("username").GetString() == username, $"bộ lọc '{action}'");
+        }
         var logs = await (await admin.PostAsJsonAsync("/api/v1/audit-logs/search?pageSize=100", new { userId })).ReadJsonAsync();
-        var actions = logs.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("action").GetString()).ToHashSet();
-        actions.Should().Contain(["login", "logout", "upload", "download", "rename", "delete", "restore", "password_change"]);
+        logs.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("action").GetString()).Should().Contain("password_change");
 
         var filtered = await (await admin.PostAsJsonAsync("/api/v1/audit-logs/search", new { actions = new[] { "rename" }, q = "doi-ten", from = DateTime.UtcNow.AddDays(-1).ToString("yyyy-MM-dd") })).ReadJsonAsync();
         filtered.GetProperty("items").EnumerateArray().Should().OnlyContain(i => i.GetProperty("action").GetString() == "rename");

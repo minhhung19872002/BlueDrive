@@ -120,7 +120,7 @@ Mỗi dòng ánh xạ một chức năng trong HSMT với API, màn hình, quy�
 | Upload video 2 GB resumable, tua được | Đạt | `scripts/test-large-upload.ps1`: tạm dừng ở 850 MB, tiếp tục đúng offset, 2048 MB trong 24 giây; tua tới 1536 MB → HTTP 206 trong 41 ms |
 | Tìm "dan so" ra "Dân số" | Đạt | Web (E2E) và app mobile (tìm kiếm không dấu có tô sáng) |
 | Sai mật khẩu 5 lần → khóa + cảnh báo | Đạt | Lần 5: "Tài khoản bị tạm khóa 15 phút"; mật khẩu đúng vẫn bị chặn; cảnh báo `brute_force` được tạo; trên bản cài mới, trang web của admin đang mở tự hiện thông báo "Cảnh báo: Đăng nhập sai nhiều lần" và chuông "1 chưa đọc" ngay khi client khác nhập sai lần thứ 5 (SignalR, không tải lại trang) |
-| Thao tác #11 vào nhật ký, lọc được | Đạt | `POST /audit-logs/search` lọc `login_failed` theo thời gian; `GET /audit-logs/verify`: chuỗi hash toàn vẹn |
+| Thao tác #11 vào nhật ký, lọc được | Đạt | IT `MonitoringTests.Every_operation_is_logged_and_filterable` thực hiện đủ 14 thao tác của kịch bản #11 (đăng nhập, tải lên, tải xuống, sửa, đổi tên, sao chép, di chuyển, chia sẻ, hủy chia sẻ, đổi quyền, xóa, khôi phục, xóa vĩnh viễn, đăng xuất) và lọc riêng từng hành động: mỗi bộ lọc trả về đúng hành động, đúng người dùng; trên stack: `POST /audit-logs/search` lọc `login_failed` theo thời gian; `GET /audit-logs/verify`: chuỗi hash toàn vẹn |
 | Sao lưu đột xuất + phục hồi | Đạt | Sao lưu đầy đủ (CSDL + tệp) thành công; xóa một tệp → `scripts/restore.ps1` → tệp trở lại, tải được, chuỗi nhật ký vẫn toàn vẹn |
 | Xuất toàn bộ dữ liệu có metadata | Đạt | Gói ZIP: `metadata.json`, `metadata.csv`, `audit-logs.csv`, `README.md`, thư mục `files/` |
 | App mobile build APK, chạy #71–84 | Đạt | Xem mục "Kiểm thử thủ công app mobile" ở trên |
