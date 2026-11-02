@@ -93,6 +93,8 @@ Mỗi dòng ánh xạ một chức năng trong HSMT với API, màn hình, quy�
 | 83 | Mobile: xem chi tiết tệp | `GET /files/{id}?recordView=true` | App: Chi tiết tệp | `doc.view` | IT `CollaborationTests.Image_thumbnail...` |
 | 84 | Mobile: tải xuống | `GET /files/{id}/download-url` | App: Tải xuống (Thư viện ảnh / chia sẻ tệp) | `doc.view` + ACL Download | IT `StorageTests.Tus_resumable_upload...` |
 
+**Kiểm thử thủ công app mobile (02/11/2026)** — APK `scripts/build-apk.ps1 -Abis x86_64` trên Android Emulator (Pixel 9a, Android 16), máy chủ `http://10.0.2.2:8088` (stack `deploy/docker-compose.yml`), tài khoản `admin` và `canbo1` (bắt buộc đổi mật khẩu lần đầu). Đã chạy đạt: #71 tab Tài liệu, #72 tệp được chia sẻ hiện ở tab Chia sẻ, #73 Trang chủ/gần đây, #74 nhóm tài nguyên và không gian đơn vị, #75 tìm "dan so" không dấu có tô sáng, #76 ảnh, PDF và Word qua ONLYOFFICE (giao diện mobile), âm thanh MP3, #77 đổi tên, #78 bỏ/đánh dấu quan trọng, #79 sao chép (tự đặt tên "(1)" khi trùng), #80 di chuyển, #81 xóa có xác nhận → Thùng rác, #82 breadcrumb và cây thư mục, #83 chi tiết + xem trước văn bản, #84 tải xuống qua bảng chia sẻ của Android, #53 tạo liên kết chia sẻ (hạn 7 ngày) và mở được từ trình duyệt chưa đăng nhập. Ảnh minh họa: `docs/images/mobile-*.png`. Lỗi phát hiện và đã sửa: sau khi đổi mật khẩu bắt buộc app không chuyển về Trang chủ; ONLYOFFICE mất cổng khi chạy ở cổng khác 80/443 (Caddy `{host}` → `{hostport}`); lỗi 4xx bị ghi log thành 500.
+
 ## Yêu cầu chất lượng (mục 3.1) và phi chức năng
 
 | Mục | Nội dung | Cách đáp ứng | Kiểm chứng |

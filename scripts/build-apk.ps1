@@ -5,14 +5,16 @@
 .EXAMPLE
   pwsh -File scripts/build-apk.ps1                 # arm64-v8a (đa số điện thoại hiện nay)
   pwsh -File scripts/build-apk.ps1 -AllAbis        # arm64-v8a, armeabi-v7a, x86_64
+  pwsh -File scripts/build-apk.ps1 -Abis x86_64    # chỉ x86_64 (chạy thử trên Android Emulator), ít tốn RAM hơn
 #>
-param([switch]$AllAbis, [string]$Image = 'reactnativecommunity/react-native-android:v22.0')
+param([switch]$AllAbis, [string]$Abis, [string]$Image = 'reactnativecommunity/react-native-android:v22.0')
 $ErrorActionPreference = 'Stop'
 $mobile = Join-Path (Split-Path -Parent $PSScriptRoot) 'mobile'
 $out = Join-Path $mobile 'build-output'
 New-Item -ItemType Directory -Force $out | Out-Null
-$abis = if ($AllAbis) { 'arm64-v8a,armeabi-v7a,x86_64' } else { 'arm64-v8a' }
+$abis = if ($Abis) { $Abis } elseif ($AllAbis) { 'arm64-v8a,armeabi-v7a,x86_64' } else { 'arm64-v8a' }
 $version = (Get-Content (Join-Path $mobile 'app.json') -Raw | ConvertFrom-Json).expo.version
+if ($Abis) { $version = "$version-$($Abis -replace ',', '-')" }
 $script = @"
 set -e
 mkdir -p /app && tar -C /src --exclude=./node_modules --exclude=./android --exclude=./ios --exclude=./.expo --exclude=./build-output -cf - . | tar -C /app -xf -

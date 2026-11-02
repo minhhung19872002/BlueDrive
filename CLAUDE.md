@@ -44,3 +44,7 @@ cd mobile; npx tsc --noEmit; npx expo lint              # app Expo SDK 58 (đọ
 - `DateTime` không có Kind được coi là UTC (`UtcDateTimeConverter`); lọc theo ngày dùng giờ Việt Nam (UTC+7).
 - ONLYOFFICE: secret ≥ 32 ký tự (HS256), URL Document Server trả về được chuyển sang InternalUrl trước khi tải.
 - nginx phải khớp `location /tus` (không có dấu `/`) vì tạo phiên tus là `POST /tus`.
+- Caddy gửi ONLYOFFICE `X-Forwarded-Host {hostport}/office` (không dùng `{host}` — mất cổng, lỗi "Download failed" khi chạy cổng 8088).
+- `UseExceptionHandler` đặt sau `UseSerilogRequestLogging`, nếu không lỗi 4xx đã xử lý bị log thành 500.
+- Mobile: route `change-password` vẫn hợp lệ khi đã đăng nhập → sau đổi mật khẩu bắt buộc phải `router.replace('/(tabs)')`.
+- Emulator x86_64 cần APK `-Abis x86_64`; xem Office trên emulator cần `adb reverse tcp:8088 tcp:8088`.

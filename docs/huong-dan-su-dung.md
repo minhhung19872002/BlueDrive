@@ -100,3 +100,9 @@ Các báo cáo xuất Excel/PDF có khối lượng lớn được xử lý nề
   ![Menu trên điện thoại](images/mobile-menu.png)
 
 - **Ứng dụng BlueDrive** (Android/iOS): nhập địa chỉ máy chủ và đăng nhập (có thể bật mở khóa bằng vân tay/khuôn mặt). Các mục: Trang chủ, Tài liệu của tôi, Được chia sẻ, Gần đây, Nhóm, Tìm kiếm. Với mỗi tệp: mở (ảnh, video, âm thanh, PDF, Office), đổi tên, đánh dấu quan trọng, sao chép/di chuyển (chọn thư mục đích trên cây thư mục), xóa, chia sẻ liên kết, xem chi tiết, **tải xuống** về máy (ảnh/video lưu vào Thư viện). Tải ảnh/video lên từ thư viện hoặc máy ảnh. Hướng dẫn cài đặt ứng dụng: `mobile/README.md`.
+
+  | Trang chủ | Tìm kiếm không dấu | Xem PDF/Office | Chia sẻ liên kết |
+  |---|---|---|---|
+  | ![Trang chủ ứng dụng](images/mobile-trang-chu.png) | ![Tìm kiếm](images/mobile-tim-kiem.png) | ![Xem PDF](images/mobile-xem-pdf.png) | ![Chia sẻ liên kết](images/mobile-chia-se-lien-ket.png) |
+  | **Nhóm và đơn vị** | **Được chia sẻ** | **Chi tiết tệp** | **Nghe âm thanh** |
+  | ![Nhóm](images/mobile-nhom.png) | ![Được chia sẻ](images/mobile-duoc-chia-se.png) | ![Chi tiết tệp](images/mobile-chi-tiet.png) | ![Âm thanh](images/mobile-am-thanh.png) |

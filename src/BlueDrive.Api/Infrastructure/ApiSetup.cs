@@ -97,12 +97,13 @@ public static class ApiSetup
     public static WebApplication UseApiPipeline(this WebApplication app)
     {
         app.UseForwardedHeaders();
-        app.UseExceptionHandler();
         app.UseBlueDriveSecurityHeaders();
         app.UseSerilogRequestLogging(o => o.GetLevel = (ctx, _, ex) =>
             ex is not null || ctx.Response.StatusCode >= 500 ? Serilog.Events.LogEventLevel.Error
             : ctx.Request.Path.StartsWithSegments("/health") ? Serilog.Events.LogEventLevel.Verbose
             : Serilog.Events.LogEventLevel.Information);
+        // Inside request logging so handled exceptions (4xx ProblemDetails) are logged with their real status, not as 500.
+        app.UseExceptionHandler();
 
         app.UseSwagger(o => o.RouteTemplate = "api/swagger/{documentName}/swagger.json");
         app.UseSwaggerUI(o =>

@@ -40,7 +40,9 @@ export default function ChangePasswordScreen() {
       const result = await authApi.changePassword(current, next);
       await useAuth.getState().setSession(result); // new token pair without the pwd_change claim
       toast.success(t('changePassword.success'));
-      if (!mustChange && router.canGoBack()) router.back();
+      // A forced change leaves the user on this screen (still allowed when signed in), so go home explicitly.
+      if (mustChange) router.replace('/(tabs)');
+      else if (router.canGoBack()) router.back();
     } catch (e) {
       setError(errorMessage(e));
     } finally {

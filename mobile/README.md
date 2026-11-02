@@ -73,9 +73,17 @@ Các script tắt tương ứng: `npm run build:apk`, `npm run build:aab`, `npm 
 ```powershell
 pwsh -File scripts/build-apk.ps1            # → mobile/build-output/bluedrive-<version>.apk (arm64-v8a)
 pwsh -File scripts/build-apk.ps1 -AllAbis   # thêm armeabi-v7a, x86_64
+pwsh -File scripts/build-apk.ps1 -Abis x86_64   # → bluedrive-<version>-x86_64.apk, chỉ để chạy trên Android Emulator
 ```
 
 Cần Docker có ≥ 8 GB RAM trống (dừng bớt dịch vụ khác nếu cần).
+
+### Chạy thử APK trên Android Emulator
+
+- Emulator x86_64 cần APK có `x86_64` (bản mặc định arm64 sẽ thoát ngay với lỗi `libreactnative.so`).
+- `adb install -r mobile/build-output/bluedrive-<version>-x86_64.apk`, địa chỉ máy chủ trong app: `http://10.0.2.2:<HTTP_PORT>`.
+- Xem PDF/Office: ONLYOFFICE được nạp từ `PUBLIC_BASE_URL` (ví dụ `http://localhost:8088`), nên trên emulator chạy thêm `adb reverse tcp:8088 tcp:8088` để `localhost` của emulator trỏ về máy host. Máy chủ thật dùng domain nên không cần bước này.
+- Tự động nhập liệu bằng `adb shell input text`: tắt bàn phím Gboard/nhập giọng nói (`adb shell ime disable <id>`) để tránh tự sửa chính tả.
 
 ## 6. Build Android cục bộ (không dùng EAS)
 
