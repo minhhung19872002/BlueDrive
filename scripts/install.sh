@@ -1,19 +1,27 @@
 #!/usr/bin/env sh
 # Cài đặt trọn gói BlueDrive trên máy chủ Linux sạch (cần Docker + Docker Compose v2).
 # Dùng: ./scripts/install.sh [domain] [acme-email]   (ví dụ: ./scripts/install.sh drive.example.gov.vn admin@example.gov.vn)
+# Máy chủ đã có dịch vụ khác chiếm cổng 80/443: HTTP_PORT=8098 HTTPS_PORT=8448 PUBLIC_BASE_URL=http://<ip>:8098 ./scripts/install.sh
 set -eu
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEPLOY="$ROOT/deploy"
 DOMAIN="${1:-}"
 ACME="${2:-}"
+HTTP_PORT="${HTTP_PORT:-80}"
+HTTPS_PORT="${HTTPS_PORT:-443}"
 rnd() { LC_ALL=C tr -dc 'A-HJ-NP-Za-km-z2-9' </dev/urandom | head -c "$1"; }
 docker version >/dev/null || { echo "Docker chưa chạy"; exit 1; }
 if [ ! -f "$DEPLOY/.env" ]; then
   ADMIN_PW="Bd@$(rnd 12)"
-  if [ -n "$DOMAIN" ]; then SITE="$DOMAIN"; URL="https://$DOMAIN"; else SITE=":80"; URL="http://localhost"; fi
+  if [ -n "$DOMAIN" ]; then SITE="$DOMAIN"; URL="https://$DOMAIN"
+  elif [ "$HTTP_PORT" != 80 ]; then SITE=":80"; URL="http://localhost:$HTTP_PORT"
+  else SITE=":80"; URL="http://localhost"; fi
+  URL="${PUBLIC_BASE_URL:-$URL}"
   sed -e "s|^SITE_ADDRESS=.*|SITE_ADDRESS=$SITE|" \
       -e "s|^PUBLIC_BASE_URL=.*|PUBLIC_BASE_URL=$URL|" \
       -e "s|^ACME_EMAIL=.*|ACME_EMAIL=$ACME|" \
+      -e "s|^HTTP_PORT=.*|HTTP_PORT=$HTTP_PORT|" \
+      -e "s|^HTTPS_PORT=.*|HTTPS_PORT=$HTTPS_PORT|" \
       -e "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$(rnd 32)|" \
       -e "s|^JWT_SECRET=.*|JWT_SECRET=$(rnd 48)|" \
       -e "s|^ONLYOFFICE_JWT_SECRET=.*|ONLYOFFICE_JWT_SECRET=$(rnd 40)|" \
