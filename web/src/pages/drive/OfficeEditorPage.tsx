@@ -1,8 +1,8 @@
 import { Button, Result, Spin, Tag, Tooltip, Typography } from 'antd'
-import { ArrowLeftOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons'
+import { CloseOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { getErrorMessage } from '@/api/errors'
 import { getOfficeConfig } from '@/api/office'
 import { qk } from '@/api/queryKeys'
@@ -10,7 +10,9 @@ import { qkc } from '@/api/queryKeys.collab'
 import FileTypeIcon from '@/features/drive/components/FileTypeIcon'
 import { useFileDetail } from '@/features/drive/hooks'
 import OfficeEditor from '@/features/office/OfficeEditor'
+import { folderUrl } from '@/features/drive/utils'
 import { isOfficeEditable } from '@/features/office/officeFiles'
+import { useAuthStore } from '@/stores/auth'
 import '@/styles/collab.css'
 
 /** Full-screen ONLYOFFICE editor /files/:id/edit (#21, #41, #42). ?view=true forces read-only. */
@@ -20,6 +22,7 @@ export default function OfficeEditorPage() {
   const forceView = params.get('view') === 'true'
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const location = useLocation()
   const queryClient = useQueryClient()
   const detail = useFileDetail(id)
   const config = useQuery({
@@ -34,11 +37,13 @@ export default function OfficeEditorPage() {
     refetchOnReconnect: false,
   })
 
-  const goBack = () => {
+  const personal = useAuthStore((s) => s.user?.personalWorkspaceId)
+  const close = () => {
     // Saved versions arrive through the Document Server callback: refresh the file views.
     void queryClient.invalidateQueries({ queryKey: qk.drive })
-    if (window.history.length > 1) navigate(-1)
-    else navigate(`/files/${id}`)
+    // Back to where the editor was opened from; opened directly (link, reload) → the file's folder.
+    if (location.key !== 'default') navigate(-1)
+    else navigate(detail.data ? folderUrl(detail.data.workspaceId, detail.data.folderId, personal) : `/files/${id}`)
   }
 
   const f = detail.data
@@ -58,10 +63,7 @@ export default function OfficeEditorPage() {
   return (
     <div className="bd-office-page">
       <div className="bd-office-bar">
-        <Tooltip title={t('common.back')}>
-          <Button type="text" icon={<ArrowLeftOutlined />} onClick={goBack} aria-label={t('common.back')} />
-        </Tooltip>
-        {f && <FileTypeIcon type="file" mediaType={f.mediaType} extension={f.extension} size={20} />}
+        {f &&<FileTypeIcon type="file" mediaType={f.mediaType} extension={f.extension} size={20} />}
         <Typography.Text strong ellipsis className="bd-office-title" title={f?.name}>
           {f?.name ?? ''}
         </Typography.Text>
@@ -80,6 +82,9 @@ export default function OfficeEditorPage() {
             {t('collab.office.switchToEdit')}
           </Button>
         )}
+        <Tooltip title={t('common.close')}>
+          <Button type="text" icon={<CloseOutlined />} onClick={close} aria-label={t('common.close')} />
+        </Tooltip>
       </div>
       <div className="bd-office-body">{body}</div>
     </div>

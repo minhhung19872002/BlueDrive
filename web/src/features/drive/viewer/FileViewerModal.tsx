@@ -29,7 +29,7 @@ export default function FileViewerModal({ fileId, siblings, onClose }: FileViewe
     >
       <FileViewer
         fileId={current}
-        onBack={onClose}
+        onClose={onClose}
         prevId={index > 0 ? siblings![index - 1] : null}
         nextId={index >= 0 && index < siblings!.length - 1 ? siblings![index + 1] : null}
         onNavigate={siblings && siblings.length > 1 ? setCurrent : undefined}

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button, Drawer, Grid, Result, Space, Spin, Tabs, Tooltip, Typography, type TabsProps } from 'antd'
 import {
-  ArrowLeftOutlined,
+  CloseOutlined,
   DownloadOutlined,
   FormOutlined,
   InfoCircleOutlined,
@@ -29,7 +29,8 @@ import MediaPreview from './MediaPreview'
 
 export interface FileViewerProps {
   fileId: string
-  onBack: () => void
+  /** Close button (top right, like SharePoint). */
+  onClose: () => void
   /** Sibling navigation (viewer opened from a listing). */
   prevId?: string | null
   nextId?: string | null
@@ -43,8 +44,8 @@ export interface FileViewerProps {
   defaultTab?: string
 }
 
-/** Full viewer: top bar (back, name, download, share, star, info) + preview by type + side info panel. */
-export default function FileViewer({ fileId, onBack, prevId, nextId, onNavigate, extraTabs, defaultTab }: FileViewerProps) {
+/** Full viewer: top bar (name, download, share, star, info, close) + preview by type + side info panel. */
+export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate, extraTabs, defaultTab }: FileViewerProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const screens = Grid.useBreakpoint()
@@ -152,10 +153,7 @@ export default function FileViewer({ fileId, onBack, prevId, nextId, onNavigate,
   return (
     <div className="bd-viewer">
       <div className="bd-viewer-bar">
-        <Tooltip title={t('common.back')}>
-          <Button type="text" icon={<ArrowLeftOutlined />} onClick={onBack} aria-label={t('common.back')} />
-        </Tooltip>
-        {f && <FileTypeIcon type="file" mediaType={f.mediaType} extension={f.extension} size={20} />}
+        {f &&<FileTypeIcon type="file" mediaType={f.mediaType} extension={f.extension} size={20} />}
         <Typography.Text strong ellipsis className="bd-viewer-title" title={f?.name}>
           {f?.name ?? ''}
         </Typography.Text>
@@ -203,6 +201,9 @@ export default function FileViewer({ fileId, onBack, prevId, nextId, onNavigate,
           )}
           <Tooltip title={t('actions.info')}>
             <Button type={sideOpen ? 'primary' : 'text'} ghost={sideOpen} icon={<InfoCircleOutlined />} onClick={() => setSideOpen(!sideOpen)} />
+          </Tooltip>
+          <Tooltip title={t('common.close')}>
+            <Button type="text" icon={<CloseOutlined />} onClick={onClose} aria-label={t('common.close')} />
           </Tooltip>
         </Space>
       </div>

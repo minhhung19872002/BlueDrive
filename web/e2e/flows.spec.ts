@@ -80,6 +80,10 @@ test('tạo tài liệu Word mới và mở trình soạn thảo ONLYOFFICE', as
   // Deep link /files/{id}/edit (reload, links in notifications) is an SPA route, not proxied to the API.
   expect((await page.reload())?.status()).toBe(200)
   await expect(page.locator('iframe[name="frameEditor"], iframe[src*="/office/"]').first()).toBeAttached({ timeout: 45_000 })
+  // Close (top right, like SharePoint) leaves the editor for the folder listing.
+  await page.getByRole('button', { name: 'Đóng' }).click()
+  await expect(page).toHaveURL(/\/my-drive/)
+  await expect(page.getByRole('row', { name: new RegExp(`${docName}\\.docx`) })).toBeVisible()
 })
 
 test('chia sẻ qua liên kết công khai có mật khẩu', async ({ page, browser }) => {
