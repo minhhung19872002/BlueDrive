@@ -4,6 +4,8 @@
 	email {$ACME_EMAIL:admin@localhost}
 	servers {
 		protocols h1 h2
+		# Behind another TLS-terminating proxy (TRUSTED_PROXIES=its subnet): keep its X-Forwarded-Proto/For.
+		trusted_proxies static {$TRUSTED_PROXIES:127.0.0.1/32}
 	}
 }
 
@@ -22,14 +24,13 @@
 	handle_path /office/* {
 		reverse_proxy onlyoffice:80 {
 			# {hostport}, not {host}: keep a non-default port (e.g. :8088) in the URLs Document Server hands to clients.
+			# X-Forwarded-Proto is set by Caddy itself (passed through from trusted proxies).
 			header_up X-Forwarded-Host {hostport}/office
-			header_up X-Forwarded-Proto {scheme}
 		}
 	}
 
 	handle {
 		reverse_proxy web:80 {
-			header_up X-Forwarded-Proto {scheme}
 			flush_interval -1
 			transport http {
 				read_timeout 1h
