@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { Form, Input, Modal, type InputRef } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { applyFieldErrors } from '@/api/formErrors'
@@ -19,11 +19,14 @@ const INVALID = /[/\\:*?"<>|]/
 export default function NameModal({ title, label, initialName, okText, loading, onSubmit, onClose }: NameModalProps) {
   const { t } = useTranslation()
   const [form] = Form.useForm<{ name: string }>()
+  const selected = useRef(false)
   // Pre-select the base name (without extension) like desktop file managers.
+  // Once only: AntD re-invokes the ref on every render, which would re-select text while the user types.
   const selectBase = useCallback(
     (ref: InputRef | null) => {
       const el = ref?.input
-      if (!el || !initialName) return
+      if (!el || !initialName || selected.current) return
+      selected.current = true
       const dot = initialName.lastIndexOf('.')
       window.setTimeout(() => el.setSelectionRange(0, dot > 0 ? dot : initialName.length), 0)
     },

@@ -66,9 +66,15 @@ test('tạo tài liệu Word mới và mở trình soạn thảo ONLYOFFICE', as
   await openMyDrive(page)
   await page.getByRole('main').getByRole('button', { name: /Mới$/ }).first().click()
   await page.getByRole('menuitem', { name: /Word/ }).click()
-  await page.getByRole('dialog').getByRole('textbox').fill(`Kế hoạch E2E ${stamp}`)
+  // Type key by key like a user: the pre-selected default name must not swallow what is typed.
+  const docName = `Kế hoạch E2E ${stamp}`
+  const nameBox = page.getByRole('dialog').getByRole('textbox')
+  await nameBox.press('Control+A')
+  await nameBox.pressSequentially(docName)
+  await expect(nameBox).toHaveValue(docName)
   await page.getByRole('dialog').getByRole('button', { name: /Tạo|Đồng ý|OK/ }).click()
   await expect(page).toHaveURL(/\/files\/.+\/edit/, { timeout: 20_000 })
+  await expect(page.getByRole('main').getByText(`${docName}.docx`).first()).toBeVisible()
   // The Document Server injects an iframe for the editor.
   await expect(page.locator('iframe[name="frameEditor"], iframe[src*="/office/"]').first()).toBeAttached({ timeout: 45_000 })
 })
