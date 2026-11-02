@@ -8,8 +8,7 @@ namespace BlueDrive.IntegrationTests.Infrastructure;
 /// <summary>Boots the real API against a throw-away PostgreSQL 16 container.</summary>
 public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _pg = new PostgreSqlBuilder()
-        .WithImage("postgres:16-alpine")
+    private readonly PostgreSqlContainer _pg = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("bluedrive_test")
         .WithUsername("bluedrive")
         .WithPassword("bluedrive_test")

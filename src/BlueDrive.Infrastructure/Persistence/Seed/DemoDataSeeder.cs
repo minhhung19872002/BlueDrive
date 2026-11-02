@@ -21,12 +21,14 @@ public sealed class DemoDataSeeder(
     AppDbContext db, IConfiguration config, IPasswordService passwords, ISettingsService settings, IFileContentService content,
     IFileTypeInspector types, IOfficeEditorProvider office, IBackgroundJobs jobs, ILogger<DemoDataSeeder> logger) : IDataSeeder
 {
-    public const string DemoPassword = "Demo@12345";
     public int Order => 10;
 
     public async Task SeedAsync(CancellationToken ct = default)
     {
         if (!config.GetValue("Seed:Demo", false) || await db.Users.AnyAsync(u => u.Username == "canbo1", ct)) return;
+        var demoPassword = config["Seed:DemoPassword"];
+        if (string.IsNullOrWhiteSpace(demoPassword))
+            throw new InvalidOperationException("Thiếu Seed:DemoPassword (DEMO_PASSWORD trong .env) để tạo người dùng mẫu.");
         var depts = await db.Organizations.Where(o => o.ParentId != null).OrderBy(o => o.SortOrder).ToListAsync(ct);
         var roles = await db.Roles.ToDictionaryAsync(r => r.Code, r => r.Id, ct);
         (string User, string Name, string Position, string Role, int Dept)[] people =
@@ -41,7 +43,7 @@ public sealed class DemoDataSeeder(
         foreach (var p in people)
         {
             var u = new User { Username = p.User, FullName = p.Name, Position = p.Position, OrganizationId = depts.ElementAtOrDefault(p.Dept)?.Id ?? depts.First().Id };
-            await passwords.SetPasswordAsync(u, DemoPassword, mustChange: true, ct);
+            await passwords.SetPasswordAsync(u, demoPassword, mustChange: true, ct);
             u.UserRoles.Add(new UserRole { UserId = u.Id, RoleId = roles[p.Role] });
             db.Users.Add(u);
             await WorkspaceProvisioning.EnsurePersonalWorkspaceAsync(db, settings, u, ct);
@@ -91,7 +93,7 @@ public sealed class DemoDataSeeder(
             var personal = await db.Workspaces.FirstAsync(w => w.OwnerId == u.Id && w.Type == WorkspaceType.Personal, ct);
             await AddAsync(personal, null, $"Ảnh hoạt động - {u.FullName}.jpg", Poster(u.FullName.ToUpperInvariant(), new SKColor(120, 60, 160)), u, [], ["cá nhân"], ct);
         }
-        logger.LogInformation("Đã nạp dữ liệu mẫu: 5 người dùng (mật khẩu {Password}), 2 nhóm tài nguyên và tệp mẫu", DemoPassword);
+        logger.LogInformation("Đã nạp dữ liệu mẫu: 5 người dùng (mật khẩu DEMO_PASSWORD trong .env), 2 nhóm tài nguyên và tệp mẫu");
     }
 
     private Folder Folder(Workspace ws, Folder? parent, string name)

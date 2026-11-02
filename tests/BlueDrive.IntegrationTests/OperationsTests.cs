@@ -112,7 +112,7 @@ public class OperationsTests(ApiFactory factory)
     {
         using var scope = factory.Services.CreateScope();
         var sp = scope.ServiceProvider;
-        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Seed:Demo"] = "true" }).Build();
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Seed:Demo"] = "true", ["Seed:DemoPassword"] = "Demo@12345" }).Build();
         var seeder = ActivatorUtilities.CreateInstance<BlueDrive.Infrastructure.Persistence.Seed.DemoDataSeeder>(sp, config);
         await seeder.SeedAsync();
         await seeder.SeedAsync(); // idempotent

@@ -15,6 +15,7 @@ public sealed class SmtpOptions
     public string? Password { get; set; }
     public string? From { get; set; }
     public bool UseSsl { get; set; } = true;
+    [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, nameof(Host), nameof(From))]
     public bool IsConfigured => !string.IsNullOrWhiteSpace(Host) && !string.IsNullOrWhiteSpace(From);
 }
 
@@ -38,7 +39,7 @@ public sealed class SmtpEmailSender(IOptions<SmtpOptions> options, ILogger<SmtpE
         using var client = new SmtpClient();
         var socket = o.Port == 465 ? SecureSocketOptions.SslOnConnect : o.UseSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.None;
         await client.ConnectAsync(o.Host, o.Port, socket, ct);
-        if (!string.IsNullOrEmpty(o.User)) await client.AuthenticateAsync(o.User, o.Password, ct);
+        if (!string.IsNullOrEmpty(o.User)) await client.AuthenticateAsync(o.User, o.Password ?? "", ct);
         await client.SendAsync(msg, ct);
         await client.DisconnectAsync(true, ct);
         logger.LogInformation("Đã gửi email \"{Subject}\" tới {To}", subject, to);

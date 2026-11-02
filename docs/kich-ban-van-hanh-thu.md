@@ -2,7 +2,7 @@
 
 Dùng cho Chủ đầu tư khi vận hành thử (HSMT mục 3.5) và nghiệm thu theo từng dòng chức năng mục 3.2 (HSMT không có mục 25).
 
-**Chuẩn bị**: hệ thống đã cài đặt (`docs/huong-dan-cai-dat.md`), đã nạp dữ liệu mẫu (`scripts/seed.ps1`): tài khoản `canbo1`, `canbo2` (Biên tập/Tải lên), `canbo3` (Phê duyệt), `canbo4` (Chỉ xem), `canbo5` (Biên tập), mật khẩu ban đầu `Demo@12345` (đổi khi đăng nhập lần đầu); 2 nhóm tài nguyên; tệp mẫu các loại. Cấu hình SMTP để kiểm tra email.
+**Chuẩn bị**: hệ thống đã cài đặt (`docs/huong-dan-cai-dat.md`), đã nạp dữ liệu mẫu (`scripts/seed.ps1`): tài khoản `canbo1`, `canbo2` (Biên tập/Tải lên), `canbo3` (Phê duyệt), `canbo4` (Chỉ xem), `canbo5` (Biên tập), mật khẩu ban đầu `DEMO_PASSWORD` trong `deploy/.env`, mặc định `Demo@12345` (đổi khi đăng nhập lần đầu); 2 nhóm tài nguyên; tệp mẫu các loại. Cấu hình SMTP để kiểm tra email.
 
 Cột "Kết quả mong đợi" ghi "Thành công" nghĩa là thao tác thực hiện được, dữ liệu hiển thị đúng, có thông báo tiếng Việt.
 

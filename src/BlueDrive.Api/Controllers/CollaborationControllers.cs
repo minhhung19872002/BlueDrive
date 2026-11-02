@@ -14,8 +14,10 @@ namespace BlueDrive.Api.Controllers;
 public class OfficeController : ApiControllerBase
 {
     /// <summary>Cấu hình mở trình soạn thảo cho phiên bản hiện tại (chế độ sửa nếu có quyền; nhiều người đồng soạn thảo).</summary>
-    [HttpGet("config/{fileId:guid}")]
+    /// <param name="fileId">Mã tệp.</param>
+    /// <param name="view">true: luôn mở ở chế độ chỉ xem.</param>
     /// <param name="mobile">true: giao diện ONLYOFFICE cho điện thoại (ứng dụng di động).</param>
+    [HttpGet("config/{fileId:guid}")]
     public Task<OfficeEditorConfig> Config(Guid fileId, [FromQuery] bool view = false, [FromQuery] bool mobile = false) => Mediator.Send(new GetOfficeConfigQuery(fileId, view, mobile));
 
     /// <summary>Cấu hình chỉ xem cho trang liên kết công khai.</summary>

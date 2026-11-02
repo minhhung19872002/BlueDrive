@@ -113,8 +113,9 @@ public class DriveController : ApiControllerBase
     public async Task<IActionResult> UpdateFolder(Guid id, UpdateFolderCommand cmd) { await Mediator.Send(cmd with { Id = id }); return NoContent(); }
 
     /// <summary>Chi tiết tệp (panel thông tin).</summary>
-    [HttpGet("files/{id:guid}")]
+    /// <param name="id">Mã tệp.</param>
     /// <param name="recordView">true khi mở xem tệp (ghi vào "Gần đây"); false khi chỉ mở panel thông tin.</param>
+    [HttpGet("files/{id:guid}")]
     public Task<FileDetailDto> File(Guid id, [FromQuery] bool recordView = false) => Mediator.Send(new GetFileDetailQuery(id, recordView));
 
     [HttpPut("files/{id:guid}/name")]

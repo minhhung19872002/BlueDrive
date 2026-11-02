@@ -12,6 +12,7 @@ x-dotnet-env: &dotnet-env
   Seed__AdminPassword: ${ADMIN_PASSWORD:?Thiếu ADMIN_PASSWORD trong .env}
   Seed__AdminEmail: ${ADMIN_EMAIL:-}
   Seed__Demo: ${SEED_DEMO:-false}
+  Seed__DemoPassword: ${DEMO_PASSWORD:-}
   Storage__Provider: ${STORAGE_PROVIDER:-local}
   Storage__LocalRoot: /data/storage
   Storage__EncryptAtRest: ${STORAGE_ENCRYPT_AT_REST:-true}

@@ -156,12 +156,12 @@ public static class PdfFonts
     {
         if (Interlocked.Exchange(ref _registered, 1) == 1) return;
         QuestPDF.Settings.License = LicenseType.Community;
-        QuestPDF.Settings.CheckIfAllTextGlyphsAreAvailable = false;
+        QuestPDF.Settings.ThrowOnMissingTextGlyphs = false;
         var asm = typeof(PdfFonts).Assembly;
         foreach (var name in asm.GetManifestResourceNames().Where(n => n.EndsWith(".ttf", StringComparison.OrdinalIgnoreCase)))
         {
             using var s = asm.GetManifestResourceStream(name)!;
-            QuestPDF.Drawing.FontManager.RegisterFont(s);
+            QuestPDF.Drawing.FontManager.RegisterFontFromStream(s);
         }
     }
 }

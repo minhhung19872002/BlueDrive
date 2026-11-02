@@ -110,3 +110,19 @@ Mỗi dòng ánh xạ một chức năng trong HSMT với API, màn hình, quy�
 | 5.1 | Hỗ trợ, xử lý sự cố, SLA | Ticket 4 giờ/24 giờ | IT `OperationsTests.Support_ticket_lifecycle_with_sla` |
 | 5.2 | Giám sát, thay đổi, báo cáo | Nhật ký thay đổi, trạng thái hệ thống | IT `OperationsTests.Change_log_and_system_status` |
 | 3.6 | Bàn giao và xóa dữ liệu | Xuất toàn bộ dữ liệu, `secure-wipe.ps1` (biên bản) | `docs/huong-dan-quan-tri.md` |
+
+## Đối chiếu tiêu chí hoàn thành (DoD) — kiểm chứng ngày 02/11/2026 trên stack `deploy/docker-compose.yml`
+
+| Tiêu chí | Kết quả | Bằng chứng |
+|---|---|---|
+| 84/84 chức năng trong bảng truy vết | Đạt | 83 dòng #1–#84 (HSMT không có #25), không ô trống |
+| Chạy bằng `docker compose up -d`, đăng nhập admin, tạo/sửa Word online | Đạt | `POST /office/new` tạo `.docx`; ONLYOFFICE mở chế độ sửa, gõ nội dung, đóng trình soạn thảo → phiên bản 2 được lưu sau 6 giây, tệp tải về chứa đúng nội dung |
+| Upload video 2 GB resumable, tua được | Đạt | `scripts/test-large-upload.ps1`: tạm dừng ở 850 MB, tiếp tục đúng offset, 2048 MB trong 24 giây; tua tới 1536 MB → HTTP 206 trong 41 ms |
+| Tìm "dan so" ra "Dân số" | Đạt | Web (E2E) và app mobile (tìm kiếm không dấu có tô sáng) |
+| Sai mật khẩu 5 lần → khóa + cảnh báo | Đạt | Lần 5: "Tài khoản bị tạm khóa 15 phút"; mật khẩu đúng vẫn bị chặn; cảnh báo `brute_force` được tạo và đẩy realtime (SignalR, `docs/images/canh-bao-thoi-gian-thuc.png`) |
+| Thao tác #11 vào nhật ký, lọc được | Đạt | `POST /audit-logs/search` lọc `login_failed` theo thời gian; `GET /audit-logs/verify`: chuỗi hash toàn vẹn |
+| Sao lưu đột xuất + phục hồi | Đạt | Sao lưu đầy đủ (CSDL + tệp) thành công; xóa một tệp → `scripts/restore.ps1` → tệp trở lại, tải được, chuỗi nhật ký vẫn toàn vẹn |
+| Xuất toàn bộ dữ liệu có metadata | Đạt | Gói ZIP: `metadata.json`, `metadata.csv`, `audit-logs.csv`, `README.md`, thư mục `files/` |
+| App mobile build APK, chạy #71–84 | Đạt | Xem mục "Kiểm thử thủ công app mobile" ở trên |
+| UI, thông báo, tài liệu tiếng Việt | Đạt | Toàn bộ thông báo lỗi/màn hình trong lần kiểm chứng là tiếng Việt |
+| Không TODO/stub, test xanh, không hard-code secret | Đạt | `git grep` TODO/FIXME/NotImplementedException: 0; mật khẩu admin/demo, JWT, ONLYOFFICE đọc từ `deploy/.env`; `scripts/ci.ps1`: build 0 cảnh báo, 59 unit + 49 integration test xanh, web/mobile lint |
