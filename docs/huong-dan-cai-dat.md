@@ -34,6 +34,12 @@ Khi có tên miền, Caddy tự cấp và gia hạn chứng chỉ TLS Let's Encr
 
 Các tùy chọn khác của `install.ps1`: `-HttpPort 8088` (đổi cổng), `-Demo` (nạp dữ liệu mẫu), `-EnableClamAv` (bật quét mã độc), `-AdminPassword '...'`.
 
+Máy chủ đã có reverse proxy khác chiếm cổng 80/443: cài BlueDrive ở cổng khác rồi cho proxy đó chuyển tiếp tới container `bluedrive-reverse-proxy-1:80` (nối proxy vào mạng `bluedrive_default`):
+```bash
+HTTP_PORT=8098 HTTPS_PORT=8448 PUBLIC_BASE_URL=https://drive.example.gov.vn ./scripts/install.sh
+echo 'TRUSTED_PROXIES=172.16.0.0/12' >> deploy/.env && (cd deploy && docker compose up -d)   # giữ X-Forwarded-Proto=https của proxy ngoài
+```
+
 > **QUAN TRỌNG**: sao lưu tệp `deploy/.env` ra nơi an toàn (két, ổ mã hóa). Mất `STORAGE_MASTER_KEY` thì **không thể giải mã** tệp đã lưu và các bản sao lưu.
 
 ## 3. Cài đặt thủ công

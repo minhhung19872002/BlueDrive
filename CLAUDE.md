@@ -47,4 +47,6 @@ cd mobile; npx tsc --noEmit; npx expo lint              # app Expo SDK 58 (đọ
 - Caddy gửi ONLYOFFICE `X-Forwarded-Host {hostport}/office` (không dùng `{host}` — mất cổng, lỗi "Download failed" khi chạy cổng 8088).
 - `UseExceptionHandler` đặt sau `UseSerilogRequestLogging`, nếu không lỗi 4xx đã xử lý bị log thành 500.
 - Mobile: route `change-password` vẫn hợp lệ khi đã đăng nhập → sau đổi mật khẩu bắt buộc phải `router.replace('/(tabs)')`.
+- `NameModal`: AntD gọi lại callback ref của `Input` mỗi lần render → chỉ bôi chọn tên mặc định một lần (E2E gõ từng phím bằng `pressSequentially`, `fill()` không bắt được lỗi này).
+- Đặt sau reverse proxy khác (VM dùng chung): `TRUSTED_PROXIES` trong `.env` để Caddy giữ `X-Forwarded-Proto=https`, nếu không ONLYOFFICE trả link `http` (mixed content).
 - Emulator x86_64 cần APK `-Abis x86_64`; xem Office trên emulator cần `adb reverse tcp:8088 tcp:8088`.
