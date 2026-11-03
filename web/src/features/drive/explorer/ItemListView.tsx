@@ -1,6 +1,7 @@
 import { Button, Dropdown, Table, Tag, Typography, type TableProps } from 'antd'
 import { DownloadOutlined, LinkOutlined, MoreOutlined, ShareAltOutlined, StarFilled } from '@ant-design/icons'
 import type { SorterResult, SortOrder } from 'antd/es/table/interface'
+import type { Breakpoint } from 'antd/es/_util/responsiveObserver'
 import { useTranslation } from 'react-i18next'
 import type { DriveItem } from '@/types/drive'
 import { formatBytes, formatDateTime } from '@/utils/format'
@@ -11,6 +12,8 @@ import type { ItemViewProps } from './types'
 interface ItemListViewProps extends ItemViewProps {
   sort: string | undefined
   onSortChange: (sort: string | undefined) => void
+  /** The info panel takes room next to the list: show fewer columns before scrolling. */
+  infoOpen?: boolean
 }
 
 const SORTABLE = ['name', 'size', 'updatedAt']
@@ -84,6 +87,8 @@ export default function ItemListView(props: ItemListViewProps) {
             title: t('drive.colOwner'),
             key: 'owner',
             width: 180,
+            // Responsive: dropped on narrower windows (and earlier when the info panel, which shows the owner, is open).
+            responsive: props.infoOpen ? (['xxl'] as Breakpoint[]) : (['xl'] as Breakpoint[]),
             ellipsis: true,
             render: (_: unknown, item: DriveItem) => item.createdByName ?? '—',
           },
@@ -160,8 +165,8 @@ export default function ItemListView(props: ItemListViewProps) {
         },
         onContextMenu: (e) => props.onContextMenu(item, e),
       })}
-      // Minimum table width: with the info panel open the list scrolls horizontally instead of squeezing the name.
-      scroll={{ x: isMobile ? undefined : 960 }}
+      // Minimum width: only small windows scroll horizontally, the name column never gets squeezed.
+      scroll={{ x: isMobile ? undefined : 600 }}
       // Header row and horizontal scrollbar stay on screen (below the app header / at the bottom of the window).
       sticky={isMobile ? undefined : { offsetHeader: 64 }}
     />

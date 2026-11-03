@@ -471,6 +471,7 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
           {view === 'list' ? (
             <ItemListView
               {...viewProps}
+              infoOpen={infoOpen && !isMobile}
               sort={sort}
               onSortChange={(s) => {
                 setSort(s)
