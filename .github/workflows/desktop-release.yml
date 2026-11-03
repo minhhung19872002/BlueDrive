@@ -2,7 +2,8 @@
 #   Trigger: push a tag desktop-v<version> (desktop-v1.2.0 = stable, desktop-v1.3.0-beta.1 = beta), or run by hand.
 #   Windows runner: desktop tests, self-contained build, signing (secrets BLUEDRIVE_SIGN_PFX_BASE64 + BLUEDRIVE_SIGN_PASSWORD;
 #   without them a self-signed development certificate), Velopack installer + update feed, MSIX → GitHub Release;
-#   then a macOS runner adds BlueDrive.pkg (Apple silicon) and the osx-<channel> update feed (Sync-Phase 10).
+#   then a macOS runner adds BlueDrive.pkg (Apple silicon) and the osx-<channel> update feed (Sync-Phase 10), and a Linux runner the
+#   AppImage + .deb and the linux-<channel> feed (Sync-Phase 11).
 #   The VM picks the release up at the next deploy (scripts/sync-desktop-downloads.sh) and serves it at /downloads/desktop/;
 #   installed apps update themselves from there.
 name: Desktop release
@@ -102,3 +103,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "desktop-v${{ needs.release.outputs.version }}" artifacts/macos/* --clobber
+
+  linux:
+    name: Linux (x64)
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Tools
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq squashfs-tools
+          dotnet tool install -g vpk --version 1.2.161
+      - name: Build release
+        run: ./desktop/packaging/linux/build-linux.sh '${{ needs.release.outputs.version }}' '${{ needs.release.outputs.channel }}' "$PWD/artifacts/linux"
+      - name: Add to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "desktop-v${{ needs.release.outputs.version }}" artifacts/linux/* --clobber

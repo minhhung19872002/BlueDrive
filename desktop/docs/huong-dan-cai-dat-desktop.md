@@ -18,6 +18,11 @@ trình cài. BlueDrive ở thanh menu (góc trên bên phải). Bản chưa nota
 tệp của các thư mục đã chọn (chưa có chế độ tệp theo yêu cầu); mã đăng nhập được giữ trong Keychain. Triển khai hàng loạt (MDM): đặt
 `/Library/Application Support/BlueDrive/deploy.json` với `{ "server": "https://…", "channel": "stable" }`.
 
+**Linux** (x64; Ubuntu 22.04+/Debian 12+ hoặc tương đương): **Linux (.deb)** → `sudo apt install ./bluedrive_<phiên bản>_amd64.deb`
+(lệnh `bluedrive`, có trong menu ứng dụng; cập nhật bằng gói mới), hoặc **Linux (AppImage)** → `chmod +x BlueDrive-x86_64.AppImage` rồi chạy (tự
+cập nhật). Biểu tượng khay cần môi trường hỗ trợ AppIndicator (GNOME: cài tiện ích "AppIndicator and KStatusNotifierItem Support"). Triển khai
+hàng loạt: `/etc/bluedrive/deploy.json`.
+
 **Windows:**
 
 1. Đăng nhập BlueDrive trên web → menu tài khoản (góc phải) → **Tải ứng dụng máy tính** → **Tải BlueDrive … cho Windows**.

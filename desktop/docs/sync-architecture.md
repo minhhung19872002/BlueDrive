@@ -236,3 +236,16 @@ Chế độ đồng bộ đầy đủ với cùng engine .NET (Tệp theo yêu c
 | Triển khai hàng loạt | `/Library/Application Support/BlueDrive/deploy.json` (`server`, `withOnlyOffice`, `channel`, `disableUpdates`). |
 | Đóng gói, cập nhật | `desktop/packaging/macos/build-macos.sh` (trên máy Mac): publish `osx-arm64`, biểu tượng `.icns`, Velopack `.app` + `BlueDrive.pkg`, kênh cập nhật `osx-stable` / `osx-beta` cùng thư mục `/downloads/desktop/`. Ký Developer ID + notarize khi có chứng thư (biến `BLUEDRIVE_MAC_*`). |
 | Kiểm thử | Job CI `Desktop (macOS)` (máy macOS của GitHub): `Sync.Tests` gồm `UnixDiskTests` (inode qua đổi tên, NFD→NFC, Thùng rác, Keychain, đồng bộ hai chiều trên đĩa thật) + build ứng dụng `osx-arm64`; các test Unix cũng chạy trên Linux trong job backend. |
+
+## 16. Linux (Sync-Phase 11)
+
+Cùng đích `net10.0` với macOS, chế độ đồng bộ đầy đủ.
+
+| Thành phần | Việc làm |
+|---|---|
+| Khay hệ thống | `TrayIcon` của Avalonia qua DBus StatusNotifierItem (AppIndicator: GNOME cần tiện ích AppIndicator, KDE/XFCE có sẵn). |
+| Mã tệp, xóa | inode (`lstat`, glibc < 2.33: `__lxstat64`); thùng rác freedesktop (`~/.local/share/Trash/files` + `info/*.trashinfo`). |
+| Mã đăng nhập | `~/.local/share/BlueDrive/<tài khoản>/tokens.json`, quyền 0600 (không phụ thuộc Secret Service). |
+| Khởi động cùng máy, thông báo, pin | `~/.config/autostart/bluedrive.desktop`; `notify-send`; `/sys/class/power_supply/BAT*`. |
+| Triển khai hàng loạt | `/etc/bluedrive/deploy.json`. |
+| Đóng gói | `desktop/packaging/linux/build-linux.sh` (trên Linux): AppImage (Velopack, tự cập nhật kênh `linux-stable` / `linux-beta`) và `.deb` (`/opt/bluedrive`, lệnh `bluedrive`, mục ứng dụng; cập nhật qua apt/CNTT). Đã chạy thử trong container Ubuntu (dotnet/sdk:10.0): đóng gói xong, ứng dụng khởi động dưới Xvfb. |

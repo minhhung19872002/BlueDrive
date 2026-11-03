@@ -21,20 +21,22 @@ internal static class Program
     {
         var home = Environment.GetEnvironmentVariable("BLUEDRIVE_HOME") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "BlueDrive");
         // Velopack install / update / uninstall hooks run and exit here, before the single-instance check.
-        VelopackApp.Build()
-            .OnBeforeUninstallFastCallback(_ =>
-            {
-                StartLog(home);
-                QuitRunningInstance();
-                try { Uninstaller.Run(home, Uninstaller.MessageBoxAsk(12)); }
-                finally { Log.CloseAndFlush(); }
-            })
-            // Silent installs do not start the app: it starts at the next sign-in ("Khởi động cùng Windows", changeable in Cài đặt).
-            .OnAfterInstallFastCallback(_ => StartupRegistration.Set(true))
+        var velopack = VelopackApp.Build()
             .OnFirstRun(_ => FirstRun = true)
             // A downloaded update is applied when BlueDrive quits or restarts (Updater), never by force-stopping a running sync.
-            .SetAutoApplyOnStartup(false)
-            .Run();
+            .SetAutoApplyOnStartup(false);
+        if (OperatingSystem.IsWindows())
+            velopack = velopack
+                .OnBeforeUninstallFastCallback(_ =>
+                {
+                    StartLog(home);
+                    QuitRunningInstance();
+                    try { Uninstaller.Run(home, Uninstaller.MessageBoxAsk(12)); }
+                    finally { Log.CloseAndFlush(); }
+                })
+                // Silent installs do not start the app: it starts at the next sign-in ("Khởi động cùng Windows", changeable in Cài đặt).
+                .OnAfterInstallFastCallback(_ => StartupRegistration.Set(true));
+        velopack.Run();
         if (args.Contains("--quit") && !IsRunning()) return 0; // uninstaller / script: nothing to stop
 
         using var single = new Mutex(true, MutexName, out var first);

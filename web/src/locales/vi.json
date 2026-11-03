@@ -1016,6 +1016,8 @@
     "downloadBeta": "Tải bản thử nghiệm {{version}}",
     "downloadMsix": "Gói MSIX (Intune / App Installer)",
     "downloadMac": "macOS (Apple silicon)",
+    "downloadAppImage": "Linux (AppImage)",
+    "downloadDeb": "Linux (.deb: Ubuntu, Debian)",
     "version": "Phiên bản",
     "published": "Ngày phát hành",
     "size": "Dung lượng",

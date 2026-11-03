@@ -45,10 +45,14 @@ for ch in stable beta; do
     else echo null; fi
   }
   pkg=BlueDrive.pkg; [ "$ch" = stable ] || pkg="BlueDrive-$ch.pkg"
+  sfx=""; [ "$ch" = stable ] || sfx="-$ch"
+  appimage="BlueDrive$sfx-x86_64.AppImage"
+  deb=$(cd "$work/new" && ls "bluedrive${sfx}_"*_amd64.deb 2>/dev/null | head -1 || true)
   jq --arg ch "$ch" --arg v "$version" --argjson setup "$(describe "$setup")" --argjson msix "$(describe "$msix")" \
-     --argjson macos "$(describe "$pkg")" \
+     --argjson macos "$(describe "$pkg")" --argjson appimage "$(describe "$appimage")" --argjson deb "$(describe "${deb:-none}")" \
      --arg at "$(jq -r '.published_at' "$work/$ch.json")" --arg notes "$(jq -r '.body // ""' "$work/$ch.json" | tr -d '\r')" \
      '.[$ch] = {version:$v, publishedAt:$at, runtime:"win-x64", minimumOs:"Windows 10 1809 (17763)", setup:$setup, msix:$msix, macos:$macos,
+                linux:(if $appimage == null and $deb == null then null else {appimage:$appimage, deb:$deb} end),
                 notes:(if $notes == "" then null else $notes end)}' "$work/channels.json" > "$work/channels.tmp"
   mv "$work/channels.tmp" "$work/channels.json"
 done

@@ -50,4 +50,8 @@ cd mobile; npx tsc --noEmit; npx expo lint              # app Expo SDK 58 (đọ
 - Mobile: route `change-password` vẫn hợp lệ khi đã đăng nhập → sau đổi mật khẩu bắt buộc phải `router.replace('/(tabs)')`.
 - `NameModal`: AntD gọi lại callback ref của `Input` mỗi lần render → chỉ bôi chọn tên mặc định một lần (E2E gõ từng phím bằng `pressSequentially`, `fill()` không bắt được lỗi này).
 - Đặt sau reverse proxy khác (VM dùng chung): `TRUSTED_PROXIES` trong `.env` để Caddy giữ `X-Forwarded-Proto=https`, nếu không ONLYOFFICE trả link `http` (mixed content).
+- Chép `scripts/deploy-vm.sh` lên VM phải đổi CRLF → LF (`sed 's/\r$//'`), nếu không shebang hỏng ("cannot execute: required file not found") và deploy lỗi.
+- `deploy/downloads` phải tạo trước `docker compose up` (Docker tạo bind mount thiếu với chủ root → `sync-desktop-downloads.sh` không ghi được).
+- Velopack 1.2.161: `Setup.exe --silent -- <tham số>` làm bộ cài panic (clap) → máy chủ triển khai hàng loạt đi qua chính sách registry / `deploy.json`, không qua tham số bộ cài.
+- Desktop build hai đích (`net10.0-windows…`, `net10.0`): mã Windows sau `#if WINDOWS`; publish phải chỉ `-f`. Test Cloud Files dễ chập chờn: chạy `BlueDrive.Sync.Windows.Tests` nhiều lần khi đổi engine / `PhysicalFileSystem`.
 - Emulator x86_64 cần APK `-Abis x86_64`; xem Office trên emulator cần `adb reverse tcp:8088 tcp:8088`.
