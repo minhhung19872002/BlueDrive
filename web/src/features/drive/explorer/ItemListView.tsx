@@ -1,4 +1,4 @@
-import { Button, Dropdown, Table, Tag, Typography, type TableProps } from 'antd'
+import { Button, Table, Tag, Typography, type TableProps } from 'antd'
 import { DownloadOutlined, LinkOutlined, MoreOutlined, ShareAltOutlined, StarFilled } from '@ant-design/icons'
 import type { SorterResult, SortOrder } from 'antd/es/table/interface'
 import type { Breakpoint } from 'antd/es/_util/responsiveObserver'
@@ -8,6 +8,7 @@ import { formatBytes, formatDateTime } from '@/utils/format'
 import FileTypeIcon from '../components/FileTypeIcon'
 import { APPROVAL_COLORS, itemKey } from '../utils'
 import type { ItemViewProps } from './types'
+import FitDropdown from '../components/FitDropdown'
 
 interface ItemListViewProps extends ItemViewProps {
   sort: string | undefined
@@ -58,9 +59,9 @@ export default function ItemListView(props: ItemListViewProps) {
             )}
             {!isMobile && (
               <span className="bd-row-actions bd-quick-actions">
-                <Dropdown menu={menu} trigger={['click']} placement="bottomLeft">
+                <FitDropdown menu={menu} align="left">
                   <Button type="text" size="small" icon={<MoreOutlined />} aria-label={t('actions.more')} title={t('actions.more')} />
-                </Dropdown>
+                </FitDropdown>
                 {QUICK_ACTIONS.filter((a) => offered.has(a.key)).map((a) => (
                   <Button
                     key={a.key}
@@ -123,9 +124,9 @@ export default function ItemListView(props: ItemListViewProps) {
             width: 48,
             render: (_: unknown, item: DriveItem) => (
               <span className="bd-row-actions">
-                <Dropdown menu={props.rowMenu(item)} trigger={['click']} placement="bottomRight">
+                <FitDropdown menu={props.rowMenu(item)}>
                   <Button type="text" size="small" icon={<MoreOutlined />} aria-label={t('common.actions')} />
-                </Dropdown>
+                </FitDropdown>
               </span>
             ),
           },

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Button, Dropdown, Grid, Space, Table, Typography, type TableProps } from 'antd'
+import { Button, Grid, Space, Table, Typography, type TableProps } from 'antd'
 import { MoreOutlined, StarFilled } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import type { DriveItem } from '@/types/drive'
@@ -7,6 +7,7 @@ import { formatBytes, formatDateTime } from '@/utils/format'
 import type { DriveActions, ItemFlags } from '../actions/useDriveActions'
 import FileTypeIcon from '../components/FileTypeIcon'
 import PositionedMenu, { type MenuPosition } from '../explorer/PositionedMenu'
+import FitDropdown from '../components/FitDropdown'
 
 /** Row of a flat list: the item plus optional page-specific data. */
 export interface DriveRow<T = unknown> {
@@ -104,9 +105,9 @@ export default function DriveItemTable<T>({
       key: 'actions',
       width: 48,
       render: (_, row) => (
-        <Dropdown menu={menuFor(row)} trigger={['click']} placement="bottomRight">
+        <FitDropdown menu={menuFor(row)}>
           <Button type="text" size="small" icon={<MoreOutlined />} aria-label={t('common.actions')} />
-        </Dropdown>
+        </FitDropdown>
       ),
     },
   ]

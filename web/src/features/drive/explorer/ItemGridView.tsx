@@ -1,4 +1,4 @@
-import { Button, Checkbox, Dropdown, Spin, Tag, Typography } from 'antd'
+import { Button, Checkbox, Spin, Tag, Typography } from 'antd'
 import { MoreOutlined, StarFilled } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { formatBytes } from '@/utils/format'
@@ -6,6 +6,7 @@ import FileTypeIcon from '../components/FileTypeIcon'
 import Thumbnail from '../components/Thumbnail'
 import { APPROVAL_COLORS, itemKey } from '../utils'
 import type { ItemViewProps } from './types'
+import FitDropdown from '../components/FitDropdown'
 
 const IGNORE = '.ant-checkbox-wrapper, button, .bd-row-actions'
 
@@ -45,9 +46,9 @@ export default function ItemGridView(props: ItemViewProps) {
                 aria-label={item.name}
               />
               <span className="bd-row-actions bd-tile-menu">
-                <Dropdown menu={props.rowMenu(item)} trigger={['click']} placement="bottomRight">
+                <FitDropdown menu={props.rowMenu(item)}>
                   <Button type="text" size="small" icon={<MoreOutlined />} aria-label={t('common.actions')} />
-                </Dropdown>
+                </FitDropdown>
               </span>
               <Thumbnail item={item} iconSize={item.type === 'folder' ? 56 : 48} />
               <div className="bd-tile-name">

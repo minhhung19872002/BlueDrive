@@ -1,4 +1,5 @@
 import { Dropdown, type MenuProps } from 'antd'
+import { fitMenu } from './fitMenu'
 
 export interface MenuPosition {
   x: number
@@ -16,11 +17,15 @@ export default function PositionedMenu({
   onClose: () => void
 }) {
   if (!position) return null
+  const fit = fitMenu(position.y)
   return (
     <Dropdown
       open
+      placement={fit.placement}
+      autoAdjustOverflow={false}
       menu={{
         ...menu,
+        style: { ...menu.style, ...fit.style },
         onClick: (info) => {
           onClose()
           menu.onClick?.(info)

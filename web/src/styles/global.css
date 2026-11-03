@@ -819,3 +819,9 @@ body {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* Context menus / "..." menus: never taller than the window, scroll inside when there is not enough room. */
+.ant-dropdown .ant-dropdown-menu {
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+}
