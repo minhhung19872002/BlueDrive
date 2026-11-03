@@ -62,6 +62,21 @@ public sealed class SyncAgentTests(ApiFactory factory) : IDisposable
         .GetProperty("items").EnumerateArray().Select(i => i.GetProperty("name").GetString()!).ToList();
 
     [Fact]
+    public async Task Deleting_one_file_reaches_the_server_after_it_settles()
+    {
+        var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(user);
+        await using var agent = Agent(await SignInAsync(user));
+        await agent.StartAsync();
+        var mine = Path.Combine(_tmp, "BlueDrive", "Tài liệu của tôi");
+        await Until(() => Task.FromResult(Directory.Exists(mine) && agent.Status.State == AgentState.Idle), "thư mục Tài liệu của tôi");
+        await File.WriteAllTextAsync(Path.Combine(mine, "nháp.txt"), "nháp");
+        await Until(async () => (await NamesAsync(user, ws)).Contains("nháp.txt") && agent.Status.State == AgentState.Idle, "tệp lên máy chủ", 30);
+        File.Delete(Path.Combine(mine, "nháp.txt"));
+        await Until(async () => !(await NamesAsync(user, ws)).Contains("nháp.txt"), "tệp bị xóa trên máy chủ", 15);
+    }
+
+    [Fact]
     public async Task Deleting_many_files_asks_first_even_when_the_server_pushes_a_change_meanwhile()
     {
         var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");

@@ -99,8 +99,8 @@ public sealed class SyncEngine(
     private readonly IPlaceholderProvider _placeholders = placeholders ?? NoPlaceholders.Instance;
     /// <summary>Content downloaded ahead in parallel: remote id → (verified temporary file, revision).</summary>
     private readonly Dictionary<string, (string Path, long Revision)> _prefetched = [];
-    /// <summary>Local deletions waiting to settle: base remote id → first seen.</summary>
-    private readonly Dictionary<string, DateTime> _deleteSeen = [];
+    /// <summary>Local deletions waiting to settle: (root, base remote id) → first seen.</summary>
+    private readonly Dictionary<(string Root, string Id), DateTime> _deleteSeen = [];
     private bool _deletesDeferred;
 
     /// <summary>Operations executed since the engine was created (tests check that a converged state stays quiet).</summary>
@@ -424,7 +424,7 @@ public sealed class SyncEngine(
         else if (root.MassDeleteDecision is not null && deletes.Count == 0) state.SetMassDelete(rootId, 0, null);
 
         await PrefetchAsync(plan, ct);
-        var settled = SettledDeletes(plan, root.MassDeleteDecision == "confirm");
+        var settled = SettledDeletes(rootId, plan, root.MassDeleteDecision == "confirm");
         var ops = 0;
         var stuckMoves = new List<Step>();
         Plan($"-- vòng {rootId}: {plan.Count} mục, {plan.Count(p => p.Decision.Actions != SyncAction.None)} cần xử lý");
@@ -974,14 +974,15 @@ public sealed class SyncEngine(
     }
 
     /// <summary>Remote ids whose local deletion has been seen for at least <see cref="SyncEngineOptions.DeleteSettleTime"/> (all of them once confirmed).</summary>
-    private HashSet<string> SettledDeletes(List<Step> plan, bool confirmed)
+    private HashSet<string> SettledDeletes(string rootId, List<Step> plan, bool confirmed)
     {
         var deletes = plan.Where(p => p.Decision.Has(SyncAction.DeleteRemote) && p.Base is not null).Select(p => p.Base!.RemoteId).ToHashSet();
-        foreach (var id in _deleteSeen.Keys.Where(id => !deletes.Contains(id)).ToList()) _deleteSeen.Remove(id); // restored meanwhile
+        // Forget the ones of this root that are no longer deleted (restored meanwhile); other roots keep theirs.
+        foreach (var key in _deleteSeen.Keys.Where(k => k.Root == rootId && !deletes.Contains(k.Id)).ToList()) _deleteSeen.Remove(key);
         if (_o.DeleteSettleTime <= TimeSpan.Zero || confirmed) return deletes;
         var now = clock.UtcNow;
-        foreach (var id in deletes) _deleteSeen.TryAdd(id, now);
-        return deletes.Where(id => now - _deleteSeen[id] >= _o.DeleteSettleTime).ToHashSet();
+        foreach (var id in deletes) _deleteSeen.TryAdd((rootId, id), now);
+        return deletes.Where(id => now - _deleteSeen[(rootId, id)] >= _o.DeleteSettleTime).ToHashSet();
     }
 
     /// <summary>Downloads the files this round will write, <see cref="SyncEngineOptions.ParallelDownloads"/> at a time, into verified temporary files.</summary>

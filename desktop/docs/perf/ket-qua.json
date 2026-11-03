@@ -43,17 +43,17 @@
     {
       "Criterion": "Th\u00EAm / s\u1EEDa / \u0111\u1ED5i t\u00EAn / di chuy\u1EC3n / x\u00F3a tr\u00EAn m\u00E1y \u2192 web d\u01B0\u1EDBi 10 gi\u00E2y",
       "Ok": true,
-      "Measured": "th\u00EAm 3.2 s, s\u1EEDa 3.1 s, \u0111\u1ED5i t\u00EAn 0.1 s, di chuy\u1EC3n 3.1 s, x\u00F3a 3.2 s"
+      "Measured": "th\u00EAm 3.2 s, s\u1EEDa 0.1 s, \u0111\u1ED5i t\u00EAn 3.2 s, di chuy\u1EC3n 0.0 s, x\u00F3a 3.1 s"
     },
     {
       "Criterion": "Thay \u0111\u1ED5i tr\u00EAn web xu\u1EA5t hi\u1EC7n tr\u00EAn m\u00E1y d\u01B0\u1EDBi 5 gi\u00E2y",
       "Ok": true,
-      "Measured": "0.32 s"
+      "Measured": "0.34 s"
     },
     {
       "Criterion": "S\u1EEDa \u0111\u1ED3ng th\u1EDDi 2 n\u01A1i t\u1EA1o b\u1EA3n xung \u0111\u1ED9t \u0111\u00FAng \u0111\u1ECBnh d\u1EA1ng t\u00EAn, kh\u00F4ng m\u1EA5t n\u1ED9i dung",
       "Ok": true,
-      "Measured": "bi\u00EAn b\u1EA3n (B\u1EA3n xung \u0111\u1ED9t - Ng\u01B0\u1EDDi d\u00F9ng - MAY-B - 2026-11-03 2007).txt"
+      "Measured": "bi\u00EAn b\u1EA3n (B\u1EA3n xung \u0111\u1ED9t - Ng\u01B0\u1EDDi d\u00F9ng - MAY-B - 2026-11-03 2039).txt"
     },
     {
       "Criterion": "M\u1EA5t m\u1EA1ng, s\u1EEDa 50 t\u1EC7p, c\u00F3 m\u1EA1ng l\u1EA1i: t\u1EA5t c\u1EA3 l\u00EAn m\u00E1y ch\u1EE7 \u0111\u00FAng",
@@ -68,7 +68,7 @@
     {
       "Criterion": "Menu chu\u1ED9t ph\u1EA3i \u0022Chia s\u1EBB\u2026\u0022 t\u1EA1o \u0111\u01B0\u1EE3c li\u00EAn k\u1EBFt c\u00F3 m\u1EADt kh\u1EA9u",
       "Ok": true,
-      "Measured": "http://localhost:8088/s/7WQo4R0qPSFvrV9EKyUHGZPsGRMg0ucdI4d9xvD-4HM"
+      "Measured": "http://localhost:8088/s/U2MN5EMEDkitkI1kLBeGCyCrL4hEv5KtNgNfzuNph0s"
     },
     {
       "Criterion": "T\u1EC7p ch\u1EC9 c\u00F3 quy\u1EC1n Xem kh\u00F4ng b\u1ECB t\u1EA3i xu\u1ED1ng m\u00E1y",
