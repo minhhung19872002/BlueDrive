@@ -168,8 +168,9 @@ export default function ItemListView(props: ItemListViewProps) {
       })}
       // Minimum width: only small windows scroll horizontally, the name column never gets squeezed.
       scroll={{ x: isMobile ? undefined : 600 }}
-      // Header row and horizontal scrollbar stay on screen (below the app header / at the bottom of the window).
-      sticky={isMobile ? undefined : { offsetHeader: 64 }}
+      // Header row and horizontal scrollbar stay on screen (below the app header, and below the selection command bar that
+      // sticks while items are selected: 32px buttons + 2 × 8px padding; at the bottom of the window).
+      sticky={isMobile ? undefined : { offsetHeader: selected.size > 0 ? 64 + 48 : 64 }}
     />
   )
 }

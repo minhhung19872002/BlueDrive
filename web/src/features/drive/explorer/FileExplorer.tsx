@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
-import { Alert, Button, Drawer, Empty, Grid, Input, Modal, Pagination, Result } from 'antd'
-import { LockOutlined, SearchOutlined } from '@ant-design/icons'
+import { Alert, Button, Drawer, Empty, Grid, Input, Modal, Pagination, Result, type MenuProps } from 'antd'
+import { EditOutlined, LockOutlined, SearchOutlined } from '@ant-design/icons'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { copyItems, listItems, moveItems } from '@/api/drive'
@@ -113,6 +113,7 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
   })
   const items = useMemo(() => listing.data?.items ?? [], [listing.data])
   const selectedItems = useMemo(() => items.filter((i) => selected.has(itemKey(i))), [items, selected])
+  const selectedFiles = useMemo(() => selectedItems.filter((i) => i.type === 'file'), [selectedItems])
   const fileIds = useMemo(() => items.filter((i) => i.type === 'file').map((i) => i.id), [items])
 
   const here: NamedTarget | null = folderInfo.data ? { workspaceId, folderId, name: folderInfo.data.name } : null
@@ -427,7 +428,7 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
         canDownload={canDownload}
         canDelete={canDelete}
         selectedCount={selectedItems.length}
-        selectedFileCount={selectedItems.filter((i) => i.type === 'file').length}
+        selectedFileCount={selectedFiles.length}
         pasteCount={pasteCount}
         search={q}
         onSearch={(v) => {
@@ -461,7 +462,15 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
         onCopyTo={() => actions.copyTo(selectedItems)}
         onMoveTo={() => actions.moveTo(selectedItems)}
         onDelete={() => actions.remove(selectedItems)}
-        onBulkEdit={() => setBulkEdit(selectedItems.filter((i) => i.type === 'file').map((i) => i.id))}
+        allStarred={selectedItems.length > 0 && selectedItems.every((i) => i.isStarred)}
+        onStar={(starred) => void actions.setStar(selectedItems, starred)}
+        moreMenu={{
+          items: [
+            ...overflowItems(actions.menuItems(selectedItems, flags)),
+            ...(canEdit && selectedFiles.length > 1 ? [{ key: 'bulkEdit', icon: <EditOutlined />, label: t('drive.bulkEdit') }] : []),
+          ],
+          onClick: ({ key }) => (key === 'bulkEdit' ? setBulkEdit(selectedFiles.map((i) => i.id)) : actions.run(key, selectedItems)),
+        }}
         onPaste={paste}
         onClearSelection={clearSelection}
       />
@@ -539,3 +548,17 @@ export default function FileExplorer(props: FileExplorerProps) {
 
 export type { NewMenuExtension } from './types'
 
+/** Commands already on the selection bar; its "..." keeps only the others (open, rename, info, versions, access...). */
+const ON_BAR = new Set(['download', 'delete', 'star', 'unstar', 'copyTo', 'moveTo', 'share', 'copyLink'])
+
+function overflowItems(items: NonNullable<MenuProps['items']>): NonNullable<MenuProps['items']> {
+  const kept = items.filter((i) => !(i && 'key' in i && ON_BAR.has(String(i.key))))
+  // Drop leading, trailing and doubled dividers left behind.
+  const out: NonNullable<MenuProps['items']> = []
+  for (const i of kept) {
+    if (i?.type === 'divider' && (out.length === 0 || out[out.length - 1]?.type === 'divider')) continue
+    out.push(i)
+  }
+  if (out[out.length - 1]?.type === 'divider') out.pop()
+  return out
+}

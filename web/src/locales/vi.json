@@ -608,6 +608,7 @@
     "copiedToClipboard": "Đã sao chép {{count}} mục. Mở thư mục đích và nhấn Ctrl+V để dán.",
     "cutToClipboard": "Đã cắt {{count}} mục. Mở thư mục đích và nhấn Ctrl+V để di chuyển.",
     "bulkEdit": "Cập nhật thông tin hàng loạt",
+    "cmd": { "star": "Quan trọng", "unstar": "Bỏ quan trọng", "copyTo": "Sao chép tới", "moveTo": "Di chuyển tới" },
     "bulkEditTitle": "Cập nhật thông tin cho {{count}} tệp",
     "bulkKeep": "Để trống để giữ nguyên",
     "bulkTagsHint": "Các thẻ nhập ở đây được bổ sung vào thẻ hiện có của từng tệp.",

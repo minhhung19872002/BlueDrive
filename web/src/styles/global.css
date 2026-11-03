@@ -299,7 +299,53 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 12px;
+  /* Same outer height as a plain 12px margin; the padding lets the sticky bar cover the rows scrolling under it. */
+  padding: 8px 0;
+  margin: -8px 0 4px;
+  background: var(--bd-bg);
+}
+
+/* While items are selected the command bar stays under the app header when the list scrolls (like SharePoint); the table's
+   sticky column header sits below it (ItemListView offsetHeader). */
+.bd-explorer-toolbar-sticky {
+  position: sticky;
+  top: 64px;
+  z-index: 20;
+}
+
+/* Selection command bar: one line; labels collapse to icons (ExplorerToolbar) rather than wrapping. The padding keeps the
+   count badge visible inside overflow: hidden without changing the toolbar height. */
+.bd-explorer-commands {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  padding-top: 10px;
+  margin-top: -10px;
+}
+
+.bd-explorer-commands-compact {
+  flex-wrap: wrap;
+}
+
+.bd-explorer-commands > * {
+  flex-shrink: 0;
+}
+
+/* Invisible copy of the labelled bar, measured to decide whether labels fit. */
+.bd-explorer-commands-probe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  gap: 8px;
+  width: max-content;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .bd-explorer-body {

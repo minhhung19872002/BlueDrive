@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Badge, Button, Dropdown, Input, Segmented, Select, Space, Tooltip, type MenuProps } from 'antd'
 import {
   AppstoreOutlined,
@@ -7,19 +8,22 @@ import {
   CopyOutlined,
   DeleteOutlined,
   DownloadOutlined,
-  EditOutlined,
   FolderAddOutlined,
   FolderOutlined,
+  EllipsisOutlined,
   InfoCircleOutlined,
   LinkOutlined,
   PlusOutlined,
   ScissorOutlined,
   ShareAltOutlined,
   SnippetsOutlined,
+  StarFilled,
+  StarOutlined,
   UploadOutlined,
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { MEDIA_TYPES, type MediaType } from '@/types/drive'
+import FitDropdown from '../components/FitDropdown'
 import type { NewMenuExtension, ViewMode } from './types'
 
 interface ExplorerToolbarProps {
@@ -54,7 +58,11 @@ interface ExplorerToolbarProps {
   onCopyTo: () => void
   onMoveTo: () => void
   onDelete: () => void
-  onBulkEdit: () => void
+  /** All selected items are marked important (the button then removes the mark). */
+  allStarred: boolean
+  onStar: (starred: boolean) => void
+  /** "..." on the command bar: every action available for the selection (same model as the context menu). */
+  moreMenu: MenuProps
   onPaste: () => void
   onClearSelection: () => void
 }
@@ -88,72 +96,31 @@ export default function ExplorerToolbar(p: ExplorerToolbarProps) {
   const label = (text: string) => (p.isMobile ? undefined : text)
 
   return (
-    <div className="bd-explorer-toolbar">
-      <Space wrap size={8} className="bd-explorer-toolbar-left">
-        {p.canUpload && !hasSelection && (
-          <>
-            <Dropdown menu={{ items: newItems, onClick: onNew }} trigger={['click']}>
-              <Button type="primary" icon={<PlusOutlined />}>
-                {t('header.new')}
-              </Button>
-            </Dropdown>
-            <Button icon={<CloudUploadOutlined />} onClick={p.onUploadFiles}>
-              {label(t('header.upload'))}
-            </Button>
-          </>
-        )}
-        {p.pasteCount > 0 && !hasSelection && (
-          <Tooltip title={t('drive.pasteHint')}>
-            <Button icon={<SnippetsOutlined />} onClick={p.onPaste}>
-              {t('drive.paste', { count: p.pasteCount })}
-            </Button>
-          </Tooltip>
-        )}
-        {hasSelection && (
-          <>
-            <Badge count={p.selectedCount} color="#0b5394">
-              <Button icon={<CloseOutlined />} onClick={p.onClearSelection}>
-                {label(t('common.clearSelection'))}
-              </Button>
-            </Badge>
-            {p.onShare && (
-              <Button icon={<ShareAltOutlined />} onClick={p.onShare}>
-                {label(t('actions.share'))}
-              </Button>
-            )}
-            {p.onCopyLink && (
-              <Button icon={<LinkOutlined />} onClick={p.onCopyLink}>
-                {label(t('actions.copyLink'))}
-              </Button>
-            )}
-            {p.canDownload && (
-              <Tooltip title={t('actions.download')}>
-                <Button icon={<DownloadOutlined />} onClick={p.onDownload}>
-                  {label(t('actions.download'))}
+    <div className={hasSelection && !p.isMobile ? 'bd-explorer-toolbar bd-explorer-toolbar-sticky' : 'bd-explorer-toolbar'}>
+      {!hasSelection && (
+        <Space wrap size={8} className="bd-explorer-toolbar-left">
+          {p.canUpload && (
+            <>
+              <Dropdown menu={{ items: newItems, onClick: onNew }} trigger={['click']}>
+                <Button type="primary" icon={<PlusOutlined />}>
+                  {t('header.new')}
                 </Button>
-              </Tooltip>
-            )}
-            <Tooltip title={t('actions.copyTo')}>
-              <Button icon={<CopyOutlined />} onClick={p.onCopyTo} />
+              </Dropdown>
+              <Button icon={<CloudUploadOutlined />} onClick={p.onUploadFiles}>
+                {label(t('header.upload'))}
+              </Button>
+            </>
+          )}
+          {p.pasteCount > 0 && (
+            <Tooltip title={t('drive.pasteHint')}>
+              <Button icon={<SnippetsOutlined />} onClick={p.onPaste}>
+                {t('drive.paste', { count: p.pasteCount })}
+              </Button>
             </Tooltip>
-            {p.canEdit && (
-              <Tooltip title={t('actions.moveTo')}>
-                <Button icon={<ScissorOutlined />} onClick={p.onMoveTo} />
-              </Tooltip>
-            )}
-            {p.canEdit && p.selectedFileCount > 1 && (
-              <Tooltip title={t('drive.bulkEdit')}>
-                <Button icon={<EditOutlined />} onClick={p.onBulkEdit} />
-              </Tooltip>
-            )}
-            {p.canDelete && (
-              <Tooltip title={t('actions.delete')}>
-                <Button danger icon={<DeleteOutlined />} onClick={p.onDelete} />
-              </Tooltip>
-            )}
-          </>
-        )}
-      </Space>
+          )}
+        </Space>
+      )}
+      {hasSelection && <SelectionCommands {...p} />}
       <Space wrap size={8} className="bd-explorer-toolbar-right">
         {/* While items are selected the command bar shows their actions (like SharePoint): hiding the search / filters
             keeps the toolbar on one line, so the listing does not jump under the cursor. */}
@@ -202,6 +169,87 @@ export default function ExplorerToolbar(p: ExplorerToolbarProps) {
           />
         </Tooltip>
       </Space>
+    </div>
+  )
+}
+
+/**
+ * Command bar for the selection (like SharePoint): every command has a label while it fits on one line; when the window is too
+ * narrow the labels collapse to icons with tooltips instead of wrapping (a taller toolbar would shift the list under the cursor).
+ */
+function SelectionCommands(p: ExplorerToolbarProps) {
+  const { t } = useTranslation()
+  const box = useRef<HTMLDivElement>(null)
+  const probeFull = useRef<HTMLDivElement>(null)
+  const probeMain = useRef<HTMLDivElement>(null)
+  const [size, setSize] = useState({ available: 0, full: 0, main: 0 })
+  const moreItems = p.moreMenu.items ?? []
+
+  // Hidden probes render the bar with every label and with the main labels only: compare their widths with the room we have.
+  useLayoutEffect(() => {
+    const el = box.current
+    const full = probeFull.current
+    const main = probeMain.current
+    if (!el || !full || !main) return
+    const measure = () => setSize({ available: el.clientWidth, full: full.offsetWidth, main: main.offsetWidth })
+    const ro = new ResizeObserver(measure)
+    ;[el, full, main].forEach((x) => ro.observe(x))
+    return () => ro.disconnect()
+  }, [])
+  // 0: every command labelled, 1: main commands labelled (Share, Copy link, Download, Delete), 2: icons only.
+  const level = size.full === 0 || size.full <= size.available ? 0 : size.main <= size.available ? 1 : 2
+
+  const commands = (level: number) => {
+    const cmd = (key: string, text: string, icon: ReactNode, onClick: () => void, extra: { danger?: boolean; tip?: string; main?: boolean } = {}) => {
+      const iconOnly = p.isMobile || level >= (extra.main ? 2 : 1)
+      return (
+      <Tooltip key={key} title={iconOnly ? (extra.tip ?? text) : undefined}>
+        <Button danger={extra.danger} icon={icon} onClick={onClick} aria-label={extra.tip ?? text}>
+          {iconOnly ? undefined : text}
+        </Button>
+      </Tooltip>
+      )
+    }
+    return (
+      <>
+        <Badge count={p.selectedCount} color="#0b5394">
+          <Button icon={<CloseOutlined />} onClick={p.onClearSelection}>
+            {p.isMobile ? undefined : t('common.clearSelection')}
+          </Button>
+        </Badge>
+        {p.onShare && cmd('share', t('actions.share'), <ShareAltOutlined />, p.onShare, { main: true })}
+        {p.onCopyLink && cmd('copyLink', t('actions.copyLink'), <LinkOutlined />, p.onCopyLink, { main: true })}
+        {p.canDownload && cmd('download', t('actions.download'), <DownloadOutlined />, p.onDownload, { main: true })}
+        {p.canDelete && cmd('delete', t('actions.delete'), <DeleteOutlined />, p.onDelete, { danger: true, main: true })}
+        {cmd(
+          'star',
+          p.allStarred ? t('drive.cmd.unstar') : t('drive.cmd.star'),
+          p.allStarred ? <StarFilled style={{ color: '#faad14' }} /> : <StarOutlined />,
+          () => p.onStar(!p.allStarred),
+          { tip: p.allStarred ? t('actions.unstar') : t('actions.star') },
+        )}
+        {cmd('copyTo', t('drive.cmd.copyTo'), <CopyOutlined />, p.onCopyTo)}
+        {p.canEdit && cmd('moveTo', t('drive.cmd.moveTo'), <ScissorOutlined />, p.onMoveTo)}
+        {moreItems.length > 0 && (
+          <FitDropdown menu={p.moreMenu} align="right">
+            <Tooltip title={t('actions.more')}>
+              <Button icon={<EllipsisOutlined />} aria-label={t('actions.more')} />
+            </Tooltip>
+          </FitDropdown>
+        )}
+      </>
+    )
+  }
+
+  return (
+    <div ref={box} className={level === 2 ? 'bd-explorer-commands bd-explorer-commands-compact' : 'bd-explorer-commands'}>
+      {commands(level)}
+      <div ref={probeFull} className="bd-explorer-commands-probe" aria-hidden>
+        {commands(0)}
+      </div>
+      <div ref={probeMain} className="bd-explorer-commands-probe" aria-hidden>
+        {commands(1)}
+      </div>
     </div>
   )
 }
