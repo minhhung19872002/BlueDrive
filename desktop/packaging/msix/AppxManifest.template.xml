@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  BlueDrive Desktop as an MSIX package (Windows 10 1809+), built by build-msix.ps1 from the same files as the Velopack installer.
+  {{PUBLISHER}} must equal the subject of the signing certificate; {{VERSION}} is a.b.c.0; {{ARCH}} x64 / arm64.
+  Registry and file system write virtualization are turned off (unvirtualizedResources) so the app keeps its data in
+  %LOCALAPPDATA%\BlueDrive and its Explorer menu in HKCU like the Velopack install, and both installs can be swapped.
+  Updates: App Installer (BlueDrive.appinstaller published by the server), not Velopack.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap desktop desktop6 rescap">
+  <Identity Name="BLUESTAR.BlueDrive" Publisher="{{PUBLISHER}}" Version="{{VERSION}}" ProcessorArchitecture="{{ARCH}}" />
+  <Properties>
+    <DisplayName>BlueDrive</DisplayName>
+    <PublisherDisplayName>BLUESTAR</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
+    <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="vi-VN" />
+  </Resources>
+  <Applications>
+    <Application Id="BlueDrive" Executable="BlueDrive.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="BlueDrive" Description="Đồng bộ tư liệu BlueDrive xuống máy tính"
+        BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <desktop:Extension Category="windows.startupTask" Executable="BlueDrive.exe" EntryPoint="Windows.FullTrustApplication">
+          <desktop:StartupTask TaskId="BlueDriveStartup" Enabled="true" DisplayName="BlueDrive" />
+        </desktop:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="unvirtualizedResources" />
+  </Capabilities>
+</Package>

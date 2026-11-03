@@ -109,7 +109,7 @@ public sealed class AppHost : IAsyncDisposable
         }
         Store.Remove(s.Config.Id);
         RegisterShell();
-        if (deleteFiles && Directory.Exists(s.Config.SyncFolder)) Directory.Delete(s.Config.SyncFolder, recursive: true);
+        if (deleteFiles) Uninstaller.DeleteTree(s.Config.SyncFolder);
         Changed?.Invoke();
     }
 

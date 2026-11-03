@@ -1,5 +1,6 @@
-import { Alert, Button, Card } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Space } from 'antd'
+import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons'
+import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { listMyDevices } from '@/api/devices'
@@ -10,6 +11,7 @@ import DeviceTable from '@/features/devices/DeviceTable'
 /** "Thiết bị đã kết nối": computers syncing the user's documents with BlueDrive Desktop. */
 export default function MyDevicesPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const { data, isLoading, isFetching, refetch } = useQuery({ queryKey: qk.myDevices, queryFn: listMyDevices })
   return (
     <>
@@ -17,9 +19,14 @@ export default function MyDevicesPage() {
         title={t('devices.myTitle')}
         description={t('devices.myHint')}
         extra={
-          <Button icon={<ReloadOutlined />} onClick={() => void refetch()} loading={isFetching}>
-            {t('common.refresh')}
-          </Button>
+          <Space>
+            <Button type="primary" icon={<DownloadOutlined />} onClick={() => navigate('/desktop-app')}>
+              {t('header.desktopApp')}
+            </Button>
+            <Button icon={<ReloadOutlined />} onClick={() => void refetch()} loading={isFetching}>
+              {t('common.refresh')}
+            </Button>
+          </Space>
         }
       />
       <Card>

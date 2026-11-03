@@ -75,6 +75,8 @@ public sealed class SyncEngine(
     private const string RevokedKey = "revoked";
     private readonly SyncEngineOptions _o = options ?? new();
     private readonly IPlaceholderProvider _placeholders = placeholders ?? NoPlaceholders.Instance;
+    /// <summary>Placeholders created during this pass: already "in sync" (created with that state), skipped by <see cref="MarkSyncedAsync"/>.</summary>
+    private readonly HashSet<string> _createdInSync = [];
 
     /// <summary>Operations executed since the engine was created (tests check that a converged state stays quiet).</summary>
     public int TotalOperations { get; private set; }
@@ -82,7 +84,14 @@ public sealed class SyncEngine(
     public event Action<string, string>? Activity;
 
     /// <summary>Diagnostics: the last planned steps and whether each one ran (tests and the diagnostic package).</summary>
+    /// <summary>Plan of the last pass (diagnostics, tests); capped so a first sync of 100 000 files does not keep 200 000 strings.</summary>
     internal List<string> LastPlan { get; } = [];
+    private const int LastPlanLimit = 2000;
+
+    private void Plan(string line)
+    {
+        if (LastPlan.Count < LastPlanLimit) LastPlan.Add(line);
+    }
 
     // ================================================================= remote tree
 
@@ -254,6 +263,7 @@ public sealed class SyncEngine(
     public async Task<SyncPassResult> SyncAsync(CancellationToken ct)
     {
         LastPlan.Clear();
+        _createdInSync.Clear();
         var started = clock.UtcNow;
         await RefreshRemoteAsync(ct);
         var total = 0;
@@ -316,7 +326,7 @@ public sealed class SyncEngine(
     {
         var items = state.Items(root.RootId);
         var byRemote = items.ToDictionary(i => i.RemoteId);
-        foreach (var b in items.Where(i => i.SyncState == "in_sync" && i.LastSyncedAt >= since))
+        foreach (var b in items.Where(i => i.SyncState == "in_sync" && i.LastSyncedAt >= since && !_createdInSync.Contains(i.RemoteId)))
         {
             var parts = new List<string> { b.Name };
             var cur = b.ParentRemoteId;
@@ -327,7 +337,7 @@ public sealed class SyncEngine(
             }
             parts.Reverse();
             var path = NameMapper.Combine(root.LocalPath.Length == 0 ? null : root.LocalPath, string.Join('/', parts));
-            if (fs.Stat(path) is null) continue;
+            if (!fs.Exists(path, out _)) continue;
             try { await _placeholders.MarkInSyncAsync(path, b.RemoteId, ct); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } // open elsewhere: next pass
         }
@@ -388,20 +398,20 @@ public sealed class SyncEngine(
 
         var ops = 0;
         var stuckMoves = new List<Step>();
-        LastPlan.Add($"-- vòng {rootId}: {plan.Count} mục, {plan.Count(p => p.Decision.Actions != SyncAction.None)} cần xử lý");
+        Plan($"-- vòng {rootId}: {plan.Count} mục, {plan.Count(p => p.Decision.Actions != SyncAction.None)} cần xử lý");
         foreach (var step in Order(plan))
         {
             ct.ThrowIfCancellationRequested();
             if (step.Decision.Actions == SyncAction.None) continue;
             var opId = state.Enqueue(rootId, step.Decision.Actions.ToString(), step.Base?.RemoteId ?? step.Remote?.Id ?? step.LocalEntry?.Path ?? "", step.Decision.Reason);
-            LastPlan.Add($".. {step.Decision.Actions} {step.Path} [{step.Base?.RemoteId}/{step.Remote?.Id}]");
+            Plan($".. {step.Decision.Actions} {step.Path} [{step.Base?.RemoteId}/{step.Remote?.Id}]");
             try
             {
                 var ran = await ExecuteAsync(c, step, ct);
                 if (ran) ops++;
                 else if (step.Decision.Has(SyncAction.MoveRemote) || (step.Decision.Has(SyncAction.MoveLocal) && step.LocalEntry is not null && step.Base is not null
                          && step.LocalEntry.Path != BasePath(c, step.Base))) stuckMoves.Add(step);
-                LastPlan.Add($"{(ran ? "OK " : "-- ")}{step.Decision.Actions} {step.Path} [{step.Base?.RemoteId}/{step.Remote?.Id}]");
+                Plan($"{(ran ? "OK " : "-- ")}{step.Decision.Actions} {step.Path} [{step.Base?.RemoteId}/{step.Remote?.Id}]");
                 state.CompleteOperation(opId);
             }
             catch (RemotePermanentException ex) when (ex.Status == 403 && step.Base is null && step.Remote is null && step.LocalEntry is { } created)
@@ -934,6 +944,7 @@ public sealed class SyncEngine(
         if (_placeholders.OnDemand)
         {
             await _placeholders.CreatePlaceholderAsync(Abs(c, path), r, ct);
+            _createdInSync.Add(r.Id);
             return true;
         }
         // Streamed straight into the temporary file of the atomic write; a wrong hash aborts the write (the old file stays).
@@ -951,8 +962,8 @@ public sealed class SyncEngine(
         var path = at ?? RemotePath(c, r.Id);
         if (path is null) return false;
         var parent = NameMapper.ParentOf(path);
-        if (parent is not null && fs.Stat(Abs(c, parent)) is not { IsFolder: true }) return false; // parent first
-        if (fs.Stat(Abs(c, path)) is not null)
+        if (parent is not null && !(fs.Exists(Abs(c, parent), out var parentIsFolder) && parentIsFolder)) return false; // parent first
+        if (fs.Exists(Abs(c, path), out _))
         {
             // Something unrelated sits there (different kind): it is renamed, the server item takes the name.
             var existing = fs.Stat(Abs(c, path))!;

@@ -68,6 +68,9 @@
       <StackPanel Spacing="12" IsVisible="{Binding Step, Converter={x:Static vm:StepIs.Instance}, ConverterParameter=4}">
         <CheckBox IsChecked="{Binding StartWithWindows}" Content="Khởi động BlueDrive cùng Windows" />
         <CheckBox IsChecked="{Binding Notifications}" Content="Hiện thông báo (xung đột, lỗi cần xử lý, sắp hết dung lượng)" />
+        <CheckBox IsChecked="{Binding InstallOnlyOffice}" IsVisible="{Binding OnlyOfficeOffered}" Content="Cài ONLYOFFICE Desktop Editors để cùng soạn thảo tài liệu" />
+        <TextBlock IsVisible="{Binding OnlyOfficeOffered}" Margin="28,-6,0,0" TextWrapping="Wrap" Opacity="0.7" FontSize="12"
+                   Text="Tải bộ cài chính thức từ onlyoffice.com (khoảng 300 MB, phần mềm nguồn mở AGPL v3 của Ascensio System SIA), cần quyền quản trị." />
       </StackPanel>
       <!-- 5: done -->
       <StackPanel Spacing="12" IsVisible="{Binding Step, Converter={x:Static vm:StepIs.Instance}, ConverterParameter=5}">

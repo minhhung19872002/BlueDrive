@@ -201,3 +201,19 @@ Chi tiết nghiên cứu và giới hạn: `docs/onlyoffice-desktop-integration.
 | Menu chuột phải | "Cùng soạn thảo bằng ONLYOFFICE" (`--coedit`): xin vé dùng một lần (`POST /onlyoffice-desktop/tickets`) rồi mở `DesktopEditors.exe "<liên kết vé>"`; chưa cài ONLYOFFICE thì mở trình duyệt. "Cùng soạn thảo trên trình duyệt" (`--coedit-web`). Chỉ hiện với tệp Office. |
 | Web | `/oo-desktop` (`portal:login`), `/oo-desktop/open?ticket=` (đổi vé → phiên web → trang soạn thảo), `/oo-desktop/logout` (`portal:logout`); trong Desktop Editors ẩn thanh đầu trang và mở tệp Office bằng `open:document`. |
 | Đồng bộ | Mỗi lần lưu từ ONLYOFFICE là một phiên bản mới trên máy chủ; agent nhận thay đổi và tải tệp mới xuống như mọi thay đổi khác. |
+
+## 14. Đóng gói, cài đặt, cập nhật (Sync-Phase 9)
+
+Chi tiết cài đặt: `huong-dan-cai-dat-desktop.md`; hiệu năng: `bao-cao-hieu-nang.md`.
+
+| Thành phần | Việc làm |
+|---|---|
+| Bộ cài EXE (Velopack 1.2.161) | `desktop/packaging/build.ps1`: publish self-contained win-x64, ký số (`sign.ps1`, chứng thư từ biến môi trường, không có thì tự ký), `vpk pack` (id `BlueDrive.Desktop`, cài theo người dùng vào `%LOCALAPPDATA%\BlueDrive.Desktop`, lối tắt Desktop + Start), `BlueDriveSetup.exe`, gói cập nhật `releases.<kênh>.json`, `releases.json` (phiên bản, dung lượng, SHA-256). |
+| MSIX | `desktop/packaging/msix/` (manifest + `build-msix.ps1`): cùng tệp, `windows.startupTask`, `unvirtualizedResources` (dữ liệu và registry như bản EXE). Menu Explorer hiện đại (`IExplorerCommand`) và Status UI chưa làm: menu cổ điển "BlueDrive" vẫn hoạt động. |
+| Hook Velopack (`Program.Main`) | Cài: đăng ký "Khởi động cùng Windows" (bản im lặng không tự mở ứng dụng). Gỡ: `Uninstaller` (dừng phiên đang chạy qua `--quit`, gỡ sync root, menu, khóa Run, provider ONLYOFFICE, mã đăng nhập; hỏi giữ tệp / gỡ ONLYOFFICE, tự chọn mặc định sau 12 giây). Không tự áp dụng bản cập nhật khi khởi động (không dừng cứng phiên đang đồng bộ). |
+| Cấu hình triển khai (`Deployment`) | Chính sách `HKLM\|HKCU\SOFTWARE\Policies\BlueDrive` (`Server`, `InstallOnlyOffice`, `UpdateChannel`, `DisableUpdates`) > tham số `--server=` / `--with-onlyoffice=` > `deploy.json` cạnh `BlueDrive.exe`; lưu vào `settings.json`. Script `install-bluedrive.ps1` cho GPO/Intune. |
+| Tự cập nhật (`Updater`) | Nguồn `<máy chủ>/downloads/desktop/` (Velopack `SimpleWebSource`, kênh stable/beta), kiểm tra lúc khởi động + mỗi 6 giờ, tải nền; cài khi thoát hoặc "Khởi động lại để cập nhật" (khay, Cài đặt → Giới thiệu). Bản MSIX / bản phát triển không tự cập nhật. |
+| ONLYOFFICE (`OnlyOfficeSetup`) | Tải bộ cài chính thức theo kiến trúc, `WinVerifyTrust` + chủ thể "Ascensio System SIA", một lần nâng quyền cài im lặng + chép provider; phiên bản tối thiểu 8.0. Tùy chọn ở trình hướng dẫn (mặc định bật) hoặc chính sách. |
+| Phát hành | `.github/workflows/desktop-release.yml` (tag `desktop-v*`, máy Windows) → GitHub Release; VM: `scripts/sync-desktop-downloads.sh` (gọi trong `deploy-vm.sh`) chép bản ổn định/beta mới nhất vào `deploy/downloads/desktop/`, nginx phục vụ `/downloads/desktop/` (tệp JSON không cache). |
+| Web | `/desktop-app` "Tải ứng dụng máy tính" (menu tài khoản, trang Thiết bị đã kết nối): tải EXE/MSIX, SHA-256, ghi chú phát hành, kênh beta, lệnh triển khai hàng loạt. |
+| Hiệu năng | Quét thư mục bằng `FileIdExtdDirectoryInfo` (một lời gọi mỗi thư mục, không mở handle từng tệp), `Stat` một handle, bỏ đánh dấu lại tệp giữ chỗ vừa tạo, trả bộ nhớ GC sau lượt lớn. Công cụ đo: `desktop/tools/BlueDrive.Sync.Perf`. |

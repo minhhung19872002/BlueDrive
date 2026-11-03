@@ -139,9 +139,17 @@
           <Button Content="Xuất gói chẩn đoán…" Command="{Binding ExportDiagnosticsCommand}" HorizontalAlignment="Left" />
           <TextBlock Classes="muted" TextWrapping="Wrap" Text="Gói chẩn đoán gồm nhật ký và thông tin hệ thống để gửi bộ phận hỗ trợ; không chứa mật khẩu, mã đăng nhập hay nội dung tệp." />
           <Button Content="Gửi yêu cầu hỗ trợ" Command="{Binding SupportCommand}" HorizontalAlignment="Left" />
+          <TextBlock Text="Cập nhật" Classes="h2" Margin="0,12,0,0" />
+          <TextBlock Text="{Binding UpdateStatus}" TextWrapping="Wrap" />
+          <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding UpdatesAvailable}">
+            <Button Content="Kiểm tra bản cập nhật" Command="{Binding CheckUpdateCommand}" />
+            <Button Content="Khởi động lại để cập nhật" Command="{Binding RestartToUpdateCommand}" IsVisible="{Binding CanRestartToUpdate}" Classes="accent" />
+          </StackPanel>
+          <CheckBox IsChecked="{Binding BetaChannel}" IsVisible="{Binding UpdatesAvailable}" Content="Nhận bản thử nghiệm (beta) trước khi phát hành chính thức" />
           <TextBlock Text="Cùng soạn thảo bằng ONLYOFFICE" Classes="h2" Margin="0,12,0,0" />
           <TextBlock Text="{Binding OnlyOfficeStatus}" TextWrapping="Wrap" />
           <Button Content="Cài BlueDrive vào ONLYOFFICE" Command="{Binding InstallProviderCommand}" IsVisible="{Binding CanInstallProvider}" HorizontalAlignment="Left" />
+          <Button Content="Cài / cập nhật ONLYOFFICE Desktop Editors" Command="{Binding InstallOnlyOfficeCommand}" IsVisible="{Binding CanInstallOnlyOffice}" HorizontalAlignment="Left" />
           <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
                      Text="ONLYOFFICE Desktop Editors © Ascensio System SIA, phần mềm nguồn mở theo giấy phép GNU AGPL v3 (https://www.onlyoffice.com, mã nguồn: https://github.com/ONLYOFFICE/DesktopEditors). BlueDrive chỉ cài bộ cài gốc không chỉnh sửa và thêm cấu hình kết nối &quot;bluedrive&quot;." />
           <TextBlock Text="{Binding AboutMessage}" TextWrapping="Wrap" Foreground="#0b5394" />

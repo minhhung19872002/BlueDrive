@@ -1096,6 +1096,8 @@ body {
 }
 
 /* ---------- Inside ONLYOFFICE Desktop Editors (provider "bluedrive") ---------- */
-.bd-oo-desktop .bd-header {
+.bd-oo-desktop .bd-header,
+.bd-oo-desktop .bd-office-bar {
+  /* The editor is a tab of ONLYOFFICE Desktop Editors: its tab shows the name and closes it. */
   display: none;
 }

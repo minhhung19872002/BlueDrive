@@ -114,6 +114,9 @@ services:
       dockerfile: web/Dockerfile
     restart: unless-stopped
     depends_on: [api]
+    volumes:
+      # BlueDrive Desktop releases served under /downloads/desktop/ (see scripts/sync-desktop-downloads.sh).
+      - ${DESKTOP_DOWNLOADS_DIR:-./downloads}:/usr/share/nginx/downloads:ro
     deploy:
       resources:
         limits: { cpus: "0.5", memory: 256m }

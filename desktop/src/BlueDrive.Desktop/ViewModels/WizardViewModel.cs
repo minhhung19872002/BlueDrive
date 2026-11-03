@@ -39,6 +39,7 @@ public partial class WizardViewModel : ObservableObject
         ServerLocked = presetServer is not null;
         StartWithWindows = host.Settings.StartWithWindows;
         Notifications = host.Settings.Notifications;
+        InstallOnlyOffice = host.Settings.InstallOnlyOffice;
     }
 
     public ObservableCollection<RootChoice> Roots { get; } = [];
@@ -56,6 +57,9 @@ public partial class WizardViewModel : ObservableObject
     [ObservableProperty] private bool _onDemandAvailable;
     [ObservableProperty] private bool _startWithWindows;
     [ObservableProperty] private bool _notifications;
+    [ObservableProperty] private bool _installOnlyOffice;
+    /// <summary>Only offered when ONLYOFFICE Desktop Editors is not on this computer yet.</summary>
+    public bool OnlyOfficeOffered { get; } = OperatingSystem.IsWindows() && OnlyOfficeService.FindEditors() is null;
 
     /// <summary>Raised when the wizard is done (or cancelled) and the window should close.</summary>
     public event Action? Close;
@@ -234,6 +238,7 @@ public partial class WizardViewModel : ObservableObject
         var settings = _host.Settings;
         settings.StartWithWindows = StartWithWindows;
         settings.Notifications = Notifications;
+        if (OnlyOfficeOffered) settings.InstallOnlyOffice = InstallOnlyOffice;
         _host.SaveSettings(settings);
         var acc = new AccountConfig(_accountId, ServerUri!.ToString(), Path.GetFullPath(Folder), _me!.Username, _me.FullName, _tokens!.DeviceId) { OnDemand = OnDemand };
         await _host.AddAccountAsync(acc, Roots.Where(r => !r.Selected).Select(r => r.Id).ToList());

@@ -33,3 +33,8 @@ storage-data/
 playwright-report/
 test-results/
 web/e2e/.auth/
+
+## Desktop packaging output / development signing certificate
+artifacts/
+desktop/packaging/.dev-cert/
+deploy/downloads/

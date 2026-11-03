@@ -24,6 +24,16 @@ public sealed class AppSettings
     /// <summary>Pause on a metered connection / on battery below 20 % (spec 6.5).</summary>
     public bool PauseOnMetered { get; set; } = true;
     public bool PauseOnLowBattery { get; set; } = true;
+    /// <summary>Server given by the installer (/server=…) or deploy.json: pre-filled in the wizard (see <see cref="Deployment"/>).</summary>
+    public string? DeploymentServer { get; set; }
+    /// <summary>"Cài ONLYOFFICE Desktop Editors để cùng soạn thảo tài liệu" (default on; /with-onlyoffice=0 turns it off).</summary>
+    public bool InstallOnlyOffice { get; set; } = true;
+    /// <summary>ONLYOFFICE was installed by BlueDrive: uninstalling BlueDrive offers to remove it too (default: keep).</summary>
+    public bool OnlyOfficeInstalledByBlueDrive { get; set; }
+    /// <summary>The automatic ONLYOFFICE installation was done or declined (not offered again; Settings → Giới thiệu still can).</summary>
+    public bool OnlyOfficeSetupDone { get; set; }
+    /// <summary>Update channel: "stable" or "beta".</summary>
+    public string UpdateChannel { get; set; } = "stable";
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } };
 
@@ -65,6 +75,12 @@ public static class StartupRegistration
     public static void Set(bool enabled, string? exePath = null)
     {
         if (!OperatingSystem.IsWindows()) return;
+        if (PackageInfo.IsPackaged)
+        {
+            // MSIX: the package's StartupTask (Settings → Apps → Startup), not the Run key.
+            PackageInfo.SetStartupTask(enabled);
+            return;
+        }
         using var key = Registry.CurrentUser.CreateSubKey(RunKey);
         if (enabled) key.SetValue(Name, $"\"{exePath ?? Environment.ProcessPath}\" --background");
         else key.DeleteValue(Name, throwOnMissingValue: false);
@@ -76,4 +92,44 @@ public static class StartupRegistration
         using var key = Registry.CurrentUser.OpenSubKey(RunKey);
         return key?.GetValue(Name) is string;
     }
+}
+
+/// <summary>Running from the MSIX package (package identity) instead of the Velopack install.</summary>
+public static class PackageInfo
+{
+    public const string StartupTaskId = "BlueDriveStartup";
+    private const int AppModelErrorNoPackage = 15700;
+
+    public static bool IsPackaged
+    {
+        get
+        {
+            if (!OperatingSystem.IsWindowsVersionAtLeast(10)) return false;
+            var len = 0;
+            return GetCurrentPackageFullName(ref len, null) != AppModelErrorNoPackage;
+        }
+    }
+
+    /// <summary>Started by Windows at sign-in through the package's StartupTask (start hidden, like --background).</summary>
+    public static bool LaunchedAtStartup()
+    {
+        if (!IsPackaged || !OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763)) return false;
+        try { return Windows.ApplicationModel.AppInstance.GetActivatedEventArgs()?.Kind == Windows.ApplicationModel.Activation.ActivationKind.StartupTask; }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException) { return false; }
+    }
+
+    public static void SetStartupTask(bool enabled)
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763)) return;
+        try
+        {
+            var task = Windows.ApplicationModel.StartupTask.GetAsync(StartupTaskId).AsTask().GetAwaiter().GetResult();
+            if (enabled && task.State == Windows.ApplicationModel.StartupTaskState.Disabled) task.RequestEnableAsync().AsTask().GetAwaiter().GetResult();
+            else if (!enabled && task.State == Windows.ApplicationModel.StartupTaskState.Enabled) task.Disable();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException or ArgumentException) { }
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int GetCurrentPackageFullName(ref int packageFullNameLength, System.Text.StringBuilder? packageFullName);
 }

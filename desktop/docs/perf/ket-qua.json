@@ -1,0 +1,42 @@
+{
+  "scale": {
+    "files": 100000,
+    "folders": 5000,
+    "entriesOnDisk": 105000,
+    "firstPassSeconds": 150.3,
+    "unchangedPassSeconds": 4.5,
+    "workingSetMb": 108,
+    "idleCpuPercent": 0.05
+  },
+  "machine": "LAPTOP-KGTEG72G, 16 CPU, Microsoft Windows NT 10.0.26300.0",
+  "latency": {
+    "server": "http://localhost:8088/",
+    "rounds": 10,
+    "webToPcSeconds": [
+      0.8549971,
+      0.6828162,
+      0.752987,
+      0.6429491,
+      0.7837538,
+      0.7323572,
+      0.7199093,
+      0.7798533,
+      0.7034679,
+      0.747313
+    ],
+    "pcToServerSeconds": [
+      3.3187338,
+      3.2450655,
+      3.3127712,
+      3.2178135,
+      3.279861,
+      3.2873324,
+      3.2305095,
+      3.3019345,
+      3.2528075,
+      3.2408647
+    ],
+    "workingSetMb": 118,
+    "idleCpuPercent": 0.16
+  }
+}

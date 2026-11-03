@@ -67,10 +67,12 @@ public partial class SettingsViewModel : ObservableObject
         _pauseOnLowBattery = s.PauseOnLowBattery;
         _notifications = s.Notifications;
         _themeIndex = (int)s.Theme;
+        _betaChannel = s.UpdateChannel == "beta";
         _freeUpIndex = Array.IndexOf(FreeUpDays, s.FreeUpAfterDays) is var i and >= 0 ? i : 0;
         Version = $"BlueDrive Desktop {host.AppVersion}";
         Refresh();
         RefreshOnlyOffice();
+        RefreshUpdate();
     }
 
     public ObservableCollection<AccountRow> Accounts { get; } = [];
@@ -298,6 +300,7 @@ public partial class SettingsViewModel : ObservableObject
         s.PauseOnLowBattery = PauseOnLowBattery;
         s.Notifications = Notifications;
         s.Theme = (ThemeChoice)ThemeIndex;
+        s.UpdateChannel = BetaChannel ? "beta" : "stable";
         s.FreeUpAfterDays = FreeUpDays[Math.Clamp(FreeUpIndex, 0, FreeUpDays.Length - 1)];
         _host.SaveSettings(s);
         App.ApplyTheme(s.Theme);
@@ -335,6 +338,87 @@ public partial class SettingsViewModel : ObservableObject
                 _ => "Đã có ONLYOFFICE Desktop Editors nhưng chưa cài BlueDrive vào đó (hoặc bị gỡ khi ONLYOFFICE cập nhật).",
             };
         CanInstallProvider = exe is not null && server is not null && state != ProviderState.Ready;
+        CanInstallOnlyOffice = OperatingSystem.IsWindows() && server is not null && (exe is null || OnlyOfficeSetup.IsOutdated(exe));
+        if (exe is not null && OnlyOfficeSetup.IsOutdated(exe))
+            OnlyOfficeStatus += $" Phiên bản {OnlyOfficeSetup.VersionOf(exe)} đã cũ (cần từ {OnlyOfficeSetup.MinimumVersion}), nên cập nhật.";
+    }
+
+    [ObservableProperty] private bool _canInstallOnlyOffice;
+
+    /// <summary>"Cài ONLYOFFICE Desktop Editors" / "Cập nhật ONLYOFFICE": official installer, signature checked, silent, with the provider.</summary>
+    [RelayCommand]
+    private async Task InstallOnlyOfficeAsync()
+    {
+        var server = _host.Sessions.FirstOrDefault()?.Config.ServerUrl;
+        if (server is null) return;
+        Busy = true;
+        try
+        {
+            var progress = new Progress<string>(m => AboutMessage = m);
+            var wasInstalled = OnlyOfficeService.FindEditors() is not null;
+            await OnlyOfficeSetup.InstallAsync(server, progress);
+            var s = _host.Settings;
+            if (!wasInstalled) s.OnlyOfficeInstalledByBlueDrive = true;
+            s.OnlyOfficeSetupDone = true;
+            _host.SaveSettings(s);
+            AboutMessage = "Đã cài ONLYOFFICE Desktop Editors và kết nối với BlueDrive.";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or IOException or TaskCanceledException)
+        {
+            AboutMessage = ex is InvalidOperationException ? ex.Message : $"Không tải được bộ cài ONLYOFFICE: {ex.Message}";
+        }
+        finally
+        {
+            Busy = false;
+            RefreshOnlyOffice();
+        }
+    }
+
+    // ---------------------------------------------------------------- updates
+
+    [ObservableProperty] private bool _betaChannel;
+    [ObservableProperty] private string _updateStatus = "";
+    [ObservableProperty] private bool _canRestartToUpdate;
+    public bool UpdatesAvailable => Updater.IsInstalled;
+
+    public void RefreshUpdate()
+    {
+        var u = _app?.Updater;
+        CanRestartToUpdate = u?.PendingVersion is not null;
+        UpdateStatus = !Updater.IsInstalled
+            ? "Bản đang chạy không được cài bằng bộ cài BlueDrive nên không tự cập nhật."
+            : u?.PendingVersion is { } v ? $"Đã tải phiên bản {v}. Khởi động lại BlueDrive để cập nhật (hoặc bản mới tự cài khi thoát)."
+            : u?.LastError ?? (u?.LastCheck is { } t ? $"Đang dùng phiên bản mới nhất (kiểm tra lúc {t:HH:mm dd/MM/yyyy})." : "BlueDrive tự kiểm tra bản cập nhật khi khởi động và mỗi 6 giờ.");
+    }
+
+    [RelayCommand]
+    private async Task CheckUpdateAsync()
+    {
+        if (_app is null) return;
+        Busy = true;
+        UpdateStatus = "Đang kiểm tra bản cập nhật…";
+        try
+        {
+            var s = _host.Settings;
+            var channel = BetaChannel ? "beta" : "stable";
+            if (s.UpdateChannel != channel)
+            {
+                s.UpdateChannel = channel;
+                _host.SaveSettings(s);
+            }
+            await _app.Updater.CheckAsync();
+        }
+        finally
+        {
+            Busy = false;
+            RefreshUpdate();
+        }
+    }
+
+    [RelayCommand]
+    private async Task RestartToUpdateAsync()
+    {
+        if (_app is not null) await _app.RestartToUpdateAsync();
     }
 
     [RelayCommand]

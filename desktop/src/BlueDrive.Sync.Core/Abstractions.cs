@@ -50,6 +50,14 @@ public interface ILocalFileSystem
 
     LocalEntry? Stat(string path);
 
+    /// <summary>Whether something is at <paramref name="path"/> and its kind, without the file id (cheaper than <see cref="Stat"/>).</summary>
+    bool Exists(string path, out bool isFolder)
+    {
+        var e = Stat(path);
+        isFolder = e?.IsFolder ?? false;
+        return e is not null;
+    }
+
     Stream OpenRead(string path);
 
     /// <summary>Writes through a temporary file then replaces <paramref name="path"/> atomically; keeps <paramref name="mtime"/>.</summary>

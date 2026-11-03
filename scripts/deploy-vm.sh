@@ -30,6 +30,8 @@ until curl -fsS "http://localhost:${port:-80}/health" 2>/dev/null | grep -q Heal
   i=$((i+1)); [ "$i" -gt 60 ] && { echo "FAILED: /health" >&2; docker compose logs --tail 40 api >&2; exit 1; }
   sleep 5
 done
+# BlueDrive Desktop installers + update feed from the GitHub release (never fails the deploy).
+sh "$app/scripts/sync-desktop-downloads.sh" "$app/deploy/downloads" || true
 echo "$rev" > "$HOME/apps/bluedrive.REVISION"
 docker image prune -f > /dev/null
 docker builder prune -f --filter until=72h > /dev/null

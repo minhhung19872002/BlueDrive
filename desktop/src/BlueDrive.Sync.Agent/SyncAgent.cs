@@ -435,6 +435,7 @@ public sealed class SyncAgent : IAsyncDisposable
 
         SetStatus(AgentState.Syncing, "Đang đồng bộ…");
         var result = await _engine.SyncAsync(ct);
+        Memory.TrimAfter(result.Operations);
         var problems = result.Errors.ToList();
         var msg = result.MassDeletePending > 0
             ? $"Bạn vừa xóa {result.MassDeletePending} tệp. Xóa cả trên BlueDrive?"
@@ -587,4 +588,19 @@ internal sealed class DbResumeStore(SyncStateDb db) : IUploadResumeStore
     private static string Key(string k) => "tus:" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(k)));
     public string? Get(string key) => db.GetAccount(Key(key));
     public void Set(string key, string? url) => db.SetAccount(Key(key), url);
+}
+
+/// <summary>
+/// A first sync of 100 000 items leaves the GC with a few hundred MB of free segments: hand them back to Windows so the app idles under
+/// 200 MB (spec 10). Only after large passes (a full blocking collection is not free).
+/// </summary>
+public static class Memory
+{
+    public const int LargePass = 2000;
+
+    public static void TrimAfter(int operations)
+    {
+        if (operations < LargePass) return;
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Aggressive, blocking: true, compacting: true);
+    }
 }

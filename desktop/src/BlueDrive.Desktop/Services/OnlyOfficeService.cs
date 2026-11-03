@@ -51,12 +51,8 @@ public static class OnlyOfficeService
     /// <summary>Writes the provider (config + icons). Returns false when the user declined the elevation prompt.</summary>
     public static bool InstallProvider(string editorsExe, string server, string? templateDir = null, bool allowElevation = true)
     {
-        templateDir ??= TemplateDir;
         var dest = Path.Combine(Path.GetDirectoryName(editorsExe)!, "providers", ProviderFolder);
-        var staging = Path.Combine(Path.GetTempPath(), "bluedrive-oo-" + Guid.NewGuid().ToString("N")[..8], ProviderFolder);
-        Directory.CreateDirectory(Path.Combine(staging, "assets"));
-        foreach (var f in Directory.EnumerateFiles(Path.Combine(templateDir, "assets"))) File.Copy(f, Path.Combine(staging, "assets", Path.GetFileName(f)));
-        File.WriteAllText(Path.Combine(staging, "config.json"), ConfigFor(server, templateDir));
+        var staging = StageProvider(server, templateDir);
         try
         {
             CopyTree(staging, dest);
@@ -81,6 +77,43 @@ public static class OnlyOfficeService
             try { Directory.Delete(Path.GetDirectoryName(staging)!, recursive: true); }
             catch (IOException) { }
         }
+    }
+
+    /// <summary>The provider for <paramref name="server"/> (config + icons) in a new temporary folder named "bluedrive".</summary>
+    public static string StageProvider(string server, string? templateDir = null)
+    {
+        templateDir ??= TemplateDir;
+        var staging = Path.Combine(Path.GetTempPath(), "bluedrive-oo-" + Guid.NewGuid().ToString("N")[..8], ProviderFolder);
+        Directory.CreateDirectory(Path.Combine(staging, "assets"));
+        foreach (var f in Directory.EnumerateFiles(Path.Combine(templateDir, "assets"))) File.Copy(f, Path.Combine(staging, "assets", Path.GetFileName(f)));
+        File.WriteAllText(Path.Combine(staging, "config.json"), ConfigFor(server, templateDir));
+        return staging;
+    }
+
+    /// <summary>Uninstall: removes the provider folder (elevated when needed and allowed). False when it stays.</summary>
+    public static bool RemoveProvider(string editorsExe, bool allowElevation)
+    {
+        var dest = Path.Combine(Path.GetDirectoryName(editorsExe)!, "providers", ProviderFolder);
+        if (!Directory.Exists(dest)) return true;
+        try
+        {
+            Directory.Delete(dest, recursive: true);
+            return true;
+        }
+        catch (UnauthorizedAccessException) when (allowElevation)
+        {
+            try
+            {
+                using var p = Process.Start(new ProcessStartInfo("cmd.exe", $"/c rmdir /s /q \"{dest}\"")
+                {
+                    UseShellExecute = true, Verb = "runas", WindowStyle = ProcessWindowStyle.Hidden,
+                })!;
+                p.WaitForExit(15_000);
+                return !Directory.Exists(dest);
+            }
+            catch (System.ComponentModel.Win32Exception) { return false; }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
     }
 
     private static void CopyTree(string from, string to)

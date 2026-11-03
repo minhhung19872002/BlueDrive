@@ -17,6 +17,7 @@
     <Project Path="desktop/tests/BlueDrive.Sync.Testing/BlueDrive.Sync.Testing.csproj" />
     <Project Path="desktop/tests/BlueDrive.Sync.Tests/BlueDrive.Sync.Tests.csproj" />
     <Project Path="desktop/tests/BlueDrive.Sync.Windows.Tests/BlueDrive.Sync.Windows.Tests.csproj" />
+    <Project Path="desktop/tools/BlueDrive.Sync.Perf/BlueDrive.Sync.Perf.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/BlueDrive.IntegrationTests/BlueDrive.IntegrationTests.csproj" />

@@ -5,6 +5,10 @@ BlueDrive Desktop đưa tư liệu trên hệ thống BlueDrive xuống một th
 
 ## 1. Thiết lập lần đầu
 
+Tải bộ cài trên web: menu tài khoản → **Tải ứng dụng máy tính** (cài đặt chi tiết, cài hàng loạt: `huong-dan-cai-dat-desktop.md`).
+
+![Tải ứng dụng máy tính](images/tai-ung-dung-may-tinh.png)
+
 1. Mở **BlueDrive** (trình đơn Start). Nhập **địa chỉ máy chủ** do đơn vị cung cấp (ví dụ `https://bluedrive.bluestar.com.vn`) → **Tiếp**.
    Nếu bộ cài đã có sẵn địa chỉ, ô này bị khóa.
 2. Bấm **Đăng nhập bằng trình duyệt**. Trình duyệt mở trang đăng nhập BlueDrive; đăng nhập rồi bấm **Cho phép**. Quay lại cửa sổ thiết lập:
@@ -92,7 +96,7 @@ Vào **Cài đặt → Vấn đề → Xử lý xung đột…** để so sánh 
 | Mạng | Giới hạn băng thông tải lên/tải xuống (KB/giây), proxy (theo Windows, không dùng, tự nhập), **tạm dừng khi dùng mạng tính phí** và **khi chạy pin dưới 20%** (mặc định bật). |
 | Chung | Khởi động cùng Windows, thông báo, giao diện sáng/tối/theo hệ thống. |
 | Vấn đề | Danh sách xung đột và mục chưa đồng bộ được, với **Xử lý xung đột…**, **Giữ cả hai**, **Thử lại**, **Mở vị trí**. |
-| Giới thiệu | Phiên bản, **Xuất gói chẩn đoán…** (nhật ký + thông tin hệ thống, đã ẩn mã đăng nhập, không chứa nội dung tệp) để gửi bộ phận hỗ trợ, **Gửi yêu cầu hỗ trợ** (mở trang Hỗ trợ của BlueDrive); trạng thái ONLYOFFICE Desktop Editors và nút **Cài BlueDrive vào ONLYOFFICE** (cần quyền quản trị), thông tin giấy phép AGPL v3 của ONLYOFFICE. |
+| Giới thiệu | Phiên bản, **Xuất gói chẩn đoán…** (nhật ký + thông tin hệ thống, đã ẩn mã đăng nhập, không chứa nội dung tệp) để gửi bộ phận hỗ trợ, **Gửi yêu cầu hỗ trợ** (mở trang Hỗ trợ của BlueDrive); trạng thái ONLYOFFICE Desktop Editors, nút **Cài BlueDrive vào ONLYOFFICE** và **Cài / cập nhật ONLYOFFICE Desktop Editors** (cần quyền quản trị), thông tin giấy phép AGPL v3 của ONLYOFFICE; **Cập nhật**: tình trạng, **Kiểm tra bản cập nhật**, **Khởi động lại để cập nhật**, nhận bản thử nghiệm (beta). |
 
 ## 6. Câu hỏi thường gặp
 

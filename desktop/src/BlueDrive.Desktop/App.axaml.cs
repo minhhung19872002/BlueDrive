@@ -24,6 +24,10 @@ public partial class App : Application
     private WizardWindow? _wizard;
     private string _iconKey = "";
     private readonly CancellationTokenSource _stop = new();
+    private Deployment _deployment = null!;
+    private Timer? _updateTimer;
+
+    public Updater Updater { get; private set; } = null!;
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -32,12 +36,17 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             _host = new AppHost(Environment.GetEnvironmentVariable("BLUEDRIVE_HOME"));
+            _deployment = Deployment.Current(desktop.Args ?? []);
+            if (_deployment.SaveInto(_host.Settings)) _host.SaveSettings(_host.Settings);
+            Updater = new Updater(() => _host.Sessions.FirstOrDefault()?.Config.ServerUrl ?? _host.Settings.DeploymentServer,
+                () => _deployment.Channel ?? _host.Settings.UpdateChannel, () => _deployment.UpdatesDisabled);
+            Updater.Changed += () => Dispatcher.UIThread.Post(BuildTray);
             ApplyTheme(_host.Settings.Theme);
             _host.Notification += ShowToast;
             _host.Changed += () => Dispatcher.UIThread.Post(UpdateTray);
             BuildTray();
             _ = ListenForActivationAsync(_stop.Token);
-            var background = desktop.Args?.Contains("--background") == true;
+            var background = desktop.Args?.Contains("--background") == true || PackageInfo.LaunchedAtStartup();
             _ = StartAsync(background);
             desktop.ShutdownRequested += (_, _) => _stop.Cancel();
         }
@@ -49,6 +58,12 @@ public partial class App : Application
         await _host.StartAsync();
         _host.WatchConditions();
         CheckOnlyOfficeProvider();
+        _host.Sessions.CollectionChanged += (_, e) =>
+        {
+            if (e.NewItems is { Count: > 0 }) _ = SetUpOnlyOfficeAsync();
+        };
+        _ = SetUpOnlyOfficeAsync();
+        _updateTimer = new Timer(_ => _ = Updater.CheckAsync(_stop.Token), null, TimeSpan.FromMinutes(1), TimeSpan.FromHours(6));
         var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
         if (_host.Sessions.Count == 0) ShowWizard();
         else if (ExplorerMenu.Parse(args) is not null) await HandleArgsAsync(args);
@@ -59,6 +74,11 @@ public partial class App : Application
     /// <summary>Explorer context menu (or a second start of the app): "--share|--link|--web|--versions|--resolve &lt;path&gt;"; otherwise show the flyout.</summary>
     private async Task HandleArgsAsync(string[] args)
     {
+        if (args.Contains("--quit"))
+        {
+            await QuitAsync(); // uninstaller
+            return;
+        }
         if (ExplorerMenu.Parse(args) is not { } cmd)
         {
             ShowFlyout();
@@ -124,6 +144,48 @@ public partial class App : Application
         }
     }
 
+    private int _ooSetup;
+
+    /// <summary>
+    /// "Cài ONLYOFFICE Desktop Editors để cùng soạn thảo tài liệu" (wizard option / --with-onlyoffice=1, default on): once an account exists,
+    /// install it in the background (one elevation), or tell the user when the installed version is too old.
+    /// </summary>
+    private async Task SetUpOnlyOfficeAsync()
+    {
+        var settings = _host.Settings;
+        var server = _host.Sessions.FirstOrDefault()?.Config.ServerUrl;
+        if (!OperatingSystem.IsWindows() || server is null || !settings.InstallOnlyOffice || settings.OnlyOfficeSetupDone) return;
+        if (Interlocked.Exchange(ref _ooSetup, 1) == 1) return;
+        try
+        {
+            if (OnlyOfficeService.FindEditors() is { } exe)
+            {
+                if (OnlyOfficeSetup.IsOutdated(exe))
+                    ShowToast("Nên cập nhật ONLYOFFICE Desktop Editors", $"Phiên bản trên máy ({OnlyOfficeSetup.VersionOf(exe)}) cũ hơn {OnlyOfficeSetup.MinimumVersion}. Mở Cài đặt → Giới thiệu để cập nhật.");
+            }
+            else
+            {
+                ShowToast("Đang cài ONLYOFFICE Desktop Editors", "Để cùng soạn thảo tài liệu Word, Excel, PowerPoint trực tiếp từ máy tính.");
+                await OnlyOfficeSetup.InstallAsync(server, localInstaller: Deployment.Arg(Environment.GetCommandLineArgs(), "onlyoffice-installer"), ct: _stop.Token);
+                settings.OnlyOfficeInstalledByBlueDrive = true;
+                ShowToast("Đã cài ONLYOFFICE Desktop Editors", "Chuột phải tệp Office trong thư mục BlueDrive → BlueDrive → Cùng soạn thảo bằng ONLYOFFICE.");
+            }
+            settings.OnlyOfficeSetupDone = true;
+            _host.SaveSettings(settings);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or HttpRequestException or IOException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            Log.Warning(ex, "Cài ONLYOFFICE Desktop Editors");
+            if (ex is InvalidOperationException { Message: var m } && m.Contains("quyền quản trị"))
+            {
+                settings.OnlyOfficeSetupDone = true; // declined: not asked again at every start
+                _host.SaveSettings(settings);
+            }
+            if (!_stop.IsCancellationRequested) ShowToast("Chưa cài được ONLYOFFICE Desktop Editors", ex is InvalidOperationException ? ex.Message : "Không tải được bộ cài. Sẽ thử lại lần khởi động sau.");
+        }
+        finally { Interlocked.Exchange(ref _ooSetup, 0); }
+    }
+
     /// <summary>ONLYOFFICE updates can remove the provider: put it back (silently when the folder is writable), otherwise tell the user.</summary>
     private void CheckOnlyOfficeProvider()
     {
@@ -163,16 +225,33 @@ public partial class App : Application
 
     private void BuildTray()
     {
-        _tray = new TrayIcon { ToolTipText = "BlueDrive", Icon = Icon("ok") };
-        _tray.Clicked += (_, _) => ToggleFlyout();
+        if (_tray is null)
+        {
+            _tray = new TrayIcon { ToolTipText = "BlueDrive", Icon = Icon("ok") };
+            _tray.Clicked += (_, _) => ToggleFlyout();
+            TrayIcon.SetIcons(this, [_tray]);
+        }
         var menu = new NativeMenu();
+        if (Updater.PendingVersion is { } v)
+        {
+            menu.Add(Item($"Khởi động lại để cập nhật lên {v}", () => _ = RestartToUpdateAsync()));
+            menu.Add(new NativeMenuItemSeparator());
+        }
         menu.Add(Item("Mở BlueDrive", ShowFlyout));
         menu.Add(Item("Mở thư mục BlueDrive", () => FlyoutViewModel.OpenPath(_host.Sessions.FirstOrDefault()?.Config.SyncFolder)));
         menu.Add(new NativeMenuItemSeparator());
         menu.Add(Item("Cài đặt", ShowSettings));
         menu.Add(Item("Thoát BlueDrive", () => _ = QuitAsync()));
         _tray.Menu = menu;
-        TrayIcon.SetIcons(this, [_tray]);
+    }
+
+    /// <summary>Stops syncing cleanly, then Velopack installs the downloaded version and starts it again.</summary>
+    public async Task RestartToUpdateAsync()
+    {
+        Log.Information("Khởi động lại để cập nhật lên {Version}", Updater.PendingVersion);
+        _tray.IsVisible = false;
+        await _host.DisposeAsync();
+        Updater.ApplyAndRestart();
     }
 
     private static NativeMenuItem Item(string header, Action action)
@@ -235,7 +314,7 @@ public partial class App : Application
         _flyout?.Hide();
         if (_wizard is null)
         {
-            _wizard = new WizardWindow(new WizardViewModel(_host, ServerFromDeployment()));
+            _wizard = new WizardWindow(new WizardViewModel(_host, _deployment.Server ?? _host.Settings.DeploymentServer));
             _wizard.Closed += (_, _) =>
             {
                 _wizard = null;
@@ -253,23 +332,13 @@ public partial class App : Application
         w.Activate();
     }
 
-    /// <summary>Server preset by the installer (/server=…) or a deploy.json next to the app (mass deployment).</summary>
-    private static string? ServerFromDeployment()
-    {
-        var args = Environment.GetCommandLineArgs();
-        var arg = args.FirstOrDefault(a => a.StartsWith("/server=", StringComparison.OrdinalIgnoreCase) || a.StartsWith("--server=", StringComparison.OrdinalIgnoreCase));
-        if (arg is not null) return arg[(arg.IndexOf('=') + 1)..];
-        var file = Path.Combine(AppContext.BaseDirectory, "deploy.json");
-        if (!File.Exists(file)) return null;
-        try { return System.Text.Json.JsonDocument.Parse(File.ReadAllText(file)).RootElement.GetProperty("server").GetString(); }
-        catch (Exception ex) when (ex is System.Text.Json.JsonException or KeyNotFoundException) { return null; }
-    }
-
     public async Task QuitAsync()
     {
         Log.Information("BlueDrive Desktop thoát");
         _tray.IsVisible = false;
+        if (_updateTimer is not null) await _updateTimer.DisposeAsync();
         await _host.DisposeAsync();
+        Updater.ApplyOnExit();
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime d) d.Shutdown();
     }
 

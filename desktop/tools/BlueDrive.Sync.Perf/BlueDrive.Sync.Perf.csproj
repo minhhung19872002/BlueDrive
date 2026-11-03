@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <RootNamespace>BlueDrive.Sync.Perf</RootNamespace>
+    <AssemblyName>bluedrive-perf</AssemblyName>
+    <Description>Performance measurements of BlueDrive Desktop (spec section 10): scale with Files On-Demand, latency against a real server.</Description>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BlueDrive.Sync.Agent\BlueDrive.Sync.Agent.csproj" />
+    <ProjectReference Include="..\..\src\BlueDrive.Sync.Windows\BlueDrive.Sync.Windows.csproj" />
+  </ItemGroup>
+</Project>

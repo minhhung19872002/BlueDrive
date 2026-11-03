@@ -43,6 +43,7 @@ const layoutRoutes: AppRoute[] = [
   { path: 'change-password', Component: lazy(() => import('@/pages/account/ChangePasswordPage')) },
   { path: 'sessions', Component: lazy(() => import('@/pages/account/MySessionsPage')) },
   { path: 'devices', Component: lazy(() => import('@/pages/account/MyDevicesPage')) },
+  { path: 'desktop-app', Component: lazy(() => import('@/pages/account/DesktopAppPage')) },
   { path: 'support', Component: lazy(() => import('@/pages/account/SupportPage')) },
   { path: 'reports', Component: lazy(() => import('@/pages/ops/ReportsPage')) },
 

@@ -2,7 +2,9 @@
 
 Tài liệu Bước 0 của Sync-Phase 8b: tóm tắt tài liệu chính thức và mã nguồn ONLYOFFICE, cách BlueDrive tích hợp, và những gì còn lại.
 Tham khảo ngày 03/11/2026 (tài liệu API Desktop Editors hiện hành; mã nguồn nhánh `master` của `ONLYOFFICE/desktop-apps`,
-`ONLYOFFICE/desktop-sdk`).
+`ONLYOFFICE/desktop-sdk`). **Phiên bản đã kiểm chứng: ONLYOFFICE Desktop Editors 10.0.0.169 (Windows x64)**, cài bằng chính BlueDrive Desktop
+(Sync-Phase 9): tải bộ cài chính thức, kiểm chữ ký Ascensio System SIA, cài im lặng, chép provider; mở tài liệu bằng liên kết vé →
+tab soạn thảo, chế độ chỉnh sửa, đã đăng nhập (ảnh `desktop/docs/images/onlyoffice-desktop-coedit.png`).
 
 ## 1. Kết quả nghiên cứu
 
@@ -35,7 +37,7 @@ mở thành tab soạn thảo**; tham số `--view=`/`--review=` chỉ dành cho
 bỏ hành vi đó, BlueDrive vẫn còn lối "Cùng soạn thảo trên trình duyệt".
 
 ### 1.4. Cài đặt im lặng
-Bộ cài Windows chính thức (Inno Setup, `package/inno` trong `desktop-apps`): `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART` (tham số chuẩn Inno);
+Bộ cài Windows chính thức (Inno Setup, `package/inno` trong `desktop-apps`): `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART` (tham số chuẩn Inno, đã chạy thử với 10.0.0.169);
 bản MSI: `msiexec /i … /qn`. Phần tải, kiểm chữ ký và cài kèm thuộc Sync-Phase 9 (bộ cài BlueDrive Desktop).
 
 ## 2. Cách BlueDrive tích hợp
@@ -59,8 +61,10 @@ bản MSI: `msiexec /i … /qn`. Phần tải, kiểm chữ ký và cài kèm th
 - `DesktopTests.OnlyOffice_provider_is_generated_…`: sinh `config.json` theo máy chủ, trạng thái Missing → Ready → Outdated, cài vào thư mục ONLYOFFICE.
 
 ## 4. Còn lại (chưa làm)
-- Kiểm thử thật với ONLYOFFICE Desktop Editors trên 2 máy Windows + 1 người trên web (máy phát triển chưa cài ONLYOFFICE).
-- Cài kèm ONLYOFFICE trong bộ cài (tùy chọn mặc định bật, kiểm chữ ký, cài im lặng, gỡ provider khi gỡ BlueDrive) — Sync-Phase 9.
+- Kiểm thử 3 người cùng lúc (2 máy Windows dùng ONLYOFFICE Desktop Editors + 1 người trên web): mới kiểm chứng trên 1 máy (mở bằng vé, vào chế độ chỉnh sửa;
+  lưu từ ứng dụng thành phiên bản dùng chung callback của Document Server); việc cùng soạn nhiều người do Document Server đảm nhận, đã kiểm thử trên web.
+- Cài kèm ONLYOFFICE: đã làm ở Sync-Phase 9 (`OnlyOfficeSetup`, tùy chọn ở trình hướng dẫn mặc định bật, chính sách `InstallOnlyOffice`,
+  gỡ provider và hỏi gỡ ONLYOFFICE khi gỡ BlueDrive).
 - Tùy chọn "nhấp đúp tệp Office → luôn mở chế độ cùng soạn", hiện "ai đang chỉnh sửa" trong flyout/Explorer và cảnh báo khóa mềm khi mở bản
   trên máy bằng Word trong lúc có phiên cùng soạn: cần máy chủ theo dõi người đang mở tài liệu (callback trạng thái 1 của Document Server)
   và cột trạng thái tùy chỉnh của Explorer (cần gói MSIX) — chưa làm.

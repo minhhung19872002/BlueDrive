@@ -31,6 +31,24 @@ public class PhysicalFileSystem(string root, bool useRecycleBin = true) : ILocal
         while (stack.Count > 0)
         {
             var dir = stack.Pop();
+            // Windows: one call per folder returns every child with its file id (no handle per file: 100 000 files scan in seconds).
+            if (OperatingSystem.IsWindows() && FastList(dir.FullName) is { } fast)
+            {
+                foreach (var c in fast)
+                {
+                    var abs = Path.Combine(dir.FullName, c.Name);
+                    if (c.Link)
+                    {
+                        Skipped?.Invoke(Rel(abs), "Liên kết tượng trưng / junction không được đồng bộ.");
+                        continue;
+                    }
+                    if (c.Attributes.HasFlag(FileAttributes.Hidden) && c.Attributes.HasFlag(FileAttributes.System)) continue;
+                    var isFolder = c.Attributes.HasFlag(FileAttributes.Directory);
+                    list.Add(new LocalEntry(Rel(abs), isFolder, c.FileId, isFolder ? 0 : c.Size, isFolder ? default : c.MTime));
+                    if (isFolder) stack.Push(new DirectoryInfo(abs));
+                }
+                continue;
+            }
             IEnumerable<FileSystemInfo> children;
             try { children = dir.EnumerateFileSystemInfos("*", options).ToList(); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -84,11 +102,29 @@ public class PhysicalFileSystem(string root, bool useRecycleBin = true) : ILocal
     {
         if (path.Length == 0) return new LocalEntry("", true, "root", 0, default);
         var abs = Abs(path);
+        if (OperatingSystem.IsWindows() && FastStat(abs) is { } fast)
+            return fast.Link
+                ? null
+                : new LocalEntry(path, fast.Attributes.HasFlag(FileAttributes.Directory), fast.FileId,
+                    fast.Attributes.HasFlag(FileAttributes.Directory) ? 0 : fast.Size, fast.Attributes.HasFlag(FileAttributes.Directory) ? default : fast.MTime);
         FileSystemInfo info = Directory.Exists(abs) ? new DirectoryInfo(abs) : new FileInfo(abs);
         if (!info.Exists || info.LinkTarget is not null) return null;
         var e = Entry(info);
         // Keep the caller's spelling of the path (the disk may differ only in case).
         return e is null ? null : e with { Path = ActualCase(path, e.Path) };
+    }
+
+    /// <summary>Attributes only (no handle, no file id): used before creating items, 100 000s of times on a first sync.</summary>
+    public bool Exists(string path, out bool isFolder)
+    {
+        isFolder = false;
+        if (path.Length == 0) { isFolder = true; return true; }
+        var info = new FileInfo(Abs(path));
+        if (!info.Exists && !Directory.Exists(info.FullName)) return false;
+        var attrs = info.Attributes;
+        if (attrs.HasFlag(FileAttributes.ReparsePoint) && info.LinkTarget is not null) return false; // symbolic links are not ours
+        isFolder = attrs.HasFlag(FileAttributes.Directory);
+        return true;
     }
 
     private static string ActualCase(string requested, string onDisk) =>
@@ -187,6 +223,70 @@ public class PhysicalFileSystem(string root, bool useRecycleBin = true) : ILocal
         abs.Length >= 248 && !abs.StartsWith(@"\\?\", StringComparison.Ordinal) ? @"\\?\" + abs : abs;
 
     /// <summary>NTFS / ReFS file id (volume serial + 128-bit id) on Windows; elsewhere the path (renames are then seen as delete + create).</summary>
+    private readonly record struct FastEntry(string Name, FileAttributes Attributes, string FileId, long Size, DateTime MTime, bool Link);
+
+    /// <summary>
+    /// Children of a folder with GetFileInformationByHandleEx(FileIdExtdDirectoryInfo): ids, sizes, dates and attributes in a few calls.
+    /// Null when the volume does not support it (FAT, some network shares): the caller falls back to one handle per file.
+    /// </summary>
+    private static List<FastEntry>? FastList(string absDir)
+    {
+        using var h = Native.CreateFileW(LongPath(absDir), Native.FILE_LIST_DIRECTORY, FileShare.ReadWrite | FileShare.Delete, IntPtr.Zero, FileMode.Open,
+            Native.FILE_FLAG_BACKUP_SEMANTICS, IntPtr.Zero);
+        if (h.IsInvalid) return null;
+        if (!Native.GetFileInformationByHandleEx(h, Native.FileIdInfo, out var self, (uint)Marshal.SizeOf<Native.FILE_ID_INFO>())) return null;
+        var volume = self.VolumeSerialNumber.ToString("x");
+        var list = new List<FastEntry>();
+        var buffer = new byte[64 * 1024];
+        var infoClass = Native.FileIdExtdDirectoryRestartInfo;
+        while (true)
+        {
+            if (!Native.GetFileInformationByHandleEx(h, infoClass, buffer, (uint)buffer.Length))
+            {
+                var err = Marshal.GetLastPInvokeError();
+                return err == Native.ERROR_NO_MORE_FILES ? list : null;
+            }
+            infoClass = Native.FileIdExtdDirectoryInfo;
+            var offset = 0;
+            while (true)
+            {
+                var span = buffer.AsSpan(offset);
+                var next = BitConverter.ToInt32(span);
+                var attrs = (FileAttributes)BitConverter.ToUInt32(span[56..]);
+                var nameBytes = BitConverter.ToInt32(span[60..]);
+                var tag = BitConverter.ToUInt32(span[68..]);
+                var name = System.Text.Encoding.Unicode.GetString(span.Slice(88, nameBytes));
+                if (name is not ("." or ".."))
+                {
+                    var link = attrs.HasFlag(FileAttributes.ReparsePoint) && tag is Native.IO_REPARSE_TAG_SYMLINK or Native.IO_REPARSE_TAG_MOUNT_POINT;
+                    var id = $"{volume}:{Convert.ToHexStringLower(span.Slice(72, 16))}";
+                    var mtime = DateTime.FromFileTimeUtc(BitConverter.ToInt64(span[24..]));
+                    list.Add(new FastEntry(name, attrs, id, BitConverter.ToInt64(span[40..]), mtime, link));
+                }
+                if (next == 0) break;
+                offset += next;
+            }
+        }
+    }
+
+    /// <summary>One handle, three queries: id, attributes / reparse tag, size and date. Null when missing (or on failure: slow path).</summary>
+    private static FastEntry? FastStat(string abs)
+    {
+        using var h = Native.CreateFileW(LongPath(abs), 0x80 /* FILE_READ_ATTRIBUTES */, FileShare.ReadWrite | FileShare.Delete, IntPtr.Zero, FileMode.Open,
+            Native.FILE_FLAG_BACKUP_SEMANTICS | Native.FILE_FLAG_OPEN_REPARSE_POINT, IntPtr.Zero);
+        if (h.IsInvalid) return null;
+        if (!Native.GetFileInformationByHandleEx(h, Native.FileIdInfo, out var id, (uint)Marshal.SizeOf<Native.FILE_ID_INFO>())) return null;
+        if (!Native.GetFileInformationByHandle(h, out var basic)) return null;
+        var attrs = (FileAttributes)basic.FileAttributes;
+        var link = false;
+        if (attrs.HasFlag(FileAttributes.ReparsePoint) && Native.GetAttributeTagInfo(h, Native.FileAttributeTagInfo, out var tag,
+                (uint)Marshal.SizeOf<Native.FILE_ATTRIBUTE_TAG_INFO>()))
+            link = tag.ReparseTag is Native.IO_REPARSE_TAG_SYMLINK or Native.IO_REPARSE_TAG_MOUNT_POINT;
+        var size = ((long)basic.FileSizeHigh << 32) | basic.FileSizeLow;
+        var mtime = DateTime.FromFileTimeUtc(((long)(uint)basic.LastWriteTime.dwHighDateTime << 32) | (uint)basic.LastWriteTime.dwLowDateTime);
+        return new FastEntry(Path.GetFileName(abs), attrs, $"{id.VolumeSerialNumber:x}:{Convert.ToHexStringLower(id.FileId)}", size, mtime, link);
+    }
+
     internal static string FileId(string abs, bool isFolder)
     {
         if (!OperatingSystem.IsWindows()) return "p:" + abs;
@@ -205,6 +305,20 @@ public class PhysicalFileSystem(string root, bool useRecycleBin = true) : ILocal
         public const uint FILE_FLAG_BACKUP_SEMANTICS = 0x02000000;
         public const uint FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000;
         public const int FileIdInfo = 18;
+        public const int FileIdExtdDirectoryInfo = 19, FileIdExtdDirectoryRestartInfo = 20, FileAttributeTagInfo = 9;
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct FILE_ATTRIBUTE_TAG_INFO
+        {
+            public uint FileAttributes;
+            public uint ReparseTag;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true, EntryPoint = "GetFileInformationByHandleEx")]
+        public static extern bool GetAttributeTagInfo(SafeFileHandle h, int infoClass, out FILE_ATTRIBUTE_TAG_INFO info, uint size);
+        public const uint FILE_LIST_DIRECTORY = 0x1;
+        public const int ERROR_NO_MORE_FILES = 18;
+        public const uint IO_REPARSE_TAG_SYMLINK = 0xA000000C, IO_REPARSE_TAG_MOUNT_POINT = 0xA0000003;
 
         [StructLayout(LayoutKind.Sequential)]
         public unsafe struct FILE_ID_INFO
@@ -236,6 +350,9 @@ public class PhysicalFileSystem(string root, bool useRecycleBin = true) : ILocal
 
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool GetFileInformationByHandleEx(SafeFileHandle h, int infoClass, out FILE_ID_INFO info, uint size);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool GetFileInformationByHandleEx(SafeFileHandle h, int infoClass, byte[] buffer, uint size);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool GetFileInformationByHandle(SafeFileHandle h, out BY_HANDLE_FILE_INFORMATION info);
