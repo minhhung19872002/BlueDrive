@@ -17,6 +17,48 @@ public sealed class SyncEngineOptions
     public int MaxRounds { get; init; } = 12;
     /// <summary>Converts the local time used in conflict names (tests pass a fixed zone).</summary>
     public TimeZoneInfo TimeZone { get; init; } = TimeZoneInfo.Local;
+    /// <summary>Where large files are snapshotted before upload (null = in memory, tests).</summary>
+    public string? SnapshotDirectory { get; init; }
+    /// <summary>Files up to this size are snapshotted in memory.</summary>
+    public long MemorySnapshotLimit { get; init; } = 32L * 1024 * 1024;
+}
+
+/// <summary>Write-through stream that hashes what passes (downloads are verified without a second read).</summary>
+public sealed class HashingStream(Stream inner) : Stream
+{
+    private readonly IncrementalHash _sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+
+    public string Hash() => Convert.ToHexStringLower(_sha.GetCurrentHash());
+    public override bool CanRead => false;
+    public override bool CanSeek => false;
+    public override bool CanWrite => true;
+    public override long Length => inner.Length;
+    public override long Position { get => inner.Position; set => throw new NotSupportedException(); }
+    public override void Flush() => inner.Flush();
+    public override Task FlushAsync(CancellationToken ct) => inner.FlushAsync(ct);
+    public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+    public override void SetLength(long value) => throw new NotSupportedException();
+
+    public override void Write(byte[] buffer, int offset, int count)
+    {
+        _sha.AppendData(buffer, offset, count);
+        inner.Write(buffer, offset, count);
+    }
+
+    public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken ct = default)
+    {
+        _sha.AppendData(buffer.Span);
+        await inner.WriteAsync(buffer, ct);
+    }
+
+    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct) => WriteAsync(buffer.AsMemory(offset, count), ct).AsTask();
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _sha.Dispose(); // the destination belongs to the caller
+        base.Dispose(disposing);
+    }
 }
 
 public sealed record SyncPassResult(int Operations, int MassDeletePending, IReadOnlyList<string> Errors);
@@ -432,14 +474,40 @@ public sealed class SyncEngine(
     // ERROR_SHARING_VIOLATION (32) / ERROR_LOCK_VIOLATION (33) on Windows.
     private static bool IsSharingViolation(Exception ex) => (ex.HResult & 0xFFFF) is 32 or 33;
 
+    /// <summary>Selective sync (folder level): folders of this root the user chose not to have on this computer.</summary>
+    public static string ExcludedFoldersKey(string rootId) => "excluded_folders:" + rootId;
+
+    public HashSet<string> ExcludedFolders(string rootId) =>
+        state.GetAccount(ExcludedFoldersKey(rootId)) is { } json ? JsonSerializer.Deserialize<HashSet<string>>(json) ?? [] : [];
+
     private Ctx Load(RootState root)
     {
         var tree = state.RemoteTree(root.RootId);
         var names = LocalNames(tree);
         var items = state.Items(root.RootId);
+        // Excluded folders (with everything inside) are left out of all three trees: never downloaded, never seen as deleted.
+        var excludedPaths = new List<string>();
+        var excluded = ExcludedFolders(root.RootId);
+        if (excluded.Count > 0)
+        {
+            var gone = new HashSet<string>();
+            foreach (var id in excluded.Where(tree.ContainsKey))
+            {
+                var parts = new List<string>();
+                for (var (cur, guard) = ((string?)id, 0); cur is not null && guard < 256 && tree.TryGetValue(cur, out var t); cur = t.ParentId, guard++)
+                    parts.Add(names.GetValueOrDefault(t.Id, t.Name));
+                parts.Reverse();
+                excludedPaths.Add(string.Join('/', parts));
+                gone.UnionWith(Subtree(tree, id));
+            }
+            tree = tree.Where(kv => !gone.Contains(kv.Key)).ToDictionary();
+            names = LocalNames(tree);
+            items = items.Where(i => !gone.Contains(i.RemoteId)).ToList();
+        }
         var local = fs.Scan(root.LocalPath)
             .Select(e => e with { Path = Rel(root.LocalPath, e.Path) })
             .Where(e => !IsExcludedPath(e.Path))
+            .Where(e => !excludedPaths.Any(x => string.Equals(e.Path, x, StringComparison.OrdinalIgnoreCase) || NameMapper.IsUnder(e.Path, x)))
             .ToList();
         var c = new Ctx
         {
@@ -772,14 +840,39 @@ public sealed class SyncEngine(
         return now is not null && now.IsFolder == l.IsFolder && now.FileId == l.FileId && now.Size == l.Size && now.MTime == l.MTime;
     }
 
-    private async Task<(MemoryStream Data, string Hash)> ReadSnapshotAsync(Ctx c, string path, CancellationToken ct)
+    private async Task<(Stream Data, string Hash)> ReadSnapshotAsync(Ctx c, string path, CancellationToken ct)
     {
-        // Snapshot the content first: the user may keep editing while the upload runs.
-        var ms = new MemoryStream();
-        await using (var s = fs.OpenRead(Abs(c, path))) await s.CopyToAsync(ms, ct);
-        var hash = Convert.ToHexStringLower(SHA256.HashData(ms.ToArray()));
-        ms.Position = 0;
-        return (ms, hash);
+        // Snapshot the content first: the user may keep editing while the upload runs. Large files go to a temporary file (deleted on
+        // close) instead of memory; the SHA-256 is computed while copying.
+        await using var s = fs.OpenRead(Abs(c, path));
+        Stream copy = _o.SnapshotDirectory is { } dir && s.CanSeek && s.Length > _o.MemorySnapshotLimit
+            ? NewSnapshotFile(dir)
+            : new MemoryStream();
+        try
+        {
+            using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+            var buffer = new byte[1 << 20];
+            int n;
+            while ((n = await s.ReadAsync(buffer, ct)) > 0)
+            {
+                sha.AppendData(buffer, 0, n);
+                await copy.WriteAsync(buffer.AsMemory(0, n), ct);
+            }
+            copy.Position = 0;
+            return (copy, Convert.ToHexStringLower(sha.GetHashAndReset()));
+        }
+        catch
+        {
+            await copy.DisposeAsync();
+            throw;
+        }
+    }
+
+    private static FileStream NewSnapshotFile(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        return new FileStream(Path.Combine(dir, $"{Guid.NewGuid():N}.snapshot"), FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 1 << 16,
+            FileOptions.DeleteOnClose | FileOptions.Asynchronous);
     }
 
     private async Task<bool> UploadNewAsync(Ctx c, LocalEntry l, CancellationToken ct)
@@ -843,12 +936,13 @@ public sealed class SyncEngine(
             await _placeholders.CreatePlaceholderAsync(Abs(c, path), r, ct);
             return true;
         }
-        var buffer = new MemoryStream();
-        await remote.DownloadAsync(r.Id, buffer, ct);
-        var hash = Convert.ToHexStringLower(SHA256.HashData(buffer.ToArray()));
-        if (r.Hash is not null && hash != r.Hash) throw new RemoteTransientException("Nội dung tải xuống không khớp mã băm, sẽ thử lại.");
-        buffer.Position = 0;
-        await fs.WriteAtomicAsync(Abs(c, path), dest => buffer.CopyToAsync(dest, ct), r.ModifiedAt, ct);
+        // Streamed straight into the temporary file of the atomic write; a wrong hash aborts the write (the old file stays).
+        await fs.WriteAtomicAsync(Abs(c, path), async dest =>
+        {
+            await using var hashing = new HashingStream(dest);
+            await remote.DownloadAsync(r.Id, hashing, ct);
+            if (r.Hash is not null && hashing.Hash() != r.Hash) throw new RemoteTransientException("Nội dung tải xuống không khớp mã băm, sẽ thử lại.");
+        }, r.ModifiedAt, ct);
         return true;
     }
 

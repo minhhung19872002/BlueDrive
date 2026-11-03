@@ -49,6 +49,7 @@ public sealed class AccountSession : IAsyncDisposable
         });
         var lastConflicts = -1;
         var lastState = AgentState.Starting;
+        var quotaWarned = false;
         Agent.StatusChanged += s =>
         {
             if (s.State != AgentState.Syncing) Transfer = null;
@@ -58,6 +59,11 @@ public sealed class AccountSession : IAsyncDisposable
             lastConflicts = conflicts;
             if (s.State != lastState && s.State is AgentState.NeedsSignIn or AgentState.Revoked or AgentState.UpdateRequired or AgentState.Error)
                 Notify?.Invoke(StateTitle(s.State), s.Message);
+            // Out of space (413): the changes stay on this computer and go up once space is freed (spec 6.5).
+            var full = s.Problems.FirstOrDefault(p => p.Contains("Không đủ dung lượng", StringComparison.Ordinal));
+            if (full is not null && !quotaWarned)
+                Notify?.Invoke("Hết dung lượng BlueDrive", "Một số tệp chưa tải lên được vì hết dung lượng. Thay đổi vẫn được giữ trên máy và sẽ tự tải lên khi có chỗ trống.");
+            quotaWarned = full is not null;
             if (s.State == AgentState.Idle && QuotaPercent >= 95 && lastState == AgentState.Syncing)
                 Notify?.Invoke("Sắp hết dung lượng", $"Bạn đã dùng {QuotaPercent}% dung lượng BlueDrive.");
             lastState = s.State;
@@ -120,6 +126,14 @@ public sealed class AccountSession : IAsyncDisposable
     public IReadOnlyList<ConflictEntry> Conflicts() => Read(db => db.Conflicts(), []);
 
     public IReadOnlyList<RootState> RootStates() => Read(db => db.Roots(), []);
+
+    /// <summary>Folders of a root (selective sync tree) and the ones left out of this computer.</summary>
+    public IReadOnlyList<RemoteItem> FoldersOf(string rootId) => Read(db => db.RemoteTree(rootId).Values.Where(i => i.IsFolder).ToList(), []);
+
+    public IReadOnlySet<string> ExcludedFoldersOf(string rootId) => Read(db =>
+        db.GetAccount(SyncEngine.ExcludedFoldersKey(rootId)) is { } json
+            ? System.Text.Json.JsonSerializer.Deserialize<HashSet<string>>(json) ?? []
+            : new HashSet<string>(), (IReadOnlySet<string>)new HashSet<string>());
 
     /// <summary>Absolute path of an activity / conflict path (stored relative to its root, or to the sync folder).</summary>
     public string Locate(string rootIdOrEmpty, string path)

@@ -36,6 +36,18 @@ public sealed class AppHost : IAsyncDisposable
         _freeUp = new Timer(_ => FreeUpUnused(), null, TimeSpan.FromMinutes(10), TimeSpan.FromHours(6));
     }
 
+    private ConditionsMonitor? _conditions;
+    private string? _autoPause;
+
+    /// <summary>Starts watching metered network / battery (not in tests: they never call it).</summary>
+    public void WatchConditions() => _conditions ??= new ConditionsMonitor(() => Settings, reason =>
+    {
+        _autoPause = reason;
+        foreach (var s in Sessions.ToList()) s.Agent.SetAutoPause(reason);
+        if (reason is not null) Log.Information("{Reason}", reason);
+        Changed?.Invoke();
+    });
+
     public async Task StartAsync()
     {
         foreach (var acc in Store.Load()) await StartSessionAsync(acc);
@@ -53,6 +65,7 @@ public sealed class AppHost : IAsyncDisposable
         s.Agent.Activity += (action, path) => Log.Information("[{Account}] {Action}: {Path}", acc.Username, action, path);
         Sessions.Add(s);
         RegisterShell();
+        if (_autoPause is not null) s.Agent.SetAutoPause(_autoPause);
         try { await s.StartAsync(); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or HttpRequestException)
         {
@@ -138,6 +151,7 @@ public sealed class AppHost : IAsyncDisposable
         settings.Save(Store.BaseDir);
         _confirmed = true;
         ApplySettings();
+        _conditions?.Evaluate();
         Changed?.Invoke();
     }
 
@@ -184,6 +198,7 @@ public sealed class AppHost : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await _freeUp.DisposeAsync();
+        _conditions?.Dispose();
         foreach (var s in Sessions.ToList()) await s.DisposeAsync();
     }
 }

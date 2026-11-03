@@ -107,6 +107,20 @@ public sealed class DesktopTests : IDisposable
     }
 
     [Fact]
+    public void Metered_network_and_low_battery_pause_unless_turned_off()
+    {
+        var s = new AppSettings();
+        ConditionsMonitor.Reason(s, metered: false, onBattery: false, 100).Should().BeNull();
+        ConditionsMonitor.Reason(s, metered: true, onBattery: false, 100).Should().Contain("mạng tính phí");
+        ConditionsMonitor.Reason(s, metered: false, onBattery: true, 19).Should().Contain("pin dưới 20%");
+        ConditionsMonitor.Reason(s, metered: false, onBattery: true, 20).Should().BeNull();
+        ConditionsMonitor.Reason(s, metered: false, onBattery: false, 5).Should().BeNull("plugged in");
+        s.PauseOnMetered = false;
+        s.PauseOnLowBattery = false;
+        ConditionsMonitor.Reason(s, metered: true, onBattery: true, 5).Should().BeNull();
+    }
+
+    [Fact]
     public void Explorer_context_menu_is_limited_to_the_sync_folders_and_parses_its_commands()
     {
         ExplorerMenu.AppliesTo([@"C:\Users\a\BlueDrive", @"D:\BlueDrive - x\"])

@@ -85,6 +85,7 @@ public sealed class SyncAgent : IAsyncDisposable
         var server = BlueDriveHttp.Normalize(o.Server);
         _auth = new DesktopAuthenticator(server, o.HandlerFactory?.Invoke());
         _http = BlueDriveHttp.Create(server, o.Tokens, _auth, o.HandlerFactory?.Invoke());
+        o.Transfer.Resume ??= new DbResumeStore(_db);
         _remote = new HttpRemoteStore(_http, o.Transfer);
         Api = new BlueDriveApi(_http);
         if (o.OnDemand is not null)
@@ -96,14 +97,23 @@ public sealed class SyncAgent : IAsyncDisposable
         _fs = _platform?.FileSystem ?? new PhysicalFileSystem(o.SyncFolder, o.UseRecycleBin);
         _fs.Skipped += (path, why) => Activity?.Invoke("Bỏ qua", $"{path}: {why}");
         _engine = new SyncEngine(_db, _remote, _fs, SystemClock.Instance,
-            new SyncEngineOptions { UserDisplayName = o.UserDisplayName, DeviceName = o.DeviceName }, _platform?.Placeholders);
+            new SyncEngineOptions { UserDisplayName = o.UserDisplayName, DeviceName = o.DeviceName, SnapshotDirectory = SnapshotDir }, _platform?.Placeholders);
         _engine.Activity += (action, path) => Activity?.Invoke(action, path);
     }
 
     // ---------------------------------------------------------------- control
 
+    /// <summary>Upload snapshots of large files (temporary; leftovers of a crash are removed at start).</summary>
+    private string SnapshotDir => Path.Combine(Path.GetDirectoryName(Path.GetFullPath(_o.StateDbPath))!, "snapshots");
+
     public async Task StartAsync(CancellationToken ct = default)
     {
+        if (Directory.Exists(SnapshotDir))
+            foreach (var f in Directory.EnumerateFiles(SnapshotDir))
+            {
+                try { File.Delete(f); }
+                catch (IOException) { }
+            }
         if (_db.GetAccount(InitializedKey) is null)
         {
             // First start: the folder is created (or adopted when it already holds files: they are matched by path + hash).
@@ -157,6 +167,22 @@ public sealed class SyncAgent : IAsyncDisposable
 
     public bool IsPaused => _pausedUntil is { } u && u > DateTime.UtcNow;
 
+    private string? _autoPause;
+
+    /// <summary>
+    /// Automatic pause (metered network, low battery — spec 6.5), independent from the user's pause: null resumes. Opening a Files On-Demand
+    /// file still downloads it.
+    /// </summary>
+    public void SetAutoPause(string? reason)
+    {
+        if (_autoPause == reason) return;
+        _autoPause = reason;
+        if (reason is not null) SetStatus(AgentState.Paused, reason);
+        else RequestRemote();
+    }
+
+    public string? AutoPauseReason => _autoPause;
+
     /// <summary>Workspaces / roots of the account as last seen (name, quota) — the flyout header and the selective sync list.</summary>
     public IReadOnlyList<HttpRemoteStore.RootDto> Roots { get; private set; } = [];
 
@@ -196,6 +222,53 @@ public sealed class SyncAgent : IAsyncDisposable
         _db.SetAccount(ExcludedRootsKey, System.Text.Json.JsonSerializer.Serialize(excluded));
         RequestRemote();
         return true;
+    }
+
+    /// <summary>
+    /// Selective sync, folder level: stop having a folder (and everything inside) on this computer — removed to the Recycle Bin once all its
+    /// changes are on BlueDrive — or have it again. Returns false when it still has changes that could not be synced.
+    /// </summary>
+    public async Task<bool> SetFolderIncludedAsync(string rootId, string folderId, bool include, CancellationToken ct = default)
+    {
+        await _pass.WaitAsync(ct);
+        try
+        {
+            var key = SyncEngine.ExcludedFoldersKey(rootId);
+            var excluded = _engine.ExcludedFolders(rootId);
+            if (include) excluded.Remove(folderId);
+            else
+            {
+                var result = await _engine.SyncAsync(ct);
+                if (result.Errors.Count > 0 || result.MassDeletePending > 0) return false;
+                var root = _db.GetRoot(rootId);
+                var items = _db.Items(rootId);
+                var byRemote = items.ToDictionary(i => i.RemoteId);
+                if (root is not null && byRemote.TryGetValue(folderId, out var folder))
+                {
+                    var path = LocalIndex.PathOf(folder, byRemote);
+                    var inside = items.Where(i => i.RemoteId == folderId || IsInside(i, folderId, byRemote)).ToList();
+                    var rel = root.LocalPath.Length == 0 ? path : NameMapper.Combine(root.LocalPath, path);
+                    if (_fs.Stat(rel) is not null) _fs.Delete(rel);
+                    foreach (var i in inside) _db.DeleteItem(i.LocalId);
+                }
+                excluded.Add(folderId);
+            }
+            _db.SetAccount(key, System.Text.Json.JsonSerializer.Serialize(excluded));
+        }
+        finally { _pass.Release(); }
+        RequestRemote();
+        return true;
+    }
+
+    private static bool IsInside(BaseItem item, string folderId, IReadOnlyDictionary<string, BaseItem> byRemote)
+    {
+        var cur = item.ParentRemoteId;
+        for (var guard = 0; cur is not null && guard < 256; guard++)
+        {
+            if (cur == folderId) return true;
+            cur = byRemote.TryGetValue(cur, out var p) ? p.ParentRemoteId : null;
+        }
+        return false;
     }
 
     /// <summary>Choices of the conflict window (spec 8.4).</summary>
@@ -301,7 +374,7 @@ public sealed class SyncAgent : IAsyncDisposable
     {
         while (await WaitDueAsync(ct))
         {
-            if (IsPaused) continue;
+            if (IsPaused || _autoPause is not null) continue;
             if (_pausedUntil is not null)
             {
                 _pausedUntil = null; // the pause ran out
@@ -506,4 +579,12 @@ public sealed class SyncAgent : IAsyncDisposable
         _db.Dispose();
         _stop.Dispose();
     }
+}
+
+/// <summary>Unfinished tus uploads remembered in the account's state database (survive a restart).</summary>
+internal sealed class DbResumeStore(SyncStateDb db) : IUploadResumeStore
+{
+    private static string Key(string k) => "tus:" + Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(k)));
+    public string? Get(string key) => db.GetAccount(Key(key));
+    public void Set(string key, string? url) => db.SetAccount(Key(key), url);
 }

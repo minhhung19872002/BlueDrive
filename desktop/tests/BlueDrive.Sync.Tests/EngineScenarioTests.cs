@@ -271,4 +271,32 @@ public class EngineScenarioTests : IDisposable
         await _a.SyncAsync();
         _remote.Tree()["Báo cáo: quý 1?.txt"].Should().Be(Content.Hash(Content.Of("1b")));
     }
+
+    [Fact]
+    public async Task Selective_sync_leaves_an_excluded_folder_out_until_it_is_included_again()
+    {
+        var clock = new FakeClock(DateTime.UtcNow);
+        var remote = new FakeRemoteStore(clock);
+        remote.WebCreateFolder(null, "Lưu trữ");
+        remote.WebUpload("Lưu trữ", "cũ.pdf", Content.Of("cũ"));
+        remote.WebUpload(null, "mới.docx", Content.Of("mới"));
+        var folderId = remote.FindPath("Lưu trữ")!;
+        using var b = new Device("PC-B", remote, clock);
+        b.Db.SetAccount(SyncEngine.ExcludedFoldersKey(FakeRemoteStore.Root), $"[\"{folderId}\"]");
+
+        await b.SyncAsync();
+        b.Fs.Exists("mới.docx").Should().BeTrue();
+        b.Fs.Exists("Lưu trữ").Should().BeFalse("excluded folders are not downloaded");
+
+        // Changes inside the excluded folder on the web, and a local folder of the same name, do not interfere.
+        remote.WebUpload("Lưu trữ", "thêm.pdf", Content.Of("thêm"));
+        (await b.SyncAsync()).Operations.Should().Be(0);
+        remote.Tree().Keys.Should().Contain("Lưu trữ/thêm.pdf");
+
+        // Included again: it comes down.
+        b.Db.SetAccount(SyncEngine.ExcludedFoldersKey(FakeRemoteStore.Root), "[]");
+        await b.SyncAsync();
+        b.Fs.Read("Lưu trữ/thêm.pdf").Should().Equal(Content.Of("thêm"));
+        b.Fs.Read("Lưu trữ/cũ.pdf").Should().Equal(Content.Of("cũ"));
+    }
 }

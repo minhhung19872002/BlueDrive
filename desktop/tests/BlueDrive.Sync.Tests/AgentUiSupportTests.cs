@@ -80,6 +80,12 @@ public sealed class AgentUiSupportTests : IDisposable
         a.IsPaused.Should().BeFalse();
         a.PauseFor(Timeout.InfiniteTimeSpan);
         a.Status.Message.Should().Be("Đã tạm dừng đồng bộ.");
+        a.PauseFor(null);
+        a.SetAutoPause("Đã tạm dừng: đang dùng mạng tính phí.");
+        a.Status.State.Should().Be(AgentState.Paused);
+        a.AutoPauseReason.Should().NotBeNull();
+        a.SetAutoPause(null);
+        a.AutoPauseReason.Should().BeNull();
     }
 
     [Fact]

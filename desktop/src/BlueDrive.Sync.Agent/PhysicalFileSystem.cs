@@ -182,11 +182,15 @@ public class PhysicalFileSystem(string root, bool useRecycleBin = true) : ILocal
 
     // ---------------------------------------------------------------- file identity
 
+    /// <summary>Paths over MAX_PATH need the "\\?\" prefix for direct Win32 calls (.NET adds it by itself).</summary>
+    public static string LongPath(string abs) =>
+        abs.Length >= 248 && !abs.StartsWith(@"\\?\", StringComparison.Ordinal) ? @"\\?\" + abs : abs;
+
     /// <summary>NTFS / ReFS file id (volume serial + 128-bit id) on Windows; elsewhere the path (renames are then seen as delete + create).</summary>
     internal static string FileId(string abs, bool isFolder)
     {
         if (!OperatingSystem.IsWindows()) return "p:" + abs;
-        using var h = Native.CreateFileW(abs, 0, FileShare.ReadWrite | FileShare.Delete, IntPtr.Zero, FileMode.Open,
+        using var h = Native.CreateFileW(LongPath(abs), 0, FileShare.ReadWrite | FileShare.Delete, IntPtr.Zero, FileMode.Open,
             Native.FILE_FLAG_BACKUP_SEMANTICS | Native.FILE_FLAG_OPEN_REPARSE_POINT, IntPtr.Zero);
         if (h.IsInvalid) throw new IOException($"Không mở được {abs} (mã lỗi {Marshal.GetLastPInvokeError()}).");
         if (Native.GetFileInformationByHandleEx(h, Native.FileIdInfo, out var info, (uint)Marshal.SizeOf<Native.FILE_ID_INFO>()))

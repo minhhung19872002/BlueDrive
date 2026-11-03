@@ -47,6 +47,7 @@ public partial class App : Application
     private async Task StartAsync(bool background)
     {
         await _host.StartAsync();
+        _host.WatchConditions();
         var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
         if (_host.Sessions.Count == 0) ShowWizard();
         else if (ExplorerMenu.Parse(args) is not null) await HandleArgsAsync(args);

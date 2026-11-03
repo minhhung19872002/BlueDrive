@@ -10,10 +10,13 @@ namespace BlueDrive.Desktop.ViewModels;
 
 public sealed record AccountRow(AccountSession Session, string Name, string Server, string Folder, string Quota, string Mode);
 
-public partial class RootToggle(SettingsViewModel owner, string id, string name, bool included) : ObservableObject
+public partial class RootToggle(SettingsViewModel owner, string id, string name, bool included, string? rootId = null) : ObservableObject
 {
     public string Id { get; } = id;
     public string Name { get; } = name;
+    /// <summary>Null for a root; the root of a folder.</summary>
+    public string? RootId { get; } = rootId;
+    public ObservableCollection<RootToggle> Children { get; } = [];
     private bool _loading = true;
     [ObservableProperty] private bool _included = included;
 
@@ -29,7 +32,7 @@ public partial class RootToggle(SettingsViewModel owner, string id, string name,
 
     partial void OnIncludedChanged(bool value)
     {
-        if (!_loading) _ = owner.ToggleRootAsync(this, value);
+        if (!_loading) _ = RootId is null ? owner.ToggleRootAsync(this, value) : owner.ToggleFolderAsync(this, value);
     }
 }
 
@@ -60,6 +63,8 @@ public partial class SettingsViewModel : ObservableObject
         _proxyIndex = (int)s.Proxy;
         _proxyAddress = s.ProxyAddress ?? "";
         _startWithWindows = s.StartWithWindows;
+        _pauseOnMetered = s.PauseOnMetered;
+        _pauseOnLowBattery = s.PauseOnLowBattery;
         _notifications = s.Notifications;
         _themeIndex = (int)s.Theme;
         _freeUpIndex = Array.IndexOf(FreeUpDays, s.FreeUpAfterDays) is var i and >= 0 ? i : 0;
@@ -89,6 +94,8 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private int _proxyIndex;
     [ObservableProperty] private string _proxyAddress = "";
     [ObservableProperty] private bool _startWithWindows;
+    [ObservableProperty] private bool _pauseOnMetered;
+    [ObservableProperty] private bool _pauseOnLowBattery;
     [ObservableProperty] private bool _notifications;
     [ObservableProperty] private int _themeIndex;
     [ObservableProperty] private int _freeUpIndex;
@@ -127,6 +134,7 @@ public partial class SettingsViewModel : ObservableObject
         foreach (var r in s.Agent.Roots)
         {
             var t = new RootToggle(this, r.RootId, r.Kind == "personal" ? "Tài liệu của tôi" : r.Name, !excluded.Contains(r.RootId));
+            if (!excluded.Contains(r.RootId)) AddFolders(s, r.RootId, null, t.Children, s.ExcludedFoldersOf(r.RootId), s.FoldersOf(r.RootId).ToLookup(f => f.ParentId));
             t.Loaded();
             RootToggles.Add(t);
         }
@@ -151,6 +159,40 @@ public partial class SettingsViewModel : ObservableObject
             Refresh();
         }
         catch (IOException ex) { SyncMessage = $"Không đổi được chế độ: {ex.Message}"; }
+        finally { Busy = false; }
+    }
+
+    private void AddFolders(AccountSession s, string rootId, string? parentId, ObservableCollection<RootToggle> into, IReadOnlySet<string> excluded,
+        ILookup<string?, Sync.Core.RemoteItem> byParent)
+    {
+        foreach (var f in byParent[parentId].OrderBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase))
+        {
+            var t = new RootToggle(this, f.Id, f.Name, !excluded.Contains(f.Id), rootId);
+            if (!excluded.Contains(f.Id)) AddFolders(s, rootId, f.Id, t.Children, excluded, byParent);
+            t.Loaded();
+            into.Add(t);
+        }
+    }
+
+    public async Task ToggleFolderAsync(RootToggle t, bool include)
+    {
+        if (SelectedAccount is null || t.RootId is null) return;
+        if (!include && Confirm is not null && !await Confirm("Bỏ đồng bộ thư mục",
+                $"Thư mục \"{t.Name}\" và mọi thứ bên trong sẽ được gỡ khỏi máy này (vào Thùng rác) sau khi các thay đổi đã lên BlueDrive. Tư liệu trên BlueDrive không bị ảnh hưởng.", "Bỏ đồng bộ"))
+        {
+            t.Reset(true);
+            return;
+        }
+        Busy = true;
+        try
+        {
+            var ok = await SelectedAccount.Session.Agent.SetFolderIncludedAsync(t.RootId, t.Id, include);
+            SyncMessage = ok
+                ? include ? $"Thư mục \"{t.Name}\" sẽ được tải về máy." : $"Đã bỏ thư mục \"{t.Name}\" khỏi máy này."
+                : $"\"{t.Name}\" còn thay đổi chưa lên BlueDrive, chưa thể bỏ đồng bộ. Hãy thử lại sau.";
+            if (!ok) t.Reset(true);
+            else if (!include) t.Children.Clear();
+        }
         finally { Busy = false; }
     }
 
@@ -251,6 +293,8 @@ public partial class SettingsViewModel : ObservableObject
         s.Proxy = (ProxyChoice)ProxyIndex;
         s.ProxyAddress = ProxyAddress.Trim();
         s.StartWithWindows = StartWithWindows;
+        s.PauseOnMetered = PauseOnMetered;
+        s.PauseOnLowBattery = PauseOnLowBattery;
         s.Notifications = Notifications;
         s.Theme = (ThemeChoice)ThemeIndex;
         s.FreeUpAfterDays = FreeUpDays[Math.Clamp(FreeUpIndex, 0, FreeUpDays.Length - 1)];

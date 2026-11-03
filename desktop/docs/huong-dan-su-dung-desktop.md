@@ -84,8 +84,8 @@ Vào **Cài đặt → Vấn đề → Xử lý xung đột…** để so sánh 
 | Tab | Nội dung |
 |---|---|
 | Tài khoản | Các tài khoản trên máy (thư mục, chế độ, dung lượng), **Thêm tài khoản** (máy chủ khác hoặc tài khoản khác), **Hủy liên kết máy này** (ngừng đồng bộ; tệp đã tải về được giữ, tệp chỉ có trên mạng được gỡ khỏi máy và vẫn còn trên BlueDrive). |
-| Đồng bộ | Mở thư mục BlueDrive; **chọn thư mục hiện trên máy này** (bỏ chọn: thư mục được gỡ khỏi máy sau khi mọi thay đổi đã lên BlueDrive); bật/tắt **tệp theo yêu cầu** (tắt: mọi tệp được tải về trước); **giải phóng dung lượng cho tệp không dùng** sau 1/7/14/30/60 ngày; danh sách tệp không đồng bộ (tệp tạm, tệp khóa của Office, `Thumbs.db`, `desktop.ini`, liên kết tượng trưng…). |
-| Mạng | Giới hạn băng thông tải lên/tải xuống (KB/giây), proxy (theo Windows, không dùng, tự nhập). |
+| Đồng bộ | Mở thư mục BlueDrive; **chọn thư mục hiện trên máy này** — cả thư mục gốc lẫn thư mục con (bỏ chọn: thư mục được gỡ khỏi máy sau khi mọi thay đổi đã lên BlueDrive, vẫn còn nguyên trên BlueDrive); bật/tắt **tệp theo yêu cầu** (tắt: mọi tệp được tải về trước); **giải phóng dung lượng cho tệp không dùng** sau 1/7/14/30/60 ngày; danh sách tệp không đồng bộ (tệp tạm, tệp khóa của Office, `Thumbs.db`, `desktop.ini`, liên kết tượng trưng…). |
+| Mạng | Giới hạn băng thông tải lên/tải xuống (KB/giây), proxy (theo Windows, không dùng, tự nhập), **tạm dừng khi dùng mạng tính phí** và **khi chạy pin dưới 20%** (mặc định bật). |
 | Chung | Khởi động cùng Windows, thông báo, giao diện sáng/tối/theo hệ thống. |
 | Vấn đề | Danh sách xung đột và mục chưa đồng bộ được, với **Xử lý xung đột…**, **Giữ cả hai**, **Thử lại**, **Mở vị trí**. |
 | Giới thiệu | Phiên bản, **Xuất gói chẩn đoán…** (nhật ký + thông tin hệ thống, đã ẩn mã đăng nhập, không chứa nội dung tệp) để gửi bộ phận hỗ trợ, **Gửi yêu cầu hỗ trợ** (mở trang Hỗ trợ của BlueDrive). |
@@ -94,6 +94,7 @@ Vào **Cài đặt → Vấn đề → Xử lý xung đột…** để so sánh 
 
 - **Tệp đang mở trong Word có đồng bộ không?** Có — BlueDrive chờ tới khi bạn lưu và đóng tệp rồi mới tải lên (thông báo "sẽ đồng bộ khi tệp
   được đóng" trong Vấn đề trong lúc chờ).
+- **Tệp rất lớn, mạng chập chờn?** BlueDrive tải tiếp từ chỗ dừng, kể cả sau khi tắt máy; nội dung được kiểm tra bằng mã băm.
 - **Mất mạng thì sao?** Cứ làm việc bình thường với tệp đã có trên máy; khi có mạng, mọi thay đổi tự lên BlueDrive.
 - **Lỡ xóa cả thư mục BlueDrive?** BlueDrive dừng đồng bộ và báo lỗi, **không xóa gì trên máy chủ**. Khôi phục thư mục từ Thùng rác rồi mở lại.
 - **Quản trị viên thu hồi máy này?** Đồng bộ dừng, tệp trên máy được giữ; đăng nhập lại nếu được cấp lại quyền. Lệnh **xóa dữ liệu từ xa**

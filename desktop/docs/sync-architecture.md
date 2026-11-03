@@ -175,3 +175,18 @@ Kiểm thử (`desktop/tests/BlueDrive.Sync.Windows.Tests`, chỉ chạy trên W
 | Chỉ đọc | Tệp chỉ có quyền xem có thuộc tính **ReadOnly** (cả tệp giữ chỗ); được cấp quyền sửa thì bỏ thuộc tính. Engine chỉ đổi những tệp có thay đổi quyền (lưu danh sách đã đánh dấu). |
 | Cấp không được ghi | Tệp/thư mục tạo trong thư mục chỉ xem hoặc ở cấp ngoài cùng "Được chia sẻ với tôi" (máy chủ trả 403) được chuyển vào `_Không đồng bộ được` (xung đột loại `not_allowed`) thay vì báo lỗi mãi; mục đặt trực tiếp ở cấp ngoài cùng của thư mục BlueDrive (chỉ chứa các thư mục gốc) cũng vậy. |
 | Đổi quyền một tệp | Chia sẻ một **tệp** sinh `permission_changed` cho tệp đó: client lấy lại chính mục đó thay vì liệt kê "thư mục" (trước đây trả 404 làm hỏng lượt đồng bộ). |
+
+## 12. Độ tin cậy (Sync-Phase 8)
+
+| Vấn đề | Cách xử lý |
+|---|---|
+| Tệp rất lớn (5 GB) | Tải lên: tệp > 32 MB được **chụp nội dung ra tệp tạm trên đĩa** (`…\<tài khoản>\snapshots`, tự xóa khi đóng; dọn khi khởi động) và tính SHA-256 trong lúc chép, không nạp vào RAM. Tải xuống: ghi thẳng vào tệp tạm của bước ghi nguyên tử qua `HashingStream`, sai mã băm thì bỏ tệp tạm, tệp cũ giữ nguyên. |
+| Mất mạng / tắt máy giữa lúc tải lên | Địa chỉ phiên tus được nhớ trong `state.db` theo (đích, tên, mã băm, kích thước): lần sau (kể cả sau khi khởi động lại) `HEAD` lấy vị trí rồi gửi tiếp phần còn thiếu; phiên đã hết hạn trên máy chủ thì tạo phiên mới. Tải xuống tiếp bằng HTTP Range. |
+| Tắt đột ngột giữa lượt (kill) | Mỗi bước an toàn khi dừng bất kỳ lúc nào (base ghi ngay sau bước); kiểm thử dừng agent ngẫu nhiên 4 lần giữa chừng: đủ tệp, không trùng, không bản xung đột thừa. Mô phỏng FsCheck có crash ngẫu nhiên: 10.000 chuỗi đạt. |
+| Mạng tính phí / pin yếu | `ConditionsMonitor` (Windows): tạm dừng khi mạng có chi phí (gói dữ liệu, chuyển vùng, vượt hạn mức) hoặc chạy pin dưới 20%; tắt được trong Cài đặt → Mạng. Tạm dừng tự động tách biệt với tạm dừng của người dùng; mở tệp theo yêu cầu vẫn tải được. |
+| Hết dung lượng (413) | Tệp đó báo trong Vấn đề, thông báo "Hết dung lượng BlueDrive" một lần; thay đổi giữ trên máy và tự tải lên khi có chỗ. |
+| Đường dẫn > 260 ký tự | .NET tự dùng `\?\`; các lời gọi Win32 trực tiếp (File ID, mở tệp giữ chỗ) thêm tiền tố; ứng dụng khai báo `longPathAware`. |
+| Chọn thư mục đồng bộ (cả thư mục con) | Danh sách thư mục loại trừ theo từng gốc (`excluded_folders:<gốc>`); engine bỏ cả cây con khỏi 3 cây khi lập kế hoạch (không tải về, không coi là bị xóa). Bỏ chọn: đồng bộ trước, gỡ thư mục khỏi máy (Thùng rác), quên bản ghi; chọn lại: tải về. |
+| Cursor quá cũ (410), xóa hàng loạt, tên tệp / hoa-thường / NFC, `access_revoked` | Đã có từ Sync-Phase 2 (xem `sync-algorithm.md`). |
+
+USN Journal (tùy chọn trong đặc tả) chưa dùng: FileSystemWatcher + quét định kỳ đã bắt đủ thay đổi, và engine luôn quét lại trước khi lập kế hoạch.

@@ -108,6 +108,62 @@ public sealed class SyncAgentTests(ApiFactory factory) : IDisposable
     }
 
     [Fact]
+    public async Task Selective_sync_removes_a_folder_from_this_computer_and_brings_it_back()
+    {
+        var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(user);
+        var folder = await (await user.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Lưu trữ 2020" })).ReadJsonAsync();
+        var folderId = folder.GetProperty("id").GetGuid();
+        await StorageTests.UploadAsync(user, ws, folderId, "cũ.txt", "cũ"u8.ToArray());
+        await using var agent = Agent(await SignInAsync(user));
+        await agent.StartAsync();
+        var local = Path.Combine(_tmp, "BlueDrive", "Tài liệu của tôi", "Lưu trữ 2020");
+        await Until(() => Task.FromResult(File.Exists(Path.Combine(local, "cũ.txt"))), "thư mục xuống máy");
+        var rootId = $"ws:{ws}";
+
+        (await agent.SetFolderIncludedAsync(rootId, folderId.ToString(), include: false)).Should().BeTrue();
+        Directory.Exists(local).Should().BeFalse("the folder leaves this computer");
+        await StorageTests.UploadAsync(user, ws, folderId, "mới.txt", "mới"u8.ToArray());
+        agent.SyncNow();
+        await Task.Delay(1500);
+        Directory.Exists(local).Should().BeFalse("an excluded folder is not downloaded again");
+        (await NamesAsync(user, ws, folderId.ToString())).Should().BeEquivalentTo(["cũ.txt", "mới.txt"], "nothing is deleted on BlueDrive");
+
+        (await agent.SetFolderIncludedAsync(rootId, folderId.ToString(), include: true)).Should().BeTrue();
+        await Until(() => Task.FromResult(File.Exists(Path.Combine(local, "mới.txt")) && File.Exists(Path.Combine(local, "cũ.txt"))), "thư mục quay lại máy");
+    }
+
+    [Fact]
+    public async Task Killing_the_agent_in_the_middle_loses_nothing_and_duplicates_nothing()
+    {
+        var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(user);
+        var tokens = await SignInAsync(user);
+        var mine = Path.Combine(_tmp, "BlueDrive", "Tài liệu của tôi");
+        for (var round = 0; round < 4; round++)
+        {
+            // New files appear, the agent starts and is stopped abruptly after a moment (no graceful end of the pass).
+            await using (var agent = Agent(tokens))
+            {
+                await agent.StartAsync();
+                await Until(() => Task.FromResult(Directory.Exists(mine)), "thư mục gốc");
+                for (var i = 0; i < 8; i++) await File.WriteAllTextAsync(Path.Combine(mine, $"vòng {round} tệp {i}.txt"), $"nội dung {round}-{i}");
+                await Task.Delay(Random.Shared.Next(300, 1500));
+            }
+        }
+        await using (var final = Agent(tokens))
+        {
+            await final.StartAsync();
+            await Until(async () => (await NamesAsync(user, ws)).Count(n => n.StartsWith("vòng ")) == 32, "đủ 32 tệp", 30);
+            await Until(() => Task.FromResult(final.Status.State == AgentState.Idle), "đồng bộ xong", 30);
+        }
+        var names = await NamesAsync(user, ws);
+        names.Where(n => n.StartsWith("vòng ")).Should().HaveCount(32).And.OnlyHaveUniqueItems();
+        names.Should().NotContain(n => n.Contains("(1)") || n.Contains("Bản xung đột"), "an interrupted upload never creates a duplicate");
+        Directory.GetFiles(mine).Should().HaveCount(32);
+    }
+
+    [Fact]
     public async Task Revoked_device_stops_and_a_signed_remote_wipe_deletes_the_local_copy()
     {
         var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");

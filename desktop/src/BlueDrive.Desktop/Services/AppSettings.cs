@@ -21,6 +21,9 @@ public sealed class AppSettings
     public string? ProxyAddress { get; set; }
     /// <summary>Files On-Demand: free the space of files not used for this many days (0 = never), like Storage Sense.</summary>
     public int FreeUpAfterDays { get; set; }
+    /// <summary>Pause on a metered connection / on battery below 20 % (spec 6.5).</summary>
+    public bool PauseOnMetered { get; set; } = true;
+    public bool PauseOnLowBattery { get; set; } = true;
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } };
 

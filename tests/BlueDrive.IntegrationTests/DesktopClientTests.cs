@@ -188,6 +188,62 @@ public class DesktopClientTests(ApiFactory factory)
         a.Flaky.Ranges.Should().Contain("bytes=60000-113999");
     }
 
+    private sealed class MemoryResume : IUploadResumeStore
+    {
+        public readonly Dictionary<string, string> Urls = [];
+        public string? Get(string key) => Urls.GetValueOrDefault(key);
+
+        public void Set(string key, string? url)
+        {
+            if (url is null) Urls.Remove(key);
+            else Urls[key] = url;
+        }
+    }
+
+    /// <summary>Lets <see cref="AllowPatches"/> tus chunks through, then the network "goes down" for PATCH; counts chunks sent.</summary>
+    private sealed class PatchGate : DelegatingHandler
+    {
+        public int AllowPatches = int.MaxValue;
+        public int Patches;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            if (request.Method == HttpMethod.Patch)
+            {
+                if (Patches >= AllowPatches) throw new HttpRequestException("mất mạng");
+                Patches++;
+            }
+            return base.SendAsync(request, ct);
+        }
+    }
+
+    [Fact]
+    public async Task An_interrupted_upload_continues_after_a_restart_without_sending_the_start_again()
+    {
+        var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (auth, tokens) = await SignInAsync(user, "PC-RESUME");
+        var store = new MemoryTokenStore();
+        store.Save(tokens);
+        var root = $"ws:{await StorageTests.PersonalWorkspaceAsync(user)}";
+        var data = TextBytes(450 * 1024); // 5 chunks of 100 KB
+        var hash = SyncContent.Hash(data);
+        var resume = new MemoryResume();
+        HttpRemoteStore Store(PatchGate gate) => new(BlueDriveHttp.Create(factory.Server.BaseAddress, store, auth, gate),
+            new RemoteStoreOptions { SmallUploadBytes = 64 * 1024, ChunkBytes = 100 * 1024, MaxRetries = 1, RetryBaseDelay = TimeSpan.FromMilliseconds(20), Resume = resume });
+
+        var first = new PatchGate { AllowPatches = 2, InnerHandler = factory.Server.CreateHandler() };
+        await FluentActions.Awaiting(() => Store(first).UploadNewAsync(root, null, "dữ liệu lớn.csv", new MemoryStream(data), hash, CancellationToken.None))
+            .Should().ThrowAsync<RemoteTransientException>();
+        resume.Urls.Should().ContainSingle("the unfinished tus session is remembered");
+
+        // "Restart": a new client, same remembered session.
+        var second = new PatchGate { InnerHandler = factory.Server.CreateHandler() };
+        var item = await Store(second).UploadNewAsync(root, null, "dữ liệu lớn.csv", new MemoryStream(data), hash, CancellationToken.None);
+        second.Patches.Should().Be(3, "only the 3 missing chunks are sent");
+        item.Hash.Should().Be(hash);
+        resume.Urls.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task Server_errors_map_to_engine_exceptions()
     {
@@ -262,9 +318,10 @@ public class DesktopClientTests(ApiFactory factory)
         var api = new BlueDriveApi(a.Http);
 
         // Lookup by local path (what the context menu receives).
-        var hit = BlueDrive.Sync.Agent.LocalIndex.Find(a.Db, @"C:\BlueDrive", @"C:\BlueDrive\Hồ sơ\tờ trình.txt");
+        var syncFolder = Path.Combine(Path.GetTempPath(), "BlueDrive");
+        var hit = BlueDrive.Sync.Agent.LocalIndex.Find(a.Db, syncFolder, Path.Combine(syncFolder, "Hồ sơ", "tờ trình.txt"));
         hit!.Item.RemoteId.Should().Be(item.RemoteId);
-        BlueDrive.Sync.Agent.LocalIndex.Find(a.Db, @"C:\BlueDrive", @"C:\Khác\tờ trình.txt").Should().BeNull();
+        BlueDrive.Sync.Agent.LocalIndex.Find(a.Db, syncFolder, Path.Combine(Path.GetTempPath(), "Khác", "tờ trình.txt")).Should().BeNull();
 
         (await api.WebUrlAsync(item.RemoteId)).Url.Should().EndWith($"/files/{item.RemoteId}");
 

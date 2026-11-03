@@ -12,6 +12,13 @@ using Polly.Retry;
 
 namespace BlueDrive.Sync.Client;
 
+/// <summary>Key → tus upload URL of an unfinished upload.</summary>
+public interface IUploadResumeStore
+{
+    string? Get(string key);
+    void Set(string key, string? url);
+}
+
 public sealed class RemoteStoreOptions
 {
     /// <summary>Files up to this size go in one multipart request; larger ones use resumable tus uploads.</summary>
@@ -25,6 +32,9 @@ public sealed class RemoteStoreOptions
     public TimeSpan RetryBaseDelay { get; set; } = TimeSpan.FromSeconds(1);
 
     public BandwidthLimiter UploadLimit { get; set; } = new();
+    /// <summary>Remembers unfinished tus uploads across restarts (null = only within one call).</summary>
+    public IUploadResumeStore? Resume { get; set; }
+
     /// <summary>(name, upload?, bytes done, bytes total) while a file is transferred: the tray flyout shows it.</summary>
     public Action<string, bool, long, long>? Progress { get; set; }
     public BandwidthLimiter DownloadLimit { get; set; } = new();
@@ -308,7 +318,22 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
         if (fields.TryGetValue("targetFileId", out var target)) meta["target_file_id"] = target;
         if (fields.TryGetValue("workspaceId", out var ws)) meta["workspace_id"] = ws;
 
-        Uri location;
+        // Same content, same destination, same size: an upload interrupted earlier (even before a restart) continues where it stopped.
+        var resumeKey = $"{subject}|{fields.GetValueOrDefault("folderId")}|{name}|{fields.GetValueOrDefault("content_hash")}|{length}";
+        Uri? location = null;
+        if (_opt.Resume?.Get(resumeKey) is { } saved && Uri.TryCreate(saved, UriKind.Absolute, out var savedUri))
+        {
+            using var probe = new HttpRequestMessage(HttpMethod.Head, savedUri);
+            probe.Headers.Add("Tus-Resumable", "1.0.0");
+            try
+            {
+                using var pr = await SendAsync(probe, HttpCompletionOption.ResponseHeadersRead, ct);
+                if (pr.IsSuccessStatusCode) location = savedUri;
+            }
+            catch (RemoteTransientException) { }
+            if (location is null) _opt.Resume.Set(resumeKey, null); // expired on the server: start over
+        }
+        if (location is null)
         using (var create = new HttpRequestMessage(HttpMethod.Post, "tus"))
         {
             create.Headers.Add("Tus-Resumable", "1.0.0");
@@ -319,6 +344,7 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
             await EnsureAsync(res, subject, ct, name);
             var loc = res.Headers.Location ?? throw new RemoteTransientException("Máy chủ không tạo được phiên tải lên.");
             location = loc.IsAbsoluteUri ? loc : new Uri(_http.BaseAddress!, loc);
+            _opt.Resume?.Set(resumeKey, location.ToString());
         }
         var tusId = location.Segments[^1].TrimEnd('/');
 
@@ -362,6 +388,8 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
         };
         using var complete = new HttpRequestMessage(HttpMethod.Post, $"api/v1/uploads/{tusId}/complete") { Content = JsonContent.Create(body, options: Json) };
         using var cr = await SendAsync(complete, HttpCompletionOption.ResponseContentRead, ct);
+        // Whatever the answer (done, conflict, refused), this tus session is used up.
+        if ((int)cr.StatusCode is < 500) _opt.Resume?.Set(resumeKey, null);
         await EnsureAsync(cr, subject, ct, name);
         return (await cr.Content.ReadFromJsonAsync<UploadResultDto>(Json, ct))!.FileId;
     }

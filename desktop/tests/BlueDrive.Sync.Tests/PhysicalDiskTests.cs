@@ -76,6 +76,23 @@ public sealed class PhysicalDiskTests : IDisposable
         fs.Scan("").Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task Paths_longer_than_260_characters_work()
+    {
+        var fs = Disk("a");
+        var deep = string.Join('/', Enumerable.Range(0, 8).Select(i => $"Thư mục báo cáo tổng hợp số {i:00} năm 2026"));
+        var file = deep + "/Kế hoạch truyền thông dân số giai đoạn 2026-2030.docx";
+        fs.Abs(file).Length.Should().BeGreaterThan(300);
+        fs.CreateDirectory(deep);
+        await fs.WriteAtomicAsync(file, async s => await s.WriteAsync("nội dung"u8.ToArray()), DateTime.UtcNow, CancellationToken.None);
+        var entry = fs.Scan("").Single(e => e.Path == file);
+        entry.FileId.Should().NotBeNullOrEmpty();
+        fs.Move(file, deep + "/đổi tên.docx");
+        if (OperatingSystem.IsWindows()) fs.Stat(deep + "/đổi tên.docx")!.FileId.Should().Be(entry.FileId);
+        fs.Delete(deep + "/đổi tên.docx");
+        fs.Stat(deep + "/đổi tên.docx").Should().BeNull();
+    }
+
     [WindowsFact]
     public void Hidden_system_files_and_links_are_not_synced()
     {
@@ -165,6 +182,46 @@ public sealed class PhysicalDiskTests : IDisposable
             (await b.SyncAsync(CancellationToken.None)).Operations.Should().Be(0);
             Directory.GetFiles(_tmp, "*" + IgnoreRules.TempSuffix, SearchOption.AllDirectories).Should().BeEmpty();
         }
+    }
+}
+
+public sealed class LargeFileTests : IDisposable
+{
+    private readonly string _tmp = Path.Combine(Path.GetTempPath(), "bd-large-" + Guid.NewGuid().ToString("N")[..8]);
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_tmp, recursive: true); }
+        catch (IOException) { }
+    }
+
+    [Fact]
+    public async Task Large_files_are_snapshotted_on_disk_and_downloads_are_streamed_and_verified()
+    {
+        var remote = new FakeRemoteStore(new FakeClock(DateTime.UtcNow));
+        var snapshots = Path.Combine(_tmp, "snapshots");
+        PhysicalFileSystem Disk(string n)
+        {
+            Directory.CreateDirectory(Path.Combine(_tmp, n));
+            return new PhysicalFileSystem(Path.Combine(_tmp, n), useRecycleBin: false);
+        }
+        var fa = Disk("a");
+        var fb = Disk("b");
+        using var dba = new SyncStateDb(":memory:");
+        using var dbb = new SyncStateDb(":memory:");
+        dba.UpsertRoot(FakeRemoteStore.Root, "", true);
+        dbb.UpsertRoot(FakeRemoteStore.Root, "", true);
+        var options = new SyncEngineOptions { SnapshotDirectory = snapshots, MemorySnapshotLimit = 4 * 1024 };
+        var a = new SyncEngine(dba, remote, fa, SystemClock.Instance, options);
+        var b = new SyncEngine(dbb, remote, fb, SystemClock.Instance, options);
+
+        var data = new byte[3 * 1024 * 1024];
+        Random.Shared.NextBytes(data);
+        File.WriteAllBytes(fa.Abs("video.mp4"), data);
+        (await a.SyncAsync(CancellationToken.None)).Errors.Should().BeEmpty();
+        Directory.GetFiles(snapshots).Should().BeEmpty("snapshot files are deleted once uploaded");
+        (await b.SyncAsync(CancellationToken.None)).Errors.Should().BeEmpty();
+        File.ReadAllBytes(fb.Abs("video.mp4")).Should().Equal(data);
     }
 }
 

@@ -33,7 +33,7 @@ public static class CloudNative
     /// </summary>
     internal static SafeFileHandle OpenForPlaceholder(string path)
     {
-        var h = PInvoke.CreateFile(path, (uint)(FILE_ACCESS_RIGHTS.WRITE_DAC | FILE_ACCESS_RIGHTS.FILE_READ_ATTRIBUTES),
+        var h = PInvoke.CreateFile(Agent.PhysicalFileSystem.LongPath(path), (uint)(FILE_ACCESS_RIGHTS.WRITE_DAC | FILE_ACCESS_RIGHTS.FILE_READ_ATTRIBUTES),
             FILE_SHARE_MODE.FILE_SHARE_READ | FILE_SHARE_MODE.FILE_SHARE_WRITE | FILE_SHARE_MODE.FILE_SHARE_DELETE, null, FILE_CREATION_DISPOSITION.OPEN_EXISTING,
             FILE_FLAGS_AND_ATTRIBUTES.FILE_FLAG_BACKUP_SEMANTICS, null);
         if (h.IsInvalid) throw new IOException($"Không mở được {path} (mã lỗi {Marshal.GetLastPInvokeError()}).", Marshal.GetHRForLastWin32Error());

@@ -49,13 +49,13 @@
               <Button Grid.Column="1" Content="Mở" Command="{Binding OpenFolderCommand}" />
             </Grid>
             <TextBlock Text="Chọn thư mục hiện trên máy này" Classes="h2" Margin="0,8,0,0" />
-            <ItemsControl ItemsSource="{Binding RootToggles}">
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:RootToggle">
-                  <CheckBox IsChecked="{Binding Included}" Content="{Binding Name}" Margin="0,2" />
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
+            <TreeView ItemsSource="{Binding RootToggles}" MaxHeight="260">
+              <TreeView.ItemTemplate>
+                <TreeDataTemplate x:DataType="vm:RootToggle" ItemsSource="{Binding Children}">
+                  <CheckBox IsChecked="{Binding Included}" Content="{Binding Name}" />
+                </TreeDataTemplate>
+              </TreeView.ItemTemplate>
+            </TreeView>
             <TextBlock Text="Tệp theo yêu cầu" Classes="h2" Margin="0,8,0,0" />
             <ToggleSwitch IsChecked="{Binding OnDemand}" IsEnabled="{Binding OnDemandAvailable}" OnContent="Bật — chỉ tải tệp khi mở" OffContent="Tắt — tải mọi tệp về máy" />
             <StackPanel Orientation="Horizontal" Spacing="8">
@@ -83,6 +83,9 @@
           <TextBlock Text="Proxy" Classes="h2" Margin="0,8,0,0" />
           <ComboBox ItemsSource="{Binding ProxyLabels}" SelectedIndex="{Binding ProxyIndex}" MinWidth="260" />
           <TextBox Text="{Binding ProxyAddress}" Watermark="http://proxy.donvi.gov.vn:8080" IsVisible="{Binding ManualProxy}" />
+          <TextBlock Text="Tiết kiệm" Classes="h2" Margin="0,8,0,0" />
+          <CheckBox IsChecked="{Binding PauseOnMetered}" Content="Tạm dừng đồng bộ khi dùng mạng tính phí (điểm phát di động, gói dữ liệu)" />
+          <CheckBox IsChecked="{Binding PauseOnLowBattery}" Content="Tạm dừng đồng bộ khi máy chạy pin dưới 20%" />
           <Button Content="Lưu" Command="{Binding SaveCommand}" Classes="accent" HorizontalAlignment="Left" />
         </StackPanel>
       </TabItem>
