@@ -118,6 +118,19 @@ public sealed class SyncEngine(
     /// <summary>Diagnostics: the last planned steps and whether each one ran (tests and the diagnostic package).</summary>
     /// <summary>Plan of the last pass (diagnostics, tests); capped so a first sync of 100 000 files does not keep 200 000 strings.</summary>
     internal List<string> LastPlan { get; } = [];
+
+    private const SyncAction Transfers = SyncAction.UploadVersion | SyncAction.UploadNew | SyncAction.Download | SyncAction.CreateLocal
+                                         | SyncAction.Conflict | SyncAction.RestoreLocal | SyncAction.ReuploadAsNew;
+    private int _remainingFiles;
+    private long _remainingBytes;
+
+    /// <summary>Files still to upload / download in the running round and their bytes (the flyout: "Đang đồng bộ 12 tệp (35 MB còn lại…)").</summary>
+    public (int Files, long Bytes) Remaining => (Volatile.Read(ref _remainingFiles), Interlocked.Read(ref _remainingBytes));
+
+    private long TransferBytes(Step s) =>
+        s.Decision.Has(SyncAction.UploadVersion) || s.Decision.Has(SyncAction.UploadNew) || s.Decision.Has(SyncAction.Conflict) || s.Decision.Has(SyncAction.ReuploadAsNew)
+            ? s.LocalEntry?.Size ?? 0
+            : _placeholders.OnDemand ? 0 : s.Remote?.Size ?? 0; // Files On-Demand: a placeholder, the content comes when opened
     private const int LastPlanLimit = 2000;
 
     private void Plan(string line)
@@ -323,6 +336,8 @@ public sealed class SyncEngine(
             state.ClearOperations(root.RootId);
         }
         ClearPrefetch();
+        Volatile.Write(ref _remainingFiles, 0);
+        Interlocked.Exchange(ref _remainingBytes, 0);
         if (state.GetAccount(RestoreKey) is not null) state.SetAccount(RestoreKey, null);
         var deferred = _deletesDeferred;
         _deletesDeferred = false;
@@ -379,7 +394,12 @@ public sealed class SyncEngine(
             parts.Reverse();
             await MarkAsync(NameMapper.Combine(root.LocalPath.Length == 0 ? null : root.LocalPath, string.Join('/', parts)), b.RemoteId);
         }
-        if (rootClean && root.LocalPath.Length > 0) await MarkAsync(root.LocalPath, root.RootId);
+        if (rootClean && root.LocalPath.Length > 0)
+        {
+            await MarkAsync(root.LocalPath, root.RootId);
+            // The folder holding it ("Nhóm"), not an item of the server either.
+            for (var parent = NameMapper.ParentOf(root.LocalPath); parent is not null; parent = NameMapper.ParentOf(parent)) await MarkAsync(parent, "");
+        }
 
         async Task MarkAsync(string path, string remoteId)
         {
@@ -446,6 +466,9 @@ public sealed class SyncEngine(
         }
         else if (root.MassDeleteDecision is not null && deletes.Count == 0) state.SetMassDelete(rootId, 0, null);
 
+        var transfers = plan.Where(p => (p.Decision.Actions & Transfers) != 0 && !(p.Remote?.IsFolder ?? p.LocalEntry?.IsFolder ?? false)).ToList();
+        Volatile.Write(ref _remainingFiles, transfers.Count);
+        Interlocked.Exchange(ref _remainingBytes, transfers.Sum(TransferBytes));
         await PrefetchAsync(plan, ct);
         var settled = SettledDeletes(rootId, plan, root.MassDeleteDecision == "confirm");
         var ops = 0;
@@ -455,6 +478,7 @@ public sealed class SyncEngine(
         {
             ct.ThrowIfCancellationRequested();
             if (step.Decision.Actions == SyncAction.None) continue;
+            using var counted = transfers.Contains(step) ? new Countdown(this, TransferBytes(step)) : null;
             if (step.Decision.Has(SyncAction.DeleteRemote) && step.Base is { } gone && !settled.Contains(gone.RemoteId))
             {
                 _deletesDeferred = true; // seen for the first time: wait for the next pass
@@ -659,6 +683,16 @@ public sealed class SyncEngine(
     // ----------------------------------------------------------------- planning
 
     private sealed record Step(string Path, int Depth, SyncDecision Decision, BaseItem? Base, RemoteItem? Remote, LocalEntry? LocalEntry, string? NewParentRemoteId);
+
+    /// <summary>One transfer of <see cref="Remaining"/> is over (done, failed or skipped).</summary>
+    private sealed class Countdown(SyncEngine engine, long bytes) : IDisposable
+    {
+        public void Dispose()
+        {
+            Interlocked.Decrement(ref engine._remainingFiles);
+            Interlocked.Add(ref engine._remainingBytes, -bytes);
+        }
+    }
 
     private List<Step> Plan(Ctx c)
     {

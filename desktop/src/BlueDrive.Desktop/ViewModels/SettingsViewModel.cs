@@ -51,6 +51,8 @@ public partial class SettingsViewModel : ObservableObject
     /// <summary>View services: confirmation dialog and "save as" picker.</summary>
     public Func<string, string, string, Task<bool>>? Confirm { get; set; }
     public Func<string, Task<string?>>? SaveFile { get; set; }
+    /// <summary>Folder picker (title → chosen folder or null).</summary>
+    public Func<string, Task<string?>>? PickFolder { get; set; }
 
     public SettingsViewModel(AppHost host, App? app)
     {
@@ -270,6 +272,33 @@ public partial class SettingsViewModel : ObservableObject
 
     [RelayCommand]
     private void OpenFolder() => FlyoutViewModel.OpenPath(Folder);
+
+    /// <summary>"Đổi vị trí…" (spec 8.3): moves the BlueDrive folder of the selected account.</summary>
+    [RelayCommand]
+    private async Task MoveFolderAsync()
+    {
+        if (SelectedAccount is not { } row || PickFolder is null) return;
+        var parent = await PickFolder("Chọn nơi đặt thư mục BlueDrive");
+        if (parent is null) return;
+        var target = Path.Combine(parent, Path.GetFileName(row.Session.Config.SyncFolder.TrimEnd(Path.DirectorySeparatorChar)));
+        if (_host.MoveProblem(row.Session, target) is { } problem)
+        {
+            SyncMessage = problem;
+            return;
+        }
+        if (Confirm is not null && !await Confirm("Đổi vị trí thư mục BlueDrive",
+                $"Chuyển thư mục BlueDrive sang:\n{target}\n\nĐồng bộ tạm dừng trong lúc chuyển. Tệp chỉ có trên mạng không cần chép (vẫn còn trên BlueDrive).",
+                "Chuyển")) return;
+        Busy = true;
+        try
+        {
+            await _host.MoveSyncFolderAsync(row.Session, target, new Progress<string>(m => SyncMessage = m));
+            SyncMessage = $"Đã chuyển thư mục BlueDrive sang {target}.";
+            Refresh();
+        }
+        catch (IOException ex) { SyncMessage = ex.Message; }
+        finally { Busy = false; }
+    }
 
     [RelayCommand]
     private void ResolveProblem(ProblemItem? p)

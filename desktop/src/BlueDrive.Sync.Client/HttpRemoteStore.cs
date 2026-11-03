@@ -115,7 +115,7 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
 
     public sealed record WipeCommand(DateTime RequestedAt, string Signature);
     public sealed record DeviceStatusInfo(Guid DeviceId, string Status, bool UpdateRequired, string MinClientVersion, WipeCommand? Wipe);
-    public sealed record UserInfo(Guid Id, string Username, string FullName);
+    public sealed record UserInfo(Guid Id, string Username, string FullName, string? OrganizationName = null);
 
     /// <summary>Revocation / signed remote wipe / minimum app version for this device (also records "last seen").</summary>
     public Task<DeviceStatusInfo> DeviceStatusAsync(string appVersion, CancellationToken ct) =>

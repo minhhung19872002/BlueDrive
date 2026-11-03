@@ -78,6 +78,8 @@ public partial class FlyoutViewModel : ObservableObject
         else QuotaText = new Uri(s.Config.ServerUrl).Host;
         var st = s.Agent.Status;
         (StatusText, StatusDetail) = Formatting.Status(st, s.Agent.IsPaused);
+        if (st.State == AgentState.Syncing && !s.Agent.IsPaused && s.SyncProgress() is { Files: > 0 } left)
+            StatusText = Formatting.Syncing(left.Files, left.Bytes, left.BytesPerSecond);
         IsPaused = s.Agent.IsPaused;
         MassDeletePending = st.PendingMassDelete > 0;
         var conflicts = s.Conflicts().Count;
@@ -181,6 +183,20 @@ public static class Formatting
         < 1024L * 1024 * 1024 => $"{b / 1024.0 / 1024:0.#} MB",
         _ => $"{b / 1024.0 / 1024 / 1024:0.##} GB",
     }).Replace('.', ',');
+
+    /// <summary>"Đang đồng bộ 12 tệp (35 MB còn lại, ~2 phút)" (spec 8.2); the time only once a speed is known.</summary>
+    public static string Syncing(int files, long bytes, double? bytesPerSecond)
+    {
+        var text = $"Đang đồng bộ {files} tệp";
+        if (bytes <= 0) return text;
+        var left = $"{Bytes(bytes)} còn lại";
+        if (bytesPerSecond is > 0 and var rate)
+        {
+            var seconds = bytes / rate;
+            left += seconds < 60 ? ", ~1 phút" : seconds < 3600 ? $", ~{Math.Ceiling(seconds / 60):0} phút" : $", ~{seconds / 3600:0.#} giờ".Replace('.', ',');
+        }
+        return $"{text} ({left})";
+    }
 
     /// <summary>Headline + detail of the flyout.</summary>
     public static (string, string) Status(AgentStatus s, bool paused)

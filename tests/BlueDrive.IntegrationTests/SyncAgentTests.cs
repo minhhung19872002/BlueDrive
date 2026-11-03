@@ -62,6 +62,74 @@ public sealed class SyncAgentTests(ApiFactory factory) : IDisposable
         .GetProperty("items").EnumerateArray().Select(i => i.GetProperty("name").GetString()!).ToList();
 
     [Fact]
+    public async Task A_sync_folder_copied_to_another_drive_carries_on_without_deleting_or_duplicating()
+    {
+        var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(user);
+        var tokens = await SignInAsync(user);
+        var mine = Path.Combine(_tmp, "BlueDrive", "Tài liệu của tôi");
+        await using (var agent = Agent(tokens))
+        {
+            await agent.StartAsync();
+            await Until(() => Task.FromResult(Directory.Exists(mine) && agent.Status.State == AgentState.Idle), "thư mục Tài liệu của tôi");
+            for (var i = 0; i < 5; i++) await File.WriteAllTextAsync(Path.Combine(mine, $"tệp {i}.txt"), $"nội dung {i}");
+            await Until(async () => (await NamesAsync(user, ws)).Count(n => n.StartsWith("tệp ")) == 5 && agent.Status.State == AgentState.Idle, "5 tệp lên máy chủ", 30);
+        }
+
+        // "Đổi vị trí thư mục" to another drive: a copy (new file ids), the old folder removed.
+        var moved = Path.Combine(_tmp, "ổ D", "BlueDrive");
+        CopyTree(Path.Combine(_tmp, "BlueDrive"), moved);
+        Directory.Delete(Path.Combine(_tmp, "BlueDrive"), recursive: true);
+        await using (var agent = new SyncAgent(new AgentOptions
+        {
+            Server = factory.Server.BaseAddress, SyncFolder = moved, StateDbPath = Path.Combine(_tmp, "state", "state.db"), Tokens = tokens,
+            UserDisplayName = "Người thử", LocalQuiet = TimeSpan.FromMilliseconds(500), UseRecycleBin = false, HandlerFactory = factory.Server.CreateHandler,
+        }))
+        {
+            await agent.StartAsync();
+            await Until(() => Task.FromResult(agent.Status.State == AgentState.Idle && agent.Status.LastSyncAt is not null), "đồng bộ ở vị trí mới", 30);
+            agent.Status.PendingMassDelete.Should().Be(0);
+            (await NamesAsync(user, ws)).Where(n => n.StartsWith("tệp ")).Should().HaveCount(5, "nothing deleted or duplicated on the server");
+            Directory.EnumerateFiles(Path.Combine(moved, "Tài liệu của tôi")).Select(Path.GetFileName).Should().BeEquivalentTo(
+                Enumerable.Range(0, 5).Select(i => $"tệp {i}.txt"), "no conflict copies");
+        }
+    }
+
+    private static void CopyTree(string from, string to)
+    {
+        Directory.CreateDirectory(to);
+        foreach (var dir in Directory.EnumerateDirectories(from, "*", SearchOption.AllDirectories))
+            Directory.CreateDirectory(Path.Combine(to, Path.GetRelativePath(from, dir)));
+        foreach (var file in Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories))
+        {
+            var target = Path.Combine(to, Path.GetRelativePath(from, file));
+            File.Copy(file, target);
+            File.SetLastWriteTimeUtc(target, File.GetLastWriteTimeUtc(file));
+        }
+    }
+
+    [Fact]
+    public async Task Group_workspaces_are_under_nhom_and_nothing_else_can_live_there()
+    {
+        var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = (await (await user.PostAsJsonAsync("/api/v1/workspaces", new { name = "Truyền thông 2026", type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        await StorageTests.UploadAsync(user, ws, null, "kế hoạch.txt", "kế hoạch"u8.ToArray());
+        await using var agent = Agent(await SignInAsync(user));
+        await agent.StartAsync();
+        var groups = Path.Combine(_tmp, "BlueDrive", "Nhóm");
+        var plan = Path.Combine(groups, "Truyền thông 2026", "kế hoạch.txt");
+        await Until(() => Task.FromResult(File.Exists(plan) && agent.Status.State == AgentState.Idle), "tệp của nhóm trong Nhóm\\Truyền thông 2026", 30);
+        (await File.ReadAllTextAsync(plan)).Should().Be("kế hoạch");
+
+        // "Nhóm" holds the groups only: a file put there goes to "_Không đồng bộ được" and is reported.
+        await File.WriteAllTextAsync(Path.Combine(groups, "lạc chỗ.txt"), "x");
+        agent.SyncNow();
+        var aside = Path.Combine(_tmp, "BlueDrive", "_Không đồng bộ được", "lạc chỗ.txt");
+        await Until(() => Task.FromResult(File.Exists(aside)), "tệp lạc chỗ được chuyển sang _Không đồng bộ được", 30);
+        File.Exists(Path.Combine(groups, "lạc chỗ.txt")).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Deleting_one_file_reaches_the_server_after_it_settles()
     {
         var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");

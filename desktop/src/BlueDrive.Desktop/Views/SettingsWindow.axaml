@@ -46,7 +46,10 @@
             <TextBlock Text="Thư mục BlueDrive" Classes="h2" />
             <Grid ColumnDefinitions="*,Auto">
               <TextBlock Text="{Binding Folder}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-              <Button Grid.Column="1" Content="Mở" Command="{Binding OpenFolderCommand}" />
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                <Button Content="Mở" Command="{Binding OpenFolderCommand}" />
+                <Button Content="Đổi vị trí…" Command="{Binding MoveFolderCommand}" IsEnabled="{Binding !Busy}" />
+              </StackPanel>
             </Grid>
             <TextBlock Text="Chọn thư mục hiện trên máy này" Classes="h2" Margin="0,8,0,0" />
             <TreeView ItemsSource="{Binding RootToggles}" MaxHeight="260">

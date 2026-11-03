@@ -16,6 +16,8 @@ public sealed class AgentOptions
     public required string StateDbPath { get; init; }
     public required ITokenStore Tokens { get; init; }
     public string UserDisplayName { get; init; } = "Người dùng";
+    /// <summary>"Tên đơn vị": the folder's name in Explorer's navigation pane ("BlueDrive - …"); the user's name when unknown.</summary>
+    public string? Organization { get; init; }
     public string DeviceName { get; init; } = Environment.MachineName;
     public string AppVersion { get; init; } = typeof(SyncAgent).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
     /// <summary>Local edits are synced once the folder has been quiet this long (debounce + "file stable", spec 6.1).</summary>
@@ -136,7 +138,7 @@ public sealed class SyncAgent : IAsyncDisposable
         }
         if (o.OnDemand is not null)
         {
-            _onDemand = new OnDemandContext(Path.GetFullPath(o.SyncFolder), o.AccountId, o.UserDisplayName, server, _remote, Path.GetFullPath(o.StateDbPath));
+            _onDemand = new OnDemandContext(Path.GetFullPath(o.SyncFolder), o.AccountId, o.Organization ?? o.UserDisplayName, server, _remote, Path.GetFullPath(o.StateDbPath));
             _platform = o.OnDemand(_onDemand);
             _platform.FileClosed += _ => RequestLocal();
         }
@@ -511,23 +513,40 @@ public sealed class SyncAgent : IAsyncDisposable
     /// </summary>
     private void GuardTopLevel()
     {
-        var roots = _db.Roots().Select(r => r.LocalPath.Split('/')[0]).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        foreach (var name in Directory.EnumerateFileSystemEntries(_fs.Root).Select(Path.GetFileName).OfType<string>())
+        var paths = _db.Roots().Select(r => r.LocalPath).Where(p => p.Length > 0).ToList();
+        GuardLevel(null, paths.Select(p => p.Split('/')[0]).ToHashSet(StringComparer.OrdinalIgnoreCase));
+        // "Nhóm" (spec 7.2): only the workspaces' folders.
+        foreach (var container in paths.Where(p => p.Contains('/')).Select(p => p[..p.LastIndexOf('/')]).Distinct(StringComparer.OrdinalIgnoreCase))
+            GuardLevel(container, paths.Where(p => p.StartsWith(container + "/", StringComparison.OrdinalIgnoreCase)).Select(p => p[(container.Length + 1)..])
+                .ToHashSet(StringComparer.OrdinalIgnoreCase));
+    }
+
+    private void GuardLevel(string? container, HashSet<string> allowed)
+    {
+        var dir = container is null ? _fs.Root : Path.Combine(_fs.Root, container.Replace('/', Path.DirectorySeparatorChar));
+        if (!Directory.Exists(dir)) return;
+        foreach (var leaf in Directory.EnumerateFileSystemEntries(dir).Select(Path.GetFileName).OfType<string>())
         {
-            if (roots.Contains(name) || name == IgnoreRules.NotSyncedFolder || IgnoreRules.IsIgnored(name) || _fs.Stat(name) is not { } e) continue;
+            var name = container is null ? leaf : container + "/" + leaf;
+            if (allowed.Contains(leaf) || name == IgnoreRules.NotSyncedFolder || IgnoreRules.IsIgnored(leaf) || _fs.Stat(name) is not { } e) continue;
             _fs.CreateDirectory(IgnoreRules.NotSyncedFolder);
-            var free = NameMapper.NextFree(e.Path, n => _fs.Stat(NameMapper.Combine(IgnoreRules.NotSyncedFolder, n)) is not null);
+            var free = NameMapper.NextFree(leaf, n => _fs.Stat(NameMapper.Combine(IgnoreRules.NotSyncedFolder, n)) is not null);
             try
             {
                 _fs.Move(e.Path, NameMapper.Combine(IgnoreRules.NotSyncedFolder, free));
-                _db.Log("Không đồng bộ được", e.Path, $"Không thể đặt tệp/thư mục trực tiếp ở cấp ngoài cùng của thư mục BlueDrive. Đã chuyển vào {IgnoreRules.NotSyncedFolder}.");
+                _db.Log("Không đồng bộ được", e.Path, container is null
+                    ? $"Không thể đặt tệp/thư mục trực tiếp ở cấp ngoài cùng của thư mục BlueDrive. Đã chuyển vào {IgnoreRules.NotSyncedFolder}."
+                    : $"Không thể đặt tệp/thư mục trực tiếp trong \"{container}\" (chỉ chứa thư mục các nhóm). Đã chuyển vào {IgnoreRules.NotSyncedFolder}.");
                 Activity?.Invoke("Không đồng bộ được", e.Path);
             }
             catch (IOException) { } // open in another program: next pass
         }
     }
 
-    /// <summary>Folders for the roots: "Tài liệu của tôi", one per workspace, "Được chia sẻ với tôi". A root keeps its folder once chosen.</summary>
+    /// <summary>Folder holding one folder per workspace (spec 7.2).</summary>
+    public const string GroupsFolder = "Nhóm";
+
+    /// <summary>Folders for the roots: "Tài liệu của tôi", "Nhóm\&lt;tên nhóm&gt;" per workspace, "Được chia sẻ với tôi". A root keeps its folder once chosen.</summary>
     private async Task RefreshRootsAsync(CancellationToken ct)
     {
         var roots = await _remote.RootsAsync(ct);
@@ -547,14 +566,20 @@ public sealed class SyncAgent : IAsyncDisposable
             }
             else
             {
-                folder = NameMapper.NextFree(NameMapper.ToLocal(r.Name), n => used.Contains(n) || IgnoreRules.IsIgnored(n) || n == IgnoreRules.NotSyncedFolder);
+                // Spec 7.2: workspaces under "Nhóm\<tên nhóm>" (roots that already have a folder keep it: nothing is moved on the disk).
+                var prefix = r.Kind == "workspace" ? GroupsFolder + "/" : "";
+                folder = prefix + NameMapper.NextFree(NameMapper.ToLocal(r.Name),
+                    n => used.Contains(prefix + n) || (prefix.Length == 0 && n == GroupsFolder) || IgnoreRules.IsIgnored(n) || n == IgnoreRules.NotSyncedFolder);
                 used.Add(folder);
                 _db.UpsertRoot(r.RootId, folder, enabled);
             }
             if (_onDemand is not null)
             {
-                if (r.OnlineOnly) _onDemand.OnlineOnlyFolders.Add(folder);
-                else _onDemand.OnlineOnlyFolders.Remove(folder);
+                lock (_onDemand.OnlineOnlyFolders)
+                {
+                    if (r.OnlineOnly) _onDemand.OnlineOnlyFolders.Add(folder);
+                    else _onDemand.OnlineOnlyFolders.Remove(folder);
+                }
             }
         }
     }

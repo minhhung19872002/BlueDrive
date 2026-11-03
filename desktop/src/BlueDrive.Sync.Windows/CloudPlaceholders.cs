@@ -102,6 +102,42 @@ public sealed class CloudPlaceholders(string root) : IPlaceholderProvider
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Turns every downloaded placeholder under <paramref name="root"/> back into a plain file, then the folders (deepest first). Items
+    /// that are not placeholders, still dehydrated, or open elsewhere are left as they are.
+    /// </summary>
+    public static int RevertAll(string root)
+    {
+        var options = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = 0 };
+        var reverted = 0;
+        foreach (var file in Directory.EnumerateFiles(root, "*", options))
+            if (!IsDehydrated(file) && Revert(file)) reverted++;
+        foreach (var dir in Directory.EnumerateDirectories(root, "*", options).OrderByDescending(d => d.Length))
+            if (Revert(dir)) reverted++;
+        return reverted;
+    }
+
+    private static bool Revert(string abs)
+    {
+        try
+        {
+            if (!IsPlaceholder(abs)) return false;
+            using var h = CloudNative.OpenForPlaceholder(abs);
+            return PInvoke.CfRevertPlaceholder(h, CF_REVERT_FLAGS.CF_REVERT_FLAG_NONE).Succeeded;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
+    }
+
+    /// <summary>The item is a cloud placeholder (the filter hides the reparse point from ordinary file attributes).</summary>
+    public static unsafe bool IsPlaceholder(string abs)
+    {
+        using var h = CloudNative.OpenForPlaceholder(abs);
+        var info = default(CF_PLACEHOLDER_BASIC_INFO);
+        var hr = PInvoke.CfGetPlaceholderInfo((global::Windows.Win32.Foundation.HANDLE)h.DangerousGetHandle(), CF_PLACEHOLDER_INFO_CLASS.CF_PLACEHOLDER_INFO_BASIC,
+            &info, (uint)sizeof(CF_PLACEHOLDER_BASIC_INFO), null);
+        return hr.Succeeded || hr.Value == unchecked((int)0x800700EA); // more data: the identity did not fit, it is a placeholder
+    }
+
     /// <summary>Explorer shows the item as synced (not "Đang chờ đồng bộ").</summary>
     public static unsafe bool IsInSync(string abs)
     {

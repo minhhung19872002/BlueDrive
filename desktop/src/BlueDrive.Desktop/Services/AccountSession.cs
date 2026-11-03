@@ -43,7 +43,7 @@ public sealed class AccountSession : IAsyncDisposable
         Agent = new SyncAgent(new AgentOptions
         {
             Server = new Uri(config.ServerUrl), SyncFolder = config.SyncFolder, StateDbPath = store.StateDbPath(config.Id), Tokens = store.Tokens(config.Id),
-            UserDisplayName = config.DisplayName, AppVersion = appVersion, AccountId = config.Id, Transfer = transfer,
+            UserDisplayName = config.DisplayName, Organization = config.Organization, AppVersion = appVersion, AccountId = config.Id, Transfer = transfer,
             ParallelTransfers = settings.ParallelTransfers,
             LanSync = settings.LanSync,
             OnDemand = config.OnDemand && CloudFiles.Supported(config.SyncFolder) ? ctx => Platform = NewPlatform(ctx, appVersion) : null,
@@ -87,7 +87,24 @@ public sealed class AccountSession : IAsyncDisposable
     private IOnDemandPlatform NewPlatform(OnDemandContext ctx, string version) =>
         CloudFiles.NewPlatform(ctx, version, (path, message) => Notify?.Invoke("BlueDrive", $"{path}: {message}"));
 
-    public Task StartAsync() => Agent.StartAsync();
+    public async Task StartAsync()
+    {
+        await Agent.StartAsync();
+        if (Config.Organization is null) _ = LearnOrganizationAsync();
+    }
+
+    /// <summary>Accounts added before the folder was named after the organisation learn it (Explorer shows it from the next start).</summary>
+    private async Task LearnOrganizationAsync()
+    {
+        try
+        {
+            var me = await Agent.Remote.MeAsync(CancellationToken.None);
+            if (string.IsNullOrWhiteSpace(me.OrganizationName)) return;
+            Config = Config with { Organization = me.OrganizationName.Trim() };
+            _store.Save(Config);
+        }
+        catch (Exception ex) when (ex is Sync.Core.RemoteTransientException or Sync.Core.RemotePermanentException or HttpRequestException or IOException) { }
+    }
 
     // ---------------------------------------------------------------- co-editing (spec 13A)
 
@@ -211,6 +228,27 @@ public sealed class AccountSession : IAsyncDisposable
 
     /// <summary>The personal root's quota (Tài liệu của tôi): "Đã dùng 1,2 GB / 10 GB".</summary>
     public HttpRemoteStore.RootDto? Personal => Agent.Roots.FirstOrDefault(r => r.Kind == "personal");
+
+    private (DateTime At, long Bytes)? _progressStart;
+
+    /// <summary>What the running pass still has to transfer and the speed seen so far in it (for the time estimate).</summary>
+    public (int Files, long Bytes, double? BytesPerSecond) SyncProgress()
+    {
+        var (files, bytes) = Agent.Engine.Remaining;
+        if (files == 0)
+        {
+            _progressStart = null;
+            return (0, 0, null);
+        }
+        var now = DateTime.UtcNow;
+        if (_progressStart is not { } start || bytes > start.Bytes)
+        {
+            _progressStart = (now, bytes);
+            return (files, bytes, null);
+        }
+        var seconds = (now - start.At).TotalSeconds;
+        return (files, bytes, seconds >= 2 && start.Bytes > bytes ? (start.Bytes - bytes) / seconds : null);
+    }
 
     public int QuotaPercent => Personal is { QuotaBytes: > 0 } p ? (int)Math.Min(100, p.UsedBytes * 100 / p.QuotaBytes) : 0;
 

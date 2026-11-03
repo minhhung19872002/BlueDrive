@@ -268,8 +268,12 @@ public sealed class FakeRemoteStore(FakeClock clock) : IRemoteStore
         return new RemoteChangePage(changes, next, _journal.Any(j => j.Seq > next));
     }));
 
+    /// <summary>Called before each download (tests look at the engine while it transfers).</summary>
+    public Action<string>? Downloading;
+
     public async Task DownloadAsync(string itemId, Stream destination, CancellationToken ct)
     {
+        Downloading?.Invoke(itemId);
         var data = Call(() => Get(itemId).Data.ToArray());
         await destination.WriteAsync(data, ct);
     }

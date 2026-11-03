@@ -26,8 +26,8 @@ public sealed class DesktopTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_home, recursive: true); }
-        catch (IOException) { }
+        try { Uninstaller.DeleteTree(_home); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
     private static AgentStatus S(AgentState state, int problems = 0, int mass = 0) =>
@@ -44,6 +44,26 @@ public sealed class DesktopTests : IDisposable
         TrayState.Of([S(AgentState.Idle, mass: 120)], 0).Icon.Should().Be("error");
         TrayState.Of([S(AgentState.Idle)], 2).Icon.Should().Be("error");
         TrayState.Of([S(AgentState.Paused), S(AgentState.Paused)], 0).Icon.Should().Be("pause");
+    }
+
+    [Fact]
+    public void The_bluedrive_folder_is_named_after_the_organisation()
+    {
+        WizardViewModel.DefaultFolderName("Trung tâm Thông tin, Chuyển đổi số và Dịch vụ dân số", "bluedrive.bluestar.com.vn", false)
+            .Should().Be("BlueDrive - Trung tâm Thông tin, Chuyển đổi số và Dịch vụ dân số");
+        WizardViewModel.DefaultFolderName("Phòng: Kế hoạch", "drive.example.gov.vn", false).Should().Be("BlueDrive - Phòng꞉ Kế hoạch", "':' is mapped like other names");
+        WizardViewModel.DefaultFolderName(null, "drive.example.gov.vn", false).Should().Be("BlueDrive");
+        WizardViewModel.DefaultFolderName(" ", "drive.example.gov.vn", true).Should().Be("BlueDrive - drive.example.gov.vn");
+    }
+
+    [Fact]
+    public void Syncing_shows_files_and_size_left_and_the_time_once_the_speed_is_known()
+    {
+        Formatting.Syncing(12, 35L * 1024 * 1024, null).Should().Be("Đang đồng bộ 12 tệp (35 MB còn lại)");
+        Formatting.Syncing(12, 35L * 1024 * 1024, 300 * 1024).Should().Be("Đang đồng bộ 12 tệp (35 MB còn lại, ~2 phút)");
+        Formatting.Syncing(1, 10 * 1024, 1024 * 1024).Should().Be("Đang đồng bộ 1 tệp (10 KB còn lại, ~1 phút)");
+        Formatting.Syncing(3, 9L * 1024 * 1024 * 1024, 1024 * 1024).Should().Be("Đang đồng bộ 3 tệp (9 GB còn lại, ~2,6 giờ)");
+        Formatting.Syncing(500, 0, null).Should().Be("Đang đồng bộ 500 tệp", "placeholders only (Files On-Demand)");
     }
 
     [Fact]
@@ -111,6 +131,39 @@ public sealed class DesktopTests : IDisposable
         vm.Folder = Path.Combine(folder, "con");
         vm.FolderOk.Should().BeFalse();
         vm.FolderInfo.Should().Contain("tài khoản BlueDrive khác");
+    }
+
+    [Fact]
+    public async Task The_bluedrive_folder_moves_safely_to_another_place()
+    {
+        await using var host = new AppHost(_home);
+        var folder = Path.Combine(_home, "BlueDrive");
+        Directory.CreateDirectory(Path.Combine(folder, "Tài liệu của tôi"));
+        await File.WriteAllTextAsync(Path.Combine(folder, "Tài liệu của tôi", "báo cáo.txt"), "nội dung");
+        File.SetAttributes(Path.Combine(folder, "Tài liệu của tôi", "báo cáo.txt"), FileAttributes.ReadOnly); // view-only file
+        var other = Path.Combine(_home, "Khác");
+        host.Store.Save(new AccountConfig(Guid.NewGuid(), "http://127.0.0.1:9/", other, "b", "B", Guid.NewGuid()));
+        var cfg = new AccountConfig(Guid.NewGuid(), "http://127.0.0.1:9/", folder, "a", "A", Guid.NewGuid());
+        host.Store.Save(cfg);
+        var session = new AccountSession(host.Store, cfg, host.Settings, new(), new(), "1.0.0");
+        host.Sessions.Add(session);
+
+        host.MoveProblem(session, folder).Should().Contain("đã là thư mục");
+        host.MoveProblem(session, Path.Combine(folder, "con")).Should().Contain("bên trong");
+        host.MoveProblem(session, Path.Combine(other, "BlueDrive")).Should().Contain("tài khoản BlueDrive khác");
+        Directory.CreateDirectory(Path.Combine(_home, "Đầy"));
+        await File.WriteAllTextAsync(Path.Combine(_home, "Đầy", "x.txt"), "x");
+        host.MoveProblem(session, Path.Combine(_home, "Đầy")).Should().Contain("trống");
+
+        var target = Path.Combine(_home, "Tài liệu", "BlueDrive");
+        host.MoveProblem(session, target).Should().BeNull();
+        var moved = await host.MoveSyncFolderAsync(session, target);
+        moved.Config.SyncFolder.Should().Be(Path.GetFullPath(target));
+        host.Store.Load().Single(a => a.Id == cfg.Id).SyncFolder.Should().Be(Path.GetFullPath(target), "remembered for the next start");
+        (await File.ReadAllTextAsync(Path.Combine(target, "Tài liệu của tôi", "báo cáo.txt"))).Should().Be("nội dung");
+        File.GetAttributes(Path.Combine(target, "Tài liệu của tôi", "báo cáo.txt")).HasFlag(FileAttributes.ReadOnly).Should().BeTrue();
+        Directory.Exists(folder).Should().BeFalse();
+        host.Sessions.Should().ContainSingle(s => s.Config.Id == cfg.Id);
     }
 
     [Fact]

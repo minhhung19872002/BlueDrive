@@ -169,11 +169,23 @@ public partial class WizardViewModel : ObservableObject
         finally { Busy = false; }
     }
 
+    /// <summary>Spec 7.2: "%USERPROFILE%\BlueDrive - &lt;Tên đơn vị&gt;" (plain "BlueDrive" when the server tells no organisation; another account adds the server).</summary>
+    public static string DefaultFolderName(string? organization, string host, bool anotherAccount)
+    {
+        var org = string.IsNullOrWhiteSpace(organization) ? null : Sync.Core.NameMapper.ToLocal(organization.Trim());
+        return (org, anotherAccount) switch
+        {
+            (not null, _) => $"BlueDrive - {org}",
+            (null, true) => $"BlueDrive - {host}",
+            _ => "BlueDrive",
+        };
+    }
+
     private void PrepareFolder()
     {
         if (Folder.Length > 0) return;
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        Folder = _host.Sessions.Count == 0 ? Path.Combine(home, "BlueDrive") : Path.Combine(home, $"BlueDrive - {ServerUri!.Host}");
+        Folder = Path.Combine(home, DefaultFolderName(_me?.OrganizationName, ServerUri!.Host, _host.Sessions.Count > 0));
         CheckFolder();
     }
 
@@ -240,7 +252,10 @@ public partial class WizardViewModel : ObservableObject
         settings.Notifications = Notifications;
         if (OnlyOfficeOffered) settings.InstallOnlyOffice = InstallOnlyOffice;
         _host.SaveSettings(settings);
-        var acc = new AccountConfig(_accountId, ServerUri!.ToString(), Path.GetFullPath(Folder), _me!.Username, _me.FullName, _tokens!.DeviceId) { OnDemand = OnDemand };
+        var acc = new AccountConfig(_accountId, ServerUri!.ToString(), Path.GetFullPath(Folder), _me!.Username, _me.FullName, _tokens!.DeviceId)
+        {
+            OnDemand = OnDemand, Organization = string.IsNullOrWhiteSpace(_me.OrganizationName) ? null : _me.OrganizationName.Trim(),
+        };
         await _host.AddAccountAsync(acc, Roots.Where(r => !r.Selected).Select(r => r.Id).ToList());
         _finished = true;
     }

@@ -11,6 +11,8 @@ public sealed record AccountConfig(Guid Id, string ServerUrl, string SyncFolder,
     public bool Paused { get; init; }
     /// <summary>Files On-Demand (placeholders) instead of downloading everything (Windows, NTFS).</summary>
     public bool OnDemand { get; init; }
+    /// <summary>The user's organisation ("Tên đơn vị", spec 7.1): Explorer shows "BlueDrive - &lt;Tên đơn vị&gt;"; null for older accounts.</summary>
+    public string? Organization { get; init; }
 }
 
 /// <summary>

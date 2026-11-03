@@ -25,6 +25,11 @@ public partial class SettingsWindow : Window
             });
             return file?.TryGetLocalPath();
         };
+        vm.PickFolder = async title =>
+        {
+            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = title, AllowMultiple = false });
+            return folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
+        };
         Activated += (_, _) => vm.Refresh();
     }
 }

@@ -117,6 +117,9 @@ public static class SyncRootRegistrar
     /// <summary>Sign out / remote wipe: Explorer forgets the sync root (files left behind are plain files).</summary>
     public static void Unregister(SyncRootInfo info)
     {
+        // Spec 7.1: what is on this computer becomes ordinary files and folders again (CfRevertPlaceholder) before the registration goes;
+        // placeholders whose content is not here are removed by the caller (or stay empty when that failed).
+        if (Directory.Exists(info.Path)) CloudPlaceholders.RevertAll(info.Path);
         try { StorageProviderSyncRootManager.Unregister(Id(info.AccountId)); }
         catch (Exception ex) when (ex is UnauthorizedAccessException or System.Runtime.InteropServices.COMException or ArgumentException) { }
         PInvoke.CfUnregisterSyncRoot(Path.GetFullPath(info.Path));

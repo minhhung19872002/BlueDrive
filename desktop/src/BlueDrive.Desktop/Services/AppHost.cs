@@ -143,6 +143,102 @@ public sealed class AppHost : IAsyncDisposable
         return await StartSessionAsync(acc);
     }
 
+    /// <summary>Why <paramref name="target"/> cannot become the account's folder, or null (spec 8.3 "đổi vị trí thư mục").</summary>
+    public string? MoveProblem(AccountSession s, string target)
+    {
+        string to;
+        try { to = Path.GetFullPath(target).TrimEnd(Path.DirectorySeparatorChar); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return "Đường dẫn không hợp lệ."; }
+        var from = Path.GetFullPath(s.Config.SyncFolder).TrimEnd(Path.DirectorySeparatorChar);
+        if (string.Equals(to, from, StringComparison.OrdinalIgnoreCase)) return "Đây đã là thư mục BlueDrive của tài khoản này.";
+        if (Path.GetPathRoot(to) == to + Path.DirectorySeparatorChar || Path.GetPathRoot(to) == to) return "Không dùng trực tiếp thư mục gốc của ổ đĩa.";
+        if (Inside(to, from) || Inside(from, to)) return "Không thể chuyển thư mục vào bên trong chính nó (hoặc ngược lại).";
+        if (Store.Load().Any(a => a.Id != s.Config.Id && (Inside(to, a.SyncFolder) || Inside(a.SyncFolder, to))))
+            return "Thư mục này đang được một tài khoản BlueDrive khác dùng.";
+        if (Directory.Exists(to) && Directory.EnumerateFileSystemEntries(to).Any()) return "Hãy chọn một thư mục trống (hoặc chưa có).";
+        return null;
+
+        static bool Inside(string path, string folder) =>
+            (Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar)
+            .StartsWith(Path.GetFullPath(folder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Moves the account's BlueDrive folder (spec 8.3): the account stops, files not on this computer are left on BlueDrive (their
+    /// placeholders removed, downloaded ones become ordinary files), the folder is moved (same drive) or copied then removed (another drive),
+    /// and the account starts again there. Nothing is deleted on the server: unchanged files are recognised by path and content, and a
+    /// sync root registered anew puts missing items back instead of treating them as deleted.
+    /// </summary>
+    public async Task<AccountSession> MoveSyncFolderAsync(AccountSession s, string target, IProgress<string>? progress = null)
+    {
+        if (MoveProblem(s, target) is { } problem) throw new IOException(problem);
+        var from = Path.GetFullPath(s.Config.SyncFolder);
+        var to = Path.GetFullPath(target);
+        progress?.Report("Đang dừng đồng bộ…");
+        Sessions.Remove(s);
+        await s.DisposeAsync();
+        var onDemand = s.Config.OnDemand;
+        if (onDemand)
+        {
+            foreach (var f in Directory.EnumerateFiles(from, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true })
+                         .Where(CloudFiles.IsDehydrated).ToList())
+            {
+                try { File.Delete(f); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Warning(ex, "Không xóa được tệp giữ chỗ {Path}", f); }
+            }
+            CloudFiles.Unregister(from, s.Config.Id, AppVersion);
+        }
+        progress?.Report("Đang chuyển tệp sang vị trí mới…");
+        try
+        {
+            await Task.Run(() =>
+            {
+            if (string.Equals(Path.GetPathRoot(from), Path.GetPathRoot(to), StringComparison.OrdinalIgnoreCase))
+            {
+                if (Directory.Exists(to)) Directory.Delete(to); // empty (checked above)
+                Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+                Directory.Move(from, to);
+            }
+            else CopyTree(from, to, progress); // the old folder goes only once the account runs from the copy
+            });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A file open in another program, no space…: the account carries on where it was (a new registration puts placeholders back).
+            Log.Warning(ex, "Không chuyển được thư mục BlueDrive {From} → {To}", from, to);
+            if (Directory.Exists(from)) await StartSessionAsync(s.Config);
+            throw new IOException($"Không chuyển được thư mục: {ex.Message} Đồng bộ tiếp tục ở vị trí cũ.", ex);
+        }
+        var acc = s.Config with { SyncFolder = to, OnDemand = onDemand && OnDemandSupport.IsSupported(to) };
+        Store.Save(acc);
+        if (Directory.Exists(from))
+        {
+            try { Uninstaller.DeleteTree(from); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Warning(ex, "Chưa xóa được thư mục cũ {From}", from); }
+        }
+        Log.Information("Đã chuyển thư mục BlueDrive của {Account}: {From} → {To}", acc.Username, from, to);
+        RegisterShell();
+        return await StartSessionAsync(acc);
+    }
+
+    private static void CopyTree(string from, string to, IProgress<string>? progress)
+    {
+        Directory.CreateDirectory(to);
+        foreach (var dir in Directory.EnumerateDirectories(from, "*", SearchOption.AllDirectories))
+            Directory.CreateDirectory(Path.Combine(to, Path.GetRelativePath(from, dir)));
+        var files = Directory.EnumerateFiles(from, "*", SearchOption.AllDirectories).ToList();
+        for (var i = 0; i < files.Count; i++)
+        {
+            var target = Path.Combine(to, Path.GetRelativePath(from, files[i]));
+            progress?.Report($"Đang chép {i + 1}/{files.Count}: {Path.GetFileName(files[i])}");
+            File.Copy(files[i], target);
+            var attributes = File.GetAttributes(files[i]);
+            File.SetAttributes(target, attributes & ~FileAttributes.ReadOnly); // view-only files are read-only: the time first
+            File.SetLastWriteTimeUtc(target, File.GetLastWriteTimeUtc(files[i]));
+            File.SetAttributes(target, attributes);
+        }
+    }
+
     /// <summary>Explorer context menu for the current sync folders (removed with the last account).</summary>
     private void RegisterShell()
     {

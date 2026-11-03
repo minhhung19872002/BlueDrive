@@ -72,8 +72,9 @@ public sealed class CloudFilesPlatform : IOnDemandPlatform
 
     private bool OnlineOnly(string rel)
     {
-        var top = rel.Split('/')[0];
-        return _ctx.OnlineOnlyFolders.Contains(top);
+        // Root folders may be nested ("Nhóm/<tên nhóm>").
+        lock (_ctx.OnlineOnlyFolders) // changed by the agent when the roots are refreshed
+            return _ctx.OnlineOnlyFolders.Any(f => rel.Equals(f, StringComparison.OrdinalIgnoreCase) || rel.StartsWith(f + "/", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>Explorer changed the pin state ("Luôn giữ trên thiết bị" / "Giải phóng dung lượng").</summary>

@@ -95,6 +95,27 @@ public sealed class FilesOnDemandTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Signing_out_leaves_downloaded_files_as_ordinary_files()
+    {
+        _remote.WebCreateFolder(null, "Hồ sơ");
+        _remote.WebUpload("Hồ sơ", "đã tải.docx", Content.Of("nội dung đã tải"));
+        (await _engine.SyncAsync(CancellationToken.None)).Errors.Should().BeEmpty();
+        CloudPlaceholders.Hydrate(Abs("Hồ sơ/đã tải.docx"));
+        CloudPlaceholders.IsDehydrated(Abs("Hồ sơ/đã tải.docx")).Should().BeFalse();
+        CloudPlaceholders.IsPlaceholder(Abs("Hồ sơ/đã tải.docx")).Should().BeTrue();
+
+        // What signing out does first (spec 7.1: CfRevertPlaceholder), checked while the folder is still a sync root.
+        CloudPlaceholders.RevertAll(Root).Should().BeGreaterThanOrEqualTo(2, "the downloaded file and its folder");
+        CloudPlaceholders.IsPlaceholder(Abs("Hồ sơ/đã tải.docx")).Should().BeFalse();
+        CloudPlaceholders.IsPlaceholder(Abs("Hồ sơ")).Should().BeFalse();
+
+        await _platform.UnregisterAsync();
+        foreach (var path in new[] { Abs("Hồ sơ/đã tải.docx"), Abs("Hồ sơ") })
+            CloudPlaceholders.IsPlaceholder(path).Should().BeFalse($"{path} is a plain file system item again");
+        (await File.ReadAllTextAsync(Abs("Hồ sơ/đã tải.docx"))).Should().Be("nội dung đã tải");
+    }
+
+    [Fact]
     public async Task A_registration_dropped_by_windows_is_noticed_on_the_next_start()
     {
         if (!_platform.ShellRegistered) return; // the shell refused the folder: nothing can be checked
