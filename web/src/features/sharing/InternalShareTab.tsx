@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { Button, Empty, Form, Input, List, Popconfirm, Select, Skeleton, Space, Tag, Tooltip, Typography } from 'antd'
-import { DeleteOutlined, ShareAltOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, ShareAltOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { qk } from '@/api/queryKeys'
@@ -7,6 +8,7 @@ import { createShare, deleteShare, listShares } from '@/api/sharing'
 import { useApiMutation } from '@/hooks/useApiMutation'
 import type { AccessLevel, ResourceType } from '@/types/sharing'
 import { formatDateTime } from '@/utils/format'
+import AccessDialog from './AccessDialog'
 import { LEVEL_COLORS, SHARE_LEVELS, splitPrincipal, type PrincipalValue } from './levels'
 import PrincipalIcon from './PrincipalIcon'
 import PrincipalSelect from './PrincipalSelect'
@@ -14,6 +16,8 @@ import PrincipalSelect from './PrincipalSelect'
 interface InternalShareTabProps {
   resourceType: ResourceType
   resourceId: string
+  resourceName?: string
+  workspaceId?: string
 }
 
 interface ShareForm {
@@ -23,8 +27,9 @@ interface ShareForm {
 }
 
 /** #49 internal sharing with users, groups and organization units. */
-export default function InternalShareTab({ resourceType, resourceId }: InternalShareTabProps) {
+export default function InternalShareTab({ resourceType, resourceId, resourceName, workspaceId }: InternalShareTabProps) {
   const { t } = useTranslation()
+  const [editing, setEditing] = useState(false)
   const [form] = Form.useForm<ShareForm>()
   const shares = useQuery({
     queryKey: qk.shares(resourceType, resourceId),
@@ -88,9 +93,9 @@ export default function InternalShareTab({ resourceType, resourceId }: InternalS
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('sharing.noShares')} /> }}
           renderItem={(s) => (
             <List.Item
-              actions={
-                // Inherited shares are managed on the folder they come from.
-                s.inheritedFromId
+              actions={[
+                // Inherited shares can only be removed in "Quản lý quyền truy cập" (it stops inheriting first, like SharePoint).
+                ...(s.inheritedFromId
                   ? []
                   : [
                       <Popconfirm
@@ -102,8 +107,11 @@ export default function InternalShareTab({ resourceType, resourceId }: InternalS
                       >
                         <Button type="text" danger size="small" icon={<DeleteOutlined />} aria-label={t('sharing.unshare')} />
                       </Popconfirm>,
-                    ]
-              }
+                    ]),
+                <Tooltip key="edit" title={t('sharing.editAccess')}>
+                  <Button type="text" size="small" icon={<EditOutlined />} aria-label={t('sharing.editAccessOf', { name: s.sharedWithName })} onClick={() => setEditing(true)} />
+                </Tooltip>,
+              ]}
             >
               <List.Item.Meta
                 avatar={<PrincipalIcon type={s.sharedWithType} />}
@@ -111,17 +119,21 @@ export default function InternalShareTab({ resourceType, resourceId }: InternalS
                   <Space wrap size={4}>
                     <span>{s.sharedWithName}</span>
                     <Tag color={LEVEL_COLORS[s.accessLevel]}>{t(`sharing.levels.${s.accessLevel}`)}</Tag>
-                    {s.inheritedFromId && (
-                      <Tooltip title={t('sharing.inheritedHint', { name: s.inheritedFromName ?? '' })}>
-                        <Tag>{t('sharing.inheritedFrom', { name: s.inheritedFromName ?? '' })}</Tag>
-                      </Tooltip>
-                    )}
                   </Space>
                 }
                 description={t('sharing.sharedByAt', { name: s.sharedByName, date: formatDateTime(s.createdAt) })}
               />
             </List.Item>
           )}
+        />
+      )}
+      {editing && (
+        <AccessDialog
+          target={{ type: resourceType, id: resourceId, name: resourceName ?? '', workspaceId: workspaceId ?? '' }}
+          onClose={() => {
+            setEditing(false)
+            void shares.refetch()
+          }}
         />
       )}
     </>

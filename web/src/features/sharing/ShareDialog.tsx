@@ -12,6 +12,8 @@ export interface ShareTarget {
   name: string
   /** Whether the current user may download (links allowing download need it). Unknown = true (server validates). */
   canDownload?: boolean
+  /** Workspace of the item (the "Quản lý quyền truy cập" dialog opened from the list needs it for folders). */
+  workspaceId?: string
 }
 
 /** #49 share dialog: internal sharing + public links. */
@@ -37,7 +39,9 @@ export default function ShareDialog({ target, onClose }: { target: ShareTarget; 
                 <TeamOutlined /> {t('sharing.tabInternal')}
               </span>
             ),
-            children: <InternalShareTab resourceType={target.type} resourceId={target.id} />,
+            children: (
+              <InternalShareTab resourceType={target.type} resourceId={target.id} resourceName={target.name} workspaceId={target.workspaceId} />
+            ),
           },
           {
             key: 'link',

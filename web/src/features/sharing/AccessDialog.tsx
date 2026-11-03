@@ -373,7 +373,7 @@ function AccessEditor({ target, data, onClose }: { target: AccessTarget; data: R
       />
       {unique && canManage && <Typography.Paragraph type="secondary" style={{ marginTop: 8 }}>{t('access.uniqueHint')}</Typography.Paragraph>}
 
-      {target.type === 'folder' && <ApprovalSetting workspaceId={target.workspaceId} folderId={target.id} />}
+      {target.type === 'folder' && target.workspaceId && <ApprovalSetting workspaceId={target.workspaceId} folderId={target.id} />}
     </Modal>
   )
 }

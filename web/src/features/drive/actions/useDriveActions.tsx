@@ -214,7 +214,7 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
       ),
     [personalWorkspaceId],
   )
-  const share = useCallback((item: DriveItem) => setShareTarget({ type: item.type, id: item.id, name: item.name }), [])
+  const share = useCallback((item: DriveItem) => setShareTarget({ type: item.type, id: item.id, name: item.name, workspaceId: item.workspaceId }), [])
   const manageAccess = useCallback(
     (item: DriveItem) => setAccessTarget({ type: item.type, id: item.id, name: item.name, workspaceId: item.workspaceId }),
     [],
