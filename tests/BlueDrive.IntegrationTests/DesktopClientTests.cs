@@ -5,6 +5,8 @@ using BlueDrive.Sync.Client;
 using BlueDrive.Sync.Core;
 using BlueDrive.Sync.Testing;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using SyncContent = BlueDrive.Sync.Testing.Content;
 
 namespace BlueDrive.IntegrationTests;
@@ -25,6 +27,7 @@ public class DesktopClientTests(ApiFactory factory)
         public required SyncStateDb Db;
         public required SyncEngine Engine;
         public required FlakyHandler Flaky;
+        public required RemoteStoreOptions Options;
 
         public async Task<SyncPassResult> SyncAsync()
         {
@@ -101,14 +104,15 @@ public class DesktopClientTests(ApiFactory factory)
         var flaky = new FlakyHandler { InnerHandler = factory.Server.CreateHandler() };
         var http = BlueDriveHttp.Create(factory.Server.BaseAddress, store, auth, flaky);
         // Small thresholds so that tus chunking and resume are exercised with small files.
-        var remote = new HttpRemoteStore(http, new RemoteStoreOptions { SmallUploadBytes = 64 * 1024, ChunkBytes = 100 * 1024, RetryBaseDelay = TimeSpan.FromMilliseconds(50) });
+        var options = new RemoteStoreOptions { SmallUploadBytes = 64 * 1024, ChunkBytes = 100 * 1024, RetryBaseDelay = TimeSpan.FromMilliseconds(50) };
+        var remote = new HttpRemoteStore(http, options);
         rootId ??= (await remote.RootsAsync(CancellationToken.None)).First(r => r.Kind == "personal").RootId;
         var db = new SyncStateDb(":memory:");
         db.UpsertRoot(rootId, "", true);
         var fs = new FakeLocalFileSystem(new FakeClock(DateTime.UtcNow));
         var engine = new SyncEngine(db, remote, fs, SystemClock.Instance,
             new SyncEngineOptions { UserDisplayName = "Người dùng thử", DeviceName = name, TimeZone = TimeZoneInfo.Utc, MaxRounds = 20 });
-        return new Pc { Name = name, Tokens = store, Remote = remote, Http = http, Fs = fs, Db = db, Engine = engine, Flaky = flaky };
+        return new Pc { Name = name, Tokens = store, Remote = remote, Http = http, Fs = fs, Db = db, Engine = engine, Flaky = flaky, Options = options };
     }
 
     [Fact]
@@ -332,6 +336,8 @@ public class DesktopClientTests(ApiFactory factory)
         var shares = await api.SharesAsync("file", item.RemoteId);
         shares.Should().ContainSingle(s => s.SharedWithId == target.Id && s.AccessLevel == "download");
         (await other.GetAsync($"/api/v1/files/{item.RemoteId}")).StatusCode.Should().Be(HttpStatusCode.OK, "the colleague can open it now");
+        // The colleague's BlueDrive Desktop turns the new share into a "Chia sẻ mới cho bạn" notification.
+        (await new BlueDriveApi(other).UnreadNotificationsAsync()).Should().Contain(n => n.Type == "share" && n.Title.Contains("tờ trình.txt"));
         await api.RemoveShareAsync(shares.Single().Id);
         (await api.SharesAsync("file", item.RemoteId)).Should().BeEmpty();
 
@@ -350,6 +356,83 @@ public class DesktopClientTests(ApiFactory factory)
         await api.RestoreVersionAsync(item.RemoteId, v1.Id);
         await a.SyncAsync();
         a.Fs.Read("Hồ sơ/tờ trình.txt").Should().Equal(SyncContent.Of("bản 1"), "the restored version comes down to the computer");
+    }
+
+    [Fact]
+    public async Task Editing_part_of_a_large_file_sends_only_the_changed_chunks()
+    {
+        var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        using var a = await PcAsync(user, "PC-A");
+        using var b = await PcAsync(user, "PC-B");
+        var data = TextBytes(20 * 1024 * 1024);
+        a.Fs.UserWrite("nhật ký tư liệu.txt", data);
+        await a.SyncAsync();
+        a.Options.DeltaBytesSaved.Should().Be(0, "a new file is uploaded whole");
+
+        // A 1 MB edit in the middle: only the chunks around it travel.
+        var edited = (byte[])data.Clone();
+        TextBytes(1024 * 1024).CopyTo(edited, 10 * 1024 * 1024);
+        a.Fs.UserWrite("nhật ký tư liệu.txt", edited);
+        await a.SyncAsync();
+        a.Options.DeltaBytesSaved.Should().BeGreaterThan(17L * 1024 * 1024);
+        await b.SyncAsync();
+        b.Fs.Read("nhật ký tư liệu.txt").Should().Equal(edited, "the server rebuilt the exact new version");
+
+        // Everything changed: a plain upload (nothing saved), still correct.
+        var saved = a.Options.DeltaBytesSaved;
+        var other = TextBytes(data.Length);
+        a.Fs.UserWrite("nhật ký tư liệu.txt", other);
+        await a.SyncAsync();
+        a.Options.DeltaBytesSaved.Should().Be(saved);
+        await b.SyncAsync();
+        b.Fs.Read("nhật ký tư liệu.txt").Should().Equal(other);
+        var id = a.Db.Items(a.Db.Roots().Single().RootId).Single(i => i.Name == "nhật ký tư liệu.txt").RemoteId;
+        (await (await user.GetAsync($"/api/v1/files/{id}/versions")).ReadJsonAsync()).GetArrayLength().Should().Be(3, "each upload is a version");
+    }
+
+    [Fact]
+    public async Task Delta_upload_refuses_chunks_that_do_not_match_their_hash()
+    {
+        var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        using var a = await PcAsync(user, "PC-A");
+        a.Fs.UserWrite("dữ liệu.txt", TextBytes(200_000));
+        await a.SyncAsync();
+        var item = a.Db.Items(a.Db.Roots().Single().RootId).Single(i => i.Name == "dữ liệu.txt");
+        var chunks = await (await a.Http.GetAsync($"api/v1/sync/items/{item.RemoteId}/chunks")).ReadJsonAsync();
+        chunks.GetProperty("revision").GetInt64().Should().Be(item.RemoteRevision);
+        using var form = new MultipartFormDataContent
+        {
+            { new StringContent($$"""[{"h":"{{new string('a', 64)}}","l":5}]"""), "manifest" },
+            { new ByteArrayContent("12345"u8.ToArray()), "chunks", "chunks.bin" },
+            { new StringContent($"\"{item.RemoteRevision}\""), "base_etag" },
+        };
+        (await a.Http.PostAsync($"api/v1/sync/items/{item.RemoteId}/delta", form)).StatusCode.Should().Be((HttpStatusCode)422);
+    }
+
+    [Fact]
+    public async Task Out_of_quota_keeps_the_file_on_the_computer_and_uploads_it_once_there_is_space()
+    {
+        var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        using var a = await PcAsync(user, "PC-A");
+        var ws = await StorageTests.PersonalWorkspaceAsync(user);
+        async Task SetQuota(long bytes)
+        {
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<BlueDrive.Infrastructure.Persistence.AppDbContext>();
+            var w = await db.Workspaces.FirstAsync(x => x.Id == ws);
+            w.QuotaBytes = bytes;
+            await db.SaveChangesAsync();
+        }
+        await SetQuota(1000);
+        a.Fs.UserWrite("báo cáo lớn.txt", TextBytes(50_000));
+        var r = await a.Engine.SyncAsync(CancellationToken.None);
+        r.Errors.Should().ContainSingle().Which.Should().Contain("Không đủ dung lượng", "shown in Cài đặt → Vấn đề, not retried in a loop");
+        a.Fs.Exists("báo cáo lớn.txt").Should().BeTrue("the change stays on this computer");
+
+        await SetQuota(10L * 1024 * 1024 * 1024);
+        await a.SyncAsync();
+        var items = await (await user.GetAsync($"/api/v1/workspaces/{ws}/items")).ReadJsonAsync();
+        items.GetProperty("items").EnumerateArray().Should().Contain(i => i.GetProperty("name").GetString() == "báo cáo lớn.txt");
     }
 
     [Fact]

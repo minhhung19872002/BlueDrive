@@ -65,6 +65,7 @@ Khóa `HKLM\SOFTWARE\Policies\BlueDrive` (áp cho mọi người dùng; `HKCU\�
 | `InstallOnlyOffice` | REG_DWORD | `1` (mặc định): tự cài ONLYOFFICE Desktop Editors sau khi đăng nhập; `0`: không cài. |
 | `UpdateChannel` | REG_SZ | `stable` (mặc định) hoặc `beta`. |
 | `DisableUpdates` | REG_DWORD | `1`: không tự cập nhật (CNTT tự phân phối phiên bản mới). |
+| `CertificatePins` | REG_MULTI_SZ | Ghim chứng thư cho máy chủ nội bộ: mã SHA-256 (base64) khóa công khai của chứng thư máy chủ hoặc CA trung gian. Lấy mã: `openssl x509 -in cert.pem -pubkey -noout \| openssl pkey -pubin -outform der \| openssl dgst -sha256 -binary \| base64`. Chứng thư khác (dù hợp lệ) bị từ chối. |
 
 ```cmd
 reg add HKLM\SOFTWARE\Policies\BlueDrive /v Server /t REG_SZ /d https://bluedrive.bluestar.com.vn /f

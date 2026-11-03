@@ -78,7 +78,12 @@ Bảng dưới đây đối chiếu từng nhóm yêu cầu với cách hệ th�
 - **Đăng nhập**: OAuth 2.0 Authorization Code + PKCE (S256), chỉ chấp nhận địa chỉ quay lại loopback trên chính máy
   (`127.0.0.1`/`localhost`, RFC 8252); mã một lần, hiệu lực 2 phút, lưu dạng băm. Mật khẩu không bao giờ nhập vào ứng dụng.
 - **Token**: phiên thiết bị riêng (claim `did`), refresh token xoay vòng, phát hiện dùng lại thì thu hồi cả phiên; thời hạn
-  cấu hình được (`sync.device_refresh_days`). Ứng dụng lưu token và khóa bí mật thiết bị bằng DPAPI/Credential Manager.
+  cấu hình được (`sync.device_refresh_days`). Ứng dụng lưu token và khóa bí mật thiết bị bằng DPAPI (Windows), Keychain (macOS),
+  tệp chỉ người dùng đọc được (Linux, quyền 0600); không ghi ra nhật ký, gói chẩn đoán lọc token/mật khẩu.
+- **Kết nối**: TLS bắt buộc; tùy chọn ghim chứng thư (certificate pinning) cho máy chủ nội bộ bằng mã SPKI SHA-256
+  (chính sách `CertificatePins` hoặc `deploy.json`), áp cho API, đăng nhập và kênh thông báo SignalR.
+- **Bộ cài**: ký số Authenticode (chứng thư của đơn vị qua biến bí mật CI), bộ cài ONLYOFFICE chỉ chạy khi chữ ký của
+  Ascensio System SIA hợp lệ.
 - **Thu hồi thiết bị**: người dùng (thiết bị của mình) hoặc quản trị (`device.admin`) thu hồi tại "Thiết bị đã kết nối"; mọi
   phiên của thiết bị bị vô hiệu ngay.
 - **Xóa dữ liệu từ xa**: lệnh được ký `HMAC-SHA256` bằng khóa bí mật riêng của thiết bị (lưu mã hóa trên máy chủ), ứng dụng

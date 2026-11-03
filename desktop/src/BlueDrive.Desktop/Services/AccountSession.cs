@@ -69,6 +69,10 @@ public sealed class AccountSession : IAsyncDisposable
             Changed?.Invoke(this);
         };
         Agent.Activity += (_, _) => Changed?.Invoke(this);
+        Agent.StatusChanged += s =>
+        {
+            if (s.State == AgentState.Idle) _ = CheckSharesAsync();
+        };
         if (config.Paused) Agent.Pause(true);
     }
 
@@ -76,6 +80,28 @@ public sealed class AccountSession : IAsyncDisposable
         CloudFiles.NewPlatform(ctx, version, (path, message) => Notify?.Invoke("BlueDrive", $"{path}: {message}"));
 
     public Task StartAsync() => Agent.StartAsync();
+
+    // Only what arrives while the app runs; at most once a minute.
+    private DateTime _sharesSince = DateTime.UtcNow;
+    private DateTime _sharesChecked = DateTime.MinValue;
+    private int _checkingShares;
+
+    /// <summary>"Chia sẻ mới cho bạn" (spec 8.2): new share notifications of the server become system notifications.</summary>
+    private async Task CheckSharesAsync()
+    {
+        if (DateTime.UtcNow - _sharesChecked < TimeSpan.FromMinutes(1) || Interlocked.Exchange(ref _checkingShares, 1) == 1) return;
+        try
+        {
+            _sharesChecked = DateTime.UtcNow;
+            var fresh = (await Agent.Api.UnreadNotificationsAsync())
+                .Where(n => n.Type == "share" && DateTime.SpecifyKind(n.CreatedAt, DateTimeKind.Utc) > _sharesSince).OrderBy(n => n.CreatedAt).ToList();
+            if (fresh.Count == 0) return;
+            _sharesSince = DateTime.SpecifyKind(fresh[^1].CreatedAt, DateTimeKind.Utc);
+            foreach (var n in fresh.TakeLast(3)) Notify?.Invoke("Chia sẻ mới cho bạn", n.Title);
+        }
+        catch (Exception ex) when (ex is RemoteTransientException or RemotePermanentException or RemoteNotFoundException or SignInRequiredException) { }
+        finally { Interlocked.Exchange(ref _checkingShares, 0); }
+    }
 
     public static string StateTitle(AgentState s) => s switch
     {

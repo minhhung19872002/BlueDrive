@@ -29,6 +29,14 @@ public sealed class SyncNotifications : IAsyncDisposable
             .WithUrl(new Uri(BlueDriveHttp.Normalize(server), "hubs/sync"), o =>
             {
                 o.AccessTokenProvider = accessToken;
+                // Same TLS rules as the API (optional certificate pinning) for WebSockets and the HTTP fallbacks.
+                o.WebSocketConfiguration = ws => ws.RemoteCertificateValidationCallback = CertificatePinning.Callback;
+                if (handlerFactory is null)
+                    o.HttpMessageHandlerFactory = inner =>
+                    {
+                        if (inner is HttpClientHandler h) h.ServerCertificateCustomValidationCallback = (_, cert, chain, errors) => CertificatePinning.Validate(cert, chain, errors);
+                        return inner;
+                    };
                 if (handlerFactory is not null)
                 {
                     // Tests (TestServer): long polling through the in-memory handler.

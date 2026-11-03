@@ -249,3 +249,13 @@ Cùng đích `net10.0` với macOS, chế độ đồng bộ đầy đủ.
 | Khởi động cùng máy, thông báo, pin | `~/.config/autostart/bluedrive.desktop`; `notify-send`; `/sys/class/power_supply/BAT*`. |
 | Triển khai hàng loạt | `/etc/bluedrive/deploy.json`. |
 | Đóng gói | `desktop/packaging/linux/build-linux.sh` (trên Linux): AppImage (Velopack, tự cập nhật kênh `linux-stable` / `linux-beta`) và `.deb` (`/opt/bluedrive`, lệnh `bluedrive`, mục ứng dụng; cập nhật qua apt/CNTT). Đã chạy thử trong container Ubuntu (dotnet/sdk:10.0): đóng gói xong, ứng dụng khởi động dưới Xvfb. |
+
+## 17. Tải lên theo khối thay đổi (Sync-Phase 12, nâng cao)
+
+| Thành phần | Việc làm |
+|---|---|
+| Chia khối | FastCDC (chuẩn hóa mức 2; khối 32 KB – 128 KB trung bình – 512 KB; bảng gear cố định) — một tệp mã nguồn dùng chung `src/BlueDrive.Application/Features/Sync/FastCdc.cs` (BlueDrive.Sync.Core liên kết tới), nên máy và máy chủ cắt cùng ranh giới. Chèn/xóa vài byte chỉ đổi các khối lân cận. |
+| Máy chủ | `GET /api/v1/sync/items/{id}/chunks` (quyền tải xuống): danh sách khối của phiên bản hiện tại. `POST /api/v1/sync/items/{id}/delta` (quyền sửa): `manifest` (mọi khối của bản mới) + `chunks` (chỉ khối máy chủ chưa có); máy chủ ghép từ phiên bản hiện tại + khối mới (kiểm SHA-256 từng khối), rồi lưu như tải lên thường: `base_etag` (412), `content_hash`, hạn mức, quét virus, phiên bản mới, nhật ký có `deviceId`. |
+| Máy | Phiên bản mới của tệp ≥ 8 MB: lấy danh sách khối (cùng revision với base), chia khối bản trên máy, nếu phần thay đổi ≤ 70 % thì gửi delta (đọc thẳng từ ảnh chụp nội dung, không nạp RAM); ngược lại, máy chủ cũ, hay base đã đổi → tải lên toàn bộ như trước (tus, tiếp tục được). |
+| Kết quả | Sửa 1 MB giữa tệp 20 MB: gửi ~2 MB thay vì 20 MB (IT `DesktopClientTests.Editing_part_of_a_large_file_sends_only_the_changed_chunks`). |
+| Chưa làm (tùy chọn trong đặc tả) | **Máy chủ lưu khối dùng chung (dedup)**: máy chủ vẫn lưu mỗi phiên bản thành một blob mã hóa riêng (AES-256-GCM theo blob, sao lưu/khôi phục, thùng rác, hạn mức đều dựa trên mô hình này) — đổi sang kho khối là thay đổi lớn về lưu trữ, chưa làm. **Đồng bộ trong mạng LAN** giữa các máy: cần cơ chế máy ngang hàng chứng minh quyền với nhau (vé do máy chủ cấp, mã hóa kênh) — chưa làm; tải lên theo khối đã giảm phần lớn băng thông với tệp lớn bị sửa. |

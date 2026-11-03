@@ -134,8 +134,11 @@ public sealed class PackagingTests : IDisposable
         try
         {
             Deployment.MachineFile = Path.Combine(_dir, "machine-deploy.json");
-            File.WriteAllText(Deployment.MachineFile, """{ "server": "https://drive.example.gov.vn", "withOnlyOffice": false, "disableUpdates": true }""");
-            Deployment.FromArgs([], Path.Combine(_dir, "app")).Should().Be(new Deployment("https://drive.example.gov.vn", false, null, true));
+            File.WriteAllText(Deployment.MachineFile,
+                """{ "server": "https://drive.example.gov.vn", "withOnlyOffice": false, "disableUpdates": true, "certificatePins": ["pin1=", "pin2="] }""");
+            var d = Deployment.FromArgs([], Path.Combine(_dir, "app"));
+            d.Should().Be(new Deployment("https://drive.example.gov.vn", false, null, true));
+            d.CertificatePins.Should().Equal("pin1=", "pin2=");
             Deployment.FromArgs(["--server=https://khac.vn"], Path.Combine(_dir, "app")).Server.Should().Be("https://khac.vn");
         }
         finally { Deployment.MachineFile = old; }

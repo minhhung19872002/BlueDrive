@@ -58,6 +58,42 @@ public class SyncController : ApiControllerBase
         return Redirect(url.Url);
     }
 
+    /// <summary>Các khối nội dung (FastCDC) của phiên bản hiện tại, cho tải lên theo khối thay đổi.</summary>
+    [HttpGet("items/{id:guid}/chunks")]
+    public Task<ChunkListDto> Chunks(Guid id) => Mediator.Send(new GetFileChunksQuery(id));
+
+    /// <summary>
+    /// Phiên bản mới gửi theo khối thay đổi: <c>manifest</c> (JSON: mọi khối của nội dung mới, theo thứ tự) và <c>chunks</c> (chỉ các khối máy chủ
+    /// chưa có, nối liền theo thứ tự). Kiểm tra như tải lên thường: base_etag (412), content_hash, hạn mức, quét, phiên bản, nhật ký.
+    /// </summary>
+    [HttpPost("items/{id:guid}/delta"), RequestSizeLimit(512L * 1024 * 1024), RequestFormLimits(MultipartBodyLengthLimit = 512L * 1024 * 1024)]
+    public async Task<BlueDrive.Application.Features.Storage.UploadResult> Delta(Guid id, [FromForm] string manifest, IFormFile? chunks,
+        [FromServices] Microsoft.Extensions.Options.IOptions<BlueDrive.Infrastructure.Storage.StorageOptions> storage,
+        [FromForm(Name = "base_etag")] string? baseEtag = null, [FromForm(Name = "content_hash")] string? contentHash = null)
+    {
+        List<DeltaChunkDto> list;
+        try { list = JsonSerializer.Deserialize<List<DeltaChunkDto>>(manifest, JsonSerializerOptions.Web) ?? []; }
+        catch (JsonException) { throw new AppException("Danh sách khối không hợp lệ.", 422); }
+        Directory.CreateDirectory(storage.Value.TempDirectory);
+        var fresh = Path.Combine(storage.Value.TempDirectory, "delta-" + Guid.NewGuid().ToString("N"));
+        var assembled = fresh + ".full";
+        try
+        {
+            await using (var fs = System.IO.File.Create(fresh))
+                if (chunks is not null) await chunks.CopyToAsync(fs);
+            var a = await Mediator.Send(new AssembleDeltaCommand(id, list, fresh, assembled));
+            var meta = new BlueDrive.Application.Features.Storage.UploadMetadata(a.FileName, a.WorkspaceId, null, null, id, null, null, null, null, null,
+                baseEtag, contentHash, FailOnConflict: true);
+            await Mediator.Send(new BlueDrive.Application.Features.Storage.ValidateUploadCommand(meta, a.Length));
+            return await Mediator.Send(new BlueDrive.Application.Features.Storage.CompleteUploadCommand(assembled, meta));
+        }
+        finally
+        {
+            if (System.IO.File.Exists(fresh)) System.IO.File.Delete(fresh);
+            if (System.IO.File.Exists(assembled)) System.IO.File.Delete(assembled);
+        }
+    }
+
     [HttpGet("items/{id:guid}/web-url")]
     public Task<SyncWebUrlDto> WebUrl(Guid id) => Mediator.Send(new GetSyncWebUrlQuery(id));
 

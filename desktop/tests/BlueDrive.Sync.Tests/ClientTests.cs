@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Text;
 using BlueDrive.Sync.Client;
+using BlueDrive.Sync.Core;
 using FluentAssertions;
 
 namespace BlueDrive.Sync.Tests;
@@ -104,5 +105,45 @@ public class ClientTests
     {
         var data = Encoding.UTF8.GetBytes(string.Concat(Enumerable.Repeat("Báo cáo dân số ", 200_000)));
         (await ContentHash.Sha256Async(new MemoryStream(data))).Should().Be(Content.Hash(data));
+    }
+
+    [Fact]
+    public void Certificate_pinning_accepts_only_the_pinned_server_key()
+    {
+        using var key = System.Security.Cryptography.RSA.Create(2048);
+        var req = new System.Security.Cryptography.X509Certificates.CertificateRequest("CN=bluedrive.noi-bo", key,
+            System.Security.Cryptography.HashAlgorithmName.SHA256, System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+        using var cert = req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30));
+        var old = CertificatePinning.Pins;
+        try
+        {
+            CertificatePinning.Pins = [];
+            CertificatePinning.Validate(cert, null, System.Net.Security.SslPolicyErrors.None).Should().BeTrue("no pins: normal TLS validation only");
+            CertificatePinning.Validate(cert, null, System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors).Should().BeFalse();
+            CertificatePinning.Pins = ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="];
+            CertificatePinning.Validate(cert, null, System.Net.Security.SslPolicyErrors.None).Should().BeFalse("another key");
+            CertificatePinning.Pins = [" " + CertificatePinning.SpkiSha256(cert) + " "];
+            CertificatePinning.Validate(cert, null, System.Net.Security.SslPolicyErrors.None).Should().BeTrue();
+            CertificatePinning.Validate(cert, null, System.Net.Security.SslPolicyErrors.RemoteCertificateNameMismatch).Should().BeFalse("a pin never overrides TLS errors");
+        }
+        finally { CertificatePinning.Pins = old; }
+    }
+
+    [Fact]
+    public async Task FastCdc_cuts_stable_boundaries_so_an_insertion_only_changes_nearby_chunks()
+    {
+        var data = new byte[8 * 1024 * 1024];
+        new Random(7).NextBytes(data);
+        var chunks = await FastCdc.SplitAllAsync(new MemoryStream(data));
+        chunks.Sum(c => (long)c.Length).Should().Be(data.Length);
+        chunks.SkipLast(1).Should().OnlyContain(c => c.Length >= FastCdc.MinSize && c.Length <= FastCdc.MaxSize);
+        chunks.Select(c => c.Offset).Should().BeInAscendingOrder();
+        (await FastCdc.SplitAllAsync(new MemoryStream(data))).Should().Equal(chunks, "deterministic (client and server must agree)");
+
+        // 100 bytes inserted near the start: boundaries resynchronise, almost every chunk is still known.
+        var inserted = data[..1000].Concat(new byte[100]).Concat(data[1000..]).ToArray();
+        var after = await FastCdc.SplitAllAsync(new MemoryStream(inserted));
+        var known = chunks.Select(c => c.Hash).ToHashSet();
+        after.Count(c => !known.Contains(c.Hash)).Should().BeLessThanOrEqualTo(2);
     }
 }

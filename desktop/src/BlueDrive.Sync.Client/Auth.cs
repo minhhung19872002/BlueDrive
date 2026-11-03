@@ -62,7 +62,7 @@ public sealed class SignInRequiredException(string message) : Exception(message)
 public sealed class DesktopAuthenticator(Uri server, HttpMessageHandler? handler = null)
 {
     public const string ClientId = "bluedrive-desktop";
-    private readonly HttpClient _http = new(handler ?? new HttpClientHandler(), disposeHandler: handler is null) { BaseAddress = server };
+    private readonly HttpClient _http = new(handler ?? CertificatePinning.Handler(allowRedirect: true), disposeHandler: handler is null) { BaseAddress = server };
 
     public sealed record PkcePair(string Verifier, string Challenge)
     {
@@ -240,7 +240,7 @@ public static class BlueDriveHttp
     public static HttpClient Create(Uri server, ITokenStore store, DesktopAuthenticator auth, HttpMessageHandler? inner = null) =>
         new(new DeviceAuthHandler(store, auth)
         {
-            InnerHandler = inner ?? new SocketsHttpHandler { AllowAutoRedirect = false, PooledConnectionLifetime = TimeSpan.FromMinutes(5) },
+            InnerHandler = inner ?? CertificatePinning.Handler(),
         })
         { BaseAddress = Normalize(server), Timeout = TimeSpan.FromMinutes(10) };
 

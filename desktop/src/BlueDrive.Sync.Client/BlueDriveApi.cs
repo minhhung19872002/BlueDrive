@@ -23,6 +23,11 @@ public sealed class BlueDriveApi(HttpClient http)
     public sealed record Version(Guid Id, int VersionNo, long SizeBytes, string? ChangeNote, string? CreatedByName, DateTime CreatedAt, bool IsCurrent);
 
     public sealed record EditorLink(string Url, string BrowserUrl, bool CanEdit);
+    public sealed record Notification(Guid Id, string Type, string Title, string? Body, string? Link, bool IsRead, DateTime CreatedAt);
+
+    /// <summary>The user's latest unread notifications (the web's bell): "X đã chia sẻ … với bạn"…</summary>
+    public async Task<IReadOnlyList<Notification>> UnreadNotificationsAsync(CancellationToken ct = default) =>
+        (await GetAsync<Paged<Notification>>("api/v1/notifications?unreadOnly=true&page=1&pageSize=20", ct)).Items;
 
     /// <summary>One-time link that opens the document in ONLYOFFICE Desktop Editors signed in (2 minutes, single use).</summary>
     public async Task<EditorLink> EditorLinkAsync(string fileId, CancellationToken ct = default)

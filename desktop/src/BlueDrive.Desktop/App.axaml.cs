@@ -36,10 +36,21 @@ public partial class App : Application
         {
             _host = new AppHost(Environment.GetEnvironmentVariable("BLUEDRIVE_HOME"));
             _deployment = Deployment.Current(desktop.Args ?? []);
+            Sync.Client.CertificatePinning.Pins = _deployment.CertificatePins;
             if (_deployment.SaveInto(_host.Settings)) _host.SaveSettings(_host.Settings);
             Updater = new Updater(() => _host.Sessions.FirstOrDefault()?.Config.ServerUrl ?? _host.Settings.DeploymentServer,
                 () => _deployment.Channel ?? _host.Settings.UpdateChannel, () => _deployment.UpdatesDisabled);
-            Updater.Changed += () => Dispatcher.UIThread.Post(BuildTray);
+            string? updateAnnounced = null;
+            Updater.Changed += () => Dispatcher.UIThread.Post(() =>
+            {
+                BuildTray();
+                if (Updater.PendingVersion is { } v && v != updateAnnounced)
+                {
+                    updateAnnounced = v;
+                    if (_host.Settings.Notifications)
+                        ShowToast("Có bản cập nhật BlueDrive", $"Phiên bản {v} đã sẵn sàng: chọn \"Khởi động lại để cập nhật\" ở biểu tượng BlueDrive, hoặc bản mới tự cài khi thoát.");
+                }
+            });
             ApplyTheme(_host.Settings.Theme);
             _host.Notification += ShowToast;
             _host.Changed += () => Dispatcher.UIThread.Post(UpdateTray);

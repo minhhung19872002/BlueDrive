@@ -13,4 +13,8 @@
     <InternalsVisibleTo Include="BlueDrive.Sync.Testing" />
     <InternalsVisibleTo Include="BlueDrive.IntegrationTests" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Sync-Phase 12: the server's content-defined chunking (delta uploads must cut identical boundaries on both sides). -->
+    <Compile Include="../../../src/BlueDrive.Application/Features/Sync/FastCdc.cs" Link="FastCdc.cs" />
+  </ItemGroup>
 </Project>

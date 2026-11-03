@@ -38,6 +38,15 @@ public sealed class RemoteStoreOptions
     /// <summary>(name, upload?, bytes done, bytes total) while a file is transferred: the tray flyout shows it.</summary>
     public Action<string, bool, long, long>? Progress { get; set; }
     public BandwidthLimiter DownloadLimit { get; set; } = new();
+
+    /// <summary>Sync-Phase 12: a new version of a file at least this large is sent as changed chunks only (0 = never).</summary>
+    public long DeltaMinBytes { get; set; } = 8L * 1024 * 1024;
+
+    /// <summary>Delta upload only when the changed chunks are at most this share of the file (otherwise a plain upload is simpler).</summary>
+    public double DeltaMaxShare { get; set; } = 0.7;
+
+    /// <summary>Bytes saved by delta uploads (diagnostics, tests).</summary>
+    public long DeltaBytesSaved;
 }
 
 /// <summary>
@@ -272,6 +281,7 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
     {
         if (!_workspaceOf.ContainsKey(itemId) || !_nameOf.ContainsKey(itemId)) await TryGetAsync(itemId, ct);
         var ws = _workspaceOf.TryGetValue(itemId, out var w) ? w : throw new RemoteNotFoundException(itemId);
+        if (await TryDeltaAsync(itemId, baseRevision, content, hash, ct) is { } delta) return delta;
         var fields = new Dictionary<string, string>
         {
             ["workspaceId"] = ws.ToString(), ["targetFileId"] = itemId, ["base_etag"] = $"\"{baseRevision}\"", ["content_hash"] = hash, ["conflict"] = "fail",
@@ -286,6 +296,95 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
             throw new RemotePreconditionFailedException(await TryGetAsync(itemId, ct));
         }
         return await GetItemAsync(itemId, ct);
+    }
+
+    private sealed record ChunkList(long Revision, long Size, List<ChunkRef> Chunks);
+    private sealed record ChunkRef(string H, int L);
+
+    /// <summary>
+    /// Sync-Phase 12: send only the chunks of the new version the server does not have (FastCDC, same boundaries on both sides). Null when
+    /// not worth it or not possible (small file, unseekable, server without delta, base changed, most of the file changed): the caller
+    /// uploads the whole file, which also produces the proper 412 / errors.
+    /// </summary>
+    private async Task<RemoteItem?> TryDeltaAsync(string itemId, long baseRevision, Stream content, string hash, CancellationToken ct)
+    {
+        if (_opt.DeltaMinBytes <= 0 || !content.CanSeek) return null;
+        var start = content.Position;
+        var length = content.Length - start;
+        if (length < _opt.DeltaMinBytes) return null;
+        ChunkList? remote;
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, $"api/v1/sync/items/{itemId}/chunks");
+            using var res = await SendAsync(req, HttpCompletionOption.ResponseContentRead, ct);
+            if (!res.IsSuccessStatusCode) return null;
+            remote = await res.Content.ReadFromJsonAsync<ChunkList>(Json, ct);
+        }
+        catch (Exception ex) when (ex is RemoteTransientException or HttpRequestException or System.Text.Json.JsonException) { return null; }
+        if (remote is null || remote.Revision != baseRevision) return null;
+
+        var local = await FastCdc.SplitAllAsync(content, ct);
+        content.Position = start;
+        var known = remote.Chunks.Select(c => c.H).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var missing = local.Where(c => !known.Contains(c.Hash)).ToList();
+        var missingBytes = missing.Sum(c => (long)c.Length);
+        if (missingBytes > length * _opt.DeltaMaxShare) return null;
+
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent(JsonSerializer.Serialize(local.Select(c => new ChunkRef(c.Hash, c.Length)), Json)), "manifest");
+        form.Add(new StringContent($"\"{baseRevision}\""), "base_etag");
+        form.Add(new StringContent(hash), "content_hash");
+        var body = new StreamContent(new ThrottledStream(new ChunkConcatStream(content, start, missing), _opt.UploadLimit, leaveOpen: false));
+        body.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        form.Add(body, "chunks", "chunks.bin");
+        using (var req = new HttpRequestMessage(HttpMethod.Post, $"api/v1/sync/items/{itemId}/delta") { Content = form })
+        using (var res = await SendAsync(req, HttpCompletionOption.ResponseContentRead, ct))
+        {
+            if (res.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed && res.Content.Headers.ContentLength is null or 0) return null; // older server
+            try { await EnsureAsync(res, itemId, ct, _nameOf.GetValueOrDefault(itemId)); }
+            catch (RemotePreconditionFailedException ex) when (ex.Current is null) { throw new RemotePreconditionFailedException(await TryGetAsync(itemId, ct)); }
+        }
+        Interlocked.Add(ref _opt.DeltaBytesSaved, length - missingBytes);
+        content.Position = start + length;
+        return await GetItemAsync(itemId, ct);
+    }
+
+    /// <summary>The given chunks of <paramref name="source"/>, one after the other (read sequentially, nothing buffered in memory).</summary>
+    private sealed class ChunkConcatStream(Stream source, long origin, IReadOnlyList<ContentChunk> parts) : Stream
+    {
+        private int _part;
+        private int _inPart;
+        private long _position;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length { get; } = parts.Sum(p => (long)p.Length);
+        public override long Position { get => _position; set => throw new NotSupportedException(); }
+
+        public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
+
+        public override int Read(Span<byte> buffer)
+        {
+            while (_part < parts.Count)
+            {
+                var p = parts[_part];
+                var left = p.Length - _inPart;
+                if (left == 0) { _part++; _inPart = 0; continue; }
+                source.Position = origin + p.Offset + _inPart;
+                var n = source.Read(buffer[..Math.Min(buffer.Length, left)]);
+                if (n == 0) throw new IOException("Tệp thay đổi trong lúc tải lên.");
+                _inPart += n;
+                _position += n;
+                return n;
+            }
+            return 0;
+        }
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     private async Task<Guid> UploadAsync(string name, Dictionary<string, string> fields, Stream content, string subject, CancellationToken ct)
