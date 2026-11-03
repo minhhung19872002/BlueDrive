@@ -102,6 +102,7 @@ public sealed class SyncAgent : IAsyncDisposable
             new SyncEngineOptions
             {
                 UserDisplayName = o.UserDisplayName, DeviceName = o.DeviceName, SnapshotDirectory = SnapshotDir, ParallelDownloads = Math.Clamp(o.ParallelTransfers, 1, 8),
+                DeleteSettleTime = o.LocalQuiet,
             }, _platform?.Placeholders);
         _engine.Activity += (action, path) => Activity?.Invoke(action, path);
     }
@@ -444,6 +445,7 @@ public sealed class SyncAgent : IAsyncDisposable
         SetStatus(AgentState.Syncing, "Đang đồng bộ…");
         var result = await _engine.SyncAsync(ct);
         Memory.TrimAfter(result.Operations);
+        if (result.DeletesDeferred) RequestLocal(); // the deletions go up (or the mass delete question comes) once they have settled
         var problems = result.Errors.ToList();
         var msg = result.MassDeletePending > 0
             ? $"Bạn vừa xóa {result.MassDeletePending} tệp. Xóa cả trên BlueDrive?"

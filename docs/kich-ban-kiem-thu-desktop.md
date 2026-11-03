@@ -56,8 +56,9 @@ Hai lần chạy liên tiếp đều đạt; số liệu lần 2:
 | UI, thông báo, tài liệu tiếng Việt; không TODO/stub | Đạt | |
 
 **Lỗi tìm ra khi nghiệm thu và đã sửa:** người dùng xóa nhiều tệp lần lượt (như Explorer) trong lúc máy chủ đẩy một thay đổi xuống → lượt
-đồng bộ chạy giữa chừng, thấy < 100 tệp bị xóa và xóa luôn trên máy chủ không hỏi (tái hiện: 71/120 tệp bị xóa). Nay mọi lượt đợi thư mục
-yên (3 giây, tối đa 30 giây) khi đang có thay đổi trên máy — IT `SyncAgentTests.Deleting_many_files_asks_first_even_when_the_server_pushes_a_change_meanwhile`.
+đồng bộ chạy giữa chừng, thấy < 100 tệp bị xóa và xóa luôn trên máy chủ không hỏi (tái hiện: 71/120 tệp bị xóa). Nay (1) mọi lượt đợi thư mục
+yên (3 giây, tối đa 30 giây) khi đang có thay đổi trên máy, và (2) một tệp xóa trên máy chỉ bị xóa trên máy chủ khi lượt sau (cách ≥ 3 giây) vẫn thấy
+nó bị xóa (sự kiện tệp có thể đến muộn hơn lượt quét, như trên Linux) — IT `SyncAgentTests.Deleting_many_files_asks_first_even_when_the_server_pushes_a_change_meanwhile`, `DeleteSettleTests`.
 
 Chưa thay thế được: chạy trên 2 máy Windows vật lý khác nhau (mạng LAN/Internet thật, Word thật). Khi nghiệm thu với đơn vị, chạy lệnh trên
 từ 2 máy vào máy chủ thật, cùng các kịch bản tay ở bảng trên.

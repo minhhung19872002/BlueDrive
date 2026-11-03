@@ -29,6 +29,13 @@ public sealed class SyncEngineOptions
     /// </summary>
     public int ParallelDownloads { get; init; } = 1;
 
+    /// <summary>
+    /// A file deleted on this computer is deleted on the server only when a later pass, at least this long after, still sees it deleted
+    /// (0 = at once). While the user is deleting many files one by one, an early pass (pushed by the server, or before the file system
+    /// events arrived) would otherwise see fewer than 100 deletes and skip the "Xóa cả trên BlueDrive?" question.
+    /// </summary>
+    public TimeSpan DeleteSettleTime { get; init; } = TimeSpan.Zero;
+
     /// <summary>Only files up to this size are prefetched (larger ones stream straight into place), at most <see cref="PrefetchBudget"/> per round.</summary>
     public long PrefetchMaxFile { get; init; } = 64L * 1024 * 1024;
     public long PrefetchBudget { get; init; } = 1024L * 1024 * 1024;
@@ -72,7 +79,11 @@ public sealed class HashingStream(Stream inner) : Stream
     }
 }
 
-public sealed record SyncPassResult(int Operations, int MassDeletePending, IReadOnlyList<string> Errors);
+public sealed record SyncPassResult(int Operations, int MassDeletePending, IReadOnlyList<string> Errors)
+{
+    /// <summary>Local deletions seen for the first time this pass and not sent yet (<see cref="SyncEngineOptions.DeleteSettleTime"/>): run again soon.</summary>
+    public bool DeletesDeferred { get; init; }
+}
 
 /// <summary>
 /// Two-way sync of one account: remote tree (snapshot + change feed) × local tree (scan) × base (SQLite), reconciled item by item with
@@ -88,6 +99,9 @@ public sealed class SyncEngine(
     private readonly IPlaceholderProvider _placeholders = placeholders ?? NoPlaceholders.Instance;
     /// <summary>Content downloaded ahead in parallel: remote id → (verified temporary file, revision).</summary>
     private readonly Dictionary<string, (string Path, long Revision)> _prefetched = [];
+    /// <summary>Local deletions waiting to settle: base remote id → first seen.</summary>
+    private readonly Dictionary<string, DateTime> _deleteSeen = [];
+    private bool _deletesDeferred;
 
     /// <summary>Operations executed since the engine was created (tests check that a converged state stays quiet).</summary>
     public int TotalOperations { get; private set; }
@@ -299,7 +313,9 @@ public sealed class SyncEngine(
             state.ClearOperations(root.RootId);
         }
         ClearPrefetch();
-        return new SyncPassResult(total, pendingMass, errors.Distinct().ToList());
+        var deferred = _deletesDeferred;
+        _deletesDeferred = false;
+        return new SyncPassResult(total, pendingMass, errors.Distinct().ToList()) { DeletesDeferred = deferred };
     }
 
     /// <summary>
@@ -408,6 +424,7 @@ public sealed class SyncEngine(
         else if (root.MassDeleteDecision is not null && deletes.Count == 0) state.SetMassDelete(rootId, 0, null);
 
         await PrefetchAsync(plan, ct);
+        var settled = SettledDeletes(plan, root.MassDeleteDecision == "confirm");
         var ops = 0;
         var stuckMoves = new List<Step>();
         Plan($"-- vòng {rootId}: {plan.Count} mục, {plan.Count(p => p.Decision.Actions != SyncAction.None)} cần xử lý");
@@ -415,6 +432,11 @@ public sealed class SyncEngine(
         {
             ct.ThrowIfCancellationRequested();
             if (step.Decision.Actions == SyncAction.None) continue;
+            if (step.Decision.Has(SyncAction.DeleteRemote) && step.Base is { } gone && !settled.Contains(gone.RemoteId))
+            {
+                _deletesDeferred = true; // seen for the first time: wait for the next pass
+                continue;
+            }
             var opId = state.Enqueue(rootId, step.Decision.Actions.ToString(), step.Base?.RemoteId ?? step.Remote?.Id ?? step.LocalEntry?.Path ?? "", step.Decision.Reason);
             Plan($".. {step.Decision.Actions} {step.Path} [{step.Base?.RemoteId}/{step.Remote?.Id}]");
             try
@@ -949,6 +971,17 @@ public sealed class SyncEngine(
         Record(b, r, b.Name, SameAsScan(c, l) ? l : null, location: false);
         Log("Đã tải lên", l.Path, "Phiên bản mới");
         return true;
+    }
+
+    /// <summary>Remote ids whose local deletion has been seen for at least <see cref="SyncEngineOptions.DeleteSettleTime"/> (all of them once confirmed).</summary>
+    private HashSet<string> SettledDeletes(List<Step> plan, bool confirmed)
+    {
+        var deletes = plan.Where(p => p.Decision.Has(SyncAction.DeleteRemote) && p.Base is not null).Select(p => p.Base!.RemoteId).ToHashSet();
+        foreach (var id in _deleteSeen.Keys.Where(id => !deletes.Contains(id)).ToList()) _deleteSeen.Remove(id); // restored meanwhile
+        if (_o.DeleteSettleTime <= TimeSpan.Zero || confirmed) return deletes;
+        var now = clock.UtcNow;
+        foreach (var id in deletes) _deleteSeen.TryAdd(id, now);
+        return deletes.Where(id => now - _deleteSeen[id] >= _o.DeleteSettleTime).ToHashSet();
     }
 
     /// <summary>Downloads the files this round will write, <see cref="SyncEngineOptions.ParallelDownloads"/> at a time, into verified temporary files.</summary>
