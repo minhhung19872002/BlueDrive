@@ -4,7 +4,7 @@
   BlueDrive server and the ONLYOFFICE option preset.
 .DESCRIPTION
   Writes the deployment policy (HKLM\SOFTWARE\Policies\BlueDrive when run as administrator, else HKCU):
-    Server (REG_SZ), InstallOnlyOffice (DWORD 0/1), UpdateChannel (stable|beta), DisableUpdates (DWORD, optional)
+    Server (REG_SZ), InstallOnlyOffice (DWORD 0/1), UpdateChannel (stable|beta), DisableUpdates (DWORD, optional), LanSync (DWORD 0/1, optional)
   then runs BlueDriveSetup.exe --silent (per-user install in %LOCALAPPDATA%\BlueDrive.Desktop, no administrator rights needed).
   BlueDrive starts at the user's next sign-in, opens the sign-in wizard on that server, and installs ONLYOFFICE Desktop Editors
   when InstallOnlyOffice=1 (one elevation prompt, or none when the user is an administrator with UAC prompts off).
@@ -13,6 +13,11 @@
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File install-bluedrive.ps1 -Server https://bluedrive.bluestar.com.vn -WithOnlyOffice 1
   powershell -ExecutionPolicy Bypass -File install-bluedrive.ps1 -Server https://drive.example.gov.vn -Setup \\fileserver\soft\BlueDriveSetup.exe -WithOnlyOffice 0
+  powershell -ExecutionPolicy Bypass -File install-bluedrive.ps1 -Server https://bluedrive.bluestar.com.vn -LanSync 1   # as administrator: also the firewall rule
+.NOTES
+  -LanSync 1 turns on "Đồng bộ trong mạng LAN" (files taken from BlueDrive computers nearby). Run as administrator, the script also allows
+  BlueDrive.exe through Windows Defender Firewall on domain / private networks (TCP for transfers, UDP 47391 for discovery), so users are
+  never asked; otherwise create the same rule by Group Policy.
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Server,
@@ -21,6 +26,8 @@ param(
     # Local / UNC path or URL of BlueDriveSetup.exe; default: downloaded from the server.
     [string]$Setup,
     [switch]$DisableUpdates,
+    # 1: "Đồng bộ trong mạng LAN" on (and the firewall rule when run as administrator), 0: off, -1: left to the user.
+    [ValidateSet(-1, 0, 1)][int]$LanSync = -1,
     [switch]$PolicyOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -34,6 +41,17 @@ Set-ItemProperty $key -Name Server -Value $server
 Set-ItemProperty $key -Name InstallOnlyOffice -Value $WithOnlyOffice -Type DWord
 Set-ItemProperty $key -Name UpdateChannel -Value $Channel
 if ($DisableUpdates) { Set-ItemProperty $key -Name DisableUpdates -Value 1 -Type DWord }
+if ($LanSync -ge 0) { Set-ItemProperty $key -Name LanSync -Value $LanSync -Type DWord }
+if ($LanSync -eq 1) {
+    $rule = 'BlueDrive - đồng bộ trong mạng LAN'
+    if ($admin) {
+        $program = Join-Path $env:LOCALAPPDATA 'BlueDrive.Desktop\current\BlueDrive.exe'
+        Get-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+        New-NetFirewallRule -DisplayName $rule -Direction Inbound -Action Allow -Program $program -Profile Domain, Private | Out-Null
+        Write-Host "Đã cho phép $program qua tường lửa (mạng miền / mạng riêng)."
+    }
+    else { Write-Warning 'Chưa tạo quy tắc tường lửa cho đồng bộ LAN (cần quyền quản trị hoặc Group Policy): Windows sẽ hỏi người dùng.' }
+}
 Write-Host "Đã ghi chính sách triển khai: $key (máy chủ $server, ONLYOFFICE=$WithOnlyOffice, kênh $Channel)"
 if ($PolicyOnly) { return }
 

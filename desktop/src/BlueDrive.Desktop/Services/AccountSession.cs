@@ -45,6 +45,7 @@ public sealed class AccountSession : IAsyncDisposable
             Server = new Uri(config.ServerUrl), SyncFolder = config.SyncFolder, StateDbPath = store.StateDbPath(config.Id), Tokens = store.Tokens(config.Id),
             UserDisplayName = config.DisplayName, AppVersion = appVersion, AccountId = config.Id, Transfer = transfer,
             ParallelTransfers = settings.ParallelTransfers,
+            LanSync = settings.LanSync,
             OnDemand = config.OnDemand && CloudFiles.Supported(config.SyncFolder) ? ctx => Platform = NewPlatform(ctx, appVersion) : null,
         });
         var lastConflicts = -1;

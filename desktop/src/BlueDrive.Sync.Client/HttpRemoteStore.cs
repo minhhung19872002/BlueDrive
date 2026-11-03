@@ -47,6 +47,10 @@ public sealed class RemoteStoreOptions
 
     /// <summary>Bytes saved by delta uploads (diagnostics, tests).</summary>
     public long DeltaBytesSaved;
+
+    /// <summary>Sync-Phase 12 LAN sync: files at least <see cref="LanMinBytes"/> are taken from a peer when one has them (null = off).</summary>
+    public LanPeers? Lan { get; set; }
+    public long LanMinBytes { get; set; } = 1024 * 1024;
 }
 
 /// <summary>
@@ -62,6 +66,7 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
     private readonly ResiliencePipeline _idempotent;
     private readonly ConcurrentDictionary<string, Guid> _workspaceOf = new();
     private readonly ConcurrentDictionary<string, string> _nameOf = new();
+    private readonly ConcurrentDictionary<string, long> _sizeOf = new();
 
     public HttpRemoteStore(HttpClient http, RemoteStoreOptions? options = null)
     {
@@ -98,6 +103,7 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
     {
         _workspaceOf[d.Id.ToString()] = d.WorkspaceId;
         _nameOf[d.Id.ToString()] = d.Name;
+        if (d.Size is { } size) _sizeOf[d.Id.ToString()] = size;
         return new RemoteItem(d.Id.ToString(), d.ParentId?.ToString(), d.Name, d.Type == "folder", d.Revision, d.Hash, d.Size ?? 0,
             DateTime.SpecifyKind(d.ModifiedAt, DateTimeKind.Utc), d.CanEdit, d.CanDownload);
     }
@@ -172,6 +178,13 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
 
     public async Task DownloadAsync(string itemId, Stream destination, CancellationToken ct)
     {
+        if (_opt.Lan is { HasPeers: true } lan && _sizeOf.GetValueOrDefault(itemId) >= _opt.LanMinBytes
+            && await lan.TryDownloadAsync(t => LanTicketAsync(itemId, t), destination, ct))
+        {
+            var size = _sizeOf.GetValueOrDefault(itemId);
+            _opt.Progress?.Invoke(_nameOf.GetValueOrDefault(itemId) ?? itemId, false, size, size);
+            return;
+        }
         long written = 0;
         await Idempotent<object?>(async t =>
         {
@@ -207,6 +220,24 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
             }
             return null;
         }, ct);
+    }
+
+    /// <summary>LAN sync: a ticket to get the file from a peer (the server checks the download right and audits it).</summary>
+    public async Task<LanTicket> LanTicketAsync(string itemId, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, "api/v1/sync/lan/tickets") { Content = JsonContent.Create(new { fileId = itemId }, options: Json) };
+        using var res = await SendAsync(req, HttpCompletionOption.ResponseContentRead, ct);
+        await EnsureAsync(res, itemId, ct);
+        return (await res.Content.ReadFromJsonAsync<LanTicket>(Json, ct))!;
+    }
+
+    /// <summary>LAN sync, serving side: the server confirms a peer's ticket (an error when it is not valid).</summary>
+    public async Task<LanTicketInfo> LanConfirmAsync(string ticket, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, "api/v1/sync/lan/confirm") { Content = JsonContent.Create(new { ticket }, options: Json) };
+        using var res = await SendAsync(req, HttpCompletionOption.ResponseContentRead, ct);
+        await EnsureAsync(res, "", ct);
+        return (await res.Content.ReadFromJsonAsync<LanTicketInfo>(Json, ct))!;
     }
 
     /// <summary>Files On-Demand hydration: streams bytes [offset, offset + length) to <paramref name="sink"/>, resuming after a dropped connection.</summary>

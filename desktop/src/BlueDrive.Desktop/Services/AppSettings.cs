@@ -21,6 +21,8 @@ public sealed class AppSettings
     public int ParallelTransfers { get; set; } = 4;
     /// <summary>"Khi nhấp đúp file Office trong BlueDrive": false = ứng dụng mặc định, true = luôn mở chế độ cùng soạn khi có mạng (spec 13A).</summary>
     public bool CoEditOnDoubleClick { get; set; }
+    /// <summary>"Đồng bộ trong mạng LAN" (Sync-Phase 12): get files from / give files to BlueDrive computers nearby; applies when the account restarts.</summary>
+    public bool LanSync { get; set; }
     public ProxyChoice Proxy { get; set; } = ProxyChoice.System;
     public string? ProxyAddress { get; set; }
     /// <summary>Files On-Demand: free the space of files not used for this many days (0 = never), like Storage Sense.</summary>

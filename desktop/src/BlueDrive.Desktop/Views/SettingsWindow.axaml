@@ -91,6 +91,12 @@
             <NumericUpDown Value="{Binding ParallelTransfers}" Minimum="1" Maximum="8" Increment="1" FormatString="0" Width="120" />
           </StackPanel>
           <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap" Text="Số tệp được tải xuống cùng lúc (chế độ đồng bộ đầy đủ); áp dụng ở lần khởi động sau." />
+          <TextBlock Text="Đồng bộ trong mạng LAN" Classes="h2" Margin="0,8,0,0" />
+          <CheckBox IsChecked="{Binding LanSync}" IsEnabled="{Binding LanSyncEditable}"
+                    Content="Lấy tệp từ máy BlueDrive khác cùng mạng thay vì tải từ máy chủ (và cho máy khác lấy tệp từ máy này)" />
+          <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
+                     Text="Máy chủ vẫn kiểm tra quyền từng lần lấy tệp; nội dung được mã hóa và kiểm tra mã băm, lỗi thì tải từ máy chủ. Chỉ gửi bản đã đồng bộ, không gửi bản đang sửa. Windows có thể hỏi cho phép BlueDrive qua tường lửa (mạng riêng). Áp dụng ở lần khởi động sau." />
+          <TextBlock Classes="muted" FontSize="12" Text="Do đơn vị quản lý (chính sách)." IsVisible="{Binding LanSyncLocked}" />
           <TextBlock Text="Proxy" Classes="h2" Margin="0,8,0,0" />
           <ComboBox ItemsSource="{Binding ProxyLabels}" SelectedIndex="{Binding ProxyIndex}" MinWidth="260" />
           <TextBox Text="{Binding ProxyAddress}" Watermark="http://proxy.donvi.gov.vn:8080" IsVisible="{Binding ManualProxy}" />

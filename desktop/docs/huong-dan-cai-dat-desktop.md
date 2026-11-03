@@ -65,6 +65,7 @@ Khóa `HKLM\SOFTWARE\Policies\BlueDrive` (áp cho mọi người dùng; `HKCU\�
 | `InstallOnlyOffice` | REG_DWORD | `1` (mặc định): tự cài ONLYOFFICE Desktop Editors sau khi đăng nhập; `0`: không cài. |
 | `UpdateChannel` | REG_SZ | `stable` (mặc định) hoặc `beta`. |
 | `DisableUpdates` | REG_DWORD | `1`: không tự cập nhật (CNTT tự phân phối phiên bản mới). |
+| `LanSync` | REG_DWORD | `1`: bật **Đồng bộ trong mạng LAN** (máy lấy tệp từ máy BlueDrive khác cùng mạng, theo vé của máy chủ); `0`: tắt; không đặt: người dùng tự chọn (mặc định tắt). Cần cho phép `%LOCALAPPDATA%\BlueDrive.Desktop\current\BlueDrive.exe` qua tường lửa trên mạng miền/riêng (TCP truyền tệp, UDP 47391 tìm máy): `install-bluedrive.ps1 -LanSync 1` chạy quyền quản trị tự tạo quy tắc, hoặc tạo bằng Group Policy. |
 | `CertificatePins` | REG_MULTI_SZ | Ghim chứng thư cho máy chủ nội bộ: mã SHA-256 (base64) khóa công khai của chứng thư máy chủ hoặc CA trung gian. Lấy mã: `openssl x509 -in cert.pem -pubkey -noout \| openssl pkey -pubin -outform der \| openssl dgst -sha256 -binary \| base64`. Chứng thư khác (dù hợp lệ) bị từ chối. |
 
 ```cmd

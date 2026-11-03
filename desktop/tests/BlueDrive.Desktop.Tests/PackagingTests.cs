@@ -212,6 +212,18 @@ public sealed class PackagingTests : IDisposable
     }
 
     [Fact]
+    public void Lan_sync_is_off_unless_the_user_or_the_organisation_turns_it_on()
+    {
+        var settings = new AppSettings();
+        settings.LanSync.Should().BeFalse("Windows would ask about the firewall on every computer");
+        new Deployment(null, null, null, false).SaveInto(settings).Should().BeFalse();
+        new Deployment(null, null, null, false) { LanSync = true }.SaveInto(settings).Should().BeTrue();
+        settings.LanSync.Should().BeTrue();
+        new Deployment(null, null, null, false) { LanSync = false }.SaveInto(settings).Should().BeTrue();
+        settings.LanSync.Should().BeFalse();
+    }
+
+    [Fact]
     public void Updates_come_from_the_bluedrive_server()
     {
         Updater.FeedUrl("https://drive.example.gov.vn/").Should().Be("https://drive.example.gov.vn/downloads/desktop/");

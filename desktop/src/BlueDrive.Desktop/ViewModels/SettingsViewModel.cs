@@ -70,6 +70,7 @@ public partial class SettingsViewModel : ObservableObject
         _betaChannel = s.UpdateChannel == "beta";
         _freeUpIndex = Array.IndexOf(FreeUpDays, s.FreeUpAfterDays) is var i and >= 0 ? i : 0;
         _doubleClickIndex = s.CoEditOnDoubleClick ? 1 : 0;
+        _lanSync = s.LanSync;
         Version = $"BlueDrive Desktop {host.AppVersion}";
         Refresh();
         RefreshOnlyOffice();
@@ -106,6 +107,10 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private int _freeUpIndex;
     /// <summary>"Khi nhấp đúp file Office trong BlueDrive" (spec 13A): 0 = ứng dụng mặc định, 1 = luôn mở chế độ cùng soạn khi có mạng.</summary>
     [ObservableProperty] private int _doubleClickIndex;
+    [ObservableProperty] private bool _lanSync;
+    /// <summary>Set by the organisation's policy: shown but not changeable.</summary>
+    public bool LanSyncLocked { get; } = Deployment.Current([]).LanSync is not null;
+    public bool LanSyncEditable => !LanSyncLocked;
     public string[] DoubleClickLabels { get; } = ["Mở bằng ứng dụng mặc định", "Luôn mở chế độ cùng soạn (khi có mạng)"];
     public bool DoubleClickAvailable => OperatingSystem.IsWindows();
     [ObservableProperty] private string? _aboutMessage;
@@ -310,6 +315,7 @@ public partial class SettingsViewModel : ObservableObject
         s.UpdateChannel = BetaChannel ? "beta" : "stable";
         s.FreeUpAfterDays = FreeUpDays[Math.Clamp(FreeUpIndex, 0, FreeUpDays.Length - 1)];
         s.CoEditOnDoubleClick = DoubleClickAvailable && DoubleClickIndex == 1;
+        if (!LanSyncLocked) s.LanSync = LanSync;
         _host.SaveSettings(s);
         App.ApplyTheme(s.Theme);
         SyncMessage = AboutMessage = "Đã lưu cài đặt.";

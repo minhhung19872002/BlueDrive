@@ -63,6 +63,14 @@ public class SyncController : ApiControllerBase
     public Task<IReadOnlyList<BlueDrive.Application.Features.Office.EditingFileDto>> Editing() =>
         Mediator.Send(new BlueDrive.Application.Features.Office.ListEditingFilesQuery());
 
+    /// <summary>Đồng bộ trong mạng LAN: vé dùng một lần để lấy tệp từ máy BlueDrive khác cùng mạng (kiểm tra quyền và ghi nhật ký như tải xuống).</summary>
+    [HttpPost("lan/tickets")]
+    public Task<LanTicketDto> LanTicket(CreateLanTicketCommand cmd) => Mediator.Send(cmd);
+
+    /// <summary>Máy cho tải xác nhận vé của máy cần tệp; trả mã băm và khóa mã hóa đường truyền.</summary>
+    [HttpPost("lan/confirm")]
+    public Task<LanTicketInfoDto> ConfirmLanTicket(ConfirmLanTicketCommand cmd) => Mediator.Send(cmd);
+
     /// <summary>Các khối nội dung (FastCDC) của phiên bản hiện tại, cho tải lên theo khối thay đổi.</summary>
     [HttpGet("items/{id:guid}/chunks")]
     public Task<ChunkListDto> Chunks(Guid id) => Mediator.Send(new GetFileChunksQuery(id));

@@ -91,4 +91,11 @@ Bảng dưới đây đối chiếu từng nhóm yêu cầu với cách hệ th�
 - **Chính sách**: bật/tắt đồng bộ, giới hạn theo vai trò/đơn vị, kích thước tối đa, đuôi tệp bị chặn, nhóm chỉ trực tuyến,
   phiên bản ứng dụng tối thiểu. Tư liệu chỉ có quyền Xem không bao giờ được tải xuống máy.
 - **Nhật ký**: mọi thao tác từ ứng dụng ghi `deviceId` và `source = desktop_sync` trong chuỗi nhật ký có băm.
+- **Đồng bộ trong mạng LAN** (tắt mặc định; bật trong Cài đặt → Mạng hoặc chính sách `LanSync`): máy chỉ lấy tệp từ máy khác khi có
+  **vé của máy chủ** — cấp sau đúng các kiểm tra của một lần tải xuống (chính sách đồng bộ, quyền tải, ghi nhật ký tải xuống), dùng
+  trong 2 phút, tối đa 3 máy xác nhận. Máy cho tải chỉ gửi sau khi máy chủ xác nhận vé, và chỉ khi chính nó là thiết bị BlueDrive đã
+  đăng nhập có quyền xem tệp; nó chỉ gửi bản đã đồng bộ, không đổi kể từ đó (không gửi bản đang sửa), không gửi tệp chưa tải về.
+  Nội dung mã hóa AES-256-GCM bằng khóa riêng của vé (khung 1 MiB, số thứ tự khung được xác thực, có khung kết thúc), máy nhận
+  kiểm tra SHA-256 cả tệp trước khi ghi; sai bất kỳ bước nào thì tải từ máy chủ. Máy chỉ nhận ra máy cùng máy chủ BlueDrive
+  (UDP 47391, mạng miền/riêng); quy tắc tường lửa do `install-bluedrive.ps1 -LanSync 1` (quyền quản trị) hoặc Group Policy tạo.
 

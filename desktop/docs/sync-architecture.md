@@ -258,7 +258,18 @@ Cùng đích `net10.0` với macOS, chế độ đồng bộ đầy đủ.
 | Máy chủ | `GET /api/v1/sync/items/{id}/chunks` (quyền tải xuống): danh sách khối của phiên bản hiện tại. `POST /api/v1/sync/items/{id}/delta` (quyền sửa): `manifest` (mọi khối của bản mới) + `chunks` (chỉ khối máy chủ chưa có); máy chủ ghép từ phiên bản hiện tại + khối mới (kiểm SHA-256 từng khối), rồi lưu như tải lên thường: `base_etag` (412), `content_hash`, hạn mức, quét virus, phiên bản mới, nhật ký có `deviceId`. |
 | Máy | Phiên bản mới của tệp ≥ 8 MB: lấy danh sách khối (cùng revision với base), chia khối bản trên máy, nếu phần thay đổi ≤ 70 % thì gửi delta (đọc thẳng từ ảnh chụp nội dung, không nạp RAM); ngược lại, máy chủ cũ, hay base đã đổi → tải lên toàn bộ như trước (tus, tiếp tục được). |
 | Kết quả | Sửa 1 MB giữa tệp 20 MB: gửi ~2 MB thay vì 20 MB (IT `DesktopClientTests.Editing_part_of_a_large_file_sends_only_the_changed_chunks`). |
-| Chưa làm (tùy chọn trong đặc tả) | **Máy chủ lưu khối dùng chung (dedup)**: máy chủ vẫn lưu mỗi phiên bản thành một blob mã hóa riêng (AES-256-GCM theo blob, sao lưu/khôi phục, thùng rác, hạn mức đều dựa trên mô hình này) — đổi sang kho khối là thay đổi lớn về lưu trữ, chưa làm. **Đồng bộ trong mạng LAN** giữa các máy: cần cơ chế máy ngang hàng chứng minh quyền với nhau (vé do máy chủ cấp, mã hóa kênh) — chưa làm; tải lên theo khối đã giảm phần lớn băng thông với tệp lớn bị sửa. |
+| Chưa làm (tùy chọn trong đặc tả) | **Máy chủ lưu khối dùng chung (dedup)**: máy chủ vẫn lưu mỗi phiên bản thành một blob mã hóa riêng (AES-256-GCM theo blob; sao lưu/khôi phục, thùng rác, hạn mức, quét mã độc, xem trước, ONLYOFFICE đều đọc blob này) — đổi sang kho khối dùng chung là thay đổi kiến trúc lưu trữ của toàn hệ thống, chưa làm; tải lên theo khối đã bỏ phần lớn băng thông khi sửa tệp lớn. |
+
+### Đồng bộ trong mạng LAN (Sync-Phase 12)
+
+| Thành phần | Việc làm |
+|---|---|
+| Bật | Cài đặt → Mạng → "Đồng bộ trong mạng LAN" (mặc định tắt; áp dụng ở lần khởi động sau) hoặc chính sách `LanSync` (DWORD 0/1, khóa ô chọn); `install-bluedrive.ps1 -LanSync 1` ghi chính sách và, khi chạy quyền quản trị, tạo quy tắc tường lửa cho `BlueDrive.exe` (mạng miền/riêng). |
+| Tìm máy | `LanPeers` (`desktop/src/BlueDrive.Sync.Client/LanPeers.cs`): mỗi tài khoản phát thông báo UDP broadcast cổng 47391 mỗi 30 giây (`net` = băm địa chỉ máy chủ, mã phiên, cổng TCP); máy khác máy chủ bị bỏ qua; máy không thấy lại sau 2 phút bị quên. |
+| Máy chủ | `POST /api/v1/sync/lan/tickets` (`CreateLanTicketCommand`): chỉ thiết bị Desktop; chạy đúng kiểm tra + nhật ký tải xuống (`GetSyncContentUrlQuery`), trả vé ngẫu nhiên, khóa AES-256, SHA-256 và kích thước; vé lưu băm trong bộ nhớ 2 phút. `POST /api/v1/sync/lan/confirm` (`ConfirmLanTicketCommand`): máy cho tải (thiết bị khác thiết bị xin vé, có quyền xem tệp) nhận lại tệp nào, mã băm và khóa; tối đa 3 lần xác nhận. |
+| Truyền | TCP: máy nhận gửi vé; máy cho tải hỏi máy chủ, tìm bản trên máy đúng phiên bản và chưa đổi (mã băm, kích thước, thời gian, mã tệp như lúc đồng bộ; tệp giữ chỗ chưa tải về không gửi), gửi từng khung 1 MiB mã hóa AES-GCM (nonce ngẫu nhiên, AAD = số khung, khung rỗng kết thúc). Tối đa 4 lượt gửi cùng lúc. |
+| Nhận | `HttpRemoteStore.DownloadAsync`: tệp ≥ 1 MB và có máy cùng mạng → xin vé, thử tối đa 3 máy (kết nối 2 giây), nhận vào tệp tạm, kiểm tra SHA-256 + kích thước rồi mới ghi vào đích (engine vẫn kiểm tra mã băm như mọi lần tải); lỗi → tải từ máy chủ như cũ. |
+| Kiểm thử | IT `LanSyncTests` (hai máy thật trên API thật: máy B nhận tệp 3 MB từ máy A; vé theo quyền của cả hai máy, phiên web không xin được vé); `LanPeersTests` (mã hóa + kiểm tra, vé giả, sai khóa, sai phiên bản, bản trên máy đã đổi, máy chết, tìm nhau bằng UDP và bỏ qua máy khác máy chủ). |
 
 ## 18. Bổ sung theo đặc tả (sau Sync-Phase 12)
 

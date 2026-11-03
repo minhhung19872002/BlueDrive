@@ -7,7 +7,7 @@ namespace BlueDrive.Desktop.Services;
 /// Mass deployment settings (spec 11 / 13A), strongest first:
 /// <list type="number">
 /// <item>Group Policy / Intune registry values under <c>HKLM\SOFTWARE\Policies\BlueDrive</c> (or HKCU): <c>Server</c>,
-/// <c>InstallOnlyOffice</c> (DWORD 0/1), <c>UpdateChannel</c> (stable/beta), <c>DisableUpdates</c> (DWORD 1).</item>
+/// <c>InstallOnlyOffice</c> (DWORD 0/1), <c>UpdateChannel</c> (stable/beta), <c>DisableUpdates</c> (DWORD 1), <c>LanSync</c> (DWORD 0/1).</item>
 /// <item>Installer arguments, forwarded by Velopack's Setup after <c>--</c>: <c>BlueDriveSetup.exe --silent -- --server=https://… --with-onlyoffice=1</c>
 /// (the <c>/server=</c> and <c>/with-onlyoffice=</c> spellings work too). They only reach the first start, so they are saved in settings.</item>
 /// <item><c>deploy.json</c> next to BlueDrive.exe: <c>{ "server": "…", "withOnlyOffice": true, "channel": "stable" }</c>.</item>
@@ -18,6 +18,8 @@ public sealed record Deployment(string? Server, bool? InstallOnlyOffice, string?
     /// <summary>Certificate pinning for an internal server (SPKI SHA-256, base64): policy <c>CertificatePins</c> (REG_MULTI_SZ) or deploy.json
     /// <c>"certificatePins": [...]</c>. Not part of equality.</summary>
     public IReadOnlyList<string> CertificatePins { get; init; } = [];
+    /// <summary>"Đồng bộ trong mạng LAN" set by policy <c>LanSync</c> (DWORD 0/1); null = the user decides. Not part of equality.</summary>
+    public bool? LanSync { get; init; }
 
     public bool Equals(Deployment? other) => other is not null && (Server, InstallOnlyOffice, Channel, UpdatesDisabled) == (other.Server, other.InstallOnlyOffice, other.Channel, other.UpdatesDisabled);
 
@@ -90,6 +92,7 @@ public sealed record Deployment(string? Server, bool? InstallOnlyOffice, string?
             if (key.GetValue("InstallOnlyOffice") is int oo) d = d with { InstallOnlyOffice = oo != 0 };
             if (key.GetValue("UpdateChannel") is string c) d = d with { Channel = NormalizeChannel(c) };
             if (key.GetValue("DisableUpdates") is int off && off != 0) d = d with { UpdatesDisabled = true };
+            if (key.GetValue("LanSync") is int lan) d = d with { LanSync = lan != 0 };
             if (key.GetValue("CertificatePins") switch { string[] many => many, string one => one.Split(';'), _ => null } is { Length: > 0 } pins)
                 d = d with { CertificatePins = pins };
             break; // machine policy wins over user policy
@@ -104,6 +107,7 @@ public sealed record Deployment(string? Server, bool? InstallOnlyOffice, string?
         if (Server is not null && settings.DeploymentServer != Server) { settings.DeploymentServer = Server; changed = true; }
         if (InstallOnlyOffice is { } oo && settings.InstallOnlyOffice != oo) { settings.InstallOnlyOffice = oo; changed = true; }
         if (Channel is not null && settings.UpdateChannel != Channel) { settings.UpdateChannel = Channel; changed = true; }
+        if (LanSync is { } lan && settings.LanSync != lan) { settings.LanSync = lan; changed = true; }
         return changed;
     }
 }

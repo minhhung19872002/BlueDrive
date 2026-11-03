@@ -35,6 +35,10 @@ public sealed class AgentOptions
     public Guid AccountId { get; init; } = Guid.NewGuid();
     /// <summary>Files On-Demand (Windows Cloud Files API); null = full sync mode (every file downloaded).</summary>
     public Func<OnDemandContext, IOnDemandPlatform>? OnDemand { get; init; }
+    /// <summary>"Đồng bộ trong mạng LAN" (Sync-Phase 12): get files from / give files to BlueDrive Desktops of the same server nearby.</summary>
+    public bool LanSync { get; init; }
+    /// <summary>Find peers by UDP broadcast (false in tests: peers are added with <see cref="SyncAgent.Lan"/>).</summary>
+    public bool LanDiscovery { get; init; } = true;
 }
 
 /// <summary>
@@ -76,6 +80,40 @@ public sealed class SyncAgent : IAsyncDisposable
     public SyncEngine Engine => _engine;
     public SyncStateDb State => _db;
     public HttpRemoteStore Remote => _remote;
+    /// <summary>LAN sync peers (null when "Đồng bộ trong mạng LAN" is off).</summary>
+    public LanPeers? Lan { get; }
+    private readonly SyncStateDb? _lanDb;
+    private readonly object _lanGate = new();
+
+    /// <summary>
+    /// LAN sync, serving side: the local copy of the file when it is exactly the synced version — fully on this computer and untouched since
+    /// (same size, time and file id as recorded): an edit not uploaded yet is never sent to a peer.
+    /// </summary>
+    private string? ServableCopy(Guid fileId, string sha256)
+    {
+        if (_lanDb is null) return null;
+        lock (_lanGate)
+        {
+            var id = fileId.ToString();
+            foreach (var root in _lanDb.Roots().Where(r => r.Enabled))
+            {
+                var items = _lanDb.Items(root.RootId);
+                var b = items.FirstOrDefault(i => i.RemoteId == id);
+                if (b is null) continue;
+                if (b.IsFolder || !string.Equals(b.Hash, sha256, StringComparison.OrdinalIgnoreCase) || b.SyncState != "in_sync") return null;
+                var byRemote = items.ToDictionary(i => i.RemoteId);
+                var rel = LocalIndex.PathOf(b, byRemote);
+                if (root.LocalPath.Length > 0) rel = root.LocalPath + "/" + rel;
+                var now = _fs.Stat(rel);
+                if (now is null || now.IsFolder || now.Size != b.Size || now.Size != b.LocalSize || now.MTime != b.LocalMtime || now.FileId != b.LocalFileId) return null;
+                var abs = Path.Combine(_fs.Root, rel.Replace('/', Path.DirectorySeparatorChar));
+                // Files On-Demand: a placeholder whose content is not here would be downloaded from the server just to be sent on.
+                const FileAttributes recall = (FileAttributes)0x00400000 | (FileAttributes)0x00040000 | FileAttributes.Offline;
+                return (File.GetAttributes(abs) & recall) == 0 ? abs : null;
+            }
+            return null;
+        }
+    }
     /// <summary>Sharing, web links, version history (Explorer context menu).</summary>
     public BlueDriveApi Api { get; }
 
@@ -90,6 +128,12 @@ public sealed class SyncAgent : IAsyncDisposable
         o.Transfer.Resume ??= new DbResumeStore(_db);
         _remote = new HttpRemoteStore(_http, o.Transfer);
         Api = new BlueDriveApi(_http);
+        if (o.LanSync)
+        {
+            _lanDb = new SyncStateDb(o.StateDbPath); // the engine's connection stays on its own thread
+            Lan = new LanPeers(server, _remote.LanConfirmAsync, ServableCopy);
+            o.Transfer.Lan = Lan;
+        }
         if (o.OnDemand is not null)
         {
             _onDemand = new OnDemandContext(Path.GetFullPath(o.SyncFolder), o.AccountId, o.UserDisplayName, server, _remote, Path.GetFullPath(o.StateDbPath));
@@ -126,6 +170,7 @@ public sealed class SyncAgent : IAsyncDisposable
             Directory.CreateDirectory(_fs.Root);
             _db.SetAccount(InitializedKey, _fs.Root);
         }
+        Lan?.Start(_o.LanDiscovery);
         if (_platform is not null && Directory.Exists(_fs.Root))
         {
             await _platform.StartAsync(ct);
@@ -592,6 +637,8 @@ public sealed class SyncAgent : IAsyncDisposable
         _watcher?.Dispose();
         if (_notes is not null) await _notes.DisposeAsync();
         if (_platform is not null) await _platform.DisposeAsync();
+        if (Lan is not null) await Lan.DisposeAsync();
+        _lanDb?.Dispose();
         _http.Dispose();
         _db.Dispose();
         _stop.Dispose();
