@@ -92,6 +92,12 @@ public sealed class SyncAgentTests(ApiFactory factory) : IDisposable
         await Until(() => Task.FromResult(Directory.Exists(Path.Combine(mine, "Từ trình duyệt"))), "thư mục xuống máy");
         watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5), "spec: a web change reaches the computer in under 5 seconds");
 
+        // The top of the BlueDrive folder only holds the root folders: a file put there is moved aside (spec 7.2).
+        var stray = Path.Combine(_tmp, "BlueDrive", "lạc chỗ.txt");
+        await File.WriteAllTextAsync(stray, "x");
+        await Until(() => Task.FromResult(!File.Exists(stray)), "tệp ở cấp ngoài cùng được chuyển đi");
+        File.Exists(Path.Combine(_tmp, "BlueDrive", "_Không đồng bộ được", "lạc chỗ.txt")).Should().BeTrue();
+
         // Deleting the whole sync folder never deletes anything on the server: the agent stops with an explanation.
         await Until(() => Task.FromResult(agent.Status.State == AgentState.Idle), "đồng bộ xong");
         Directory.Delete(Path.Combine(_tmp, "BlueDrive"), recursive: true);

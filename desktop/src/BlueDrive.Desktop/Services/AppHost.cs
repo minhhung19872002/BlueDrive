@@ -52,6 +52,7 @@ public sealed class AppHost : IAsyncDisposable
         };
         s.Agent.Activity += (action, path) => Log.Information("[{Account}] {Action}: {Path}", acc.Username, action, path);
         Sessions.Add(s);
+        RegisterShell();
         try { await s.StartAsync(); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or HttpRequestException)
         {
@@ -94,6 +95,7 @@ public sealed class AppHost : IAsyncDisposable
             SyncRootRegistrar.Unregister(new SyncRootInfo(s.Config.SyncFolder, s.Config.Id, "", AppVersion, "", null));
         }
         Store.Remove(s.Config.Id);
+        RegisterShell();
         if (deleteFiles && Directory.Exists(s.Config.SyncFolder)) Directory.Delete(s.Config.SyncFolder, recursive: true);
         Changed?.Invoke();
     }
@@ -120,6 +122,14 @@ public sealed class AppHost : IAsyncDisposable
         var acc = s.Config with { OnDemand = onDemand };
         Store.Save(acc);
         return await StartSessionAsync(acc);
+    }
+
+    /// <summary>Explorer context menu for the current sync folders (removed with the last account).</summary>
+    private void RegisterShell()
+    {
+        if (Environment.ProcessPath is not { } exe || !exe.EndsWith("BlueDrive.exe", StringComparison.OrdinalIgnoreCase)) return; // tests, tools
+        try { ExplorerMenu.Register(Sessions.Select(x => x.Config.SyncFolder).ToList(), exe); }
+        catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Không đăng ký được menu chuột phải"); }
     }
 
     public void SaveSettings(AppSettings settings)

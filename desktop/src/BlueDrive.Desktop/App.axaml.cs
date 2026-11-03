@@ -47,9 +47,74 @@ public partial class App : Application
     private async Task StartAsync(bool background)
     {
         await _host.StartAsync();
+        var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
         if (_host.Sessions.Count == 0) ShowWizard();
+        else if (ExplorerMenu.Parse(args) is not null) await HandleArgsAsync(args);
         else if (!background) ShowFlyout();
         UpdateTray();
+    }
+
+    /// <summary>Explorer context menu (or a second start of the app): "--share|--link|--web|--versions|--resolve &lt;path&gt;"; otherwise show the flyout.</summary>
+    private async Task HandleArgsAsync(string[] args)
+    {
+        if (ExplorerMenu.Parse(args) is not { } cmd)
+        {
+            ShowFlyout();
+            return;
+        }
+        var session = _host.Sessions.FirstOrDefault(s => s.Owns(cmd.Path));
+        if (session is null)
+        {
+            ShowToast("BlueDrive", "Mục này không nằm trong thư mục BlueDrive.");
+            return;
+        }
+        if (cmd.Action == "resolve")
+        {
+            var name = Path.GetFileName(cmd.Path);
+            var conflict = session.Conflicts().FirstOrDefault(c => string.Equals(Sync.Core.NameMapper.NameOf(c.ConflictPath), name, StringComparison.OrdinalIgnoreCase)
+                                                                  || string.Equals(Sync.Core.NameMapper.NameOf(c.Path), name, StringComparison.OrdinalIgnoreCase));
+            if (conflict is null) ShowToast("BlueDrive", "Tệp này không có xung đột cần xử lý.");
+            else ShowConflict(session, conflict);
+            return;
+        }
+        if (session.FindItem(cmd.Path) is not { } hit)
+        {
+            ShowToast("BlueDrive", "Mục này chưa được đồng bộ lên BlueDrive. Hãy thử lại sau ít phút.");
+            return;
+        }
+        try
+        {
+            switch (cmd.Action)
+            {
+                case "share":
+                    Show(new ShareWindow(new ShareViewModel(session.Agent.Api, hit.Item.RemoteId, hit.Item.IsFolder, hit.Item.Name)));
+                    break;
+                case "versions":
+                    Show(new VersionsWindow(new VersionsViewModel(session, hit.Item.RemoteId, hit.Item.Name)));
+                    break;
+                case "link":
+                case "web":
+                    var url = (await session.Agent.Api.WebUrlAsync(hit.Item.RemoteId)).Url;
+                    if (cmd.Action == "web") FlyoutViewModel.OpenPath(url);
+                    else
+                    {
+                        _flyout ??= new FlyoutWindow(new FlyoutViewModel(_host, this));
+                        if (_flyout.Clipboard is { } clip) await clip.SetTextAsync(url);
+                        ShowToast("Đã sao chép liên kết", $"Liên kết tới \"{hit.Item.Name}\" đã ở trong bộ nhớ tạm. Người nhận cần có quyền truy cập.");
+                    }
+                    break;
+            }
+        }
+        catch (Exception ex) when (ex is Sync.Core.RemoteTransientException or Sync.Core.RemotePermanentException or Sync.Core.RemoteNotFoundException)
+        {
+            ShowToast("BlueDrive", ex.Message);
+        }
+    }
+
+    private static void Show(Window w)
+    {
+        w.Show();
+        w.Activate();
     }
 
     public static void ApplyTheme(ThemeChoice theme)
@@ -197,7 +262,12 @@ public partial class App : Application
             {
                 await using var server = new NamedPipeServerStream(Program.PipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
                 await server.WaitForConnectionAsync(ct);
-                Dispatcher.UIThread.Post(ShowFlyout);
+                using var reader = new StreamReader(server);
+                var text = await reader.ReadToEndAsync(ct);
+                string[] args;
+                try { args = text.StartsWith('[') ? System.Text.Json.JsonSerializer.Deserialize<string[]>(text) ?? [] : []; }
+                catch (System.Text.Json.JsonException) { args = []; }
+                Dispatcher.UIThread.Post(() => _ = HandleArgsAsync(args));
             }
             catch (OperationCanceledException) { return; }
             catch (IOException ex) { Log.Warning(ex, "Kênh kích hoạt"); }

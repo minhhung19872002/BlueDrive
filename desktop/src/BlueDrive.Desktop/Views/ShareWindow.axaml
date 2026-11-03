@@ -1,0 +1,64 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:BlueDrive.Desktop.ViewModels"
+        x:Class="BlueDrive.Desktop.Views.ShareWindow"
+        x:DataType="vm:ShareViewModel"
+        x:Name="Root"
+        Title="{Binding Title}" Width="560" Height="600" WindowStartupLocation="CenterScreen" Icon="/Assets/bluedrive.ico">
+  <DockPanel Margin="20">
+    <TextBlock DockPanel.Dock="Top" Text="{Binding Title}" Classes="h1" TextTrimming="CharacterEllipsis" Margin="0,0,0,12" />
+    <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,12,0,0">
+      <ProgressBar IsIndeterminate="True" IsVisible="{Binding Busy}" Height="3" />
+      <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Foreground="#0b5394" />
+    </StackPanel>
+    <TabControl>
+      <TabItem Header="Mời người">
+        <DockPanel Margin="0,8,0,0">
+          <StackPanel DockPanel.Dock="Top" Spacing="8">
+            <TextBox Text="{Binding Query}" Watermark="Tìm người (tên, tên đăng nhập) hoặc nhóm…" />
+            <ComboBox ItemsSource="{Binding Results}" SelectedItem="{Binding Selected}" HorizontalAlignment="Stretch" PlaceholderText="Kết quả tìm kiếm">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:PrincipalChoice"><TextBlock Text="{Binding Label}" /></DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <Grid ColumnDefinitions="*,Auto">
+              <ComboBox ItemsSource="{Binding LevelLabels}" SelectedIndex="{Binding LevelIndex}" HorizontalAlignment="Stretch" />
+              <Button Grid.Column="1" Content="Chia sẻ" Command="{Binding InviteCommand}" Classes="accent" Margin="8,0,0,0" />
+            </Grid>
+            <TextBox Text="{Binding Note}" Watermark="Lời nhắn (không bắt buộc)" />
+            <TextBlock Text="Đang được chia sẻ với" Classes="h2" Margin="0,8,0,0" />
+          </StackPanel>
+          <ScrollViewer>
+            <ItemsControl ItemsSource="{Binding Shares}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:ShareRow">
+                  <Grid ColumnDefinitions="*,Auto" Margin="0,4">
+                    <StackPanel>
+                      <TextBlock Text="{Binding Name}" />
+                      <TextBlock Classes="muted" FontSize="12"><Run Text="{Binding Level}" /><Run Text="  " /><Run Text="{Binding Inherited}" /></TextBlock>
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Hủy chia sẻ" IsVisible="{Binding CanRemove}"
+                            Command="{Binding #Root.((vm:ShareViewModel)DataContext).RemoveCommand}" CommandParameter="{Binding}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </DockPanel>
+      </TabItem>
+      <TabItem Header="Liên kết">
+        <StackPanel Spacing="10" Margin="0,8,0,0">
+          <CheckBox IsChecked="{Binding AllowDownload}" Content="Cho phép tải xuống" />
+          <CheckBox IsChecked="{Binding RequireLogin}" Content="Người nhận phải đăng nhập BlueDrive" />
+          <TextBox Text="{Binding Password}" PasswordChar="•" Watermark="Mật khẩu (không bắt buộc)" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="Hết hạn:" VerticalAlignment="Center" />
+            <CalendarDatePicker SelectedDate="{Binding Expires}" Watermark="Không hết hạn" />
+          </StackPanel>
+          <Button Content="Tạo liên kết và sao chép" Command="{Binding CreateLinkCommand}" Classes="accent" />
+          <TextBox Text="{Binding LinkUrl}" IsReadOnly="True" IsVisible="{Binding LinkUrl, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+      </TabItem>
+    </TabControl>
+  </DockPanel>
+</Window>

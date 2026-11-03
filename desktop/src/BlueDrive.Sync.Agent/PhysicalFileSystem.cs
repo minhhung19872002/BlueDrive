@@ -113,6 +113,7 @@ public class PhysicalFileSystem(string root, bool useRecycleBin = true) : ILocal
                 fs.Flush(flushToDisk: true);
             }
             File.SetLastWriteTimeUtc(tmp, mtime);
+            Writable(abs); // a view-only file being replaced by the server's copy
             // Replaces the destination in one step (MoveFileEx REPLACE_EXISTING on Windows, rename(2) elsewhere).
             File.Move(tmp, abs, overwrite: true);
         }
@@ -157,12 +158,27 @@ public class PhysicalFileSystem(string root, bool useRecycleBin = true) : ILocal
         var abs = Abs(path);
         var isDir = Directory.Exists(abs);
         if (!isDir && !File.Exists(abs)) return;
+        if (!isDir) Writable(abs);
         if (useRecycleBin && OperatingSystem.IsWindows() && RecycleBin.TrySend(abs)) return;
         if (isDir) Directory.Delete(abs, recursive: true);
         else File.Delete(abs);
     }
 
     public void Copy(string from, string to) => File.Copy(Abs(from), Abs(to), overwrite: false);
+
+    public void SetReadOnly(string path, bool readOnly)
+    {
+        var abs = Abs(path);
+        if (!File.Exists(abs)) return;
+        var a = File.GetAttributes(abs);
+        var next = readOnly ? a | FileAttributes.ReadOnly : a & ~FileAttributes.ReadOnly;
+        if (next != a) File.SetAttributes(abs, next);
+    }
+
+    private static void Writable(string abs)
+    {
+        if (File.Exists(abs) && File.GetAttributes(abs).HasFlag(FileAttributes.ReadOnly)) File.SetAttributes(abs, File.GetAttributes(abs) & ~FileAttributes.ReadOnly);
+    }
 
     // ---------------------------------------------------------------- file identity
 

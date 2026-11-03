@@ -22,7 +22,7 @@ internal static class Program
             {
                 using var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.Out);
                 pipe.Connect(2000);
-                pipe.Write(Encoding.UTF8.GetBytes(string.Join(' ', args)));
+                pipe.Write(Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(args)));
             }
             catch (Exception ex) when (ex is TimeoutException or IOException) { }
             return 0;

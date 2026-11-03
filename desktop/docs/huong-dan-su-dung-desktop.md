@@ -30,6 +30,20 @@ BlueDrive Desktop đưa tư liệu trên hệ thống BlueDrive xuống một th
 - Tệp bạn chỉ có quyền **xem**: không xóa / đổi tên được từ máy; nếu sửa, bản sửa được chuyển vào thư mục `_Không đồng bộ được`.
 - Không gian **chỉ xem trực tuyến** theo chính sách của đơn vị: không giữ tệp trên máy được; nội dung tự giải phóng sau khi đóng tệp.
 
+### Menu chuột phải "BlueDrive"
+
+Chuột phải một tệp/thư mục trong thư mục BlueDrive → **BlueDrive** (Windows 11: **Hiện thêm tùy chọn** → BlueDrive):
+
+- **Chia sẻ…**: mời người hoặc nhóm (Chỉ xem / Xem và tải xuống / Chỉnh sửa, kèm lời nhắn), xem ai đang được chia sẻ (kể cả kế thừa từ thư mục cha)
+  và hủy chia sẻ; tab **Liên kết** tạo liên kết có thể đặt mật khẩu, ngày hết hạn, bắt buộc đăng nhập — liên kết tự được sao chép.
+- **Sao chép liên kết BlueDrive**: liên kết nội bộ, người nhận cần có quyền truy cập.
+- **Xem trên web**: mở mục trên trang BlueDrive.
+- **Lịch sử phiên bản…**: lưu bản sao của phiên bản cũ hoặc **khôi phục** thành phiên bản hiện tại (không mất phiên bản nào).
+- **Giải quyết xung đột…**: chỉ hiện với tệp "Bản xung đột".
+
+Không thể tạo tệp/thư mục ngay ở cấp ngoài cùng của thư mục BlueDrive, ở cấp ngoài cùng "Được chia sẻ với tôi" hoặc trong thư mục chỉ xem:
+những mục đó được chuyển vào `_Không đồng bộ được` và hiện trong **Cài đặt → Vấn đề**.
+
 ## 3. Biểu tượng khay hệ thống và bảng BlueDrive
 
 ![Bảng BlueDrive từ khay hệ thống](images/tray-flyout.png)

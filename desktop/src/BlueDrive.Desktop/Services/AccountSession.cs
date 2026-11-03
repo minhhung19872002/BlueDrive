@@ -106,6 +106,15 @@ public sealed class AccountSession : IAsyncDisposable
         }
     }
 
+    /// <summary>The BlueDrive item at a path of this account's folder (context menu commands), or null when not synced (yet).</summary>
+    public LocalIndex.Hit? FindItem(string absPath) => Read(db => LocalIndex.Find(db, Config.SyncFolder, absPath), null);
+
+    public bool Owns(string absPath)
+    {
+        var rel = Path.GetRelativePath(Path.GetFullPath(Config.SyncFolder), Path.GetFullPath(absPath));
+        return !rel.StartsWith("..", StringComparison.Ordinal) && !Path.IsPathRooted(rel);
+    }
+
     public IReadOnlyList<ActivityEntry> Activity(int take = 30) => Read(db => db.Activity(take), []);
 
     public IReadOnlyList<ConflictEntry> Conflicts() => Read(db => db.Conflicts(), []);

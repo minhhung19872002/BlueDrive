@@ -168,6 +168,53 @@ public sealed class PhysicalDiskTests : IDisposable
     }
 }
 
+public sealed class ReadOnlyAndNotAllowedTests : IDisposable
+{
+    private readonly string _tmp = Path.Combine(Path.GetTempPath(), "bd-ro-" + Guid.NewGuid().ToString("N")[..8]);
+
+    public void Dispose()
+    {
+        try
+        {
+            foreach (var f in Directory.EnumerateFiles(_tmp, "*", SearchOption.AllDirectories)) File.SetAttributes(f, FileAttributes.Normal);
+            Directory.Delete(_tmp, recursive: true);
+        }
+        catch (IOException) { }
+    }
+
+    [Fact]
+    public async Task View_only_files_are_read_only_and_items_created_where_not_allowed_are_moved_aside()
+    {
+        var remote = new FakeRemoteStore(new FakeClock(DateTime.UtcNow));
+        remote.WebCreateFolder(null, "Công văn");
+        remote.WebUpload("Công văn", "quy định.pdf", Content.Of("pdf"));
+        remote.SetCanEdit("Công văn/quy định.pdf", false);
+        remote.SetCanEdit("Công văn", false);
+        Directory.CreateDirectory(_tmp);
+        var fs = new PhysicalFileSystem(_tmp, useRecycleBin: false);
+        using var db = new SyncStateDb(":memory:");
+        db.UpsertRoot(FakeRemoteStore.Root, "", true);
+        var engine = new SyncEngine(db, remote, fs, SystemClock.Instance, new SyncEngineOptions());
+
+        await engine.SyncAsync(CancellationToken.None);
+        File.GetAttributes(fs.Abs("Công văn/quy định.pdf")).HasFlag(FileAttributes.ReadOnly).Should().BeTrue();
+
+        // A file put into the view-only folder: not retried forever, moved to "_Không đồng bộ được".
+        File.WriteAllText(fs.Abs("Công văn/của tôi.txt"), "x");
+        var r = await engine.SyncAsync(CancellationToken.None);
+        r.Errors.Should().BeEmpty();
+        File.Exists(fs.Abs("Công văn/của tôi.txt")).Should().BeFalse();
+        File.ReadAllText(fs.Abs(IgnoreRules.NotSyncedFolder + "/Công văn/của tôi.txt")).Should().Be("x");
+        db.Conflicts().Should().ContainSingle(c => c.Kind == "not_allowed");
+
+        // Edit right granted later: the file becomes writable again.
+        remote.SetCanEdit("Công văn/quy định.pdf", true);
+        await engine.SyncAsync(CancellationToken.None);
+        File.GetAttributes(fs.Abs("Công văn/quy định.pdf")).HasFlag(FileAttributes.ReadOnly).Should().BeFalse();
+        (await engine.SyncAsync(CancellationToken.None)).Operations.Should().Be(0);
+    }
+}
+
 /// <summary>Runs only on Windows (NTFS sharing modes, hidden+system attributes); skipped on the Linux CI runners.</summary>
 public sealed class WindowsFactAttribute : FactAttribute
 {

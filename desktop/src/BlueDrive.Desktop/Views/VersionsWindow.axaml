@@ -1,0 +1,36 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:BlueDrive.Desktop.ViewModels"
+        x:Class="BlueDrive.Desktop.Views.VersionsWindow"
+        x:DataType="vm:VersionsViewModel"
+        x:Name="Root"
+        Title="{Binding Title}" Width="600" Height="480" WindowStartupLocation="CenterScreen" Icon="/Assets/bluedrive.ico">
+  <DockPanel Margin="20">
+    <TextBlock DockPanel.Dock="Top" Text="{Binding Title}" Classes="h1" TextTrimming="CharacterEllipsis" Margin="0,0,0,12" />
+    <StackPanel DockPanel.Dock="Bottom" Spacing="6" Margin="0,12,0,0">
+      <ProgressBar IsIndeterminate="True" IsVisible="{Binding Busy}" Height="3" />
+      <TextBlock Text="{Binding Message}" TextWrapping="Wrap" Foreground="#0b5394" />
+    </StackPanel>
+    <ScrollViewer>
+      <ItemsControl ItemsSource="{Binding Versions}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:VersionsViewModel+Row">
+            <Border BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,0,0,8">
+              <Grid ColumnDefinitions="*,Auto">
+                <StackPanel>
+                  <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Detail}" Classes="muted" TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                  <Button Content="Lưu bản sao…" Command="{Binding #Root.((vm:VersionsViewModel)DataContext).SaveCopyCommand}" CommandParameter="{Binding}" />
+                  <Button Content="Khôi phục" IsVisible="{Binding CanRestore}" Classes="accent"
+                          Command="{Binding #Root.((vm:VersionsViewModel)DataContext).RestoreCommand}" CommandParameter="{Binding}" />
+                </StackPanel>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

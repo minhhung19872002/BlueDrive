@@ -122,6 +122,16 @@ public sealed class FakeLocalFileSystem(FakeClock clock) : ILocalFileSystem
 
     // ---------------------------------------------------------------- the user
 
+    /// <summary>Files the engine marked read-only (view-only on the server).</summary>
+    public HashSet<string> ReadOnly { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public void SetReadOnly(string path, bool readOnly)
+    {
+        if (!_nodes.ContainsKey(path)) return;
+        if (readOnly) ReadOnly.Add(path);
+        else ReadOnly.Remove(path);
+    }
+
     public bool Exists(string path) => _nodes.ContainsKey(path);
     public bool IsFolder(string path) => _nodes.TryGetValue(path, out var n) && n.IsFolder;
     public byte[] Read(string path) => _nodes[path].Data;
@@ -227,6 +237,7 @@ public sealed class FakeRemoteStore(FakeClock clock) : IRemoteStore
     private void RequireFolder(string? parentId)
     {
         if (parentId is not null && (!_nodes.TryGetValue(parentId, out var p) || p.Deleted || !p.IsFolder)) throw new RemoteNotFoundException(parentId);
+        if (parentId is not null && !_nodes[parentId].CanEdit) throw new RemotePermanentException("Bạn không có quyền thêm vào thư mục này.", 403);
     }
 
     // ---------------------------------------------------------------- IRemoteStore

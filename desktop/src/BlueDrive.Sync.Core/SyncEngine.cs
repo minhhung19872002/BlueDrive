@@ -228,6 +228,7 @@ public sealed class SyncEngine(
                 if (ops == 0) break;
             }
             if (_placeholders.OnDemand) await MarkSyncedAsync(root, started, ct);
+            MarkReadOnly(root);
             // Clear processed revocations: the items are gone from the base now.
             var revoked = Revoked();
             var known = state.Items(root.RootId).Select(i => i.RemoteId).ToHashSet();
@@ -236,6 +237,36 @@ public sealed class SyncEngine(
             state.ClearOperations(root.RootId);
         }
         return new SyncPassResult(total, pendingMass, errors.Distinct().ToList());
+    }
+
+    /// <summary>
+    /// View-only files are read-only on the disk (spec 7.2); the attribute follows permission changes. Only the files whose state changes are
+    /// touched (the set marked last time is kept in the state database).
+    /// </summary>
+    private void MarkReadOnly(RootState root)
+    {
+        var key = "readonly:" + root.RootId;
+        var marked = state.GetAccount(key) is { } json ? JsonSerializer.Deserialize<HashSet<string>>(json) ?? [] : [];
+        var tree = state.RemoteTree(root.RootId);
+        var items = state.Items(root.RootId);
+        var byRemote = items.ToDictionary(i => i.RemoteId);
+        var target = items.Where(b => !b.IsFolder && tree.TryGetValue(b.RemoteId, out var r) && !r.CanEdit).Select(b => b.RemoteId).ToHashSet();
+        foreach (var id in target.Union(marked))
+        {
+            var want = target.Contains(id);
+            if (want == marked.Contains(id) || !byRemote.TryGetValue(id, out var b)) continue;
+            var parts = new List<string> { b.Name };
+            var cur = b.ParentRemoteId;
+            for (var guard = 0; cur is not null && guard < 256 && byRemote.TryGetValue(cur, out var p); guard++)
+            {
+                parts.Add(p.Name);
+                cur = p.ParentRemoteId;
+            }
+            parts.Reverse();
+            try { fs.SetReadOnly(NameMapper.Combine(root.LocalPath.Length == 0 ? null : root.LocalPath, string.Join('/', parts)), want); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { target.Remove(id); } // retried next pass
+        }
+        if (target.Count > 0 || marked.Count > 0) state.SetAccount(key, JsonSerializer.Serialize(target));
     }
 
     /// <summary>Files On-Demand: everything recorded during this pass is shown as synced in Explorer (status icon).</summary>
@@ -330,6 +361,13 @@ public sealed class SyncEngine(
                          && step.LocalEntry.Path != BasePath(c, step.Base))) stuckMoves.Add(step);
                 LastPlan.Add($"{(ran ? "OK " : "-- ")}{step.Decision.Actions} {step.Path} [{step.Base?.RemoteId}/{step.Remote?.Id}]");
                 state.CompleteOperation(opId);
+            }
+            catch (RemotePermanentException ex) when (ex.Status == 403 && step.Base is null && step.Remote is null && step.LocalEntry is { } created)
+            {
+                // Created where the user may not add anything (a view-only folder, the top of "Được chia sẻ với tôi"): moved aside, not retried forever.
+                state.CompleteOperation(opId);
+                QuarantineNew(c, created, ex.Message);
+                ops++;
             }
             catch (RemotePermanentException ex)
             {
@@ -1042,6 +1080,18 @@ public sealed class SyncEngine(
             return true;
         }
         return await CreateLocalAsync(c, r, null, ct); // the server's spelling of the name
+    }
+
+    private void QuarantineNew(Ctx c, LocalEntry l, string reason)
+    {
+        var target = NameMapper.Combine(IgnoreRules.NotSyncedFolder, l.Path);
+        var targetParent = NameMapper.ParentOf(target)!;
+        fs.CreateDirectory(Abs(c, targetParent));
+        var free = NameMapper.NextFree(NameMapper.NameOf(target), n => fs.Stat(Abs(c, NameMapper.Combine(targetParent, n))) is not null);
+        target = NameMapper.Combine(targetParent, free);
+        fs.Move(Abs(c, l.Path), Abs(c, target));
+        state.AddConflict(c.RootId, l.Path, target, "not_allowed");
+        Log("Không đồng bộ được", l.Path, $"{reason} Đã chuyển vào: {target}");
     }
 
     private async Task<bool> QuarantineAsync(Ctx c, Step s, CancellationToken ct)

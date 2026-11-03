@@ -247,6 +247,55 @@ public class DesktopClientTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Explorer_context_menu_commands_work_against_the_api()
+    {
+        var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (other, _, otherName) = await factory.CreateUserClientAsync("bien_tap");
+        using var a = await PcAsync(user, "PC-A");
+        a.Fs.UserMkdir("Hồ sơ");
+        a.Fs.UserWrite("Hồ sơ/tờ trình.txt", SyncContent.Of("bản 1"));
+        await a.SyncAsync();
+        a.Fs.UserWrite("Hồ sơ/tờ trình.txt", SyncContent.Of("bản 2"));
+        await a.SyncAsync();
+        var root = a.Db.Roots().Single();
+        var item = a.Db.Items(root.RootId).Single(i => i.Name == "tờ trình.txt");
+        var api = new BlueDriveApi(a.Http);
+
+        // Lookup by local path (what the context menu receives).
+        var hit = BlueDrive.Sync.Agent.LocalIndex.Find(a.Db, @"C:\BlueDrive", @"C:\BlueDrive\Hồ sơ\tờ trình.txt");
+        hit!.Item.RemoteId.Should().Be(item.RemoteId);
+        BlueDrive.Sync.Agent.LocalIndex.Find(a.Db, @"C:\BlueDrive", @"C:\Khác\tờ trình.txt").Should().BeNull();
+
+        (await api.WebUrlAsync(item.RemoteId)).Url.Should().EndWith($"/files/{item.RemoteId}");
+
+        // Chia sẻ… with a user, then listed and removable.
+        var found = await api.FindUsersAsync(otherName);
+        var target = found.Single(u => u.Username == otherName);
+        await api.ShareAsync("file", item.RemoteId, "user", target.Id, "download", "Nhờ anh xem giúp");
+        var shares = await api.SharesAsync("file", item.RemoteId);
+        shares.Should().ContainSingle(s => s.SharedWithId == target.Id && s.AccessLevel == "download");
+        (await other.GetAsync($"/api/v1/files/{item.RemoteId}")).StatusCode.Should().Be(HttpStatusCode.OK, "the colleague can open it now");
+        await api.RemoveShareAsync(shares.Single().Id);
+        (await api.SharesAsync("file", item.RemoteId)).Should().BeEmpty();
+
+        // Link with password and expiry.
+        var link = await api.CreateLinkAsync(item.RemoteId, allowDownload: false, password: "Mk@123456", DateTime.UtcNow.AddDays(7), requireLogin: false);
+        link.HasPassword.Should().BeTrue();
+        link.Url.Should().Contain("/s/");
+
+        // Lịch sử phiên bản…: save version 1, restore it as current.
+        var versions = await api.VersionsAsync(item.RemoteId);
+        versions.Should().HaveCount(2);
+        var v1 = versions.Single(v => v.VersionNo == 1);
+        var saved = new MemoryStream();
+        await api.DownloadVersionAsync(item.RemoteId, v1.Id, saved);
+        saved.ToArray().Should().Equal(SyncContent.Of("bản 1"));
+        await api.RestoreVersionAsync(item.RemoteId, v1.Id);
+        await a.SyncAsync();
+        a.Fs.Read("Hồ sơ/tờ trình.txt").Should().Equal(SyncContent.Of("bản 1"), "the restored version comes down to the computer");
+    }
+
+    [Fact]
     public async Task Expired_access_token_is_refreshed_and_rotated_transparently()
     {
         var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");

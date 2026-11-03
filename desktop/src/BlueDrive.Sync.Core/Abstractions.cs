@@ -64,6 +64,9 @@ public interface ILocalFileSystem
     void Delete(string path);
 
     void Copy(string from, string to);
+
+    /// <summary>Read-only attribute for files the user may only view (spec 7.2); no-op where the platform has none.</summary>
+    void SetReadOnly(string path, bool readOnly);
 }
 
 public interface IClock

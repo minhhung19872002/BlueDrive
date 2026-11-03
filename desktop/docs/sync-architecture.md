@@ -163,3 +163,15 @@ Kiểm thử (`desktop/tests/BlueDrive.Sync.Windows.Tests`, chỉ chạy trên W
   truyền tải, khóa lượt (thao tác từ giao diện không chạy đè engine), gói chẩn đoán (`Diagnostics`, che token/mật khẩu).
 - Cửa sổ: `WizardWindow`, `FlyoutWindow` (góc phải trên thanh tác vụ, tự ẩn khi mất focus), `SettingsWindow`, `ConflictWindow`; thông báo Windows
   qua `Microsoft.Toolkit.Uwp.Notifications`. Hướng dẫn người dùng: `huong-dan-su-dung-desktop.md`.
+
+## 11. Tích hợp Explorer (Sync-Phase 7)
+
+| Thành phần | Việc làm |
+|---|---|
+| Menu chuột phải `ExplorerMenu` | Menu con "BlueDrive" cho tệp/thư mục **trong thư mục BlueDrive** (điều kiện `AppliesTo` theo đường dẫn), đăng ký theo người dùng (`HKCU\Software\Classes`), không cần quyền quản trị: **Chia sẻ…**, **Sao chép liên kết BlueDrive**, **Xem trên web**, **Lịch sử phiên bản…** (tệp), **Giải quyết xung đột…** (chỉ hiện với bản xung đột). Lệnh gửi `--share/--link/--web/--versions/--resolve "<đường dẫn>"` tới phiên BlueDrive đang chạy (named pipe, JSON). Trên Windows 11 menu nằm trong "Hiện thêm tùy chọn"; menu hiện đại `IExplorerCommand`, cột trạng thái tùy chỉnh (`IStorageProviderItemPropertySource`) và Status UI cần định danh gói MSIX — làm cùng đóng gói ở Sync-Phase 9. |
+| `LocalIndex` | Đường dẫn trên máy → mục BlueDrive (theo bản ghi base). |
+| `BlueDriveApi` | Liên kết web (`/sync/items/{id}/web-url`), chia sẻ người/nhóm (`/shares`, `/users/lookup`, `/user-groups`), liên kết có mật khẩu/hạn dùng (`/sync/items/{id}/share-link`), phiên bản (`/files/{id}/versions`, khôi phục, tải bản cũ). |
+| Cửa sổ | `ShareWindow` (Mời người: tìm người/nhóm, quyền Chỉ xem / Xem và tải xuống / Chỉnh sửa, danh sách đang chia sẻ kể cả kế thừa; Liên kết), `VersionsWindow` (lưu bản sao, khôi phục thành phiên bản hiện tại), `ConflictWindow`. |
+| Chỉ đọc | Tệp chỉ có quyền xem có thuộc tính **ReadOnly** (cả tệp giữ chỗ); được cấp quyền sửa thì bỏ thuộc tính. Engine chỉ đổi những tệp có thay đổi quyền (lưu danh sách đã đánh dấu). |
+| Cấp không được ghi | Tệp/thư mục tạo trong thư mục chỉ xem hoặc ở cấp ngoài cùng "Được chia sẻ với tôi" (máy chủ trả 403) được chuyển vào `_Không đồng bộ được` (xung đột loại `not_allowed`) thay vì báo lỗi mãi; mục đặt trực tiếp ở cấp ngoài cùng của thư mục BlueDrive (chỉ chứa các thư mục gốc) cũng vậy. |
+| Đổi quyền một tệp | Chia sẻ một **tệp** sinh `permission_changed` cho tệp đó: client lấy lại chính mục đó thay vì liệt kê "thư mục" (trước đây trả 404 làm hỏng lượt đồng bộ). |

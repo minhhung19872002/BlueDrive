@@ -74,6 +74,8 @@ public sealed class SyncAgent : IAsyncDisposable
     public SyncEngine Engine => _engine;
     public SyncStateDb State => _db;
     public HttpRemoteStore Remote => _remote;
+    /// <summary>Sharing, web links, version history (Explorer context menu).</summary>
+    public BlueDriveApi Api { get; }
 
     public SyncAgent(AgentOptions o)
     {
@@ -84,6 +86,7 @@ public sealed class SyncAgent : IAsyncDisposable
         _auth = new DesktopAuthenticator(server, o.HandlerFactory?.Invoke());
         _http = BlueDriveHttp.Create(server, o.Tokens, _auth, o.HandlerFactory?.Invoke());
         _remote = new HttpRemoteStore(_http, o.Transfer);
+        Api = new BlueDriveApi(_http);
         if (o.OnDemand is not null)
         {
             _onDemand = new OnDemandContext(Path.GetFullPath(o.SyncFolder), o.AccountId, o.UserDisplayName, server, _remote, Path.GetFullPath(o.StateDbPath));
@@ -349,6 +352,7 @@ public sealed class SyncAgent : IAsyncDisposable
         }
         _watcher ??= NewWatcher();
         await RefreshRootsAsync(ct);
+        GuardTopLevel();
         foreach (var r in _db.Roots().Where(r => r.Enabled))
             if (!Directory.Exists(_fs.Abs(r.LocalPath)) && _db.Items(r.RootId).Count > 0)
             {
@@ -364,6 +368,28 @@ public sealed class SyncAgent : IAsyncDisposable
             : problems.Count > 0 ? $"Đã đồng bộ, {problems.Count} mục chưa đồng bộ được." : "Đã đồng bộ.";
         Status = new AgentStatus(AgentState.Idle, msg, DateTime.UtcNow, result.MassDeletePending, problems);
         StatusChanged?.Invoke(Status);
+    }
+
+    /// <summary>
+    /// The top of the BlueDrive folder only holds the root folders (spec 7.2: virtual, read-only level). Anything else created there would never
+    /// reach the server: it is moved to "_Không đồng bộ được" and reported.
+    /// </summary>
+    private void GuardTopLevel()
+    {
+        var roots = _db.Roots().Select(r => r.LocalPath.Split('/')[0]).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in Directory.EnumerateFileSystemEntries(_fs.Root).Select(Path.GetFileName).OfType<string>())
+        {
+            if (roots.Contains(name) || name == IgnoreRules.NotSyncedFolder || IgnoreRules.IsIgnored(name) || _fs.Stat(name) is not { } e) continue;
+            _fs.CreateDirectory(IgnoreRules.NotSyncedFolder);
+            var free = NameMapper.NextFree(e.Path, n => _fs.Stat(NameMapper.Combine(IgnoreRules.NotSyncedFolder, n)) is not null);
+            try
+            {
+                _fs.Move(e.Path, NameMapper.Combine(IgnoreRules.NotSyncedFolder, free));
+                _db.Log("Không đồng bộ được", e.Path, $"Không thể đặt tệp/thư mục trực tiếp ở cấp ngoài cùng của thư mục BlueDrive. Đã chuyển vào {IgnoreRules.NotSyncedFolder}.");
+                Activity?.Invoke("Không đồng bộ được", e.Path);
+            }
+            catch (IOException) { } // open in another program: next pass
+        }
     }
 
     /// <summary>Folders for the roots: "Tài liệu của tôi", one per workspace, "Được chia sẻ với tôi". A root keeps its folder once chosen.</summary>

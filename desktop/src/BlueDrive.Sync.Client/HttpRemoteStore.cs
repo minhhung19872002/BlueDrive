@@ -106,7 +106,18 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
 
     public Task<UserInfo> MeAsync(CancellationToken ct) => Idempotent(async t => (await GetJsonAsync<UserInfo>("api/v1/auth/me", t))!, ct);
 
-    public Task<RemoteSnapshotPage> SnapshotAsync(string rootId, string? pageToken, string? folderId, CancellationToken ct) => Idempotent(async t =>
+    public async Task<RemoteSnapshotPage> SnapshotAsync(string rootId, string? pageToken, string? folderId, CancellationToken ct)
+    {
+        try { return await SnapshotPageAsync(rootId, pageToken, folderId, ct); }
+        catch (RemoteNotFoundException) when (folderId is not null)
+        {
+            // Re-listing after "permission_changed": the item is a file (sharing a file), or is no longer visible.
+            try { return new RemoteSnapshotPage([await GetItemAsync(folderId, ct)], null, 0); }
+            catch (RemoteNotFoundException) { return new RemoteSnapshotPage([], null, 0); }
+        }
+    }
+
+    private Task<RemoteSnapshotPage> SnapshotPageAsync(string rootId, string? pageToken, string? folderId, CancellationToken ct) => Idempotent(async t =>
     {
         var url = $"api/v1/sync/snapshot?root_id={Uri.EscapeDataString(rootId)}" + (pageToken is null ? "" : $"&page_token={Uri.EscapeDataString(pageToken)}")
                   + (folderId is null ? "" : $"&folder_id={folderId}");

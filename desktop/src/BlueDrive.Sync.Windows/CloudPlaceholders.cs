@@ -52,7 +52,8 @@ public sealed class CloudPlaceholders(string root) : IPlaceholderProvider
             BasicInfo = new FILE_BASIC_INFO
             {
                 CreationTime = t, LastAccessTime = t, LastWriteTime = t, ChangeTime = t,
-                FileAttributes = (uint)(item.IsFolder ? FILE_FLAGS_AND_ATTRIBUTES.FILE_ATTRIBUTE_DIRECTORY : FILE_FLAGS_AND_ATTRIBUTES.FILE_ATTRIBUTE_NORMAL),
+                FileAttributes = (uint)(item.IsFolder ? FILE_FLAGS_AND_ATTRIBUTES.FILE_ATTRIBUTE_DIRECTORY
+                    : item.CanEdit ? FILE_FLAGS_AND_ATTRIBUTES.FILE_ATTRIBUTE_NORMAL : FILE_FLAGS_AND_ATTRIBUTES.FILE_ATTRIBUTE_READONLY),
             },
             FileSize = item.IsFolder ? 0 : item.Size,
         };

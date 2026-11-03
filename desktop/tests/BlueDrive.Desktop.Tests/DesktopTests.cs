@@ -106,6 +106,40 @@ public sealed class DesktopTests : IDisposable
         StartupRegistration.IsSet().Should().BeFalse();
     }
 
+    [Fact]
+    public void Explorer_context_menu_is_limited_to_the_sync_folders_and_parses_its_commands()
+    {
+        ExplorerMenu.AppliesTo([@"C:\Users\a\BlueDrive", @"D:\BlueDrive - x\"])
+            .Should().Be(@"System.ItemPathDisplay:~<""C:\Users\a\BlueDrive\"" OR System.ItemPathDisplay:~<""D:\BlueDrive - x\""");
+        ExplorerMenu.Parse(["--share", @"C:\Users\a\BlueDrive\Tài liệu của tôi\báo cáo.docx"])
+            .Should().Be(("share", @"C:\Users\a\BlueDrive\Tài liệu của tôi\báo cáo.docx"));
+        ExplorerMenu.Parse(["--background"]).Should().BeNull();
+        ExplorerMenu.Commands.Select(c => c.Text).Should().Equal("Chia sẻ…", "Sao chép liên kết BlueDrive", "Xem trên web", "Lịch sử phiên bản…", "Giải quyết xung đột…");
+
+        // Real registration (per user), then removed.
+        var exe = Path.Combine(_home, "BlueDrive.exe");
+        try
+        {
+            ExplorerMenu.Register([Path.Combine(_home, "BlueDrive")], exe);
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Classes\*\shell\BlueDrive\shell\01share\command")!;
+            ((string)key.GetValue("")!).Should().Be($"\"{exe}\" --share \"%1\"");
+            Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Classes\Directory\shell\BlueDrive\shell\04versions").Should().BeNull("versions are for files");
+        }
+        finally { ExplorerMenu.Unregister(); }
+        Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Classes\*\shell\BlueDrive").Should().BeNull();
+    }
+
+    [AvaloniaFact]
+    public void Share_window_renders_with_both_tabs()
+    {
+        using var http = new HttpClient { BaseAddress = new Uri("http://127.0.0.1:9/") };
+        var w = new ShareWindow(new ShareViewModel(new Sync.Client.BlueDriveApi(http), Guid.NewGuid().ToString(), false, "báo cáo.docx"));
+        w.Show();
+        w.GetVisualDescendants().OfType<TabItem>().Select(t => t.Header).Should().Equal("Mời người", "Liên kết");
+        w.Title.Should().Be("Chia sẻ \"báo cáo.docx\"");
+        w.Close();
+    }
+
     [AvaloniaFact]
     public void Every_window_renders_in_vietnamese()
     {
