@@ -35,7 +35,7 @@ public sealed class RemoteStoreOptions
 /// </summary>
 public sealed class HttpRemoteStore : IRemoteStore
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter() } };
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) } };
     private readonly HttpClient _http;
     private readonly RemoteStoreOptions _opt;
     private readonly ResiliencePipeline _idempotent;
@@ -85,6 +85,24 @@ public sealed class HttpRemoteStore : IRemoteStore
 
     public Task<IReadOnlyList<RootDto>> RootsAsync(CancellationToken ct) =>
         Idempotent(async t => (IReadOnlyList<RootDto>)(await GetJsonAsync<List<RootDto>>("api/v1/sync/roots", t))!, ct);
+
+    public sealed record WipeCommand(DateTime RequestedAt, string Signature);
+    public sealed record DeviceStatusInfo(Guid DeviceId, string Status, bool UpdateRequired, string MinClientVersion, WipeCommand? Wipe);
+    public sealed record UserInfo(Guid Id, string Username, string FullName);
+
+    /// <summary>Revocation / signed remote wipe / minimum app version for this device (also records "last seen").</summary>
+    public Task<DeviceStatusInfo> DeviceStatusAsync(string appVersion, CancellationToken ct) =>
+        Idempotent(async t => (await GetJsonAsync<DeviceStatusInfo>($"api/v1/sync/devices/current?appVersion={Uri.EscapeDataString(appVersion)}", t))!, ct);
+
+    /// <summary>Reports that the remote wipe has been carried out: the server ends the device.</summary>
+    public async Task ConfirmWipedAsync(CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, "api/v1/sync/devices/current/wiped");
+        using var res = await SendAsync(req, HttpCompletionOption.ResponseContentRead, ct);
+        await EnsureAsync(res, "", ct);
+    }
+
+    public Task<UserInfo> MeAsync(CancellationToken ct) => Idempotent(async t => (await GetJsonAsync<UserInfo>("api/v1/auth/me", t))!, ct);
 
     public Task<RemoteSnapshotPage> SnapshotAsync(string rootId, string? pageToken, string? folderId, CancellationToken ct) => Idempotent(async t =>
     {

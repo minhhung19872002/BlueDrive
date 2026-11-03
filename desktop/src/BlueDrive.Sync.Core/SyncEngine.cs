@@ -233,7 +233,7 @@ public sealed class SyncEngine(
             state.SetAccount(RevokedKey, JsonSerializer.Serialize(revoked));
             state.ClearOperations(root.RootId);
         }
-        return new SyncPassResult(total, pendingMass, errors);
+        return new SyncPassResult(total, pendingMass, errors.Distinct().ToList());
     }
 
     /// <summary>The user answered the mass delete question: delete on BlueDrive too, or restore the files.</summary>
@@ -253,6 +253,8 @@ public sealed class SyncEngine(
         public required Dictionary<long, LocalEntry?> Match; // base local id → local entry (null = deleted locally)
         public required HashSet<string> Revoked;
         public readonly Dictionary<string, string> HashCache = new();
+        /// <summary>Local files that could not be read while planning: left alone this round.</summary>
+        public readonly HashSet<string> Busy = new(StringComparer.OrdinalIgnoreCase);
     }
 
     private async Task<(int Ops, int MassPending)> RoundAsync(string rootId, List<string> errors, CancellationToken ct)
@@ -260,6 +262,11 @@ public sealed class SyncEngine(
         var root = state.GetRoot(rootId)!;
         var c = Load(root);
         var plan = Plan(c);
+        if (c.Busy.Count > 0)
+        {
+            plan = plan.Select(p => p.LocalEntry is { } l && c.Busy.Contains(l.Path) ? p with { Decision = new(SyncAction.None, "Tệp đang được mở.") } : p).ToList();
+            foreach (var path in c.Busy) errors.Add($"{path}: Tệp đang được mở hoặc bị khóa, sẽ đồng bộ khi tệp được đóng.");
+        }
 
         // Safe mass delete: pause server deletions and ask the user.
         var deletes = plan.Where(p => p.Decision.Has(SyncAction.DeleteRemote) && p.Base is { IsFolder: false }).ToList();
@@ -306,6 +313,17 @@ public sealed class SyncEngine(
                 errors.Add($"{step.Path}: {ex.Message}");
                 state.Log("Lỗi", step.Path, ex.Message);
             }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // The file is open in an editor, locked, or changed under us: skip it this time. Every step is safe to stop at
+                // any point (as after a crash), and the next pass plans again from fresh scans.
+                state.FailOperation(opId, "retry");
+                var why = ex is UnauthorizedAccessException || IsSharingViolation(ex)
+                    ? "Tệp đang được mở hoặc bị khóa, sẽ đồng bộ khi tệp được đóng."
+                    : ex.Message;
+                errors.Add($"{step.Path}: {why}");
+                state.Log("Chờ", step.Path, why);
+            }
             catch (RemoteNotFoundException ex)
             {
                 // Gone on the server meanwhile (the item, or the destination folder): forget exactly that one, re-plan next round.
@@ -348,6 +366,9 @@ public sealed class SyncEngine(
         TotalOperations += ops;
         return (ops, massPending);
     }
+
+    // ERROR_SHARING_VIOLATION (32) / ERROR_LOCK_VIOLATION (33) on Windows.
+    private static bool IsSharingViolation(Exception ex) => (ex.HResult & 0xFFFF) is 32 or 33;
 
     private Ctx Load(RootState root)
     {
@@ -528,11 +549,20 @@ public sealed class SyncEngine(
         return LocalDelta.Modified;
     }
 
-    private string Hash(Ctx c, LocalEntry l)
+    /// <summary>SHA-256 of a local file; null when it cannot be read now (open in an editor, locked): the item then waits (<see cref="Ctx.Busy"/>).</summary>
+    private string? Hash(Ctx c, LocalEntry l)
     {
         if (c.HashCache.TryGetValue(l.Path, out var h)) return h;
-        using var s = fs.OpenRead(Abs(c, l.Path));
-        h = Convert.ToHexStringLower(SHA256.HashData(s));
+        try
+        {
+            using var s = fs.OpenRead(Abs(c, l.Path));
+            h = Convert.ToHexStringLower(SHA256.HashData(s));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            c.Busy.Add(l.Path);
+            return null;
+        }
         c.HashCache[l.Path] = h;
         return h;
     }

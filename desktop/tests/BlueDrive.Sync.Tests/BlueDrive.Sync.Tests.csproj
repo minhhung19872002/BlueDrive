@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\BlueDrive.Sync.Core\BlueDrive.Sync.Core.csproj" />
     <ProjectReference Include="..\..\src\BlueDrive.Sync.Client\BlueDrive.Sync.Client.csproj" />
+    <ProjectReference Include="..\..\src\BlueDrive.Sync.Agent\BlueDrive.Sync.Agent.csproj" />
     <ProjectReference Include="..\BlueDrive.Sync.Testing\BlueDrive.Sync.Testing.csproj" />
   </ItemGroup>
   <ItemGroup>

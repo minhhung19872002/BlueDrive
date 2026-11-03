@@ -77,6 +77,7 @@ giữ mtime theo máy chủ.
   hỏi người dùng ("Xóa cả trên BlueDrive" / "Khôi phục các tệp") qua `ResolveMassDelete`.
 - 412 (bản máy chủ đã đổi) → cập nhật cây, lập lại kế hoạch. Khi chỉ metadata đổi (không đổi nội dung/vị trí), base nhận revision
   mới để If-Match không bị kẹt. Lệnh di chuyển trên máy dùng revision hiện tại khi máy chủ chỉ đổi nội dung.
+- Tệp **đang mở / bị khóa** (không đọc được để tính hash hoặc tải lên): mục đó đứng yên trong lượt này và được báo "sẽ đồng bộ khi tệp được đóng"; lỗi đọc/ghi ổ đĩa ở một bước chỉ dừng bước đó (như crash), không dừng cả lượt.
 - 404: chỉ gỡ đúng mục máy chủ báo thiếu (có thể là thư mục đích), không gỡ mục đang thao tác.
 - **Chống kẹt**: nếu hai bên di chuyển tạo vòng (mỗi bên chuyển một thư mục vào thư mục kia), máy chủ từ chối (400) hoặc không
   bước nào chạy được → hoàn tác di chuyển trên máy (ưu tiên máy chủ), rồi áp bố cục của máy chủ.

@@ -261,6 +261,12 @@ public sealed class SyncStateDb : IDisposable
     internal string Diagnostics() =>
         $"remote_items={_db.ExecuteScalar<long>("SELECT COUNT(*) FROM remote_items")} roots={string.Join(",", _db.Query<string>("SELECT DISTINCT root_id FROM remote_items"))} cursor={GetAccount("cursor")}";
 
+    /// <summary>Remote wipe: forgets everything about the account (trees, base, queue, conflicts, activity, cursor).</summary>
+    public void ClearAll() => _db.Execute("""
+        DELETE FROM operations; DELETE FROM conflicts; DELETE FROM activity_log; DELETE FROM items; DELETE FROM remote_items;
+        DELETE FROM roots; DELETE FROM account;
+        """);
+
     public void Dispose() => _db.Dispose();
 
     private sealed class RemoteRow

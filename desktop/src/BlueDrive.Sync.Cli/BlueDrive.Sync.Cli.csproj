@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>BlueDrive.Sync.Cli</RootNamespace>
+    <AssemblyName>bluedrive-sync</AssemblyName>
+    <Description>BlueDrive Desktop command line: sign in, run the full-sync agent, status (demo / headless deployments).</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BlueDrive.Sync.Agent\BlueDrive.Sync.Agent.csproj" />
+  </ItemGroup>
+</Project>

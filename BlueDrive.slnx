@@ -9,6 +9,8 @@
   <Folder Name="/desktop/">
     <Project Path="desktop/src/BlueDrive.Sync.Core/BlueDrive.Sync.Core.csproj" />
     <Project Path="desktop/src/BlueDrive.Sync.Client/BlueDrive.Sync.Client.csproj" />
+    <Project Path="desktop/src/BlueDrive.Sync.Agent/BlueDrive.Sync.Agent.csproj" />
+    <Project Path="desktop/src/BlueDrive.Sync.Cli/BlueDrive.Sync.Cli.csproj" />
     <Project Path="desktop/tests/BlueDrive.Sync.Testing/BlueDrive.Sync.Testing.csproj" />
     <Project Path="desktop/tests/BlueDrive.Sync.Tests/BlueDrive.Sync.Tests.csproj" />
   </Folder>

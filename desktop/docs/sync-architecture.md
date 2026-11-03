@@ -115,3 +115,24 @@ phân quyền trực tiếp; mục có thư mục cha không được thấy n�
 | `SyncNotifications` | SignalR `/hubs/sync` (`changes_available`, `device_status`, tự kết nối lại + `Resubscribe`) và hỏi định kỳ dự phòng (5 phút; 30 giây khi mất kết nối hub). |
 
 Kiểm thử: `tests/BlueDrive.IntegrationTests/DesktopClientTests.cs` chạy engine thật trên API thật (Testcontainers): 2 máy tạo/sửa/đổi tên/xung đột/xóa, tải tiếp bằng Range, ánh xạ lỗi, làm mới token, đẩy SignalR; `desktop/tests/BlueDrive.Sync.Tests/ClientTests.cs`: PKCE loopback, chặn `state` giả, giới hạn băng thông.
+
+## 8. Tiến trình nền `BlueDrive.Sync.Agent` (chế độ đồng bộ đầy đủ)
+
+Mỗi tài khoản có một `SyncAgent` chạy `SyncEngine` trên thư mục thật (`PhysicalFileSystem`, `IPlaceholderProvider` = không dùng placeholder).
+
+| Thành phần | Việc làm |
+|---|---|
+| `PhysicalFileSystem` | Đường dẫn tương đối, phân cách `/`. Windows: **NTFS File ID** (`GetFileInformationByHandleEx`) nhận diện tệp qua đổi tên/di chuyển. Ghi qua tệp tạm `.…bluedrive-tmp` rồi thay thế một bước, giữ mtime của máy chủ. Xóa vào **Thùng rác** (không hộp thoại). Không đi theo liên kết tượng trưng/junction, bỏ qua tệp vừa ẩn vừa hệ thống. Đọc để tải lên với `FileShare.Read`: tệp đang được trình soạn thảo ghi sẽ chờ. |
+| `LocalChangeWatcher` | `FileSystemWatcher` (bộ đệm 64 KB) chỉ báo "có thay đổi"; engine luôn quét lại nên mất sự kiện không gây sai. Tràn bộ đệm → đồng bộ ngay. |
+| `SyncAgent` | Chạy một lượt khi: máy chủ đẩy `changes_available`, thư mục yên 3 giây sau thay đổi (tối đa 30 giây), định kỳ 15 phút, "Đồng bộ ngay". Mất mạng → thử lại 1 giây → 30 phút có jitter. Đầu mỗi lượt kiểm tra thiết bị: bị thu hồi → dừng, giữ tệp; **xóa từ xa** chỉ thực hiện khi chữ ký HMAC (bí mật thiết bị) hợp lệ; phiên bản cũ hơn mức tối thiểu → dừng, yêu cầu cập nhật. |
+| An toàn dữ liệu | Thư mục đồng bộ hoặc thư mục của một gốc **biến mất** (xóa nhầm, ổ rút ra) → không chạy lượt nào, báo lỗi; không bao giờ coi đó là xóa hàng loạt trên máy chủ. Tệp đang mở/bị khóa → bỏ qua mục đó trong lượt (báo "sẽ đồng bộ khi tệp được đóng"), các mục khác vẫn chạy. |
+| `AccountStore` | `%LOCALAPPDATA%\BlueDrive\accounts.json` (không chứa bí mật) + mỗi tài khoản một thư mục: `state.db`, `tokens.dat` mã hóa **DPAPI** (người dùng hiện tại). Thư mục gốc: "Tài liệu của tôi", mỗi nhóm/đơn vị một thư mục, "Được chia sẻ với tôi"; không gian "chỉ trực tuyến" theo chính sách không được tải xuống ở chế độ này. |
+
+Dòng lệnh (trước khi có ứng dụng khay ở Sync-Phase 6):
+
+```powershell
+bluedrive-sync login https://bluedrive.bluestar.com.vn [--folder D:\BlueDrive]   # đăng nhập bằng trình duyệt
+bluedrive-sync run       # đồng bộ mọi tài khoản, Ctrl+C để dừng
+bluedrive-sync status    # tài khoản, số mục, xung đột, hoạt động gần nhất
+bluedrive-sync logout https://bluedrive.bluestar.com.vn                           # gỡ tài khoản, giữ tệp
+```

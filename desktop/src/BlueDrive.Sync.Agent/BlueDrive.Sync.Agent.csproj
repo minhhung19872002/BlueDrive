@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>BlueDrive.Sync.Agent</RootNamespace>
+    <Description>BlueDrive Desktop background agent: real disk (full sync mode), change watcher, account storage, sync loop.</Description>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BlueDrive.Sync.Core\BlueDrive.Sync.Core.csproj" />
+    <ProjectReference Include="..\BlueDrive.Sync.Client\BlueDrive.Sync.Client.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="BlueDrive.Sync.Tests" />
+    <InternalsVisibleTo Include="BlueDrive.IntegrationTests" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
+  </ItemGroup>
+</Project>
