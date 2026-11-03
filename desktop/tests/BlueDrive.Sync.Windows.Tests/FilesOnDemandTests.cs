@@ -74,6 +74,26 @@ public sealed class FilesOnDemandTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_registration_dropped_by_windows_is_noticed_on_the_next_start()
+    {
+        if (!_platform.ShellRegistered) return; // the shell refused the folder: nothing can be checked
+        var ctx = new OnDemandContext(Root, _accountId, "Kiểm thử", new Uri("https://bluedrive.example/"), _range, Path.Combine(_tmp, "state.db"));
+
+        // An ordinary restart keeps the registration: missing files are the user's deletions.
+        await _platform.DisposeAsync();
+        _platform = new CloudFilesPlatform(ctx);
+        await _platform.StartAsync(CancellationToken.None);
+        _platform.RegistrationLost.Should().BeFalse();
+
+        // Windows dropped it (MSIX package removed, profile repaired): the agent then puts missing items back instead of deleting them.
+        await _platform.DisposeAsync();
+        SyncRootRegistrar.Unregister(new SyncRootInfo(Root, _accountId, "", "1.0.0", "", null));
+        _platform = new CloudFilesPlatform(ctx);
+        await _platform.StartAsync(CancellationToken.None);
+        _platform.RegistrationLost.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Explorer_shows_bluedrive_states_on_items()
     {
         _remote.WebUpload(null, "đang cùng soạn.docx", Content.Of("x"));

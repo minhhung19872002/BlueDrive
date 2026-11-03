@@ -47,6 +47,31 @@ public sealed class DesktopTests : IDisposable
     }
 
     [Fact]
+    public void Explorer_status_ui_shows_the_state_and_the_storage_used()
+    {
+        var personal = new Sync.Client.HttpRemoteStore.RootDto("r", "personal", "Tài liệu của tôi", null, true, true, false, false,
+            QuotaBytes: 10L * 1024 * 1024 * 1024, UsedBytes: 1_288_490_188);
+        var ok = StatusUiModel.Of(S(AgentState.Idle), false, personal, 0);
+        ok.State.Should().Be(ProviderStatus.InSync);
+        ok.Label.Should().Be("Đã cập nhật");
+        ok.QuotaLabel.Should().Be("Đã dùng 1,2 GB / 10 GB (11%)");
+        (ok.QuotaUsed, ok.QuotaTotal).Should().Be((1_288_490_188, 10L * 1024 * 1024 * 1024));
+
+        StatusUiModel.Of(S(AgentState.Syncing), false, personal, 0).State.Should().Be(ProviderStatus.Syncing);
+        StatusUiModel.Of(S(AgentState.Syncing), true, personal, 0).State.Should().Be(ProviderStatus.Paused);
+        StatusUiModel.Of(S(AgentState.Offline), false, personal, 0).State.Should().Be(ProviderStatus.Offline);
+        StatusUiModel.Of(S(AgentState.NeedsSignIn), false, personal, 0).State.Should().Be(ProviderStatus.Error);
+        StatusUiModel.Of(S(AgentState.Idle, mass: 120), false, personal, 0).State.Should().Be(ProviderStatus.Warning);
+        var conflict = StatusUiModel.Of(S(AgentState.Idle), false, personal, 2);
+        (conflict.State, conflict.Label).Should().Be((ProviderStatus.Warning, "Có xung đột"));
+        conflict.Detail.Should().StartWith("2 tệp bị sửa ở cả máy này và nơi khác");
+
+        // No quota on the server: no bar, only what is used.
+        var noQuota = StatusUiModel.Of(S(AgentState.Idle), false, personal with { QuotaBytes = 0 }, 0);
+        (noQuota.QuotaTotal, noQuota.QuotaLabel).Should().Be((0, "Đã dùng 1,2 GB"));
+    }
+
+    [Fact]
     public void Texts_are_vietnamese_and_numbers_use_the_vietnamese_decimal_comma()
     {
         Formatting.Bytes(1_288_490_188).Should().Be("1,2 GB");

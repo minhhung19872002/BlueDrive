@@ -36,6 +36,9 @@ public static class Uninstaller
         if (registry)
         {
             TryRun(ExplorerMenu.Unregister, "menu chuột phải");
+#if WINDOWS
+            TryRun(StatusUiServer.Unregister, "Status UI của Explorer");
+#endif
             TryRun(() => StartupRegistration.Set(false), "khởi động cùng Windows");
             editorsExe ??= OnlyOfficeService.FindEditors();
         }

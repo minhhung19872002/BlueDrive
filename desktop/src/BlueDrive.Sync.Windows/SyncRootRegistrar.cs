@@ -20,6 +20,14 @@ public static class SyncRootRegistrar
     /// <summary>Fixed id of the BlueDrive cloud files provider.</summary>
     public static readonly Guid ProviderId = new("3c6d3a4e-7f0b-4b8e-9d2a-5b1e0d1e0001");
 
+    /// <summary>
+    /// Explorer Status UI class (IStorageProviderStatusUISourceFactory) of an install without package identity: recorded on the sync root
+    /// registration like OneDrive does (the MSIX package declares it in its manifest instead). Null: none.
+    /// </summary>
+    public static Guid? StatusUiFactory { get; set; }
+
+    private const string SyncRootManagerKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\SyncRootManager";
+
     public static string Id(Guid accountId) => $"BlueDrive!{WindowsIdentity.GetCurrent().User?.Value ?? "user"}!{accountId:N}";
 
     /// <summary>Returns true when the shell registration (navigation pane) succeeded, false when only the cloud filter is registered.</summary>
@@ -52,7 +60,11 @@ public static class SyncRootRegistrar
             root.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition { Id = ItemStatus.PropertyId, DisplayNameResource = "Trạng thái BlueDrive" });
             StorageProviderSyncRootManager.Register(root);
             // Windows accepts the call but ignores some folders (e.g. under %TEMP%): check it really took.
-            if (StorageProviderSyncRootManager.GetSyncRootInformationForFolder(folder)?.Id == root.Id) return true;
+            if (StorageProviderSyncRootManager.GetSyncRootInformationForFolder(folder)?.Id == root.Id)
+            {
+                SetStatusUiFactory(root.Id);
+                return true;
+            }
             RegisterFilterOnly(info);
             return false;
         }
@@ -89,6 +101,17 @@ public static class SyncRootRegistrar
             };
             CloudNative.Check(PInvoke.CfRegisterSyncRoot(Path.GetFullPath(info.Path), reg, policies, CF_REGISTER_FLAGS.CF_REGISTER_FLAG_UPDATE), "Đăng ký thư mục đồng bộ");
         }
+    }
+
+    private static void SetStatusUiFactory(string id)
+    {
+        if (StatusUiFactory is not { } clsid) return;
+        try
+        {
+            using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey($@"{SyncRootManagerKey}\{id}", writable: true);
+            key?.SetValue("StorageProviderStatusUISourceFactory", clsid.ToString("B").ToUpperInvariant());
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException) { } // no Status UI, sync unaffected
     }
 
     /// <summary>Sign out / remote wipe: Explorer forgets the sync root (files left behind are plain files).</summary>

@@ -95,6 +95,13 @@ public sealed class SyncEngine(
 {
     private const string CursorKey = "cursor";
     private const string RevokedKey = "revoked";
+    private const string RestoreKey = "restore_local_deletions";
+
+    /// <summary>
+    /// Items missing locally were not deleted by the user (the OS removed the placeholders): the next pass puts them back instead of deleting
+    /// them on the server. Kept in the state database until a pass has run.
+    /// </summary>
+    public void RestoreLocalDeletions() => state.SetAccount(RestoreKey, "1");
     private readonly SyncEngineOptions _o = options ?? new();
     private readonly IPlaceholderProvider _placeholders = placeholders ?? NoPlaceholders.Instance;
     /// <summary>Content downloaded ahead in parallel: remote id → (verified temporary file, revision).</summary>
@@ -313,6 +320,7 @@ public sealed class SyncEngine(
             state.ClearOperations(root.RootId);
         }
         ClearPrefetch();
+        if (state.GetAccount(RestoreKey) is not null) state.SetAccount(RestoreKey, null);
         var deferred = _deletesDeferred;
         _deletesDeferred = false;
         return new SyncPassResult(total, pendingMass, errors.Distinct().ToList()) { DeletesDeferred = deferred };
@@ -401,6 +409,10 @@ public sealed class SyncEngine(
             plan = plan.Select(p => p.LocalEntry is { } l && c.Busy.Contains(l.Path) ? p with { Decision = new(SyncAction.None, "Tệp đang được mở.") } : p).ToList();
             foreach (var path in c.Busy) errors.Add($"{path}: Tệp đang được mở hoặc bị khóa, sẽ đồng bộ khi tệp được đóng.");
         }
+
+        if (state.GetAccount(RestoreKey) is not null)
+            plan = plan.Select(p => p.Decision.Has(SyncAction.DeleteRemote)
+                ? p with { Decision = new(SyncAction.RestoreLocal, "Windows đã gỡ tệp giữ chỗ khi mất đăng ký thư mục: tải lại.") } : p).ToList();
 
         // Safe mass delete: pause server deletions and ask the user.
         var deletes = plan.Where(p => p.Decision.Has(SyncAction.DeleteRemote) && p.Base is { IsFolder: false }).ToList();

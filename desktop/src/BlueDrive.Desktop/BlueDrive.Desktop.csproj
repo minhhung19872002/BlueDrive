@@ -2,7 +2,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <!-- Windows (Files On-Demand, Explorer, toasts) and macOS / Linux (full sync mode, Sync-Phase 10/11). -->
-    <TargetFrameworks>net10.0-windows10.0.19041.0;net10.0</TargetFrameworks>
+    <TargetFrameworks>net10.0-windows10.0.22621.0;net10.0</TargetFrameworks>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <RootNamespace>BlueDrive.Desktop</RootNamespace>
     <AssemblyName>BlueDrive</AssemblyName>
@@ -15,14 +15,16 @@
     <Company>BLUESTAR</Company>
     <Product>BlueDrive</Product>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'">
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.22621.0'">
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <!-- Source-generated COM (Explorer Status UI server). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
     <!-- macOS: a menu bar app (no Dock icon) once bundled (Info.plist LSUIElement, desktop/packaging/macos). -->
     <OutputType>Exe</OutputType>
   </PropertyGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'">
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.22621.0'">
     <ProjectReference Include="..\BlueDrive.Sync.Windows\BlueDrive.Sync.Windows.csproj" />
     <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
     <!-- Microsoft.Toolkit.Uwp.Notifications pulls System.Drawing.Common 4.7.0 (GHSA-rxg9-xrhp-64gj). -->
@@ -37,6 +39,10 @@
   <ItemGroup>
     <!-- ONLYOFFICE Desktop Editors provider template (config.json is generated per BlueDrive server). -->
     <None Include="..\..\onlyoffice-provider\bluedrive\**" LinkBase="onlyoffice-provider\bluedrive" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.22621.0'">
+    <!-- Icons of Explorer's Status UI (StatusUiServer), for the EXE and the MSIX installs. -->
+    <None Include="..\..\packaging\msix\Assets\*.svg" Link="Assets\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="BlueDrive.Desktop.Tests" />

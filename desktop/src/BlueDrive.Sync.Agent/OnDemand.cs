@@ -21,6 +21,12 @@ public interface IOnDemandPlatform : IAsyncDisposable
     /// <summary>Registers the sync folder with the OS (Explorer navigation pane, status icons) and starts serving hydration requests.</summary>
     Task StartAsync(CancellationToken ct);
 
+    /// <summary>
+    /// Set by <see cref="StartAsync"/>: the folder had to be registered again although BlueDrive had registered it (the OS dropped the registration
+    /// and with it the placeholders of files not on the computer). The next pass then downloads missing items back instead of deleting them.
+    /// </summary>
+    bool RegistrationLost => false;
+
     /// <summary>Removes the OS registration (sign out, remote wipe). Placeholders left behind become plain empty files.</summary>
     Task UnregisterAsync();
 }

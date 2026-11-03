@@ -44,4 +44,30 @@ public sealed class DeleteSettleTests
         await engine.SyncAsync(CancellationToken.None);
         remote.Tree().Should().NotContainKey("Lưu trữ/000.txt");
     }
+
+    [Fact]
+    public async Task Items_the_os_removed_come_back_instead_of_being_deleted_on_the_server()
+    {
+        var clock = new FakeClock(DateTime.UtcNow);
+        var remote = new FakeRemoteStore(clock);
+        remote.WebCreateFolder(null, "Báo cáo");
+        for (var i = 0; i < 5; i++) remote.WebUpload("Báo cáo", $"{i}.txt", Content.Of($"tệp {i}"));
+        using var db = new SyncStateDb(":memory:");
+        db.UpsertRoot(FakeRemoteStore.Root, "", true);
+        var fs = new FakeLocalFileSystem(clock);
+        var engine = new SyncEngine(db, remote, fs, clock, new SyncEngineOptions { DeviceName = "PC", TimeZone = TimeZoneInfo.Utc });
+        (await engine.SyncAsync(CancellationToken.None)).Errors.Should().BeEmpty();
+
+        // Windows dropped the sync root registration and its placeholders (too few for the mass delete question).
+        for (var i = 0; i < 5; i++) fs.UserDelete($"Báo cáo/{i}.txt");
+        engine.RestoreLocalDeletions();
+        (await engine.SyncAsync(CancellationToken.None)).Errors.Should().BeEmpty();
+        remote.Tree().Keys.Count(k => k.StartsWith("Báo cáo/")).Should().Be(5, "nothing is deleted on the server");
+        for (var i = 0; i < 5; i++) fs.Exists($"Báo cáo/{i}.txt").Should().BeTrue();
+
+        // Only that pass: a deletion by the user afterwards goes to the server as usual.
+        fs.UserDelete("Báo cáo/0.txt");
+        await engine.SyncAsync(CancellationToken.None);
+        remote.Tree().Should().NotContainKey("Báo cáo/0.txt");
+    }
 }

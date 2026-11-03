@@ -126,7 +126,13 @@ public sealed class SyncAgent : IAsyncDisposable
             Directory.CreateDirectory(_fs.Root);
             _db.SetAccount(InitializedKey, _fs.Root);
         }
-        if (_platform is not null && Directory.Exists(_fs.Root)) await _platform.StartAsync(ct);
+        if (_platform is not null && Directory.Exists(_fs.Root))
+        {
+            await _platform.StartAsync(ct);
+            // Windows lost the registration (package uninstalled, profile repaired…) and removed the placeholders that were not downloaded:
+            // those are not the user's deletions.
+            if (_platform.RegistrationLost) _engine.RestoreLocalDeletions();
+        }
         if (Directory.Exists(_fs.Root)) _watcher = NewWatcher();
         _notes = new SyncNotifications(BlueDriveHttp.Normalize(_o.Server), () => Task.FromResult(_o.Tokens.Load()?.AccessToken), _o.HandlerFactory)
         {

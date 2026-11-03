@@ -23,6 +23,7 @@ public sealed class CloudFilesPlatform : IOnDemandPlatform
     /// <summary>True when Explorer shows the folder in its navigation pane (shell registration), false when only the cloud filter is registered.</summary>
     public bool ShellRegistered { get; private set; }
     public int Hydrations => _provider.Hydrations;
+    public bool RegistrationLost { get; private set; }
 
     public event Action<string>? FileClosed;
     /// <summary>(relative path, message) — hydration failures, refused pins.</summary>
@@ -44,7 +45,10 @@ public sealed class CloudFilesPlatform : IOnDemandPlatform
     public async Task StartAsync(CancellationToken ct)
     {
         if (_started) return;
+        var wasRegistered = SyncRootRegistrar.IsRegistered(_ctx.AccountId);
         ShellRegistered = await SyncRootRegistrar.RegisterAsync(_info);
+        // Only a shell registration can be checked; a brand-new account has nothing in its state yet, so restoring is harmless there.
+        RegistrationLost = ShellRegistered && !wasRegistered;
         _provider.Connect();
         _pins = new FileSystemWatcher(_ctx.SyncFolder)
         {

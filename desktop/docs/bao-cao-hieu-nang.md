@@ -25,7 +25,7 @@ Số liệu gốc: [`perf/ket-qua.json`](perf/ket-qua.json).
 
 ```powershell
 dotnet build desktop/tools/BlueDrive.Sync.Perf -c Release
-$perf = 'desktop/tools/BlueDrive.Sync.Perf/bin/Release/net10.0-windows10.0.19041.0/bluedrive-perf.dll'
+$perf = 'desktop/tools/BlueDrive.Sync.Perf/bin/Release/net10.0-windows10.0.22621.0/bluedrive-perf.dll'
 # Quy mô: máy chủ giả lập trong bộ nhớ (không tính mạng), Cloud Files API thật, SQLite thật, thư mục dưới %USERPROFILE%.
 dotnet $perf scale --files 100000 --folders 5000 --out desktop/docs/perf/ket-qua.json
 # Độ trễ: máy chủ thật, đăng nhập thiết bị (PKCE) như ứng dụng, tác tử đồng bộ đầy đủ với SignalR.

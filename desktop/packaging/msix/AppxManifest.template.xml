@@ -10,12 +10,14 @@
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
   xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:desktop3="http://schemas.microsoft.com/appx/manifest/desktop/windows10/3"
   xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+  xmlns:cloudFiles2="http://schemas.microsoft.com/appx/manifest/cloudfiles/windows10/2"
   xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5"
   xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
   xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap desktop desktop4 desktop5 desktop6 com rescap">
+  IgnorableNamespaces="uap desktop desktop3 desktop4 desktop5 desktop6 cloudFiles2 com rescap">
   <Identity Name="BLUESTAR.BlueDrive" Publisher="{{PUBLISHER}}" Version="{{VERSION}}" ProcessorArchitecture="{{ARCH}}" />
   <Properties>
     <DisplayName>BlueDrive</DisplayName>
@@ -49,8 +51,24 @@
             </desktop5:ItemType>
           </desktop4:FileExplorerContextMenus>
         </desktop4:Extension>
+        <!-- Explorer's cloud Status UI (spec 7.2, Windows 11 22H2+): state and storage used, served by the running BlueDrive (StatusUiServer). -->
+        <desktop3:Extension Category="windows.cloudFiles">
+          <desktop3:CloudFiles>
+            <!-- The schema requires these handlers; BlueDrive has none of them (the class is not registered, Explorer uses its defaults),
+                 as in Microsoft's CloudMirror sample. Item states come from StorageProviderItemProperties instead. -->
+            <desktop3:CustomStateHandler Clsid="5B1E0D1E-3C6D-4E7F-8B0B-B1DE0D1E00FF" />
+            <desktop3:ThumbnailProviderHandler Clsid="5B1E0D1E-3C6D-4E7F-8B0B-B1DE0D1E00FF" />
+            <desktop3:ExtendedPropertyHandler Clsid="5B1E0D1E-3C6D-4E7F-8B0B-B1DE0D1E00FF" />
+            <desktop3:BannersHandler Clsid="5B1E0D1E-3C6D-4E7F-8B0B-B1DE0D1E00FF" />
+            <desktop3:CloudFilesContextMenus />
+            <cloudFiles2:StorageProviderStatusUISourceFactory Clsid="5B1E0D1E-3C6D-4E7F-8B0B-B1DE0D1E0003" />
+          </desktop3:CloudFiles>
+        </desktop3:Extension>
         <com:Extension Category="windows.comServer">
           <com:ComServer>
+            <com:ExeServer Executable="BlueDrive.exe" Arguments="-Embedding" DisplayName="BlueDrive Status">
+              <com:Class Id="5B1E0D1E-3C6D-4E7F-8B0B-B1DE0D1E0003" DisplayName="BlueDrive Status UI" />
+            </com:ExeServer>
             <com:SurrogateServer DisplayName="BlueDrive Explorer">
               <com:Class Id="5B1E0D1E-3C6D-4E7F-8B0B-B1DE0D1E0002" Path="BlueDrive.Shell.dll" ThreadingModel="STA" />
             </com:SurrogateServer>

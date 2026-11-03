@@ -38,7 +38,7 @@ một máy / thiết bị giả lập). Ghi kết quả vào cột cuối kèm n
 
 Chạy ngày 03/11/2026 bằng `bluedrive-perf acceptance` (`desktop/tools/BlueDrive.Sync.Perf`): hai BlueDrive Desktop độc lập ("MAY-A", "MAY-B": hai
 lần đăng nhập thiết bị PKCE, hai thư mục đồng bộ trên đĩa thật, tác tử đầy đủ có SignalR) với máy chủ BlueDrive thật (stack Docker trên
-cùng máy). Chạy lại: `dotnet desktop/tools/BlueDrive.Sync.Perf/bin/Release/net10.0-windows10.0.19041.0/bluedrive-perf.dll acceptance --server <máy chủ> --user <quản trị> --password <mật khẩu>`.
+cùng máy). Chạy lại: `dotnet desktop/tools/BlueDrive.Sync.Perf/bin/Release/net10.0-windows10.0.22621.0/bluedrive-perf.dll acceptance --server <máy chủ> --user <quản trị> --password <mật khẩu>`.
 Hai lần chạy liên tiếp đều đạt; số liệu lần 2:
 
 | Tiêu chí (mục 15) | Kết quả | Đo được |

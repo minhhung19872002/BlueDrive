@@ -42,6 +42,8 @@ internal static class Program
         using var single = new Mutex(true, MutexName, out var first);
         if (!first)
         {
+            // Started by COM for Explorer (Status UI) while BlueDrive starts up: the running one serves it.
+            if (args.Contains("-Embedding")) return 0;
             // Already running: ask it to show its window, then leave.
             try
             {

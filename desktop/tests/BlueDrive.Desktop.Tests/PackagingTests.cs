@@ -156,6 +156,20 @@ public sealed class PackagingTests : IDisposable
     }
 
     [Fact]
+    public void Msix_package_serves_explorer_status_ui_from_bluedrive()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "desktop", "packaging", "msix", "AppxManifest.template.xml"))) dir = dir.Parent;
+        dir.Should().NotBeNull("the manifest template is in the repository");
+        var xml = System.Xml.Linq.XDocument.Load(Path.Combine(dir!.FullName, "desktop", "packaging", "msix", "AppxManifest.template.xml"));
+        var clsid = StatusUiServer.Clsid.ToString().ToUpperInvariant();
+        xml.Descendants().Should().Contain(e => e.Name.LocalName == "StorageProviderStatusUISourceFactory" && (string?)e.Attribute("Clsid") == clsid);
+        var server = xml.Descendants().Single(e => e.Name.LocalName == "Class" && (string?)e.Attribute("Id") == clsid).Parent!;
+        (server.Name.LocalName, (string?)server.Attribute("Executable"), (string?)server.Attribute("Arguments"))
+            .Should().Be(("ExeServer", "BlueDrive.exe", "-Embedding"));
+    }
+
+    [Fact]
     public void Updates_come_from_the_bluedrive_server()
     {
         Updater.FeedUrl("https://drive.example.gov.vn/").Should().Be("https://drive.example.gov.vn/downloads/desktop/");

@@ -17,6 +17,9 @@ namespace BlueDrive.Desktop;
 public partial class App : Application
 {
     private AppHost _host = null!;
+#if WINDOWS
+    private StatusUiServer? _statusUi;
+#endif
     private TrayIcon _tray = null!;
     private FlyoutWindow? _flyout;
     private SettingsWindow? _settings;
@@ -72,7 +75,11 @@ public partial class App : Application
             _host.Changed += () => Dispatcher.UIThread.Post(UpdateTray);
             BuildTray();
             _ = ListenForActivationAsync(_stop.Token);
-            var background = desktop.Args?.Contains("--background") == true || PackageInfo.LaunchedAtStartup();
+#if WINDOWS
+            _statusUi = StatusUiServer.Start(_host, () => Dispatcher.UIThread.Post(ShowFlyout));
+#endif
+            // "-Embedding": started by COM for Explorer's Status UI.
+            var background = desktop.Args?.Contains("--background") == true || desktop.Args?.Contains("-Embedding") == true || PackageInfo.LaunchedAtStartup();
             _ = StartAsync(background);
             desktop.ShutdownRequested += (_, _) => _stop.Cancel();
         }
@@ -363,6 +370,9 @@ public partial class App : Application
         Log.Information("BlueDrive Desktop thoát");
         _tray.IsVisible = false;
         if (_updateTimer is not null) await _updateTimer.DisposeAsync();
+#if WINDOWS
+        _statusUi?.Dispose();
+#endif
         await _host.DisposeAsync();
         Updater.ApplyOnExit();
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime d) d.Shutdown();
