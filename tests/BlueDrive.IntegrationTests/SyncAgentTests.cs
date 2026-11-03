@@ -62,6 +62,40 @@ public sealed class SyncAgentTests(ApiFactory factory) : IDisposable
         .GetProperty("items").EnumerateArray().Select(i => i.GetProperty("name").GetString()!).ToList();
 
     [Fact]
+    public async Task Deleting_many_files_asks_first_even_when_the_server_pushes_a_change_meanwhile()
+    {
+        var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(user);
+        await using var agent = Agent(await SignInAsync(user));
+        await agent.StartAsync();
+        var mine = Path.Combine(_tmp, "BlueDrive", "Tài liệu của tôi");
+        await Until(() => Task.FromResult(Directory.Exists(mine) && agent.Status.State == AgentState.Idle), "thư mục Tài liệu của tôi");
+        var folder = Path.Combine(mine, "Lưu trữ");
+        Directory.CreateDirectory(folder);
+        for (var i = 0; i < 120; i++) await File.WriteAllTextAsync(Path.Combine(folder, $"{i:000}.txt"), $"tệp {i}");
+        string? folderId = null;
+        await Until(async () =>
+        {
+            var items = await (await user.GetAsync($"/api/v1/workspaces/{ws}/items?pageSize=200")).ReadJsonAsync();
+            folderId = items.GetProperty("items").EnumerateArray().FirstOrDefault(i => i.GetProperty("name").GetString() == "Lưu trữ") is { ValueKind: System.Text.Json.JsonValueKind.Object } f
+                ? f.GetProperty("id").GetString() : null;
+            return folderId is not null && (await NamesAsync(user, ws, folderId)).Count == 120 && agent.Status.State == AgentState.Idle;
+        }, "120 tệp lên máy chủ", 60);
+
+        // The user deletes them one by one (like Explorer), and halfway the web changes something: the pushed pass must wait.
+        var files = Directory.GetFiles(folder);
+        for (var i = 0; i < files.Length; i++)
+        {
+            File.Delete(files[i]);
+            if (i == 40) await (await user.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Từ trình duyệt" })).ReadJsonAsync();
+            await Task.Delay(5);
+        }
+        await Until(() => Task.FromResult(agent.Status.PendingMassDelete > 0), "câu hỏi xóa hàng loạt", 30);
+        agent.Status.PendingMassDelete.Should().Be(120);
+        (await NamesAsync(user, ws, folderId)).Should().HaveCount(120, "nothing is deleted on BlueDrive before the user answers");
+    }
+
+    [Fact]
     public async Task Agent_mirrors_local_edits_to_the_server_and_web_changes_to_disk()
     {
         var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");

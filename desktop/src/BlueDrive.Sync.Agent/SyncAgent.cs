@@ -359,6 +359,9 @@ public sealed class SyncAgent : IAsyncDisposable
             lock (_gate)
             {
                 due = new[] { _remoteDue, _localDue, _retryDue }.Where(d => d is not null).Min();
+                // While the user is still changing files (e.g. deleting 120 files one by one), no pass runs — not even one asked for by the
+                // server: a scan of a half-done deletion would see fewer than 100 deletes and skip the "Xóa cả trên BlueDrive?" question.
+                if (_localDue is { } quiet && due < quiet) due = quiet;
                 if (due is not null && due <= DateTime.UtcNow)
                 {
                     _remoteDue = _localDue = _localFirst = _retryDue = null;

@@ -33,3 +33,31 @@ tài khoản `bien_tap`, trình duyệt đăng nhập tài khoản đó; tài kh
 
 Còn phải chạy tay trên 2 máy Windows vật lý trước nghiệm thu: các mục **Tự động** ở trên (kiểm thử tự động đã dùng API thật và đĩa thật, nhưng
 một máy / thiết bị giả lập). Ghi kết quả vào cột cuối kèm ngày và người chạy.
+
+## Kết quả nghiệm thu tự động — mục 15, hai thiết bị
+
+Chạy ngày 03/11/2026 bằng `bluedrive-perf acceptance` (`desktop/tools/BlueDrive.Sync.Perf`): hai BlueDrive Desktop độc lập ("MAY-A", "MAY-B": hai
+lần đăng nhập thiết bị PKCE, hai thư mục đồng bộ trên đĩa thật, tác tử đầy đủ có SignalR) với máy chủ BlueDrive thật (stack Docker trên
+cùng máy). Chạy lại: `dotnet desktop/tools/BlueDrive.Sync.Perf/bin/Release/net10.0-windows10.0.19041.0/bluedrive-perf.dll acceptance --server <máy chủ> --user <quản trị> --password <mật khẩu>`.
+Hai lần chạy liên tiếp đều đạt; số liệu lần 2:
+
+| Tiêu chí (mục 15) | Kết quả | Đo được |
+|---|---|---|
+| Sửa/thêm/đổi tên/di chuyển/xóa trên máy → web < 10 giây | Đạt | thêm 3,2 s; sửa 3,1 s; đổi tên 0,1 s; di chuyển 3,1 s; xóa 3,2 s (gồm 3 s chờ thư mục yên) |
+| Web → máy < 5 giây | Đạt | 0,32 s |
+| Sửa đồng thời 2 nơi → bản xung đột đúng tên, không mất nội dung | Đạt | `biên bản (Bản xung đột - <Họ tên> - MAY-B - 2026-11-03 2007).txt`, cả hai nội dung còn |
+| Mất mạng, sửa 50 tệp, có mạng lại → lên máy chủ đủ | Đạt | 0 tệp lên khi ngoại tuyến; đủ 50 sau 2,6 s |
+| Xóa hơn 100 tệp → hỏi xác nhận | Đạt | "Bạn vừa xóa 120 tệp. Xóa cả trên BlueDrive?", máy chủ còn đủ 120 |
+| "Chia sẻ…" tạo liên kết có mật khẩu | Đạt | liên kết `/s/…` có mật khẩu |
+| Tệp chỉ quyền Xem không tải xuống máy | Đạt | tệp "Xem + Tải xuống" có trên máy, tệp "Chỉ xem" không |
+| Thu hồi thiết bị; nhật ký có device_id | Đạt | máy B dừng sau 3,1 s ("Cần đăng nhập lại"); nhật ký có device_id của máy A |
+| Tệp theo yêu cầu: mở tự tải, "Luôn giữ", "Giải phóng dung lượng" | Đạt | `FilesOnDemandTests` (Cloud Files thật, Windows 11) |
+| Simulation 10 000 chuỗi; kill-test không mất dữ liệu | Đạt | `SimulationTests`, IT `SyncAgentTests.Killing_the_agent_in_the_middle_loses_nothing_and_duplicates_nothing` |
+| UI, thông báo, tài liệu tiếng Việt; không TODO/stub | Đạt | |
+
+**Lỗi tìm ra khi nghiệm thu và đã sửa:** người dùng xóa nhiều tệp lần lượt (như Explorer) trong lúc máy chủ đẩy một thay đổi xuống → lượt
+đồng bộ chạy giữa chừng, thấy < 100 tệp bị xóa và xóa luôn trên máy chủ không hỏi (tái hiện: 71/120 tệp bị xóa). Nay mọi lượt đợi thư mục
+yên (3 giây, tối đa 30 giây) khi đang có thay đổi trên máy — IT `SyncAgentTests.Deleting_many_files_asks_first_even_when_the_server_pushes_a_change_meanwhile`.
+
+Chưa thay thế được: chạy trên 2 máy Windows vật lý khác nhau (mạng LAN/Internet thật, Word thật). Khi nghiệm thu với đơn vị, chạy lệnh trên
+từ 2 máy vào máy chủ thật, cùng các kịch bản tay ở bảng trên.

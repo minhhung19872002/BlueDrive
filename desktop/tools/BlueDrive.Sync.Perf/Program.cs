@@ -20,6 +20,9 @@ switch (cmd)
     case "scale":
         await Scale.RunAsync(int.Parse(Opt("files", "100000")), int.Parse(Opt("folders", "5000")), results);
         break;
+    case "acceptance":
+        await Acceptance.RunAsync(new Uri(Opt("server", "http://localhost:8088")), Opt("user", "admin"), Opt("password", ""), results);
+        break;
     case "latency":
         await Latency.RunAsync(new Uri(Opt("server", "http://localhost:8088")), Opt("user", "admin"), Opt("password", ""), int.Parse(Opt("rounds", "10")), results);
         break;
@@ -284,7 +287,7 @@ internal static class Latency
     }
 
     /// <summary>A valid Word document of about <paramref name="size"/> bytes (the server checks Office content): a minimal package plus a picture.</summary>
-    private static byte[] Docx(int size)
+    public static byte[] Docx(int size)
     {
         using var ms = new MemoryStream();
         using (var zip = new System.IO.Compression.ZipArchive(ms, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
