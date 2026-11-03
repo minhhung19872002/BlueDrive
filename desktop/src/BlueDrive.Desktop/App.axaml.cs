@@ -48,6 +48,7 @@ public partial class App : Application
     {
         await _host.StartAsync();
         _host.WatchConditions();
+        CheckOnlyOfficeProvider();
         var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
         if (_host.Sessions.Count == 0) ShowWizard();
         else if (ExplorerMenu.Parse(args) is not null) await HandleArgsAsync(args);
@@ -93,6 +94,17 @@ public partial class App : Application
                 case "versions":
                     Show(new VersionsWindow(new VersionsViewModel(session, hit.Item.RemoteId, hit.Item.Name)));
                     break;
+                case "coedit":
+                case "coedit-web":
+                    var editor = await session.Agent.Api.EditorLinkAsync(hit.Item.RemoteId);
+                    var exe = cmd.Action == "coedit" ? OnlyOfficeService.FindEditors() : null;
+                    if (exe is not null) OnlyOfficeService.Open(exe, editor.Url);
+                    else
+                    {
+                        if (cmd.Action == "coedit") ShowToast("Chưa có ONLYOFFICE Desktop Editors", "Tài liệu được mở để cùng soạn thảo trên trình duyệt.");
+                        FlyoutViewModel.OpenPath(editor.BrowserUrl);
+                    }
+                    break;
                 case "link":
                 case "web":
                     var url = (await session.Agent.Api.WebUrlAsync(hit.Item.RemoteId)).Url;
@@ -109,6 +121,24 @@ public partial class App : Application
         catch (Exception ex) when (ex is Sync.Core.RemoteTransientException or Sync.Core.RemotePermanentException or Sync.Core.RemoteNotFoundException)
         {
             ShowToast("BlueDrive", ex.Message);
+        }
+    }
+
+    /// <summary>ONLYOFFICE updates can remove the provider: put it back (silently when the folder is writable), otherwise tell the user.</summary>
+    private void CheckOnlyOfficeProvider()
+    {
+        var server = _host.Sessions.FirstOrDefault()?.Config.ServerUrl;
+        if (server is null || OnlyOfficeService.FindEditors() is not { } exe) return;
+        try
+        {
+            var state = OnlyOfficeService.State(exe, server);
+            if (state is ProviderState.Missing or ProviderState.Outdated && !OnlyOfficeService.InstallProvider(exe, server, allowElevation: false))
+                ShowToast("Cần cài lại BlueDrive cho ONLYOFFICE", "Mở Cài đặt → Giới thiệu → \"Cài BlueDrive vào ONLYOFFICE\" để cùng soạn thảo trong ONLYOFFICE Desktop Editors.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ShowToast("Cần cài lại BlueDrive cho ONLYOFFICE", "Mở Cài đặt → Giới thiệu → \"Cài BlueDrive vào ONLYOFFICE\".");
+            Log.Warning(ex, "Provider ONLYOFFICE");
         }
     }
 

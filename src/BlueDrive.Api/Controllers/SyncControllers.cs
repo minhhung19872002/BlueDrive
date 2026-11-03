@@ -133,3 +133,20 @@ public class ConnectController : ApiControllerBase
         }
     }
 }
+
+/// <summary>Cùng soạn thảo bằng ONLYOFFICE Desktop Editors: kiểm tra provider, vé mở tài liệu dùng một lần từ BlueDrive Desktop.</summary>
+[Route("api/v1/onlyoffice-desktop")]
+public class OnlyOfficeDesktopController : ApiControllerBase
+{
+    /// <summary>Kiểm tra provider ("check.url" trong config.json của ONLYOFFICE Desktop Editors): 200 + JSON.</summary>
+    [HttpGet("status"), AllowAnonymous]
+    public IActionResult Status() => Ok(new { provider = OnlyOfficeDesktop.ProviderId, name = "BlueDrive", ok = true });
+
+    /// <summary>BlueDrive Desktop xin vé mở một tài liệu trong ONLYOFFICE Desktop Editors (2 phút, dùng một lần).</summary>
+    [HttpPost("tickets")]
+    public Task<OnlyOfficeEditorLinkDto> Ticket(CreateEditorTicketCommand cmd) => Mediator.Send(cmd);
+
+    /// <summary>Trang /oo-desktop/open đổi vé lấy phiên đăng nhập web (không phải nhập lại mật khẩu).</summary>
+    [HttpPost("tickets/redeem"), AllowAnonymous, EnableRateLimiting(SecuritySetup.AuthRateLimit)]
+    public Task<RedeemEditorTicketResult> Redeem(RedeemEditorTicketCommand cmd) => Mediator.Send(cmd);
+}

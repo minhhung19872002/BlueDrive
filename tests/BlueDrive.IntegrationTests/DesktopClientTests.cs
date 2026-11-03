@@ -353,6 +353,37 @@ public class DesktopClientTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task OnlyOffice_desktop_ticket_opens_the_editor_without_signing_in_again_once()
+    {
+        var anon = factory.CreateClient();
+        var status = await (await anon.GetAsync("/api/v1/onlyoffice-desktop/status")).ReadJsonAsync();
+        status.GetProperty("provider").GetString().Should().Be("bluedrive");
+
+        var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (stranger, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(user);
+        var file = await StorageTests.UploadAsync(user, ws, null, "tờ trình.txt", "x"u8.ToArray());
+        var fileId = file.GetProperty("fileId").GetGuid();
+        using var a = await PcAsync(user, "PC-A");
+
+        var link = await (await a.Http.PostAsJsonAsync("api/v1/onlyoffice-desktop/tickets", new { fileId })).ReadJsonAsync();
+        var url = new Uri(factory.Server.BaseAddress, link.GetProperty("url").GetString()!); // absolute when App:PublicBaseUrl is set
+        url.AbsolutePath.Should().Be("/oo-desktop/open");
+        link.GetProperty("canEdit").GetBoolean().Should().BeTrue();
+        var ticket = System.Web.HttpUtility.ParseQueryString(url.Query)["ticket"]!;
+
+        var redeemed = await (await anon.PostAsJsonAsync("/api/v1/onlyoffice-desktop/tickets/redeem", new { ticket })).ReadJsonAsync();
+        redeemed.GetProperty("next").GetString().Should().Be($"/files/{fileId}/edit");
+        var web = factory.CreateClient().WithToken(redeemed.GetProperty("auth").GetProperty("accessToken").GetString()!);
+        (await web.GetAsync($"/api/v1/office/config/{fileId}")).StatusCode.Should().Be(HttpStatusCode.OK, "the redeemed session opens the editor");
+
+        (await anon.PostAsJsonAsync("/api/v1/onlyoffice-desktop/tickets/redeem", new { ticket })).StatusCode
+            .Should().Be(HttpStatusCode.Unauthorized, "a ticket works once");
+        (await stranger.PostAsJsonAsync("/api/v1/onlyoffice-desktop/tickets", new { fileId })).StatusCode
+            .Should().Be(HttpStatusCode.NotFound, "no ticket for a document the user cannot see");
+    }
+
+    [Fact]
     public async Task Expired_access_token_is_refreshed_and_rotated_transparently()
     {
         var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");

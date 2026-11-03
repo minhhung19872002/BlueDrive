@@ -1,3 +1,4 @@
+import { ooOpenDocument } from '@/features/office/ooDesktop'
 import { useCallback, useState, type ReactNode } from 'react'
 import { App, Drawer, type MenuProps } from 'antd'
 import {
@@ -133,6 +134,8 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
       // Office documents open straight in ONLYOFFICE (edit when allowed, otherwise read-only), like SharePoint.
       // PDF / text / CSV keep the built-in preview (ONLYOFFICE asks for an encoding on every text file);
       // "Mở bằng trình soạn thảo" still edits them.
+      // Inside ONLYOFFICE Desktop Editors: the document opens as an editor tab of the desktop app.
+      else if (needsOfficeViewer(item.extension) && ooOpenDocument(editorUrl(item.id), item.extension)) return
       else if (needsOfficeViewer(item.extension)) navigate(editorUrl(item.id))
       else setViewerId(item.id)
     },

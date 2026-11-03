@@ -139,6 +139,11 @@
           <Button Content="Xuất gói chẩn đoán…" Command="{Binding ExportDiagnosticsCommand}" HorizontalAlignment="Left" />
           <TextBlock Classes="muted" TextWrapping="Wrap" Text="Gói chẩn đoán gồm nhật ký và thông tin hệ thống để gửi bộ phận hỗ trợ; không chứa mật khẩu, mã đăng nhập hay nội dung tệp." />
           <Button Content="Gửi yêu cầu hỗ trợ" Command="{Binding SupportCommand}" HorizontalAlignment="Left" />
+          <TextBlock Text="Cùng soạn thảo bằng ONLYOFFICE" Classes="h2" Margin="0,12,0,0" />
+          <TextBlock Text="{Binding OnlyOfficeStatus}" TextWrapping="Wrap" />
+          <Button Content="Cài BlueDrive vào ONLYOFFICE" Command="{Binding InstallProviderCommand}" IsVisible="{Binding CanInstallProvider}" HorizontalAlignment="Left" />
+          <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
+                     Text="ONLYOFFICE Desktop Editors © Ascensio System SIA, phần mềm nguồn mở theo giấy phép GNU AGPL v3 (https://www.onlyoffice.com, mã nguồn: https://github.com/ONLYOFFICE/DesktopEditors). BlueDrive chỉ cài bộ cài gốc không chỉnh sửa và thêm cấu hình kết nối &quot;bluedrive&quot;." />
           <TextBlock Text="{Binding AboutMessage}" TextWrapping="Wrap" Foreground="#0b5394" />
         </StackPanel>
       </TabItem>

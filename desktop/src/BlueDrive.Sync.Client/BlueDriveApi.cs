@@ -22,6 +22,17 @@ public sealed class BlueDriveApi(HttpClient http)
         Guid? InheritedFromId, string? InheritedFromName);
     public sealed record Version(Guid Id, int VersionNo, long SizeBytes, string? ChangeNote, string? CreatedByName, DateTime CreatedAt, bool IsCurrent);
 
+    public sealed record EditorLink(string Url, string BrowserUrl, bool CanEdit);
+
+    /// <summary>One-time link that opens the document in ONLYOFFICE Desktop Editors signed in (2 minutes, single use).</summary>
+    public async Task<EditorLink> EditorLinkAsync(string fileId, CancellationToken ct = default)
+    {
+        var l = await SendAsync<EditorLink>(HttpMethod.Post, "api/v1/onlyoffice-desktop/tickets", new { fileId = Guid.Parse(fileId) }, ct);
+        // Relative when the server has no public address configured: make it absolute against the server.
+        string Abs(string u) => Uri.TryCreate(u, UriKind.Absolute, out _) ? u : new Uri(http.BaseAddress!, u.TrimStart('/')).ToString();
+        return l with { Url = Abs(l.Url), BrowserUrl = Abs(l.BrowserUrl) };
+    }
+
     public Task<WebUrl> WebUrlAsync(string itemId, CancellationToken ct = default) => GetAsync<WebUrl>($"api/v1/sync/items/{itemId}/web-url", ct);
 
     public Task<ShareLink> CreateLinkAsync(string itemId, bool allowDownload, string? password, DateTime? expiresAt, bool requireLogin, CancellationToken ct = default) =>

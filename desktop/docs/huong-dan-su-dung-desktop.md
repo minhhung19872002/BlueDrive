@@ -40,6 +40,10 @@ Chuột phải một tệp/thư mục trong thư mục BlueDrive → **BlueDrive
 - **Xem trên web**: mở mục trên trang BlueDrive.
 - **Lịch sử phiên bản…**: lưu bản sao của phiên bản cũ hoặc **khôi phục** thành phiên bản hiện tại (không mất phiên bản nào).
 - **Giải quyết xung đột…**: chỉ hiện với tệp "Bản xung đột".
+- **Cùng soạn thảo bằng ONLYOFFICE** (tệp Word/Excel/PowerPoint/PDF/OpenDocument): mở tài liệu trong ONLYOFFICE Desktop Editors, đã đăng nhập
+  sẵn, cùng chỉnh sửa trực tiếp với người khác; mỗi lần lưu là một phiên bản mới trên BlueDrive và tự đồng bộ về máy. Chưa cài ONLYOFFICE
+  thì tài liệu mở trên trình duyệt. Trong ONLYOFFICE, BlueDrive cũng hiện ở **Đám mây đã kết nối** để duyệt và mở tệp.
+- **Cùng soạn thảo trên trình duyệt**: mở trình soạn thảo trên trang BlueDrive.
 
 Không thể tạo tệp/thư mục ngay ở cấp ngoài cùng của thư mục BlueDrive, ở cấp ngoài cùng "Được chia sẻ với tôi" hoặc trong thư mục chỉ xem:
 những mục đó được chuyển vào `_Không đồng bộ được` và hiện trong **Cài đặt → Vấn đề**.
@@ -88,7 +92,7 @@ Vào **Cài đặt → Vấn đề → Xử lý xung đột…** để so sánh 
 | Mạng | Giới hạn băng thông tải lên/tải xuống (KB/giây), proxy (theo Windows, không dùng, tự nhập), **tạm dừng khi dùng mạng tính phí** và **khi chạy pin dưới 20%** (mặc định bật). |
 | Chung | Khởi động cùng Windows, thông báo, giao diện sáng/tối/theo hệ thống. |
 | Vấn đề | Danh sách xung đột và mục chưa đồng bộ được, với **Xử lý xung đột…**, **Giữ cả hai**, **Thử lại**, **Mở vị trí**. |
-| Giới thiệu | Phiên bản, **Xuất gói chẩn đoán…** (nhật ký + thông tin hệ thống, đã ẩn mã đăng nhập, không chứa nội dung tệp) để gửi bộ phận hỗ trợ, **Gửi yêu cầu hỗ trợ** (mở trang Hỗ trợ của BlueDrive). |
+| Giới thiệu | Phiên bản, **Xuất gói chẩn đoán…** (nhật ký + thông tin hệ thống, đã ẩn mã đăng nhập, không chứa nội dung tệp) để gửi bộ phận hỗ trợ, **Gửi yêu cầu hỗ trợ** (mở trang Hỗ trợ của BlueDrive); trạng thái ONLYOFFICE Desktop Editors và nút **Cài BlueDrive vào ONLYOFFICE** (cần quyền quản trị), thông tin giấy phép AGPL v3 của ONLYOFFICE. |
 
 ## 6. Câu hỏi thường gặp
 

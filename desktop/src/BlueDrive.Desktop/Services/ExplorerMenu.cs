@@ -14,6 +14,9 @@ public static class ExplorerMenu
 
     public sealed record Command(string Id, string Text, string Arg, bool FilesOnly = false, string? Condition = null);
 
+    /// <summary>Office documents only (co-editing).</summary>
+    public static string OfficeCondition => string.Join(" OR ", OnlyOfficeService.Extensions.Select(e => $"System.FileExtension:=\"{e}\""));
+
     public static readonly Command[] Commands =
     [
         new("01share", "Chia sẻ…", "--share"),
@@ -21,6 +24,8 @@ public static class ExplorerMenu
         new("03web", "Xem trên web", "--web"),
         new("04versions", "Lịch sử phiên bản…", "--versions", FilesOnly: true),
         new("05resolve", "Giải quyết xung đột…", "--resolve", FilesOnly: true, Condition: "System.FileName:~~\"(Bản xung đột -\""),
+        new("06coedit", "Cùng soạn thảo bằng ONLYOFFICE", "--coedit", FilesOnly: true, Condition: OfficeCondition),
+        new("07coeditweb", "Cùng soạn thảo trên trình duyệt", "--coedit-web", FilesOnly: true, Condition: OfficeCondition),
     ];
 
     /// <summary>AQS condition: the item is inside one of the folders.</summary>

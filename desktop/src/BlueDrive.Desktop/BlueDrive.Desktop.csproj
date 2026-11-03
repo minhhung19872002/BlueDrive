@@ -18,6 +18,10 @@
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
   <ItemGroup>
+    <!-- ONLYOFFICE Desktop Editors provider template (config.json is generated per BlueDrive server). -->
+    <None Include="..\..\onlyoffice-provider\bluedrive\**" LinkBase="onlyoffice-provider\bluedrive" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="BlueDrive.Desktop.Tests" />
   </ItemGroup>
   <ItemGroup>

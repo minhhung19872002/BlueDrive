@@ -608,7 +608,12 @@
     "copiedToClipboard": "Đã sao chép {{count}} mục. Mở thư mục đích và nhấn Ctrl+V để dán.",
     "cutToClipboard": "Đã cắt {{count}} mục. Mở thư mục đích và nhấn Ctrl+V để di chuyển.",
     "bulkEdit": "Cập nhật thông tin hàng loạt",
-    "cmd": { "star": "Quan trọng", "unstar": "Bỏ quan trọng", "copyTo": "Sao chép tới", "moveTo": "Di chuyển tới" },
+    "cmd": {
+      "star": "Quan trọng",
+      "unstar": "Bỏ quan trọng",
+      "copyTo": "Sao chép tới",
+      "moveTo": "Di chuyển tới"
+    },
     "bulkEditTitle": "Cập nhật thông tin cho {{count}} tệp",
     "bulkKeep": "Để trống để giữ nguyên",
     "bulkTagsHint": "Các thẻ nhập ở đây được bổ sung vào thẻ hiện có của từng tệp.",
@@ -1041,5 +1046,10 @@
     "invalidHint": "Hãy mở lại cửa sổ đăng nhập từ ứng dụng BlueDrive Desktop.",
     "doneTitle": "Đã đăng nhập",
     "doneHint": "Bạn có thể đóng thẻ này và quay lại ứng dụng BlueDrive Desktop."
+  },
+  "ooDesktop": {
+    "opening": "Đang mở tài liệu trong ONLYOFFICE…",
+    "openFailed": "Không mở được tài liệu",
+    "noTicket": "Thiếu mã mở tài liệu. Hãy mở lại từ BlueDrive Desktop (chuột phải → Cùng soạn thảo bằng ONLYOFFICE)."
   }
 }

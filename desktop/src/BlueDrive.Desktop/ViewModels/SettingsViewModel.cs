@@ -70,6 +70,7 @@ public partial class SettingsViewModel : ObservableObject
         _freeUpIndex = Array.IndexOf(FreeUpDays, s.FreeUpAfterDays) is var i and >= 0 ? i : 0;
         Version = $"BlueDrive Desktop {host.AppVersion}";
         Refresh();
+        RefreshOnlyOffice();
     }
 
     public ObservableCollection<AccountRow> Accounts { get; } = [];
@@ -316,6 +317,44 @@ public partial class SettingsViewModel : ObservableObject
         }
         catch (IOException ex) { AboutMessage = $"Không xuất được: {ex.Message}"; }
         finally { Busy = false; }
+    }
+
+    [ObservableProperty] private string _onlyOfficeStatus = "";
+    [ObservableProperty] private bool _canInstallProvider;
+
+    public void RefreshOnlyOffice()
+    {
+        var exe = OnlyOfficeService.FindEditors();
+        var server = _host.Sessions.FirstOrDefault()?.Config.ServerUrl;
+        var state = server is null ? ProviderState.NotInstalled : OnlyOfficeService.State(exe, server);
+        OnlyOfficeStatus = exe is null
+            ? "Chưa cài ONLYOFFICE Desktop Editors — \"Cùng soạn thảo\" sẽ mở trên trình duyệt. Bộ cài BlueDrive Desktop có tùy chọn cài kèm."
+            : state switch
+            {
+                ProviderState.Ready => "ONLYOFFICE Desktop Editors đã kết nối với BlueDrive: chuột phải tệp Office → \"Cùng soạn thảo bằng ONLYOFFICE\".",
+                _ => "Đã có ONLYOFFICE Desktop Editors nhưng chưa cài BlueDrive vào đó (hoặc bị gỡ khi ONLYOFFICE cập nhật).",
+            };
+        CanInstallProvider = exe is not null && server is not null && state != ProviderState.Ready;
+    }
+
+    [RelayCommand]
+    private async Task InstallProviderAsync()
+    {
+        var exe = OnlyOfficeService.FindEditors();
+        var server = _host.Sessions.FirstOrDefault()?.Config.ServerUrl;
+        if (exe is null || server is null) return;
+        Busy = true;
+        try
+        {
+            var ok = await Task.Run(() => OnlyOfficeService.InstallProvider(exe, server));
+            AboutMessage = ok ? "Đã cài BlueDrive vào ONLYOFFICE Desktop Editors. Mở lại ONLYOFFICE để thấy BlueDrive trong \"Đám mây\"." : "Chưa cài được (cần quyền quản trị).";
+        }
+        catch (IOException ex) { AboutMessage = ex.Message; }
+        finally
+        {
+            Busy = false;
+            RefreshOnlyOffice();
+        }
     }
 
     [RelayCommand]

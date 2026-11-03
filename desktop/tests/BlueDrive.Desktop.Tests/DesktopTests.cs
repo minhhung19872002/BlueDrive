@@ -128,7 +128,10 @@ public sealed class DesktopTests : IDisposable
         ExplorerMenu.Parse(["--share", @"C:\Users\a\BlueDrive\Tài liệu của tôi\báo cáo.docx"])
             .Should().Be(("share", @"C:\Users\a\BlueDrive\Tài liệu của tôi\báo cáo.docx"));
         ExplorerMenu.Parse(["--background"]).Should().BeNull();
-        ExplorerMenu.Commands.Select(c => c.Text).Should().Equal("Chia sẻ…", "Sao chép liên kết BlueDrive", "Xem trên web", "Lịch sử phiên bản…", "Giải quyết xung đột…");
+        ExplorerMenu.Commands.Select(c => c.Text).Should().Equal("Chia sẻ…", "Sao chép liên kết BlueDrive", "Xem trên web", "Lịch sử phiên bản…", "Giải quyết xung đột…",
+            "Cùng soạn thảo bằng ONLYOFFICE", "Cùng soạn thảo trên trình duyệt");
+        ExplorerMenu.Parse(["--coedit-web", @"C:\x\a.docx"]).Should().Be(("coedit-web", @"C:\x\a.docx"));
+        ExplorerMenu.OfficeCondition.Should().Contain("System.FileExtension:=\".docx\"").And.Contain(" OR ");
 
         // Real registration (per user), then removed.
         var exe = Path.Combine(_home, "BlueDrive.exe");
@@ -141,6 +144,30 @@ public sealed class DesktopTests : IDisposable
         }
         finally { ExplorerMenu.Unregister(); }
         Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Classes\*\shell\BlueDrive").Should().BeNull();
+    }
+
+    [Fact]
+    public void OnlyOffice_provider_is_generated_for_the_server_and_installed_into_the_editors_folder()
+    {
+        var template = Path.Combine(AppContext.BaseDirectory, "onlyoffice-provider", "bluedrive");
+        Directory.Exists(template).Should().BeTrue("the provider template ships with BlueDrive Desktop");
+        var config = System.Text.Json.JsonDocument.Parse(OnlyOfficeService.ConfigFor("https://bluedrive.example/", template)).RootElement;
+        config.GetProperty("provider").GetString().Should().Be("bluedrive");
+        config.GetProperty("entryPage").GetString().Should().Be("https://bluedrive.example/oo-desktop");
+        config.GetProperty("extraLogout").GetString().Should().Be("https://bluedrive.example/oo-desktop/logout");
+        config.GetProperty("editorPage").GetString().Should().StartWith("regex:");
+
+        // A fake ONLYOFFICE install folder (writable): missing → installed → ready; another server → outdated.
+        var install = Path.Combine(_home, "ONLYOFFICE", "DesktopEditors");
+        Directory.CreateDirectory(install);
+        var exe = Path.Combine(install, "DesktopEditors.exe");
+        File.WriteAllText(exe, "");
+        OnlyOfficeService.State(null, "https://bluedrive.example").Should().Be(ProviderState.NotInstalled);
+        OnlyOfficeService.State(exe, "https://bluedrive.example", template).Should().Be(ProviderState.Missing);
+        OnlyOfficeService.InstallProvider(exe, "https://bluedrive.example", template, allowElevation: false).Should().BeTrue();
+        OnlyOfficeService.State(exe, "https://bluedrive.example", template).Should().Be(ProviderState.Ready);
+        File.Exists(Path.Combine(install, "providers", "bluedrive", "assets", "listicon.svg")).Should().BeTrue();
+        OnlyOfficeService.State(exe, "https://khac.example", template).Should().Be(ProviderState.Outdated);
     }
 
     [AvaloniaFact]

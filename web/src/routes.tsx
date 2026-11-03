@@ -15,6 +15,9 @@ const PrintAlertsPage = lazy(() => import('@/pages/print/PrintAlertsPage'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 const PublicSharePage = lazy(() => import('@/pages/public/PublicSharePage'))
 const ConnectAuthorizePage = lazy(() => import('@/pages/ConnectAuthorizePage'))
+const OoDesktopEntryPage = lazy(() => import('@/pages/office/OoDesktopPages').then((m) => ({ default: m.OoDesktopEntryPage })))
+const OoDesktopOpenPage = lazy(() => import('@/pages/office/OoDesktopPages').then((m) => ({ default: m.OoDesktopOpenPage })))
+const OoDesktopLogoutPage = lazy(() => import('@/pages/office/OoDesktopPages').then((m) => ({ default: m.OoDesktopLogoutPage })))
 
 interface AppRoute {
   path: string
@@ -82,6 +85,17 @@ export default function AppRoutes() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         {/* Public share links: anonymous, outside the authenticated layout. */}
         <Route path="/s/:token" element={<PublicSharePage />} />
+        {/* ONLYOFFICE Desktop Editors provider: entry page (signed in), ticket sign-in from BlueDrive Desktop, logout. */}
+        <Route
+          path="/oo-desktop"
+          element={
+            <RequireAuth>
+              <OoDesktopEntryPage />
+            </RequireAuth>
+          }
+        />
+        <Route path="/oo-desktop/open" element={<OoDesktopOpenPage />} />
+        <Route path="/oo-desktop/logout" element={<OoDesktopLogoutPage />} />
         {/* BlueDrive Desktop sign-in (OAuth PKCE consent): signed-in, outside the main layout. */}
         <Route
           path="/connect/authorize"

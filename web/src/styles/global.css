@@ -1094,3 +1094,8 @@ body {
     grid-template-columns: minmax(0, 1fr) 20px;
   }
 }
+
+/* ---------- Inside ONLYOFFICE Desktop Editors (provider "bluedrive") ---------- */
+.bd-oo-desktop .bd-header {
+  display: none;
+}

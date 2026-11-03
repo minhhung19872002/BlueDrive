@@ -1,5 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { isInDesktopEditors } from '@/features/office/ooDesktop'
 import { App as AntApp, ConfigProvider } from 'antd'
 import viVN from 'antd/locale/vi_VN'
 import { QueryClientProvider } from '@tanstack/react-query'
@@ -16,6 +17,9 @@ import AppRoutes from './routes'
 import { theme } from './theme'
 
 dayjs.locale('vi')
+
+// Inside ONLYOFFICE Desktop Editors the app header is hidden (the desktop app has its own tabs and sign-out).
+if (isInDesktopEditors()) document.documentElement.classList.add('bd-oo-desktop')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

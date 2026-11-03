@@ -1,0 +1,22 @@
+{
+  "provider": "bluedrive",
+  "name": "BlueDrive",
+  "check": {
+    "url": "api/v1/onlyoffice-desktop/status",
+    "headers": {}
+  },
+  "entryPage": "{{SERVER}}/oo-desktop",
+  "extraLogout": "{{SERVER}}/oo-desktop/logout",
+  "editorPage": "regex:/files/[0-9a-fA-F-]+/edit",
+  "startPage": "/oo-desktop",
+  "icons": {
+    "themeLight": {
+      "connectionsList": "./assets/listicon.svg",
+      "buttonLogo": "./assets/buttonlogo.svg"
+    },
+    "themeDark": {
+      "connectionsList": "./assets/listicon_dark.svg",
+      "buttonLogo": "./assets/buttonlogo_dark.svg"
+    }
+  }
+}

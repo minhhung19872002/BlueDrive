@@ -190,3 +190,14 @@ Kiểm thử (`desktop/tests/BlueDrive.Sync.Windows.Tests`, chỉ chạy trên W
 | Cursor quá cũ (410), xóa hàng loạt, tên tệp / hoa-thường / NFC, `access_revoked` | Đã có từ Sync-Phase 2 (xem `sync-algorithm.md`). |
 
 USN Journal (tùy chọn trong đặc tả) chưa dùng: FileSystemWatcher + quét định kỳ đã bắt đủ thay đổi, và engine luôn quét lại trước khi lập kế hoạch.
+
+## 13. Cùng soạn thảo bằng ONLYOFFICE Desktop Editors (Sync-Phase 8b)
+
+Chi tiết nghiên cứu và giới hạn: `docs/onlyoffice-desktop-integration.md`.
+
+| Thành phần | Việc làm |
+|---|---|
+| Provider `bluedrive` | `desktop/onlyoffice-provider/bluedrive/` (config + biểu tượng), sinh theo máy chủ; `OnlyOfficeService` tìm `DesktopEditors.exe` (App Paths / Program Files), báo trạng thái Chưa cài / Thiếu provider / Provider cũ / Sẵn sàng, cài provider (cần quyền quản trị thì xin nâng quyền). |
+| Menu chuột phải | "Cùng soạn thảo bằng ONLYOFFICE" (`--coedit`): xin vé dùng một lần (`POST /onlyoffice-desktop/tickets`) rồi mở `DesktopEditors.exe "<liên kết vé>"`; chưa cài ONLYOFFICE thì mở trình duyệt. "Cùng soạn thảo trên trình duyệt" (`--coedit-web`). Chỉ hiện với tệp Office. |
+| Web | `/oo-desktop` (`portal:login`), `/oo-desktop/open?ticket=` (đổi vé → phiên web → trang soạn thảo), `/oo-desktop/logout` (`portal:logout`); trong Desktop Editors ẩn thanh đầu trang và mở tệp Office bằng `open:document`. |
+| Đồng bộ | Mỗi lần lưu từ ONLYOFFICE là một phiên bản mới trên máy chủ; agent nhận thay đổi và tải tệp mới xuống như mọi thay đổi khác. |
