@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
+import { openContextMenu } from './helpers'
 
 /**
  * Every item of the file context menu opens what it should, without console errors
@@ -43,16 +44,7 @@ function watchErrors(page: Page) {
 }
 
 async function openMenu(page: Page, item: string) {
-  const row = page.getByRole('row', { name: new RegExp(item) })
-  await expect(row).toBeVisible()
-  // The menu may re-align (flip above the cursor) right after opening: retry until an item is clickable.
-  await expect(async () => {
-    await page.keyboard.press('Escape')
-    await row.getByText(item).click({ button: 'right' })
-    await expect(page.getByRole('menuitem', { name: /Thông tin/ })).toBeVisible({ timeout: 2_000 })
-  }).toPass({ timeout: 15_000 })
-  // Let the open animation / re-alignment settle before clicking an item.
-  await page.waitForTimeout(300)
+  await openContextMenu(page, page.getByRole('row', { name: new RegExp(item) }).getByText(item))
 }
 
 async function clickMenu(page: Page, item: string, name: RegExp) {
@@ -136,9 +128,14 @@ test('menu ngữ cảnh: mọi thao tác trên tệp', async ({ page }) => {
   expect((inTarget.items ?? inTarget).filter((i: { name: string }) => i.name.startsWith('doi-ten-')).length).toBe(2)
 
   // Xóa (from the folder "Đích").
-  await page.getByRole('row', { name: /Đích/ }).getByText('Đích').dblclick()
+  // The checkbox selects without opening; a click on the row opens the folder.
+  await page.getByRole('row', { name: /Đích/ }).getByRole('checkbox').check()
+  await expect(page).toHaveURL(new RegExp(`folder=${folderId}`))
+  await expect(page.getByRole('button', { name: /Bỏ chọn/ })).toBeVisible()
+  await page.getByRole('row', { name: /Đích/ }).getByText('Đích').click()
+  await expect(page).toHaveURL(new RegExp(`folder=${targetId}`))
   await page.waitForLoadState('networkidle')
-  await page.getByRole('row', { name: new RegExp(renamed) }).first().getByText(renamed).first().click()
+  await page.getByRole('row', { name: new RegExp(renamed) }).first().getByRole('checkbox').check()
   await page.keyboard.press('Delete')
   await page.getByRole('button', { name: /Xóa|Đồng ý|OK/ }).last().click()
   await expect(page.getByRole('row', { name: new RegExp(renamed) })).toHaveCount(1)

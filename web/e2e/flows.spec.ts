@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { openContextMenu } from './helpers'
 
 /** Main business flows through the real UI (needs the docker stack incl. ONLYOFFICE). */
 const stamp = Date.now().toString().slice(-6)
@@ -20,7 +21,9 @@ test.describe.serial('Tư liệu cá nhân', () => {
     await page.getByRole('dialog').getByRole('button', { name: /Tạo|Đồng ý|OK/ }).click()
     await expect(page.getByRole('row', { name: new RegExp(folder) })).toBeVisible()
 
-    await page.getByRole('row', { name: new RegExp(folder) }).getByText(folder).dblclick()
+    // A single click opens the folder.
+    await page.getByRole('row', { name: new RegExp(folder) }).getByText(folder).click()
+    await expect(page).toHaveURL(/folder=/)
     await page.waitForLoadState('networkidle')
     const chooser = page.waitForEvent('filechooser')
     await page.getByRole('main').getByRole('button', { name: /Tải lên$/ }).first().click()
@@ -32,7 +35,7 @@ test.describe.serial('Tư liệu cá nhân', () => {
     await expect(fileRow).toBeVisible({ timeout: 30_000 })
     await expect(page.getByRole('dialog')).toHaveCount(0)
 
-    await fileRow.getByText(fileName).click({ button: 'right' })
+    await openContextMenu(page, fileRow.getByText(fileName))
     await page.getByRole('menuitem', { name: /Đánh dấu quan trọng/ }).click()
     await page.goto('/starred')
     await expect(page.getByText(fileName)).toBeVisible()
@@ -45,7 +48,7 @@ test.describe.serial('Tư liệu cá nhân', () => {
 
   test('xóa vào thùng rác và khôi phục', async ({ page }) => {
     await openMyDrive(page)
-    await page.getByRole('row', { name: new RegExp(folder) }).getByText(folder).click()
+    await page.getByRole('row', { name: new RegExp(folder) }).getByRole('checkbox').check()
     await page.keyboard.press('Delete')
     await page.getByRole('button', { name: /Xóa|Đồng ý|OK/ }).last().click()
     await expect(page.getByRole('row', { name: new RegExp(folder) })).toHaveCount(0)
@@ -86,26 +89,21 @@ test('tạo tài liệu Word mới và mở trình soạn thảo ONLYOFFICE', as
   await expect(docRow).toBeVisible()
   // Versions / discussion live in the context menu (the viewer side panel is closed by default).
   await page.waitForLoadState('networkidle')
-  await docRow.getByText(`${docName}.docx`).click({ button: 'right' })
+  await openContextMenu(page, docRow.getByText(`${docName}.docx`))
   await page.getByRole('menuitem', { name: /Phiên bản$/ }).click()
   await expect(page.locator('.ant-drawer').getByRole('tab', { name: 'Phiên bản', selected: true })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.locator('.ant-drawer-open')).toHaveCount(0)
   // Opening an Office document goes straight to the editor.
-  await docRow.getByText(`${docName}.docx`).dblclick()
+  await docRow.getByText(`${docName}.docx`).click()
   await expect(page).toHaveURL(/\/files\/.+\/edit/)
 })
 
 test('chia sẻ qua liên kết công khai có mật khẩu', async ({ page, browser }) => {
   await openMyDrive(page)
   const row = page.getByRole('row').filter({ hasText: /\.(txt|docx)/ }).first()
-  // The context menu may re-align (flip above the cursor) right after opening: retry until it is clickable.
-  await expect(async () => {
-    await page.keyboard.press('Escape')
-    await row.click({ button: 'right' })
-    await page.getByRole('menuitem', { name: /Chia sẻ$/ }).click({ timeout: 2_000 })
-    await expect(page.getByRole('tab', { name: /liên kết/i })).toBeVisible({ timeout: 2_000 })
-  }).toPass({ timeout: 20_000 })
+  await openContextMenu(page, row)
+  await page.getByRole('menuitem', { name: /Chia sẻ$/ }).click()
   await page.getByRole('tab', { name: /liên kết/i }).click()
   await page.getByPlaceholder(/mật khẩu/i).fill('1234')
   await page.getByRole('button', { name: /Tạo liên kết/ }).click()

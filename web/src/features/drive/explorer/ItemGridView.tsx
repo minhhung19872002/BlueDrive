@@ -29,10 +29,6 @@ export default function ItemGridView(props: ItemViewProps) {
                 if ((e.target as HTMLElement).closest(IGNORE)) return
                 props.onItemClick(item, e)
               }}
-              onDoubleClick={(e) => {
-                if ((e.target as HTMLElement).closest(IGNORE)) return
-                props.onOpen(item)
-              }}
               onContextMenu={(e) => props.onContextMenu(item, e)}
               title={item.name}
             >

@@ -43,6 +43,8 @@ const PAGE_SIZE = 50
 
 function isEditable(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
+  // Selection checkboxes keep the shortcuts (select with the checkbox, then Del / F2 / Ctrl+C).
+  if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) return false
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
 }
 
@@ -163,7 +165,11 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
   // ---------- Selection ----------
   const onItemClick = (item: DriveItem, e: MouseEvent) => {
     const key = itemKey(item)
-    if (isMobile && !e.ctrlKey && !e.metaKey && !e.shiftKey && selected.size === 0) {
+    // Second click of a double-click: the first one already opened the item (do not open what appeared under it).
+    if (e.detail > 1) return
+    // A plain click opens the folder / file, like SharePoint; the checkbox, Ctrl/Shift+click select
+    // (on phones a tap toggles the selection once selection mode has started).
+    if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !(isMobile && selected.size > 0)) {
       actions.open(item)
       return
     }

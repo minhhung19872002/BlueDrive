@@ -119,10 +119,6 @@ export default function ItemListView(props: ItemListViewProps) {
           if ((e.target as HTMLElement).closest(IGNORE_CLICK)) return
           props.onItemClick(item, e)
         },
-        onDoubleClick: (e) => {
-          if ((e.target as HTMLElement).closest(IGNORE_CLICK)) return
-          props.onOpen(item)
-        },
         onContextMenu: (e) => props.onContextMenu(item, e),
       })}
       scroll={{ x: isMobile ? undefined : 640 }}

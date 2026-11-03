@@ -123,7 +123,11 @@ export default function DriveItemTable<T>({
         locale={{ emptyText: empty }}
         scroll={{ x: isMobile ? undefined : 760 }}
         onRow={(row) => ({
-          onDoubleClick: () => actions.open(row.item),
+          // A click opens (like the explorer); buttons, links and the "..." menu keep their own action.
+          onClick: (e) => {
+            if (e.detail > 1 || (e.target as HTMLElement).closest('button, a, .ant-dropdown-trigger, .ant-checkbox-wrapper')) return
+            actions.open(row.item)
+          },
           onContextMenu: (e) => {
             e.preventDefault()
             setMenu({ row, pos: { x: e.clientX, y: e.clientY } })

@@ -1,4 +1,5 @@
 import { expect, test, type APIRequestContext, type Browser, type Page } from '@playwright/test'
+import { openContextMenu } from './helpers'
 
 /**
  * Two users share documents with each other through the UI (#19, #45, #49, #72):
@@ -60,14 +61,7 @@ async function loginPage(browser: Browser, u: TestUser): Promise<Page> {
 }
 
 async function contextMenu(page: Page, name: string) {
-  const row = page.getByRole('row', { name: new RegExp(name) })
-  await expect(row).toBeVisible({ timeout: 15_000 })
-  await expect(async () => {
-    await page.keyboard.press('Escape')
-    await row.getByText(name).click({ button: 'right' })
-    await expect(page.getByRole('menuitem', { name: /Thông tin/ })).toBeVisible({ timeout: 2_000 })
-  }).toPass({ timeout: 15_000 })
-  await page.waitForTimeout(300)
+  await openContextMenu(page, page.getByRole('row', { name: new RegExp(name) }).getByText(name))
 }
 
 async function shareWith(page: Page, fileName: string, user: TestUser, level: RegExp) {
@@ -137,7 +131,7 @@ test('hai người dùng chia sẻ tài liệu qua lại', async ({ browser }) =
   const rowB = pageB.getByRole('row', { name: new RegExp(fileA) })
   await expect(rowB).toBeVisible({ timeout: 15_000 })
   await expect(rowB).toContainText(a.fullName)
-  await rowB.getByText(fileA).dblclick()
+  await rowB.getByText(fileA).click()
   await expect(pageB.getByText('Báo cáo của người gửi')).toBeVisible({ timeout: 15_000 })
   await pageB.getByRole('button', { name: 'Đóng' }).first().click()
   const renamed = `bao-cao-B-da-sua-${stamp}.txt`
@@ -158,7 +152,7 @@ test('hai người dùng chia sẻ tài liệu qua lại', async ({ browser }) =
   await pageA.goto('/shared')
   const rowA = pageA.getByRole('row', { name: new RegExp(fileB) })
   await expect(rowA).toBeVisible({ timeout: 15_000 })
-  await rowA.getByText(fileB).dblclick()
+  await rowA.getByText(fileB).click()
   await expect(pageA.getByText('Kế hoạch của người nhận')).toBeVisible({ timeout: 15_000 })
   await pageA.getByRole('button', { name: 'Đóng' }).first().click()
   await contextMenu(pageA, fileB)
