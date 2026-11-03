@@ -62,6 +62,12 @@
               <TextBlock Text="Giải phóng dung lượng cho tệp không dùng:" VerticalAlignment="Center" />
               <ComboBox ItemsSource="{Binding FreeUpLabels}" SelectedIndex="{Binding FreeUpIndex}" MinWidth="160" />
             </StackPanel>
+            <StackPanel Spacing="4" IsVisible="{Binding DoubleClickAvailable}">
+              <TextBlock Text="Khi nhấp đúp tệp Office trong BlueDrive" Classes="h2" Margin="0,8,0,0" />
+              <ComboBox ItemsSource="{Binding DoubleClickLabels}" SelectedIndex="{Binding DoubleClickIndex}" MinWidth="320" />
+              <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
+                         Text="Chế độ cùng soạn mở tài liệu trong ONLYOFFICE Desktop Editors (hoặc trình duyệt) để cùng sửa với người khác; khi mất mạng tệp trên máy được mở bằng ứng dụng mặc định. Áp dụng cho mọi thư mục BlueDrive." />
+            </StackPanel>
             <TextBlock Text="Không đồng bộ các tệp/thư mục" Classes="h2" Margin="0,8,0,0" />
             <TextBlock Text="{Binding IgnoreList}" TextWrapping="Wrap" Classes="muted" />
             <TextBlock Text="{Binding SyncMessage}" TextWrapping="Wrap" Foreground="#0b5394" />

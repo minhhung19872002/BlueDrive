@@ -303,14 +303,17 @@ public sealed class SyncEngine(
         foreach (var root in state.Roots().Where(r => r.Enabled))
         {
             fs.CreateDirectory(root.LocalPath);
+            var errorsBefore = errors.Count;
+            var rootMass = 0;
             for (var round = 0; round < _o.MaxRounds; round++)
             {
                 var (ops, mass) = await RoundAsync(root.RootId, errors, ct);
                 total += ops;
+                rootMass = mass;
                 pendingMass = Math.Max(pendingMass, mass);
                 if (ops == 0) break;
             }
-            if (_placeholders.OnDemand) await MarkSyncedAsync(root, started, ct);
+            if (_placeholders.OnDemand) await MarkSyncedAsync(root, started, errors.Count == errorsBefore && rootMass == 0, ct);
             MarkReadOnly(root);
             // Clear processed revocations: the items are gone from the base now.
             var revoked = Revoked();
@@ -356,8 +359,11 @@ public sealed class SyncEngine(
         if (target.Count > 0 || marked.Count > 0) state.SetAccount(key, JsonSerializer.Serialize(target));
     }
 
-    /// <summary>Files On-Demand: everything recorded during this pass is shown as synced in Explorer (status icon).</summary>
-    private async Task MarkSyncedAsync(RootState root, DateTime since, CancellationToken ct)
+    /// <summary>
+    /// Files On-Demand: everything recorded during this pass is shown as synced in Explorer (status icon); so is the root's own folder
+    /// ("Tài liệu của tôi"…, not an item of the server) once the root had no problem this pass.
+    /// </summary>
+    private async Task MarkSyncedAsync(RootState root, DateTime since, bool rootClean, CancellationToken ct)
     {
         var items = state.Items(root.RootId);
         var byRemote = items.ToDictionary(i => i.RemoteId);
@@ -371,9 +377,14 @@ public sealed class SyncEngine(
                 cur = p.ParentRemoteId;
             }
             parts.Reverse();
-            var path = NameMapper.Combine(root.LocalPath.Length == 0 ? null : root.LocalPath, string.Join('/', parts));
-            if (!fs.Exists(path, out _)) continue;
-            try { await _placeholders.MarkInSyncAsync(path, b.RemoteId, ct); }
+            await MarkAsync(NameMapper.Combine(root.LocalPath.Length == 0 ? null : root.LocalPath, string.Join('/', parts)), b.RemoteId);
+        }
+        if (rootClean && root.LocalPath.Length > 0) await MarkAsync(root.LocalPath, root.RootId);
+
+        async Task MarkAsync(string path, string remoteId)
+        {
+            if (!fs.Exists(path, out _)) return;
+            try { await _placeholders.MarkInSyncAsync(path, remoteId, ct); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } // open elsewhere: next pass
         }
     }

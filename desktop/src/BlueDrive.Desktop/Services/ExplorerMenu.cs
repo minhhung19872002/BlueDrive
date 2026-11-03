@@ -71,7 +71,10 @@ public static class ExplorerMenu
     public static (string Action, string Path)? Parse(IReadOnlyList<string> args)
     {
         for (var i = 0; i + 1 < args.Count; i++)
+        {
+            if (args[i] == "--open") return ("open", args[i + 1]); // double click on an Office document (OfficeDoubleClick)
             if (Commands.FirstOrDefault(c => c.Arg == args[i]) is { } c) return (c.Arg[2..], args[i + 1]);
+        }
         return null;
     }
 }

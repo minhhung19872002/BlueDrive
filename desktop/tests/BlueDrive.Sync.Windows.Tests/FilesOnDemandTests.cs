@@ -74,6 +74,27 @@ public sealed class FilesOnDemandTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Root_folders_and_their_folders_show_synced_in_explorer()
+    {
+        // As in the app: the root ("Tài liệu của tôi") is a folder of the sync root, not an item of the server.
+        using var db = new SyncStateDb(Path.Combine(_tmp, "roots.db"));
+        db.UpsertRoot(FakeRemoteStore.Root, "Tài liệu của tôi", true);
+        var engine = new SyncEngine(db, _remote, _platform.FileSystem, SystemClock.Instance,
+            new SyncEngineOptions { UserDisplayName = "Người thử", DeviceName = "PC-CF" }, _platform.Placeholders);
+        _remote.WebCreateFolder(null, "Báo cáo");
+        _remote.WebUpload("Báo cáo", "quý 1.docx", Content.Of("q1"));
+        (await engine.SyncAsync(CancellationToken.None)).Errors.Should().BeEmpty();
+        CloudPlaceholders.IsInSync(Abs("Tài liệu của tôi")).Should().BeTrue("Explorer must not show the root as waiting to sync");
+        CloudPlaceholders.IsInSync(Abs("Tài liệu của tôi/Báo cáo")).Should().BeTrue();
+
+        _remote.WebUpload("Báo cáo", "quý 2.docx", Content.Of("q2"));
+        (await engine.SyncAsync(CancellationToken.None)).Errors.Should().BeEmpty();
+        CloudPlaceholders.IsInSync(Abs("Tài liệu của tôi/Báo cáo/quý 2.docx")).Should().BeTrue();
+        CloudPlaceholders.IsInSync(Abs("Tài liệu của tôi/Báo cáo")).Should().BeTrue();
+        CloudPlaceholders.IsInSync(Abs("Tài liệu của tôi")).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task A_registration_dropped_by_windows_is_noticed_on_the_next_start()
     {
         if (!_platform.ShellRegistered) return; // the shell refused the folder: nothing can be checked

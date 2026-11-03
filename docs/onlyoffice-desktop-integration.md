@@ -65,6 +65,12 @@ bản MSI: `msiexec /i … /qn`. Phần tải, kiểm chữ ký và cài kèm th
   lưu từ ứng dụng thành phiên bản dùng chung callback của Document Server); việc cùng soạn nhiều người do Document Server đảm nhận, đã kiểm thử trên web.
 - Cài kèm ONLYOFFICE: đã làm ở Sync-Phase 9 (`OnlyOfficeSetup`, tùy chọn ở trình hướng dẫn mặc định bật, chính sách `InstallOnlyOffice`,
   gỡ provider và hỏi gỡ ONLYOFFICE khi gỡ BlueDrive).
-- Tùy chọn "nhấp đúp tệp Office → luôn mở chế độ cùng soạn", hiện "ai đang chỉnh sửa" trong flyout/Explorer và cảnh báo khóa mềm khi mở bản
-  trên máy bằng Word trong lúc có phiên cùng soạn: cần máy chủ theo dõi người đang mở tài liệu (callback trạng thái 1 của Document Server)
-  và cột trạng thái tùy chỉnh của Explorer (cần gói MSIX) — chưa làm.
+- Đã làm sau đó: hiện "ai đang chỉnh sửa" trong flyout/Explorer (`OfficeEditingTracker`, `GET /api/v1/sync/editing`), cảnh báo khóa mềm khi
+  mở bản trên máy bằng Word trong lúc có phiên cùng soạn, và tùy chọn **Cài đặt → Đồng bộ → "Khi nhấp đúp tệp Office trong BlueDrive"**
+  (`OfficeDoubleClick`): Windows không có liên kết tệp theo thư mục, nên BlueDrive thêm verb "Mở bằng BlueDrive" có `AppliesTo` = các thư mục
+  BlueDrive vào ProgID mà loại tệp đang mở bằng (Word.Document.12, ASC.Docx.12…, trong HKCU) và đặt lên đầu thứ tự verb. Trong thư mục
+  BlueDrive nhấp đúp chạy `BlueDrive.exe --open`: có mạng → phiên cùng soạn (ONLYOFFICE Desktop Editors, không có thì trình duyệt); mất mạng /
+  máy chủ lỗi / tệp chưa lên máy chủ → mở bản trên máy bằng verb "open" của ứng dụng mặc định. Ngoài thư mục BlueDrive verb không áp dụng,
+  ứng dụng mặc định giữ nguyên. Tắt tùy chọn (hoặc gỡ BlueDrive) trả lại đúng thứ tự verb cũ (`office-open.json`). Đã chạy thử trên Windows 11:
+  tệp .docx trong BlueDrive mở trong ONLYOFFICE 10.0 ở chế độ cùng soạn, khi máy chủ không truy cập được thì mở bằng Word; tệp .docx ngoài
+  BlueDrive vẫn mở bằng Word.

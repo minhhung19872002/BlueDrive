@@ -170,6 +170,48 @@ public sealed class PackagingTests : IDisposable
     }
 
     [Fact]
+    public void Double_click_on_office_documents_can_open_co_editing_only_inside_bluedrive_folders()
+    {
+        OfficeDoubleClick.Order(null).Should().Be("BlueDriveCoEdit,open");
+        OfficeDoubleClick.Order("Open").Should().Be("BlueDriveCoEdit,Open");
+        OfficeDoubleClick.Order("BlueDriveCoEdit,Edit, Open").Should().Be("BlueDriveCoEdit,Edit,Open");
+        OfficeDoubleClick.CanCoEdit(AgentState.Idle).Should().BeTrue();
+        OfficeDoubleClick.CanCoEdit(AgentState.Syncing).Should().BeTrue();
+        OfficeDoubleClick.CanCoEdit(AgentState.Offline).Should().BeFalse("offline: the local copy opens with the usual program");
+        ExplorerMenu.Parse(["--open", @"C:\BlueDrive\a.docx"]).Should().Be(("open", @"C:\BlueDrive\a.docx"));
+        if (!OperatingSystem.IsWindows()) return;
+
+        // A made-up document program (per user) with its own verb order "Edit,Open", which must come back.
+        var progId = "BlueDrive.Test." + Guid.NewGuid().ToString("N")[..8];
+        var key = $@"Software\Classes\{progId}\shell";
+        using (var open = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(key + @"\Open\command")) open.SetValue("", "notepad.exe \"%1\"");
+        using (var shell = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(key)) shell.SetValue("", "Edit,Open");
+        try
+        {
+            OfficeDoubleClick.Register(_dir, [@"C:\Users\a\BlueDrive"], @"C:\App\BlueDrive.exe", [progId]);
+            using (var shell = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(key)!)
+            {
+                shell.GetValue("").Should().Be("BlueDriveCoEdit,Edit,Open");
+                using var verb = shell.OpenSubKey("BlueDriveCoEdit")!;
+                verb.GetValue("AppliesTo").Should().Be(@"System.ItemPathDisplay:~<""C:\Users\a\BlueDrive\""");
+                using var cmd = verb.OpenSubKey("command")!;
+                cmd.GetValue("").Should().Be(@"""C:\App\BlueDrive.exe"" --open ""%1""");
+            }
+
+            // Registering again (folders changed) does not stack; turning it off puts the program's order back.
+            OfficeDoubleClick.Register(_dir, [@"D:\BlueDrive"], @"C:\App\BlueDrive.exe", [progId]);
+            using (var shell = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(key)!) shell.GetValue("").Should().Be("BlueDriveCoEdit,Edit,Open");
+            OfficeDoubleClick.Unregister(_dir);
+            using (var shell = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(key)!)
+            {
+                shell.GetValue("").Should().Be("Edit,Open");
+                shell.OpenSubKey("BlueDriveCoEdit").Should().BeNull();
+            }
+        }
+        finally { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree($@"Software\Classes\{progId}", throwOnMissingSubKey: false); }
+    }
+
+    [Fact]
     public void Updates_come_from_the_bluedrive_server()
     {
         Updater.FeedUrl("https://drive.example.gov.vn/").Should().Be("https://drive.example.gov.vn/downloads/desktop/");

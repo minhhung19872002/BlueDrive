@@ -69,6 +69,7 @@ public partial class SettingsViewModel : ObservableObject
         _themeIndex = (int)s.Theme;
         _betaChannel = s.UpdateChannel == "beta";
         _freeUpIndex = Array.IndexOf(FreeUpDays, s.FreeUpAfterDays) is var i and >= 0 ? i : 0;
+        _doubleClickIndex = s.CoEditOnDoubleClick ? 1 : 0;
         Version = $"BlueDrive Desktop {host.AppVersion}";
         Refresh();
         RefreshOnlyOffice();
@@ -103,6 +104,10 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _notifications;
     [ObservableProperty] private int _themeIndex;
     [ObservableProperty] private int _freeUpIndex;
+    /// <summary>"Khi nhấp đúp file Office trong BlueDrive" (spec 13A): 0 = ứng dụng mặc định, 1 = luôn mở chế độ cùng soạn khi có mạng.</summary>
+    [ObservableProperty] private int _doubleClickIndex;
+    public string[] DoubleClickLabels { get; } = ["Mở bằng ứng dụng mặc định", "Luôn mở chế độ cùng soạn (khi có mạng)"];
+    public bool DoubleClickAvailable => OperatingSystem.IsWindows();
     [ObservableProperty] private string? _aboutMessage;
     [ObservableProperty] private bool _busy;
 
@@ -304,6 +309,7 @@ public partial class SettingsViewModel : ObservableObject
         s.Theme = (ThemeChoice)ThemeIndex;
         s.UpdateChannel = BetaChannel ? "beta" : "stable";
         s.FreeUpAfterDays = FreeUpDays[Math.Clamp(FreeUpIndex, 0, FreeUpDays.Length - 1)];
+        s.CoEditOnDoubleClick = DoubleClickAvailable && DoubleClickIndex == 1;
         _host.SaveSettings(s);
         App.ApplyTheme(s.Theme);
         SyncMessage = AboutMessage = "Đã lưu cài đặt.";

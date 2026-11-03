@@ -118,6 +118,11 @@ public partial class App : Application
             return;
         }
         var session = _host.Sessions.FirstOrDefault(s => s.Owns(cmd.Path));
+        if (cmd.Action == "open")
+        {
+            await OpenOfficeAsync(session, cmd.Path);
+            return;
+        }
         if (session is null)
         {
             ShowToast("BlueDrive", "Mục này không nằm trong thư mục BlueDrive.");
@@ -175,6 +180,31 @@ public partial class App : Application
         {
             ShowToast("BlueDrive", ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Double click on an Office document in a BlueDrive folder with "Luôn mở chế độ cùng soạn" (spec 13A): online and on the server → the
+    /// co-editing session (ONLYOFFICE Desktop Editors, else the browser); offline, not uploaded yet or the server unreachable → the local copy
+    /// with the usual program.
+    /// </summary>
+    private async Task OpenOfficeAsync(AccountSession? session, string path)
+    {
+        if (session is not null && OfficeDoubleClick.CanCoEdit(session.Agent.Status.State) && session.FindItem(path) is { } hit)
+        {
+            try
+            {
+                var editor = await session.Agent.Api.EditorLinkAsync(hit.Item.RemoteId);
+                if (OnlyOfficeService.FindEditors() is { } exe) OnlyOfficeService.Open(exe, editor.Url);
+                else FlyoutViewModel.OpenPath(editor.BrowserUrl);
+                return;
+            }
+            catch (Exception ex) when (ex is Sync.Core.RemoteTransientException or Sync.Core.RemotePermanentException or Sync.Core.RemoteNotFoundException
+                                           or HttpRequestException or TaskCanceledException)
+            {
+                Log.Information("Không mở được chế độ cùng soạn cho {Path}, mở bản trên máy: {Error}", path, ex.Message);
+            }
+        }
+        OfficeDoubleClick.OpenLocally(path);
     }
 
     private int _ooSetup;

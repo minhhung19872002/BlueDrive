@@ -147,8 +147,22 @@ public sealed class AppHost : IAsyncDisposable
     private void RegisterShell()
     {
         if (Environment.ProcessPath is not { } exe || !exe.EndsWith("BlueDrive.exe", StringComparison.OrdinalIgnoreCase)) return; // tests, tools
+        var folders = Sessions.Select(x => x.Config.SyncFolder).ToList();
+        try
+        {
+            // MSIX: started through its app execution alias (an exe inside the package folder cannot be started by path).
+            var launcher = PackageInfo.IsPackaged
+                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Microsoft", "WindowsApps", "BlueDrive.exe")
+                : exe;
+            if (Settings.CoEditOnDoubleClick) OfficeDoubleClick.Register(Store.BaseDir, folders, launcher);
+            else OfficeDoubleClick.Unregister(Store.BaseDir);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
+        {
+            Log.Warning(ex, "Không đăng ký được tùy chọn nhấp đúp tệp Office");
+        }
         if (PackageInfo.IsPackaged) return; // MSIX: the package's Windows 11 menu (BlueDrive.Shell.dll) instead of the classic one
-        try { ExplorerMenu.Register(Sessions.Select(x => x.Config.SyncFolder).ToList(), exe); }
+        try { ExplorerMenu.Register(folders, exe); }
         catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Không đăng ký được menu chuột phải"); }
     }
 
@@ -158,6 +172,7 @@ public sealed class AppHost : IAsyncDisposable
         settings.Save(Store.BaseDir);
         _confirmed = true;
         ApplySettings();
+        if (Sessions.Count > 0) RegisterShell(); // "nhấp đúp tệp Office" may have changed
         _conditions?.Evaluate();
         Changed?.Invoke();
     }

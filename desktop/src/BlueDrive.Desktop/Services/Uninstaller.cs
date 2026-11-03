@@ -36,6 +36,7 @@ public static class Uninstaller
         if (registry)
         {
             TryRun(ExplorerMenu.Unregister, "menu chuột phải");
+            TryRun(() => OfficeDoubleClick.Unregister(baseDir), "nhấp đúp tệp Office");
 #if WINDOWS
             TryRun(StatusUiServer.Unregister, "Status UI của Explorer");
 #endif

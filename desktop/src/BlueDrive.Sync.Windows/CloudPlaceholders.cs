@@ -102,6 +102,17 @@ public sealed class CloudPlaceholders(string root) : IPlaceholderProvider
         return Task.CompletedTask;
     }
 
+    /// <summary>Explorer shows the item as synced (not "Đang chờ đồng bộ").</summary>
+    public static unsafe bool IsInSync(string abs)
+    {
+        using var h = CloudNative.OpenForPlaceholder(abs);
+        var info = default(CF_PLACEHOLDER_BASIC_INFO);
+        var hr = PInvoke.CfGetPlaceholderInfo((global::Windows.Win32.Foundation.HANDLE)h.DangerousGetHandle(), CF_PLACEHOLDER_INFO_CLASS.CF_PLACEHOLDER_INFO_BASIC,
+            &info, (uint)sizeof(CF_PLACEHOLDER_BASIC_INFO), null);
+        // A larger structure (with the identity) does not fit: the fixed part is filled all the same.
+        return (hr.Succeeded || hr.Value == unchecked((int)0x800700EA)) && info.InSyncState == CF_IN_SYNC_STATE.CF_IN_SYNC_STATE_IN_SYNC;
+    }
+
     /// <summary>"Luôn giữ trên thiết bị" (download now and keep) / back to on-demand.</summary>
     public static void Pin(string abs, bool keep)
     {
