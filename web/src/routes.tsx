@@ -14,6 +14,7 @@ const PrintStorageStatsPage = lazy(() => import('@/pages/print/PrintStorageStats
 const PrintAlertsPage = lazy(() => import('@/pages/print/PrintAlertsPage'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 const PublicSharePage = lazy(() => import('@/pages/public/PublicSharePage'))
+const ConnectAuthorizePage = lazy(() => import('@/pages/ConnectAuthorizePage'))
 
 interface AppRoute {
   path: string
@@ -38,6 +39,7 @@ const layoutRoutes: AppRoute[] = [
   { path: 'profile', Component: lazy(() => import('@/pages/account/ProfilePage')) },
   { path: 'change-password', Component: lazy(() => import('@/pages/account/ChangePasswordPage')) },
   { path: 'sessions', Component: lazy(() => import('@/pages/account/MySessionsPage')) },
+  { path: 'devices', Component: lazy(() => import('@/pages/account/MyDevicesPage')) },
   { path: 'support', Component: lazy(() => import('@/pages/account/SupportPage')) },
   { path: 'reports', Component: lazy(() => import('@/pages/ops/ReportsPage')) },
 
@@ -61,6 +63,7 @@ const layoutRoutes: AppRoute[] = [
   { path: 'admin/storage-stats', perm: 'stats.view', Component: lazy(() => import('@/pages/admin/StorageStatsPage')) },
   { path: 'admin/alerts', perm: 'alert.view', Component: lazy(() => import('@/pages/admin/AlertsPage')) },
   { path: 'admin/sessions', perm: 'session.view', Component: lazy(() => import('@/pages/admin/AdminSessionsPage')) },
+  { path: 'admin/devices', perm: 'device.view', Component: lazy(() => import('@/pages/admin/AdminDevicesPage')) },
   { path: 'admin/backups', perm: 'backup.view', Component: lazy(() => import('@/pages/admin/BackupsPage')) },
   { path: 'admin/tickets', perm: 'ticket.view', Component: lazy(() => import('@/pages/admin/TicketsPage')) },
   { path: 'admin/change-logs', perm: 'changelog.view', Component: lazy(() => import('@/pages/admin/ChangeLogsPage')) },
@@ -79,6 +82,15 @@ export default function AppRoutes() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         {/* Public share links: anonymous, outside the authenticated layout. */}
         <Route path="/s/:token" element={<PublicSharePage />} />
+        {/* BlueDrive Desktop sign-in (OAuth PKCE consent): signed-in, outside the main layout. */}
+        <Route
+          path="/connect/authorize"
+          element={
+            <RequireAuth>
+              <ConnectAuthorizePage />
+            </RequireAuth>
+          }
+        />
         <Route
           path="/print/organizations"
           element={

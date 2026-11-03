@@ -29,12 +29,12 @@ public sealed class SessionValidator(IMemoryCache cache, IServiceScopeFactory sc
         var now = clock.GetUtcNow().UtcDateTime;
 
         var row = await db.UserSessions.Where(s => s.Id == sessionId && s.UserId == userId)
-            .Select(s => new { s.RevokedAt, s.LastSeenAt, s.User!.IsActive, s.User.IsLocked, s.User.LockoutEnd, s.User.SecurityStamp })
+            .Select(s => new { s.RevokedAt, s.LastSeenAt, s.DeviceId, s.User!.IsActive, s.User.IsLocked, s.User.LockoutEnd, s.User.SecurityStamp })
             .FirstOrDefaultAsync(ct);
         var idle = await settings.GetAsync(SettingKeys.SessionIdleMinutes, 30, ct);
         var valid = row is not null && row.RevokedAt is null && row.IsActive && !row.IsLocked
                     && (row.LockoutEnd is null || row.LockoutEnd < now) && row.SecurityStamp == securityStamp
-                    && (idle <= 0 || now - row.LastSeenAt < TimeSpan.FromMinutes(idle));
+                    && (idle <= 0 || row.DeviceId is not null || now - row.LastSeenAt < TimeSpan.FromMinutes(idle)); // device sessions: no idle timeout
         if (!valid)
         {
             MarkRevoked(sessionId, TimeSpan.FromMinutes(20));

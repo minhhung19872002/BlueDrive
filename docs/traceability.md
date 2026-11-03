@@ -129,3 +129,19 @@ Mỗi dòng ánh xạ một chức năng trong HSMT với API, màn hình, quy�
 | UI, thông báo, tài liệu tiếng Việt | Đạt | Toàn bộ thông báo lỗi/màn hình trong lần kiểm chứng là tiếng Việt |
 | Không TODO/stub, test xanh, không hard-code secret | Đạt | `git grep` TODO/FIXME/NotImplementedException: 0; mật khẩu admin/demo, JWT, ONLYOFFICE đọc từ `deploy/.env`; `scripts/ci.ps1`: build 0 cảnh báo, 59 unit + 49 integration test xanh, web/mobile lint |
 | Phase 11: Playwright E2E và k6 | Đạt | `npm run test:e2e`: 39/39 (luồng chính, mọi trang quản trị, cảnh báo realtime, giao diện điện thoại); lần chạy đầu phát hiện lỗi 500 ở Thùng rác khi có tệp (UNION làm sai kiểu cột `media_type`) — đã sửa và bổ sung integration test; k6 50 người dùng × 2 phút: p95 danh sách 75 ms, tìm kiếm 69 ms, dashboard 11 ms, 0% lỗi trên 21.565 request |
+
+## Mở rộng: Đồng bộ desktop (BlueDrive Desktop)
+
+Đặc tả: `PROMPT_BlueDrive_DesktopSync.md`. Kiến trúc và API: `desktop/docs/sync-architecture.md`.
+
+| Phase | Hạng mục | API / Màn hình | Kiểm thử |
+|---|---|---|---|
+| Sync-Phase 1 | Nhật ký thay đổi `change_journal` ghi cùng transaction, ETag (`revision`), `If-Match` → 412 | `ChangeJournalInterceptor`; `PUT /files/{id}/name`, `PUT /folders/{id}`, `POST /items/move\|delete` | IT `SyncTests.Snapshot_and_change_feed_follow_drive_operations_with_etags` |
+| Sync-Phase 1 | Thư mục gốc, ảnh chụp cây phân trang + cursor, luồng thay đổi theo quyền, `access_revoked`, 410 khi cursor quá cũ | `GET /sync/roots\|snapshot\|changes\|items/{id}` | IT `SyncTests.Snapshot_and_change_feed…`, `SyncTests.Shared_root_lists_shares_flags_view_only_and_reports_access_revoked`, `SyncTests.Policy_can_disable_sync_and_old_cursors_need_a_full_resync` |
+| Sync-Phase 1 | Nội dung có HTTP Range, tải lên với `base_etag` / `content_hash` / `conflict=fail` | `GET /sync/items/{id}/content`, `/tus`, `POST /files/upload` | IT `SyncTests.Snapshot_and_change_feed…` |
+| Sync-Phase 1 | Thao tác hàng loạt, liên kết web, liên kết chia sẻ | `POST /sync/batch`, `GET /sync/items/{id}/web-url`, `POST /sync/items/{id}/share-link` | IT `SyncTests.Batch_creates_trees_and_reports_conflicts_per_operation` |
+| Sync-Phase 1 | Thông báo đẩy `changes_available` (< 5 giây) | SignalR `/hubs/sync`, `SyncChangeBroadcaster` | IT `SyncTests.Sync_hub_pushes_changes_available_within_seconds` |
+| Sync-Phase 1 | Đăng nhập OAuth PKCE (loopback), phiên thiết bị 90 ngày, thu hồi | `/connect/authorize` (web), `POST /api/v1/connect/authorize\|token` | IT `SyncTests.Pkce_login_registers_a_device_session_that_refreshes_and_is_revocable`; E2E `web/e2e/desktop-connect.spec.ts` |
+| Sync-Phase 1 | Thiết bị đã kết nối, xóa dữ liệu từ xa có ký HMAC, audit `device_id` | `/devices`, `/admin/devices` (`device.view`, `device.admin`), `GET /sync/devices/current`, `POST /sync/devices/current/wiped` | IT `SyncTests.Remote_wipe_is_signed_with_the_device_secret_and_ends_the_device`; E2E `desktop-connect.spec.ts` |
+| Sync-Phase 1 | Chính sách đồng bộ (bật/tắt, vai trò/đơn vị, kích thước, đuôi tệp, chỉ trực tuyến, phiên bản tối thiểu) | `/admin/settings` nhóm "Đồng bộ máy tính", `GET /sync/policy` | IT `SyncTests.Policy_can_disable_sync_and_old_cursors_need_a_full_resync` |
+

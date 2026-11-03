@@ -24,6 +24,8 @@ public static class DependencyInjection
         services.AddScoped<Abstractions.IResourceAccessChecker, Security.ResourceAccessChecker>();
         services.AddScoped<Features.Storage.QuotaService>();
         services.AddScoped<Features.Storage.TrashPurger>();
+        services.AddScoped<Features.Sync.SyncPolicyService>();
+        services.AddScoped<Features.Sync.SyncAccessContext>();
         services.AddSingleton<Features.Storage.IContentTicketService, Features.Storage.ContentTicketService>();
         services.AddSingleton<Features.Sharing.IPublicLinkTickets, Features.Sharing.PublicLinkTickets>();
         ValidatorOptions.Global.LanguageManager.Culture = new System.Globalization.CultureInfo("vi");

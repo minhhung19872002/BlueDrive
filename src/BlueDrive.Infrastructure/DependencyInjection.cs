@@ -26,10 +26,11 @@ public static class DependencyInjection
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(_ => new NpgsqlDataSourceBuilder(cs).Build());
         services.AddScoped<AuditableInterceptor>();
+        services.AddScoped<ChangeJournalInterceptor>();
         services.AddDbContext<AppDbContext>((sp, o) => o
             .UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>(), npg => npg.MigrationsHistoryTable("__ef_migrations_history"))
             .UseSnakeCaseNamingConvention()
-            .AddInterceptors(sp.GetRequiredService<AuditableInterceptor>()));
+            .AddInterceptors(sp.GetRequiredService<AuditableInterceptor>(), sp.GetRequiredService<ChangeJournalInterceptor>()));
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddMemoryCache();
 

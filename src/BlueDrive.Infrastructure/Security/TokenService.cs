@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using BlueDrive.Application.Abstractions;
 using BlueDrive.Application.Security;
+using BlueDrive.Application.Settings;
 using BlueDrive.Domain.Entities;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
@@ -25,11 +26,11 @@ public sealed class JwtOptions
     }
 }
 
-public sealed class TokenService(IOptions<JwtOptions> options, IAppDbContext db, TimeProvider clock) : ITokenService
+public sealed class TokenService(IOptions<JwtOptions> options, IAppDbContext db, ISettingsService settings, TimeProvider clock) : ITokenService
 {
     private readonly JwtOptions _opt = options.Value;
 
-    public Task<IssuedTokens> IssueAsync(User user, UserSession session, CancellationToken ct = default)
+    public async Task<IssuedTokens> IssueAsync(User user, UserSession session, CancellationToken ct = default)
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var accessExp = now.AddMinutes(_opt.AccessTokenMinutes);
@@ -43,12 +44,16 @@ public sealed class TokenService(IOptions<JwtOptions> options, IAppDbContext db,
             new("pwd_change", user.MustChangePassword ? "1" : "0"),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
         };
+        // Desktop sync sessions carry their device id (audit, revocation) and a long-lived refresh token.
+        if (session.DeviceId is { } deviceId) claims.Add(new Claim("did", deviceId.ToString()));
         var token = new JwtSecurityToken(_opt.Issuer, _opt.Audience, claims, now, accessExp,
             new SigningCredentials(_opt.SigningKey(), SecurityAlgorithms.HmacSha256));
         var access = new JwtSecurityTokenHandler().WriteToken(token);
 
         var refresh = GenerateOpaqueToken();
-        var refreshExp = now.AddDays(_opt.RefreshTokenDays);
+        var refreshExp = session.DeviceId is null
+            ? now.AddDays(_opt.RefreshTokenDays)
+            : now.AddDays(await settings.GetAsync(SettingKeys.SyncDeviceRefreshDays, 90, ct));
         db.RefreshTokens.Add(new RefreshToken
         {
             UserId = user.Id,
@@ -57,7 +62,7 @@ public sealed class TokenService(IOptions<JwtOptions> options, IAppDbContext db,
             CreatedAt = now,
             ExpiresAt = refreshExp,
         });
-        return Task.FromResult(new IssuedTokens(access, accessExp, refresh, refreshExp));
+        return new IssuedTokens(access, accessExp, refresh, refreshExp);
     }
 
     public string HashToken(string token) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)));

@@ -41,3 +41,11 @@ public enum TicketPriority { KhanCap, KhongKhanCap }
 public enum TicketStatus { Moi, DangXuLy, ChoPhanHoi, DaXuLy, Dong }
 
 public enum FavoriteItemType { Folder, File }
+
+/// <summary>Operation recorded in the change journal (delta sync for BlueDrive Desktop).</summary>
+public enum ChangeOp { Create, UpdateContent, UpdateMeta, Rename, Move, Delete, Restore, Purge, PermissionChanged }
+
+/// <summary>Item kind in the change journal: a workspace entry means "access to the whole root changed".</summary>
+public enum ChangeItemType { File, Folder, Workspace }
+
+public enum DeviceStatus { Active, Revoked, WipePending, Wiped }

@@ -17,6 +17,17 @@ public sealed class AuditLogger(NpgsqlDataSource dataSource, ICurrentUser curren
     private const long ChainLockKey = 0x426C7565_41756469; // "BlueAudi"
     internal static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
+    /// <summary>Operations from a BlueDrive Desktop session carry the device id and source = desktop_sync.</summary>
+    private string? WithDevice(string? detail)
+    {
+        if (currentUser.DeviceId is not { } deviceId) return detail;
+        var node = (detail is null ? null : System.Text.Json.Nodes.JsonNode.Parse(detail)) as System.Text.Json.Nodes.JsonObject ?? new System.Text.Json.Nodes.JsonObject();
+        if (detail is not null && System.Text.Json.Nodes.JsonNode.Parse(detail) is not System.Text.Json.Nodes.JsonObject) node["value"] = System.Text.Json.Nodes.JsonNode.Parse(detail);
+        node["deviceId"] ??= deviceId.ToString();
+        node["source"] ??= "desktop_sync";
+        return node.ToJsonString(JsonOpts);
+    }
+
     public async Task LogAsync(AuditEntry entry, CancellationToken ct = default)
     {
         var log = new AuditLog
@@ -30,7 +41,7 @@ public sealed class AuditLogger(NpgsqlDataSource dataSource, ICurrentUser curren
             WorkspaceId = entry.WorkspaceId,
             Ip = currentUser.Ip,
             UserAgent = Truncate(currentUser.UserAgent, 500),
-            Detail = entry.Detail is null ? null : JsonSerializer.Serialize(entry.Detail, JsonOpts),
+            Detail = WithDevice(entry.Detail is null ? null : JsonSerializer.Serialize(entry.Detail, JsonOpts)),
             // Truncate to microseconds so the hash recomputed from the DB value matches.
             OccurredAt = TruncateToMicros(clock.GetUtcNow().UtcDateTime),
         };

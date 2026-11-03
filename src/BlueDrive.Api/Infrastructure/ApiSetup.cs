@@ -25,6 +25,8 @@ public static class ApiSetup
         services.AddBlueDriveSecurity(config);
         services.AddSignalR();
         services.AddHostedService<BlueDrive.Api.Realtime.RealtimeRelay>();
+        services.AddHostedService<BlueDrive.Api.Realtime.SyncChangeBroadcaster>();
+        services.AddScoped<BlueDrive.Application.Features.Sync.ISyncNotifier, BlueDrive.Api.Realtime.HubSyncNotifier>();
         services.AddHostedService<BlueDrive.Api.Storage.TusCleanupService>();
         services.AddBlueDriveHangfire(config, runServer: false);
         services.AddProblemDetails();
@@ -126,6 +128,7 @@ public static class ApiSetup
         app.UseRateLimiter();
         app.MapControllers();
         app.MapHub<BlueDrive.Api.Realtime.NotificationHub>("/hubs/notifications");
+        app.MapHub<BlueDrive.Api.Realtime.SyncHub>("/hubs/sync");
         app.MapBlueDriveTus();
         app.MapBlueDriveHealthChecks();
         return app;

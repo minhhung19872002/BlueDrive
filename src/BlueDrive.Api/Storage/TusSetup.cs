@@ -26,10 +26,11 @@ public static class TusSetup
         string? S(string key) => meta.TryGetValue(key, out var v) ? v.GetString(Encoding.UTF8) : null;
         Guid? G(string key) => Guid.TryParse(S(key), out var g) ? g : null;
         return new UploadMetadata(
-            S("filename") ?? S("name") ?? "Không tên", G("workspaceId") ?? Guid.Empty, G("folderId"), S("relativePath"), G("targetFileId"),
+            S("filename") ?? S("name") ?? "Không tên", G("workspaceId") ?? G("workspace_id") ?? Guid.Empty, G("folderId") ?? G("parent_id"), S("relativePath"),
+            G("targetFileId") ?? G("target_file_id"),
             S("title"), S("description"), S("tags")?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
             S("catalogItemIds")?.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => Guid.TryParse(x, out var g) ? g : Guid.Empty).Where(g => g != Guid.Empty).ToList(),
-            S("changeNote"));
+            S("changeNote"), S("base_etag"), S("content_hash"), S("conflict") == "fail");
     }
 
     public static void MapBlueDriveTus(this WebApplication app)

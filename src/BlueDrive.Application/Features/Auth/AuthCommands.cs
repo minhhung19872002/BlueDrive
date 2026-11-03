@@ -163,7 +163,7 @@ public sealed class RefreshHandler(
         var session = await db.UserSessions.FirstOrDefaultAsync(s => s.Id == token.SessionId, ct);
         if (session is null || session.RevokedAt is not null) throw new UnauthorizedException("Phiên đăng nhập đã bị thu hồi. Vui lòng đăng nhập lại.");
         var idle = await settings.GetAsync(SettingKeys.SessionIdleMinutes, 30, ct);
-        if (idle > 0 && now - session.LastSeenAt > TimeSpan.FromMinutes(idle))
+        if (idle > 0 && session.DeviceId is null && now - session.LastSeenAt > TimeSpan.FromMinutes(idle))
         {
             await revoker.RevokeAsync([session.Id], ct);
             throw new UnauthorizedException("Phiên đăng nhập đã hết hạn do không hoạt động. Vui lòng đăng nhập lại.");

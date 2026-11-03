@@ -11,6 +11,7 @@ public sealed class HttpCurrentUser(IHttpContextAccessor accessor) : ICurrentUse
     public Guid? UserId => Guid.TryParse(Principal?.FindFirstValue("sub") ?? Principal?.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
     public string? Username => Principal?.FindFirstValue("preferred_username") ?? Principal?.Identity?.Name;
     public Guid? SessionId => Guid.TryParse(Principal?.FindFirstValue("sid"), out var id) ? id : null;
+    public Guid? DeviceId => Guid.TryParse(Principal?.FindFirstValue("did"), out var id) ? id : null;
     public string? Ip => accessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
     public string? UserAgent => accessor.HttpContext?.Request.Headers.UserAgent.ToString();
     public bool IsAuthenticated => Principal?.Identity?.IsAuthenticated == true && UserId.HasValue;

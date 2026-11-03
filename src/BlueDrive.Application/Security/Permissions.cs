@@ -25,6 +25,7 @@ public static class Perm
     public const string StatsView = "stats.view";
     public const string AlertView = "alert.view", AlertEdit = "alert.edit";
     public const string SessionView = "session.view", SessionAdmin = "session.admin";
+    public const string DeviceView = "device.view", DeviceAdmin = "device.admin";
     public const string SettingsView = "settings.view", SettingsEdit = "settings.edit";
     public const string BackupView = "backup.view", BackupAdmin = "backup.admin";
     public const string TicketView = "ticket.view", TicketCreate = "ticket.upload", TicketEdit = "ticket.edit", TicketAdmin = "ticket.admin";
@@ -51,6 +52,7 @@ public static class Perm
         ("monitor", "Giám sát hệ thống", "stats", "Thống kê dung lượng", ["view"]),
         ("monitor", "Giám sát hệ thống", "alert", "Cảnh báo bất thường", ["view", "edit"]),
         ("monitor", "Giám sát hệ thống", "session", "Phiên đăng nhập", ["view", "admin"]),
+        ("monitor", "Giám sát hệ thống", "device", "Thiết bị đồng bộ (BlueDrive Desktop)", ["view", "admin"]),
         ("monitor", "Giám sát hệ thống", "dashboard", "Dashboard quản trị", ["view"]),
         ("ops", "Vận hành", "settings", "Cấu hình hệ thống", ["view", "edit"]),
         ("ops", "Vận hành", "backup", "Sao lưu & phục hồi", ["view", "admin"]),

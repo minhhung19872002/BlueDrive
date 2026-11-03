@@ -130,6 +130,8 @@ public class UserSession : Entity
     public DateTime LastSeenAt { get; set; }
     public DateTime? RevokedAt { get; set; }
     public Guid? RevokedBy { get; set; }
+    /// <summary>Desktop sync device this session belongs to (long-lived, no idle timeout, revoked with the device).</summary>
+    public Guid? DeviceId { get; set; }
 }
 
 public class PasswordResetToken : Entity

@@ -57,7 +57,8 @@
     "tickets": "Hỗ trợ & sự cố",
     "changeLogs": "Nhật ký thay đổi",
     "settings": "Cấu hình hệ thống",
-    "approvals": "Phê duyệt"
+    "approvals": "Phê duyệt",
+    "adminDevices": "Thiết bị đồng bộ"
   },
   "header": {
     "searchPlaceholder": "Tìm kiếm tài liệu, thư mục...",
@@ -76,7 +77,8 @@
     "changePassword": "Đổi mật khẩu",
     "mySessions": "Phiên đăng nhập",
     "support": "Hỗ trợ",
-    "logout": "Đăng xuất"
+    "logout": "Đăng xuất",
+    "myDevices": "Thiết bị đã kết nối"
   },
   "sider": {
     "storage": "Dung lượng",
@@ -987,5 +989,46 @@
     "sharedBy": "Chia sẻ bởi {{name}}",
     "emptyFolder": "Thư mục trống.",
     "noPreviewNoDownload": "Định dạng này chưa hỗ trợ xem trực tiếp và liên kết không cho phép tải xuống."
+  },
+  "devices": {
+    "myTitle": "Thiết bị đã kết nối",
+    "myHint": "Các máy tính đang đồng bộ tài liệu của bạn bằng ứng dụng BlueDrive Desktop. Thu hồi nếu bạn không còn dùng máy đó; xóa dữ liệu từ xa nếu máy bị mất.",
+    "adminHint": "Mọi máy tính cài BlueDrive Desktop trong hệ thống: thu hồi quyền đồng bộ hoặc yêu cầu xóa dữ liệu từ xa.",
+    "none": "Chưa có máy tính nào kết nối. Cài BlueDrive Desktop và đăng nhập để đồng bộ tài liệu xuống máy.",
+    "name": "Máy tính",
+    "owner": "Người dùng",
+    "status": "Trạng thái",
+    "lastSeen": "Hoạt động gần nhất",
+    "lastIp": "Địa chỉ IP",
+    "connectedAt": "Kết nối lúc",
+    "current": "Máy này",
+    "revoke": "Thu hồi",
+    "revoked": "Đã thu hồi thiết bị.",
+    "revokeConfirm": "Thu hồi quyền đồng bộ của máy \"{{name}}\"? Ứng dụng trên máy đó sẽ bị đăng xuất.",
+    "wipe": "Xóa dữ liệu từ xa",
+    "wipeRequested": "Đã gửi lệnh xóa dữ liệu. Lệnh được thực hiện khi máy kết nối mạng.",
+    "wipeConfirm": "Xóa dữ liệu BlueDrive trên máy \"{{name}}\"?",
+    "wipeHint": "Khi máy kết nối mạng, ứng dụng sẽ xóa thư mục đồng bộ, bộ nhớ đệm và thông tin đăng nhập trên máy đó. Tài liệu trên BlueDrive không bị ảnh hưởng.",
+    "waitingWipe": "Đang chờ máy thực hiện lệnh xóa",
+    "searchPlaceholder": "Tìm theo tên máy hoặc người dùng",
+    "allStatuses": "Tất cả trạng thái",
+    "statuses": {
+      "active": "Đang hoạt động",
+      "revoked": "Đã thu hồi",
+      "wipe_pending": "Chờ xóa dữ liệu",
+      "wiped": "Đã xóa dữ liệu"
+    }
+  },
+  "connect": {
+    "title": "Đăng nhập BlueDrive Desktop",
+    "question": "Cho phép ứng dụng BlueDrive Desktop trên {{device}} đồng bộ tài liệu của {{user}}?",
+    "thisComputer": "máy tính này",
+    "scope": "Ứng dụng sẽ hiện tài liệu của bạn, tài liệu nhóm và tài liệu được chia sẻ (có quyền tải xuống) trong thư mục BlueDrive trên máy. Bạn có thể thu hồi bất cứ lúc nào tại \"Thiết bị đã kết nối\".",
+    "allow": "Cho phép",
+    "deny": "Từ chối",
+    "invalidTitle": "Yêu cầu đăng nhập không hợp lệ",
+    "invalidHint": "Hãy mở lại cửa sổ đăng nhập từ ứng dụng BlueDrive Desktop.",
+    "doneTitle": "Đã đăng nhập",
+    "doneHint": "Bạn có thể đóng thẻ này và quay lại ứng dụng BlueDrive Desktop."
   }
 }

@@ -194,6 +194,13 @@ public sealed class TrashPurger(IAppDbContext db, IFileContentService content, Q
         await db.FileVersions.Where(v => fileIds.Contains(v.FileId)).ExecuteDeleteAsync(ct);
         await db.Files.Where(f => fileIds.Contains(f.Id)).ExecuteDeleteAsync(ct);
         if (folderIds.Count > 0) await db.Folders.Where(f => folderIds.Contains(f.Id)).ExecuteDeleteAsync(ct);
+        // Bulk deletes bypass the change journal interceptor: record the purge of the trash root for desktop sync.
+        db.ChangeJournal.Add(new ChangeJournalEntry
+        {
+            WorkspaceId = wsId, ItemId = item.Id, ItemType = item.IsFile ? ChangeItemType.File : ChangeItemType.Folder, Op = ChangeOp.Purge, Name = name,
+            ModifiedAt = DateTime.UtcNow, OccurredAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync(ct);
         await quota.AddUsageAsync(wsId, -bytes, ct);
 
         // Copy-on-write blobs are removed only when no other version references them.

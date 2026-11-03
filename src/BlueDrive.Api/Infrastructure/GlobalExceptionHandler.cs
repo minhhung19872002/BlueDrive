@@ -13,6 +13,10 @@ public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logge
         ProblemDetails problem;
         switch (ex)
         {
+            case PreconditionFailedException pf:
+                problem = ProblemFactory.Create(412, pf.Message);
+                problem.Extensions["current"] = pf.Current;
+                break;
             case AppException app:
                 problem = ProblemFactory.Create(app.StatusCode, app.Message, app.Errors);
                 break;

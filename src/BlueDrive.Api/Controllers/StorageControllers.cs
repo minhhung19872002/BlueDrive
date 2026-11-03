@@ -109,7 +109,7 @@ public class DriveController : ApiControllerBase
     public Task<DriveItemDto> CreateFolder(CreateFolderCommand cmd) => Mediator.Send(cmd);
 
     /// <summary>Đổi tên thư mục / bật "cần phê duyệt".</summary>
-    [HttpPut("folders/{id:guid}")]
+    [HttpPut("folders/{id:guid}"), SyncIfMatch]
     public async Task<IActionResult> UpdateFolder(Guid id, UpdateFolderCommand cmd) { await Mediator.Send(cmd with { Id = id }); return NoContent(); }
 
     /// <summary>Chi tiết tệp (panel thông tin).</summary>
@@ -118,21 +118,21 @@ public class DriveController : ApiControllerBase
     [HttpGet("files/{id:guid}")]
     public Task<FileDetailDto> File(Guid id, [FromQuery] bool recordView = false) => Mediator.Send(new GetFileDetailQuery(id, recordView));
 
-    [HttpPut("files/{id:guid}/name")]
+    [HttpPut("files/{id:guid}/name"), SyncIfMatch]
     public async Task<IActionResult> RenameFile(Guid id, [FromBody] NameBody body) { await Mediator.Send(new RenameFileCommand(id, body.Name)); return NoContent(); }
 
     /// <summary>Cập nhật tiêu đề, mô tả, thẻ, danh mục (một hoặc nhiều tệp).</summary>
     [HttpPut("files/metadata")]
     public async Task<IActionResult> Metadata(UpdateFileMetadataCommand cmd) => Ok(new { updated = await Mediator.Send(cmd) });
 
-    [HttpPost("items/move")]
+    [HttpPost("items/move"), SyncIfMatch]
     public async Task<IActionResult> Move(MoveItemsCommand cmd) => Ok(new { moved = await Mediator.Send(cmd) });
 
     [HttpPost("items/copy")]
     public async Task<IActionResult> Copy(CopyItemsCommand cmd) => Ok(new { copied = await Mediator.Send(cmd) });
 
     /// <summary>Xóa (chuyển vào thùng rác).</summary>
-    [HttpPost("items/delete")]
+    [HttpPost("items/delete"), SyncIfMatch]
     public async Task<IActionResult> Delete(DeleteItemsCommand cmd) => Ok(new { deleted = await Mediator.Send(cmd) });
 
     [HttpPost("trash/restore"), HasPermission(Perm.TrashRestore)]
@@ -164,10 +164,11 @@ public class DriveController : ApiControllerBase
     [HttpPost("files/upload"), RequestSizeLimit(512L * 1024 * 1024), RequestFormLimits(MultipartBodyLengthLimit = 512L * 1024 * 1024)]
     public async Task<UploadResult> Upload(IFormFile file, [FromForm] Guid workspaceId, [FromForm] Guid? folderId, [FromForm] Guid? targetFileId,
         [FromForm] string? title, [FromForm] string? description, [FromForm] string? tags, [FromForm] string? relativePath, [FromForm] string? changeNote,
-        [FromServices] Microsoft.Extensions.Options.IOptions<BlueDrive.Infrastructure.Storage.StorageOptions> storage)
+        [FromServices] Microsoft.Extensions.Options.IOptions<BlueDrive.Infrastructure.Storage.StorageOptions> storage,
+        [FromForm(Name = "base_etag")] string? baseEtag = null, [FromForm(Name = "content_hash")] string? contentHash = null, [FromForm] string? conflict = null)
     {
         var meta = new UploadMetadata(file.FileName, workspaceId, folderId, relativePath, targetFileId, title, description,
-            tags?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), null, changeNote);
+            tags?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), null, changeNote, baseEtag, contentHash, conflict == "fail");
         await Mediator.Send(new ValidateUploadCommand(meta, file.Length));
         Directory.CreateDirectory(storage.Value.TempDirectory);
         var tmp = Path.Combine(storage.Value.TempDirectory, "mp-" + Guid.NewGuid().ToString("N"));

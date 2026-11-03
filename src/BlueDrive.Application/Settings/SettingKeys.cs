@@ -30,6 +30,17 @@ public static class SettingKeys
     public const string BrandingLogoUrl = "branding.logo_url";
     public const string ReportShowNationalHeader = "report.show_national_header";
     public const string ReportGoverningBody = "report.governing_body";
+    public const string SyncEnabled = "sync.enabled";
+    public const string SyncAllowedRoles = "sync.allowed_roles";
+    public const string SyncAllowedOrganizations = "sync.allowed_organizations";
+    public const string SyncMaxFileSizeMb = "sync.max_file_size_mb";
+    public const string SyncBlockedExtensions = "sync.blocked_extensions";
+    public const string SyncOnlineOnlyWorkspaces = "sync.online_only_workspaces";
+    public const string SyncMinClientVersion = "sync.min_client_version";
+    public const string SyncViewOnlyAsLink = "sync.view_only_as_link";
+    public const string SyncDeviceRefreshDays = "sync.device_refresh_days";
+    public const string SyncJournalRetentionDays = "sync.journal_retention_days";
+    public const string SyncPollSeconds = "sync.poll_seconds";
 
     public static readonly string[] DefaultAllowedExtensions =
     [
@@ -71,6 +82,17 @@ public static class SettingKeys
         new(BrandingLogoUrl, "", "Giao diện", "Đường dẫn logo", "text"),
         new(ReportShowNationalHeader, true, "Báo cáo", "Hiển thị Quốc hiệu trên bản in", "boolean"),
         new(ReportGoverningBody, "CỤC DÂN SỐ - BỘ Y TẾ", "Báo cáo", "Cơ quan chủ quản (dòng trên tiêu đề bản in)", "text"),
+        new(SyncEnabled, true, "Đồng bộ máy tính", "Cho phép đồng bộ bằng BlueDrive Desktop", "boolean"),
+        new(SyncAllowedRoles, Array.Empty<string>(), "Đồng bộ máy tính", "Chỉ cho phép các vai trò (mã vai trò; để trống = tất cả)", "tags"),
+        new(SyncAllowedOrganizations, Array.Empty<string>(), "Đồng bộ máy tính", "Chỉ cho phép các đơn vị (mã đơn vị, gồm đơn vị con; để trống = tất cả)", "tags"),
+        new(SyncMaxFileSizeMb, 0, "Đồng bộ máy tính", "Kích thước tệp tối đa được đồng bộ (MB, 0 = theo giới hạn tải lên)", "number"),
+        new(SyncBlockedExtensions, Array.Empty<string>(), "Đồng bộ máy tính", "Đuôi tệp không đồng bộ xuống máy", "tags"),
+        new(SyncOnlineOnlyWorkspaces, Array.Empty<string>(), "Đồng bộ máy tính", "Nhóm tài nguyên bắt buộc chỉ trực tuyến (tên nhóm; không cho \"Luôn giữ trên thiết bị\")", "tags"),
+        new(SyncMinClientVersion, "1.0.0", "Đồng bộ máy tính", "Phiên bản ứng dụng tối thiểu", "text"),
+        new(SyncViewOnlyAsLink, true, "Đồng bộ máy tính", "Tư liệu chỉ có quyền Xem hiện dạng liên kết \"Mở trên web\" (tắt = ẩn)", "boolean"),
+        new(SyncDeviceRefreshDays, 90, "Đồng bộ máy tính", "Thời hạn đăng nhập của thiết bị (ngày)", "number"),
+        new(SyncJournalRetentionDays, 90, "Đồng bộ máy tính", "Giữ nhật ký thay đổi đồng bộ (ngày)", "number"),
+        new(SyncPollSeconds, 30, "Đồng bộ máy tính", "Chu kỳ hỏi thay đổi khi không có kết nối thời gian thực (giây)", "number"),
     ];
 
     public static Definition? Find(string key) => All.FirstOrDefault(d => d.Key == key);

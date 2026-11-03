@@ -35,11 +35,23 @@ public sealed class TrashRetentionJob(ISender mediator, ILogger<TrashRetentionJo
     }
 }
 
+public sealed class SyncJournalRetentionJob(ISender mediator, ILogger<SyncJournalRetentionJob> logger)
+{
+    [Queue(HangfireSetup.QueueMaintenance)]
+    public async Task RunAsync(CancellationToken ct)
+    {
+        var n = await mediator.Send(new Application.Features.Sync.PurgeSyncJournalCommand(), ct);
+        if (n > 0) logger.LogInformation("Đã dọn {Count} dòng nhật ký thay đổi đồng bộ đã hết hạn lưu", n);
+    }
+}
+
 public sealed class StorageRecurringJobs(IRecurringJobManager jobs) : IRecurringJobRegistration
 {
     public Task RegisterAsync(CancellationToken ct)
     {
         jobs.AddOrUpdate<TrashRetentionJob>("trash-retention", j => j.RunAsync(CancellationToken.None), "15 1 * * *",
+            new RecurringJobOptions { TimeZone = Reporting.VietnamTime.Zone });
+        jobs.AddOrUpdate<SyncJournalRetentionJob>("sync-journal-retention", j => j.RunAsync(CancellationToken.None), "45 1 * * *",
             new RecurringJobOptions { TimeZone = Reporting.VietnamTime.Zone });
         return Task.CompletedTask;
     }

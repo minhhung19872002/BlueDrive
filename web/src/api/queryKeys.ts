@@ -4,6 +4,8 @@ export const qk = {
   branding: ['branding'] as const,
   passwordPolicy: ['password-policy'] as const,
   mySessions: ['sessions', 'mine'] as const,
+  myDevices: ['devices', 'mine'] as const,
+  devices: (params: object) => ['devices', 'all', params] as const,
   allSessions: ['sessions', 'all'] as const,
   organizations: ['organizations'] as const,
   orgTree: ['organizations', 'tree'] as const,

@@ -36,6 +36,15 @@ Loại danh mục (loại sản phẩm truyền thông, chủ đề, chiến d�
 ## 6. Phiên đăng nhập (#16–17)
 *Quản trị > Phiên đăng nhập*: danh sách phiên toàn hệ thống (thiết bị, IP, thời gian). Thu hồi một phiên, thu hồi toàn bộ phiên của người dùng, khóa tài khoản.
 
+## 6a. Thiết bị đồng bộ (BlueDrive Desktop)
+
+- **Quản trị → Thiết bị đồng bộ** (`/admin/devices`, quyền `device.view` / `device.admin`): danh sách mọi máy tính cài BlueDrive
+  Desktop (người dùng, hệ điều hành, phiên bản, lần hoạt động cuối, IP). **Thu hồi** để đăng xuất và dừng đồng bộ trên máy;
+  **Xóa dữ liệu từ xa** khi máy bị mất (ứng dụng xóa thư mục đồng bộ và thông tin đăng nhập ở lần kết nối tới).
+- Người dùng tự quản lý máy của mình tại **Thiết bị đã kết nối** (menu tài khoản, `/devices`).
+- Chính sách ở **Cấu hình hệ thống → Đồng bộ máy tính**: bật/tắt, chỉ cho phép một số vai trò/đơn vị, kích thước tệp tối đa,
+  đuôi tệp không đồng bộ, nhóm bắt buộc chỉ trực tuyến, phiên bản ứng dụng tối thiểu, thời hạn đăng nhập thiết bị.
+
 ## 7. Nhóm tài nguyên và dung lượng (#57–60)
 - *Quản trị > Nhóm tài nguyên*: danh sách tất cả nhóm, mức sử dụng; đặt hạn mức nhóm; khóa/mở khóa (khóa = chỉ xem, không ghi).
 - *Cấu hình dung lượng cá nhân*: đặt dung lượng cho người dùng cụ thể hoặc cả đơn vị (có/không gồm đơn vị con). Mặc định cho tài khoản/nhóm mới đặt ở *Cấu hình hệ thống*.

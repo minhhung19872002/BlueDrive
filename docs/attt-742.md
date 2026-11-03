@@ -72,3 +72,18 @@ Bảng dưới đây đối chiếu từng nhóm yêu cầu với cách hệ th�
 - Chỉ mở cổng 80/443 ra ngoài; PostgreSQL, API, Worker, ONLYOFFICE, ClamAV chỉ trong mạng nội bộ Docker.
 - Giới hạn tài nguyên từng dịch vụ trong `docker-compose.yml` (phù hợp máy chủ 8 core/16 GB).
 - Cập nhật hệ thống: dựng lại image (`docker compose up -d --build`); mỗi lần triển khai được ghi tự động vào *Nhật ký thay đổi hệ thống*.
+
+## 9. Thiết bị đầu cuối đồng bộ (BlueDrive Desktop)
+
+- **Đăng nhập**: OAuth 2.0 Authorization Code + PKCE (S256), chỉ chấp nhận địa chỉ quay lại loopback trên chính máy
+  (`127.0.0.1`/`localhost`, RFC 8252); mã một lần, hiệu lực 2 phút, lưu dạng băm. Mật khẩu không bao giờ nhập vào ứng dụng.
+- **Token**: phiên thiết bị riêng (claim `did`), refresh token xoay vòng, phát hiện dùng lại thì thu hồi cả phiên; thời hạn
+  cấu hình được (`sync.device_refresh_days`). Ứng dụng lưu token và khóa bí mật thiết bị bằng DPAPI/Credential Manager.
+- **Thu hồi thiết bị**: người dùng (thiết bị của mình) hoặc quản trị (`device.admin`) thu hồi tại "Thiết bị đã kết nối"; mọi
+  phiên của thiết bị bị vô hiệu ngay.
+- **Xóa dữ liệu từ xa**: lệnh được ký `HMAC-SHA256` bằng khóa bí mật riêng của thiết bị (lưu mã hóa trên máy chủ), ứng dụng
+  kiểm tra chữ ký trước khi xóa thư mục đồng bộ, bộ nhớ đệm và token, rồi xác nhận về máy chủ.
+- **Chính sách**: bật/tắt đồng bộ, giới hạn theo vai trò/đơn vị, kích thước tối đa, đuôi tệp bị chặn, nhóm chỉ trực tuyến,
+  phiên bản ứng dụng tối thiểu. Tư liệu chỉ có quyền Xem không bao giờ được tải xuống máy.
+- **Nhật ký**: mọi thao tác từ ứng dụng ghi `deviceId` và `source = desktop_sync` trong chuỗi nhật ký có băm.
+

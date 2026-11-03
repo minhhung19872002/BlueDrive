@@ -12,7 +12,10 @@ namespace BlueDrive.Application.Features.Storage;
 /// <summary>Metadata sent with an upload (tus Upload-Metadata or multipart fields).</summary>
 public sealed record UploadMetadata(
     string FileName, Guid WorkspaceId, Guid? FolderId, string? RelativePath, Guid? TargetFileId,
-    string? Title, string? Description, IReadOnlyList<string>? Tags, IReadOnlyList<Guid>? CatalogItemIds, string? ChangeNote);
+    string? Title, string? Description, IReadOnlyList<string>? Tags, IReadOnlyList<Guid>? CatalogItemIds, string? ChangeNote,
+    // Desktop sync: version uploads are based on BaseETag (412 when the server copy changed), ContentHash (SHA-256 hex) is verified
+    // once all chunks are assembled, and FailOnConflict answers 409 instead of auto-renaming "Tên (1).ext".
+    string? BaseETag = null, string? ContentHash = null, bool FailOnConflict = false);
 
 public sealed record UploadResult(Guid FileId, Guid VersionId, int VersionNo, string Name, ApprovalStatus ApprovalStatus);
 
@@ -48,7 +51,8 @@ public static class UploadRules
         if (meta.TargetFileId is { } target)
         {
             var a = await auth.EnsureAsync(uid, ResourceType.File, target, AccessLevel.Edit, ct);
-            var f = await db.Files.AsNoTracking().Where(x => x.Id == target).Select(x => new { x.WorkspaceId, x.Extension }).FirstAsync(ct);
+            var f = await db.Files.AsNoTracking().Where(x => x.Id == target).Select(x => new { x.WorkspaceId, x.Extension, x.Revision }).FirstAsync(ct);
+            if (!string.IsNullOrWhiteSpace(meta.BaseETag) && !Sync.SyncIds.Matches(meta.BaseETag, f.Revision)) throw new PreconditionFailedException(null);
             if (!string.Equals(f.Extension, ext, StringComparison.OrdinalIgnoreCase)) throw new AppException($"Phiên bản mới phải cùng định dạng .{f.Extension} với tệp hiện tại.");
             await quota.EnsureAvailableAsync(f.WorkspaceId, length, ct);
             return;
@@ -56,7 +60,15 @@ public static class UploadRules
         await auth.EnsureCanUploadAsync(uid, meta.WorkspaceId, meta.FolderId, ct);
         if (meta.FolderId.HasValue && !await db.Folders.AnyAsync(x => x.Id == meta.FolderId && x.WorkspaceId == meta.WorkspaceId && !x.IsDeleted, ct))
             throw new NotFoundException("Không tìm thấy thư mục đích.");
+        if (meta.FailOnConflict && string.IsNullOrEmpty(meta.RelativePath) && await NameTakenAsync(db, meta.WorkspaceId, meta.FolderId, name, ct))
+            throw new ConflictException($"Đã có tệp \"{name}\" trong thư mục này.");
         await quota.EnsureAvailableAsync(meta.WorkspaceId, length, ct);
+    }
+
+    public static Task<bool> NameTakenAsync(IAppDbContext db, Guid workspaceId, Guid? folderId, string name, CancellationToken ct)
+    {
+        var lower = name.ToLower();
+        return db.Files.AnyAsync(f => f.WorkspaceId == workspaceId && f.FolderId == folderId && !f.IsDeleted && f.Name.ToLower() == lower, ct);
     }
 }
 
@@ -84,6 +96,12 @@ public sealed class CompleteUploadHandler(
         StoredContent stored;
         await using (var src = new FileStream(cmd.TempFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, true))
             stored = await content.SaveAsync(src, "files", ct);
+        if (!string.IsNullOrWhiteSpace(cmd.Meta.ContentHash) && !string.Equals(cmd.Meta.ContentHash.Trim(), stored.Sha256, StringComparison.OrdinalIgnoreCase))
+        {
+            // Blobs may be shared (copy-on-write): only remove one that no version references.
+            if (!await db.FileVersions.AnyAsync(v => v.StorageKey == stored.StorageKey, ct)) await content.DeleteAsync(stored.StorageKey, ct);
+            throw new AppException("Nội dung nhận được không khớp mã băm SHA-256 của tệp gửi lên. Vui lòng tải lên lại.", 422);
+        }
 
         StoredFile file;
         FileVersion version;
@@ -110,7 +128,9 @@ public sealed class CompleteUploadHandler(
             file = new StoredFile
             {
                 WorkspaceId = cmd.Meta.WorkspaceId, FolderId = folder?.Id,
-                Name = await StorageNames.UniqueFileNameAsync(db, cmd.Meta.WorkspaceId, folder?.Id, name, null, ct),
+                Name = cmd.Meta.FailOnConflict
+                    ? (await UploadRules.NameTakenAsync(db, cmd.Meta.WorkspaceId, folder?.Id, name, ct) ? throw new ConflictException($"Đã có tệp \"{name}\" trong thư mục này.") : name)
+                    : await StorageNames.UniqueFileNameAsync(db, cmd.Meta.WorkspaceId, folder?.Id, name, null, ct),
                 Extension = info.Extension, MimeType = info.MimeType, MediaType = info.MediaType, SizeBytes = stored.SizeBytes, ChecksumSha256 = stored.Sha256,
                 Title = string.IsNullOrWhiteSpace(cmd.Meta.Title) ? null : cmd.Meta.Title.Trim(), Description = string.IsNullOrWhiteSpace(cmd.Meta.Description) ? null : cmd.Meta.Description.Trim(),
                 Tags = cmd.Meta.Tags?.Select(t => t.Trim()).Where(t => t.Length > 0).Distinct().ToList() ?? [],

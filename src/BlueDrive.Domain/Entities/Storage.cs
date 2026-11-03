@@ -66,6 +66,8 @@ public class Folder : AuditableEntity, ISoftDeletable
     public Guid? OriginalParentId { get; set; }
     /// <summary>True when the folder itself was deleted (not as a descendant of a deleted folder).</summary>
     public bool IsTrashRoot { get; set; }
+    /// <summary>Incremented on every change recorded in the change journal; the sync ETag.</summary>
+    public long Revision { get; set; } = 1;
 }
 
 public class StoredFile : AuditableEntity, ISoftDeletable
@@ -101,6 +103,8 @@ public class StoredFile : AuditableEntity, ISoftDeletable
     public Guid? DeletedBy { get; set; }
     public Guid? OriginalFolderId { get; set; }
     public bool IsTrashRoot { get; set; }
+    /// <summary>Incremented on every change recorded in the change journal; the sync ETag.</summary>
+    public long Revision { get; set; } = 1;
     public List<FileVersion> Versions { get; set; } = [];
     public List<FileCatalogItem> CatalogItems { get; set; } = [];
 }

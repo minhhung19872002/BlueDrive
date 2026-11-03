@@ -17,3 +17,9 @@ public sealed class UnauthorizedException(string message = "Phiên đăng nhập
 
 public sealed class RequestValidationException(IDictionary<string, string[]> errors)
     : AppException("Dữ liệu nhập không hợp lệ.", 400, errors);
+
+/// <summary>412: If-Match does not match the item's current ETag (desktop sync). <see cref="Current"/> is returned to the client.</summary>
+public sealed class PreconditionFailedException(object? current) : AppException("Tài liệu đã thay đổi trên máy chủ kể từ lần đồng bộ trước.", 412)
+{
+    public object? Current { get; } = current;
+}

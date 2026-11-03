@@ -46,6 +46,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ChangeLog> ChangeLogs => Set<ChangeLog>();
     public DbSet<ReportJob> ReportJobs => Set<ReportJob>();
     public DbSet<SystemLog> SystemLogs => Set<SystemLog>();
+    public DbSet<ChangeJournalEntry> ChangeJournal => Set<ChangeJournalEntry>();
+    public DbSet<SyncDevice> Devices => Set<SyncDevice>();
+    public DbSet<OAuthAuthorizationCode> OAuthAuthorizationCodes => Set<OAuthAuthorizationCode>();
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     Task<int> IAppDbContext.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
@@ -113,6 +116,35 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         b.Entity<RefreshToken>(e => { e.HasIndex(x => x.TokenHash).IsUnique(); e.HasIndex(x => x.SessionId); e.HasIndex(x => x.UserId); });
         b.Entity<UserSession>(e => { e.HasIndex(x => new { x.UserId, x.RevokedAt }); e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId); });
+        b.Entity<ChangeJournalEntry>(e =>
+        {
+            e.ToTable("change_journal");
+            e.HasKey(x => x.Seq);
+            e.Property(x => x.Seq).UseIdentityAlwaysColumn();
+            e.HasIndex(x => new { x.WorkspaceId, x.Seq });
+            e.HasIndex(x => x.ItemId);
+            e.HasIndex(x => x.OccurredAt);
+            e.Property(x => x.Name).HasMaxLength(255);
+            e.Property(x => x.ContentHash).HasMaxLength(64);
+        });
+        b.Entity<SyncDevice>(e =>
+        {
+            e.ToTable("devices");
+            e.HasIndex(x => new { x.UserId, x.Status });
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId);
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.Os).HasMaxLength(200);
+            e.Property(x => x.AppVersion).HasMaxLength(50);
+            e.Property(x => x.MachineIdHash).HasMaxLength(64);
+            e.Property(x => x.LastIp).HasMaxLength(64);
+        });
+        b.Entity<OAuthAuthorizationCode>(e =>
+        {
+            e.ToTable("oauth_authorization_codes");
+            e.HasIndex(x => x.CodeHash).IsUnique();
+            e.Property(x => x.RedirectUri).HasMaxLength(300);
+            e.Property(x => x.CodeChallenge).HasMaxLength(128);
+        });
         b.Entity<PasswordResetToken>().HasIndex(x => x.TokenHash).IsUnique();
 
         b.Entity<Catalog>().HasIndex(x => x.Code).IsUnique();

@@ -44,6 +44,9 @@ public interface IAppDbContext
     DbSet<ChangeLog> ChangeLogs { get; }
     DbSet<ReportJob> ReportJobs { get; }
     DbSet<SystemLog> SystemLogs { get; }
+    DbSet<ChangeJournalEntry> ChangeJournal { get; }
+    DbSet<SyncDevice> Devices { get; }
+    DbSet<OAuthAuthorizationCode> OAuthAuthorizationCodes { get; }
     DatabaseFacade Database { get; }
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }
@@ -54,6 +57,8 @@ public interface ICurrentUser
     Guid? UserId { get; }
     string? Username { get; }
     Guid? SessionId { get; }
+    /// <summary>Desktop sync device of the session (claim "did"); null for web/mobile sessions and jobs.</summary>
+    Guid? DeviceId => null;
     string? Ip { get; }
     string? UserAgent { get; }
     bool IsAuthenticated { get; }
