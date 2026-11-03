@@ -70,6 +70,47 @@ public class SharingTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task File_can_stop_inheriting_permissions_like_sharepoint_and_restore_them()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (friend, friendId, _) = await factory.CreateUserClientAsync("chi_xem");
+        var (other, otherId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var folder = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Chung" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var fileId = (await StorageTests.UploadAsync(owner, ws, folder, "rieng.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        await (await owner.PostAsJsonAsync("/api/v1/shares", new { resourceType = "folder", resourceId = folder, targets = new[] { new { type = "user", id = friendId }, new { type = "user", id = otherId } }, accessLevel = 3 })).ReadJsonAsync();
+        async Task<List<Guid>> Listed(HttpClient c) => (await (await c.GetAsync($"/api/v1/workspaces/{ws}/items?folderId={folder}")).ReadJsonAsync())
+            .GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()).ToList();
+
+        // Stop inheriting, copying today's access: both keep it, now as direct permissions of the file.
+        (await owner.PutAsJsonAsync($"/api/v1/access/file/{fileId}", new { entries = Array.Empty<object>(), breakInheritance = true, copyInheritedOnBreak = true }))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var acl = await (await owner.GetAsync($"/api/v1/access/file/{fileId}")).ReadJsonAsync();
+        acl.GetProperty("breakInheritance").GetBoolean().Should().BeTrue();
+        acl.GetProperty("entries").EnumerateArray().Where(e => e.GetProperty("source").GetString() == "direct").Select(e => e.GetProperty("principalId").GetGuid())
+            .Should().BeEquivalentTo([friendId, otherId]);
+        acl.GetProperty("entries").EnumerateArray().Should().NotContain(e => e.GetProperty("fromParent").GetBoolean());
+
+        // Remove one person: only the file is affected, the folder share stays.
+        (await owner.PutAsJsonAsync($"/api/v1/access/file/{fileId}", new
+        {
+            entries = new[] { new { principalType = "user", principalId = otherId, accessLevel = "edit", inherit = true } }, breakInheritance = true,
+        })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await friend.GetAsync($"/api/v1/files/{fileId}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await Listed(friend)).Should().NotContain(fileId, "an item with unique permissions is hidden from those without access");
+        (await other.GetAsync($"/api/v1/files/{fileId}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await Listed(other)).Should().Contain(fileId);
+        (await friend.GetAsync($"/api/v1/workspaces/{ws}/items?folderId={folder}")).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Restore inheritance (unique permissions removed): the folder share applies again.
+        (await owner.PutAsJsonAsync($"/api/v1/access/file/{fileId}", new { entries = Array.Empty<object>(), breakInheritance = false })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await friend.GetAsync($"/api/v1/files/{fileId}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await Listed(friend)).Should().Contain(fileId);
+        (await (await owner.GetAsync($"/api/v1/access/file/{fileId}")).ReadJsonAsync()).GetProperty("entries").EnumerateArray()
+            .Should().Contain(e => e.GetProperty("fromParent").GetBoolean() && e.GetProperty("principalId").GetGuid() == friendId);
+    }
+
+    [Fact]
     public async Task Folder_share_is_inherited_by_subfolders_and_files_until_inheritance_is_broken()
     {
         var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");

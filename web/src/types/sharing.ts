@@ -40,6 +40,8 @@ export interface AccessEntry {
   source: AccessSource
   sourceName: string | null
   editable: boolean
+  /** Comes from a parent folder or the workspace (lost when the item stops inheriting, unless copied). */
+  fromParent: boolean
 }
 
 export interface ResourceAccessList {

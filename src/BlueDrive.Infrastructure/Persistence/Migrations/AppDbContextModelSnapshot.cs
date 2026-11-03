@@ -1497,6 +1497,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("approved_by");
 
+                    b.Property<bool>("BreakInheritance")
+                        .HasColumnType("boolean")
+                        .HasColumnName("break_inheritance");
+
                     b.Property<string>("ChecksumSha256")
                         .HasColumnType("text")
                         .HasColumnName("checksum_sha256");

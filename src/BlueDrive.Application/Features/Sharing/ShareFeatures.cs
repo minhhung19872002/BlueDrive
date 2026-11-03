@@ -96,7 +96,11 @@ public sealed class ListSharesOfResourceHandler(IAppDbContext db, ICurrentUser m
         string? path;
         var selfBreaks = false;
         if (q.ResourceType == ResourceType.File)
-            path = await db.Files.AsNoTracking().Where(f => f.Id == q.ResourceId).Select(f => f.Folder != null ? f.Folder.Path : null).FirstOrDefaultAsync(ct);
+        {
+            var file = await db.Files.AsNoTracking().Where(f => f.Id == q.ResourceId).Select(f => new { Path = f.Folder != null ? f.Folder.Path : null, f.BreakInheritance }).FirstOrDefaultAsync(ct);
+            path = file?.Path;
+            selfBreaks = file?.BreakInheritance ?? false;
+        }
         else if (q.ResourceType == ResourceType.Folder)
         {
             var self = await db.Folders.AsNoTracking().Where(f => f.Id == q.ResourceId).Select(f => new { f.Path, f.BreakInheritance }).FirstOrDefaultAsync(ct);

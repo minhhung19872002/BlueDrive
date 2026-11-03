@@ -98,6 +98,8 @@ public class StoredFile : AuditableEntity, ISoftDeletable
     public string? PreviewKey { get; set; }
     /// <summary>Organization of the uploader at upload time ("đơn vị đăng tải").</summary>
     public Guid? UploaderOrganizationId { get; set; }
+    /// <summary>Unique permissions (like SharePoint "Stop inheriting permissions"): folder grants no longer reach this file.</summary>
+    public bool BreakInheritance { get; set; }
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }
     public Guid? DeletedBy { get; set; }

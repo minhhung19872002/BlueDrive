@@ -23,6 +23,9 @@ public sealed class WorkspaceAccessMap
 
     private readonly Dictionary<Guid, (Guid? Parent, AccessLevel Level, AccessLevel Down)> _folders = [];
     private readonly Dictionary<Guid, AccessLevel> _fileGrants = [];
+    /// <summary>Files with unique permissions: only their own grants (and owner / managers) apply.</summary>
+    private HashSet<Guid> _brokenFiles = [];
+    private AccessLevel _brokenLevel;
     private AccessLevel _rootLevel;
     private Guid _userId;
 
@@ -76,6 +79,9 @@ public sealed class WorkspaceAccessMap
         foreach (var a in acl.Where(a => a.ResourceType == ResourceType.File)) map._fileGrants[a.ResourceId] = Max(map._fileGrants.GetValueOrDefault(a.ResourceId), a.AccessLevel);
         foreach (var s in shares.Where(s => s.ResourceType == ResourceType.File)) map._fileGrants[s.ResourceId] = Max(map._fileGrants.GetValueOrDefault(s.ResourceId), s.AccessLevel);
 
+        map._brokenFiles = (await db.Files.AsNoTracking().Where(f => f.WorkspaceId == workspaceId && f.BreakInheritance && !f.IsDeleted).Select(f => f.Id).ToListAsync(ct)).ToHashSet();
+        map._brokenLevel = full ? AccessLevel.Manage : managerial ? memberLevel : AccessLevel.None;
+
         // Parents before children: materialized paths sort that way.
         var folders = await db.Folders.AsNoTracking().Where(f => f.WorkspaceId == workspaceId && !f.IsDeleted)
             .Select(f => new { f.Id, f.ParentId, f.Path, f.BreakInheritance }).OrderBy(f => f.Path).ToListAsync(ct);
@@ -98,7 +104,8 @@ public sealed class WorkspaceAccessMap
 
     public AccessLevel FileLevel(Guid fileId, Guid? folderId, ApprovalStatus approval, Guid? createdBy)
     {
-        var inherited = folderId is { } fid ? (_folders.TryGetValue(fid, out var f) ? f.Down : AccessLevel.None) : _rootLevel;
+        var inherited = _brokenFiles.Contains(fileId) ? _brokenLevel
+            : folderId is { } fid ? (_folders.TryGetValue(fid, out var f) ? f.Down : AccessLevel.None) : _rootLevel;
         var level = Max(inherited, _fileGrants.GetValueOrDefault(fileId));
         // Approval workflow: plain viewers only see approved files (and their own uploads).
         if (approval != ApprovalStatus.Approved && createdBy != _userId && level < AccessLevel.Edit && !CanApproveAll) return AccessLevel.None;

@@ -12,8 +12,9 @@ namespace BlueDrive.Application.Features.Sharing;
 
 public sealed record PrincipalRef(PrincipalType Type, Guid Id);
 
+/// <param name="FromParent">Comes from a parent folder or the workspace (lost when the item stops inheriting, unless copied).</param>
 public sealed record AccessEntryDto(Guid? Id, PrincipalType PrincipalType, Guid PrincipalId, string PrincipalName, AccessLevel AccessLevel,
-    bool Inherit, DateTime? ExpiresAt, string Source, string? SourceName, bool Editable);
+    bool Inherit, DateTime? ExpiresAt, string Source, string? SourceName, bool Editable, bool FromParent = false);
 
 public sealed record ResourceAccessListDto(ResourceType ResourceType, Guid ResourceId, string Name, bool BreakInheritance, bool CanManage, IReadOnlyList<AccessEntryDto> Entries);
 
@@ -84,7 +85,7 @@ public sealed class GetResourceAccessHandler(IAppDbContext db, ICurrentUser me, 
         {
             case ResourceType.File:
                 var f = await db.Files.AsNoTracking().Include(x => x.Folder).FirstAsync(x => x.Id == q.Id, ct);
-                wsId = f.WorkspaceId; name = f.Name; chain = ResourceAuthorizationService.PathIds(f.Folder?.Path);
+                wsId = f.WorkspaceId; name = f.Name; chain = ResourceAuthorizationService.PathIds(f.Folder?.Path); breakInheritance = f.BreakInheritance;
                 break;
             case ResourceType.Folder:
                 var fo = await db.Folders.AsNoTracking().FirstAsync(x => x.Id == q.Id, ct);
@@ -121,17 +122,17 @@ public sealed class GetResourceAccessHandler(IAppDbContext db, ICurrentUser me, 
                 .Concat(members.Select(m => (PrincipalType.User, m.UserId))).Concat(shares.Select(s => (s.SharedWithType, s.SharedWithId))).Append((PrincipalType.User, ws.OwnerId)), ct);
         string N(PrincipalType t, Guid id) => names.GetValueOrDefault((t, id), "(không xác định)");
 
-        entries.Add(new AccessEntryDto(null, PrincipalType.User, ws.OwnerId, N(PrincipalType.User, ws.OwnerId), AccessLevel.Manage, true, null, "owner", ws.Type == WorkspaceType.Personal ? "Chủ sở hữu" : "Trưởng nhóm", false));
+        entries.Add(new AccessEntryDto(null, PrincipalType.User, ws.OwnerId, N(PrincipalType.User, ws.OwnerId), AccessLevel.Manage, true, null, "owner", ws.Type == WorkspaceType.Personal ? "Chủ sở hữu" : "Trưởng nhóm", false, false));
         foreach (var m in members.Where(m => m.UserId != ws.OwnerId))
-            entries.Add(new AccessEntryDto(null, PrincipalType.User, m.UserId, N(PrincipalType.User, m.UserId), ResourceAuthorizationService.LevelOf(m.MemberRole), true, null, "member", $"Thành viên nhóm ({MemberRoleNames.Of(m.MemberRole)})", false));
+            entries.Add(new AccessEntryDto(null, PrincipalType.User, m.UserId, N(PrincipalType.User, m.UserId), ResourceAuthorizationService.LevelOf(m.MemberRole), true, null, "member", $"Thành viên nhóm ({MemberRoleNames.Of(m.MemberRole)})", false, true));
         foreach (var a in inherited)
             entries.Add(new AccessEntryDto(a.Id, a.PrincipalType, a.PrincipalId, N(a.PrincipalType, a.PrincipalId), a.AccessLevel, true, a.ExpiresAt, "inherited",
-                a.ResourceType == ResourceType.Workspace ? $"Kế thừa từ nhóm \"{ws.Name}\"" : $"Kế thừa từ thư mục \"{folderNames.GetValueOrDefault(a.ResourceId)?.Name}\"", false));
+                a.ResourceType == ResourceType.Workspace ? $"Kế thừa từ nhóm \"{ws.Name}\"" : $"Kế thừa từ thư mục \"{folderNames.GetValueOrDefault(a.ResourceId)?.Name}\"", false, true));
         foreach (var s in shares)
             entries.Add(new AccessEntryDto(s.Id, s.SharedWithType, s.SharedWithId, N(s.SharedWithType, s.SharedWithId), s.AccessLevel, true, null, "share",
                 s.ResourceId == q.Id ? "Chia sẻ trực tiếp mục này" : $"Chia sẻ từ thư mục \"{folderNames.GetValueOrDefault(s.ResourceId)?.Name}\"",
                 // Shares of this very item can be changed or removed here; shares of a parent folder are managed on that folder.
-                s.ResourceId == q.Id && access.CanManage));
+                s.ResourceId == q.Id && access.CanManage, s.ResourceId != q.Id));
         foreach (var a in direct)
             entries.Add(new AccessEntryDto(a.Id, a.PrincipalType, a.PrincipalId, N(a.PrincipalType, a.PrincipalId), a.AccessLevel, a.Inherit, a.ExpiresAt, "direct", "Phân quyền trực tiếp", access.CanManage));
         return new ResourceAccessListDto(q.Type, q.Id, name, breakInheritance, access.CanManage, entries);
@@ -164,7 +165,7 @@ public sealed class SetResourceAccessValidator : AbstractValidator<SetResourceAc
         RuleForEach(x => x.Entries).Must(e => e.ExpiresAt is null || e.ExpiresAt > DateTime.UtcNow).WithMessage("Ngày hết hạn phải ở tương lai.");
         RuleForEach(x => x.Shares).Must(e => e.AccessLevel is AccessLevel.View or AccessLevel.Download or AccessLevel.Edit)
             .WithMessage("Mức quyền chia sẻ chỉ gồm Xem, Xem + Tải xuống, Chỉnh sửa.");
-        RuleFor(x => x.BreakInheritance).Null().When(x => x.Type != ResourceType.Folder).WithMessage("Chỉ thư mục mới có thể ngắt kế thừa quyền.");
+        RuleFor(x => x.BreakInheritance).Null().When(x => x.Type == ResourceType.Workspace).WithMessage("Chỉ thư mục hoặc tệp mới có thể ngừng kế thừa quyền.");
     }
 }
 
@@ -180,16 +181,23 @@ public sealed class SetResourceAccessHandler(IAppDbContext db, ICurrentUser me, 
 
         if (cmd.BreakInheritance is { } brk)
         {
-            var folder = await db.Folders.FirstAsync(f => f.Id == cmd.Id, ct);
-            if (brk && !folder.BreakInheritance && cmd.CopyInheritedOnBreak)
+            var folder = cmd.Type == ResourceType.Folder ? await db.Folders.FirstAsync(f => f.Id == cmd.Id, ct) : null;
+            var file = cmd.Type == ResourceType.File ? await db.Files.FirstAsync(f => f.Id == cmd.Id, ct) : null;
+            var wasBroken = folder?.BreakInheritance ?? file!.BreakInheritance;
+            if (brk && !wasBroken && cmd.CopyInheritedOnBreak)
             {
-                // Optional: keep today's inherited grants as direct grants on the folder that stops inheriting.
+                // Like SharePoint "Stop inheriting permissions": everyone who had access through the parent keeps it as a direct grant
+                // (inherited ACL, folder shares, plain workspace members; owner and managers keep access anyway).
                 var current = await mediator.Send(new GetResourceAccessQuery(cmd.Type, cmd.Id), ct);
-                foreach (var inh in current.Entries.Where(e => e.Source == "inherited"))
+                var copied = current.Entries
+                    .Where(e => e.FromParent && !(e.Source == "member" && e.AccessLevel >= AccessLevel.Manage))
+                    .GroupBy(e => (e.PrincipalType, e.PrincipalId)).Select(g => g.MaxBy(e => e.AccessLevel)!);
+                foreach (var inh in copied)
                     if (!cmd.Entries.Any(x => x.PrincipalType == inh.PrincipalType && x.PrincipalId == inh.PrincipalId))
                         db.ResourcePermissions.Add(new ResourcePermission { ResourceType = cmd.Type, ResourceId = cmd.Id, PrincipalType = inh.PrincipalType, PrincipalId = inh.PrincipalId, AccessLevel = inh.AccessLevel, Inherit = true, ExpiresAt = inh.ExpiresAt });
             }
-            folder.BreakInheritance = brk;
+            if (folder is not null) folder.BreakInheritance = brk;
+            if (file is not null) file.BreakInheritance = brk;
         }
         var existing = await db.ResourcePermissions.Where(a => a.ResourceType == cmd.Type && a.ResourceId == cmd.Id).ToListAsync(ct);
         var before = existing.Select(a => new { a.PrincipalType, a.PrincipalId, a.AccessLevel }).ToList();

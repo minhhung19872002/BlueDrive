@@ -107,12 +107,13 @@ public sealed class ResourceAuthorizationService(IAppDbContext db, IPermissionSe
         Guid? fileId = null;
         Guid? createdBy = null;
         var approved = true;
+        var fileBreaks = false;
         switch (type)
         {
             case ResourceType.File:
             {
                 var f = await db.Files.AsNoTracking().Where(x => x.Id == resourceId && !x.IsDeleted)
-                    .Select(x => new { x.WorkspaceId, x.FolderId, FolderPath = x.Folder != null ? x.Folder.Path : null, x.CreatedBy, x.ApprovalStatus })
+                    .Select(x => new { x.WorkspaceId, x.FolderId, FolderPath = x.Folder != null ? x.Folder.Path : null, x.CreatedBy, x.ApprovalStatus, x.BreakInheritance })
                     .FirstOrDefaultAsync(ct);
                 if (f is null) return ResourceAccess.None;
                 workspaceId = f.WorkspaceId;
@@ -120,6 +121,7 @@ public sealed class ResourceAuthorizationService(IAppDbContext db, IPermissionSe
                 fileId = resourceId;
                 createdBy = f.CreatedBy;
                 approved = f.ApprovalStatus == ApprovalStatus.Approved;
+                fileBreaks = f.BreakInheritance;
                 break;
             }
             case ResourceType.Folder:
@@ -158,8 +160,8 @@ public sealed class ResourceAuthorizationService(IAppDbContext db, IPermissionSe
         var folderFlags = folderChain.Count == 0 ? new Dictionary<Guid, bool>()
             : await db.Folders.AsNoTracking().Where(f => folderChain.Contains(f.Id)).ToDictionaryAsync(f => f.Id, f => f.BreakInheritance, ct);
         var effectiveChain = new List<Guid>();
-        var broken = false;
-        foreach (var id in folderChain)
+        var broken = fileBreaks; // a file with unique permissions inherits nothing from its folders
+        foreach (var id in fileBreaks ? new List<Guid>() : folderChain)
         {
             effectiveChain.Add(id);
             if (folderFlags.GetValueOrDefault(id)) { broken = true; break; }

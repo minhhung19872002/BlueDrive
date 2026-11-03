@@ -89,21 +89,30 @@ public sealed class ListItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
 
         var folders = db.Folders.AsNoTracking().Where(f => f.WorkspaceId == q.WorkspaceId && f.ParentId == q.FolderId && !f.IsDeleted);
         var files = db.Files.AsNoTracking().Where(f => f.WorkspaceId == q.WorkspaceId && f.FolderId == q.FolderId && !f.IsDeleted);
+        var p = await auth.GetPrincipalsAsync(uid, ct);
+        var principals = p.GroupIds.Concat(p.OrganizationIds).Concat(p.RoleIds).Append(uid).ToList();
+        var grantedFolders = db.Shares.Where(s => s.ResourceType == ResourceType.Folder && principals.Contains(s.SharedWithId)).Select(s => s.ResourceId)
+            .Concat(db.ResourcePermissions.Where(a => a.ResourceType == ResourceType.Folder && principals.Contains(a.PrincipalId)).Select(a => a.ResourceId));
+        var grantedFiles = db.Shares.Where(s => s.ResourceType == ResourceType.File && principals.Contains(s.SharedWithId)).Select(s => s.ResourceId)
+            .Concat(db.ResourcePermissions.Where(a => a.ResourceType == ResourceType.File && principals.Contains(a.PrincipalId)).Select(a => a.ResourceId));
         if (!access.CanView)
         {
             // No access to the container: show only children granted directly (shared items).
-            var p = await auth.GetPrincipalsAsync(uid, ct);
-            var principals = p.GroupIds.Concat(p.OrganizationIds).Concat(p.RoleIds).Append(uid).ToList();
-            var grantedFolders = db.Shares.Where(s => s.ResourceType == ResourceType.Folder && principals.Contains(s.SharedWithId)).Select(s => s.ResourceId)
-                .Concat(db.ResourcePermissions.Where(a => a.ResourceType == ResourceType.Folder && principals.Contains(a.PrincipalId)).Select(a => a.ResourceId));
-            var grantedFiles = db.Shares.Where(s => s.ResourceType == ResourceType.File && principals.Contains(s.SharedWithId)).Select(s => s.ResourceId)
-                .Concat(db.ResourcePermissions.Where(a => a.ResourceType == ResourceType.File && principals.Contains(a.PrincipalId)).Select(a => a.ResourceId));
             folders = folders.Where(f => grantedFolders.Contains(f.Id));
             files = files.Where(f => grantedFiles.Contains(f.Id) && f.ApprovalStatus == ApprovalStatus.Approved);
             if (!await folders.AnyAsync(ct) && !await files.AnyAsync(ct))
                 throw new NotFoundException("Không tìm thấy thư mục hoặc bạn không có quyền truy cập.");
         }
-        else files = DriveProjection.VisibleApproval(files, access, uid);
+        else
+        {
+            files = DriveProjection.VisibleApproval(files, access, uid);
+            // Items with unique permissions (stopped inheriting) are listed only to those granted on them, the owner and managers.
+            if (access.Source is not ("admin" or "owner" or "member:manager" or "member:owner"))
+            {
+                folders = folders.Where(f => !f.BreakInheritance || grantedFolders.Contains(f.Id));
+                files = files.Where(f => !f.BreakInheritance || grantedFiles.Contains(f.Id));
+            }
+        }
 
         if (!string.IsNullOrWhiteSpace(q.Q))
         {
