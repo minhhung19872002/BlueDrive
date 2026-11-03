@@ -1,0 +1,136 @@
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
+using BlueDrive.Desktop;
+using BlueDrive.Desktop.Services;
+using BlueDrive.Desktop.ViewModels;
+using BlueDrive.Desktop.Views;
+using BlueDrive.Sync.Agent;
+using FluentAssertions;
+
+[assembly: AvaloniaTestApplication(typeof(BlueDrive.Desktop.Tests.TestApp))]
+
+namespace BlueDrive.Desktop.Tests;
+
+public sealed class TestApp
+{
+    public static Avalonia.AppBuilder BuildAvaloniaApp() =>
+        Avalonia.AppBuilder.Configure<App>().UseHeadless(new AvaloniaHeadlessPlatformOptions());
+}
+
+/// <summary>Sync-Phase 6: view models and every window rendered headless (no real accounts, temporary data folder).</summary>
+public sealed class DesktopTests : IDisposable
+{
+    private readonly string _home = Path.Combine(Path.GetTempPath(), "bd-desktop-" + Guid.NewGuid().ToString("N")[..8]);
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_home, recursive: true); }
+        catch (IOException) { }
+    }
+
+    private static AgentStatus S(AgentState state, int problems = 0, int mass = 0) =>
+        new(state, "", DateTime.UtcNow, mass, Enumerable.Range(0, problems).Select(i => $"tệp {i}: lỗi").ToList());
+
+    [Fact]
+    public void Tray_icon_shows_the_worst_state_of_all_accounts()
+    {
+        TrayState.Of([], 0).Icon.Should().Be("signin");
+        TrayState.Of([S(AgentState.Idle)], 0).Should().Be(("ok", "Đã cập nhật"));
+        TrayState.Of([S(AgentState.Idle), S(AgentState.Syncing)], 0).Icon.Should().Be("sync");
+        TrayState.Of([S(AgentState.Syncing), S(AgentState.Offline)], 0).Icon.Should().Be("offline");
+        TrayState.Of([S(AgentState.Offline), S(AgentState.NeedsSignIn)], 0).Icon.Should().Be("signin");
+        TrayState.Of([S(AgentState.Idle, mass: 120)], 0).Icon.Should().Be("error");
+        TrayState.Of([S(AgentState.Idle)], 2).Icon.Should().Be("error");
+        TrayState.Of([S(AgentState.Paused), S(AgentState.Paused)], 0).Icon.Should().Be("pause");
+    }
+
+    [Fact]
+    public void Texts_are_vietnamese_and_numbers_use_the_vietnamese_decimal_comma()
+    {
+        Formatting.Bytes(1_288_490_188).Should().Be("1,2 GB");
+        Formatting.Bytes(1536).Should().Be("1,5 KB");
+        Formatting.Status(S(AgentState.Offline), false).Item1.Should().Be("Ngoại tuyến");
+        Formatting.Status(S(AgentState.Idle, problems: 3), false).Item2.Should().Be("3 mục chưa đồng bộ được.");
+        Formatting.Status(S(AgentState.Idle), true).Item1.Should().Be("Đã tạm dừng đồng bộ");
+        Formatting.Glyph("Báo cáo.DOCX").Should().Be("W");
+        Formatting.Glyph("ảnh.jpg").Should().Be("IMG");
+        var now = DateTime.UtcNow;
+        ActivityItem.Ago(now.AddSeconds(-5), now).Should().Be("Vừa xong");
+        ActivityItem.Ago(now.AddMinutes(-12), now).Should().Be("12 phút trước");
+        ActivityItem.Ago(now.AddHours(-3), now).Should().Be("3 giờ trước");
+        ConflictViewModel.WhoFromName("kế hoạch (Bản xung đột - Nguyễn Văn A - PC-KE-TOAN - 2026-11-03 0915).docx")
+            .Should().Be("Sửa bởi Nguyễn Văn A trên máy PC-KE-TOAN");
+    }
+
+    [Fact]
+    public void Wizard_checks_the_sync_folder()
+    {
+        var host = new AppHost(_home);
+        var vm = new WizardViewModel(host, "https://bluedrive.example");
+        vm.ServerLocked.Should().BeTrue("a server preset by the installer cannot be changed");
+
+        vm.Folder = Path.GetPathRoot(Path.GetTempPath())!;
+        vm.FolderOk.Should().BeFalse();
+        vm.FolderInfo.Should().Contain("thư mục gốc");
+
+        var folder = Path.Combine(_home, "BlueDrive");
+        vm.Folder = folder;
+        vm.FolderOk.Should().BeTrue();
+        vm.FolderInfo.Should().Contain("còn trống");
+        Directory.Exists(folder).Should().BeTrue();
+
+        // A folder already used by another account (or inside it) is refused.
+        host.Store.Save(new AccountConfig(Guid.NewGuid(), "https://a.example/", folder, "a", "A", Guid.NewGuid()));
+        vm.Folder = Path.Combine(folder, "con");
+        vm.FolderOk.Should().BeFalse();
+        vm.FolderInfo.Should().Contain("tài khoản BlueDrive khác");
+    }
+
+    [Fact]
+    public void Settings_round_trip_and_nothing_is_registered_before_the_user_confirms()
+    {
+        var host = new AppHost(_home);
+        File.Exists(Path.Combine(_home, "settings.json")).Should().BeFalse("first run: nothing written before the wizard");
+        var s = host.Settings;
+        s.UploadLimitKBps = 512;
+        s.Theme = ThemeChoice.Dark;
+        s.FreeUpAfterDays = 30;
+        s.StartWithWindows = false;
+        host.SaveSettings(s);
+        host.UploadLimit.BytesPerSecond.Should().Be(512 * 1024);
+        var again = AppSettings.Load(_home);
+        again.Theme.Should().Be(ThemeChoice.Dark);
+        again.FreeUpAfterDays.Should().Be(30);
+        StartupRegistration.IsSet().Should().BeFalse();
+    }
+
+    [AvaloniaFact]
+    public void Every_window_renders_in_vietnamese()
+    {
+        var host = new AppHost(_home);
+        var windows = new Window[]
+        {
+            new WizardWindow(new WizardViewModel(host, null)),
+            new FlyoutWindow(new FlyoutViewModel(host, null)),
+            new SettingsWindow(new SettingsViewModel(host, null)),
+        };
+        foreach (var w in windows)
+        {
+            w.Show();
+            var texts = w.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).Where(t => !string.IsNullOrEmpty(t)).ToList();
+            texts.Should().NotBeEmpty();
+            w.Close();
+        }
+        var wizard = new WizardWindow(new WizardViewModel(host, null));
+        wizard.Show();
+        wizard.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).Should().Contain("Chào mừng đến với BlueDrive");
+        wizard.Close();
+        var settings = new SettingsWindow(new SettingsViewModel(host, null));
+        settings.Show();
+        settings.GetVisualDescendants().OfType<TabItem>().Select(t => t.Header).Should()
+            .Equal("Tài khoản", "Đồng bộ", "Mạng", "Chung", "Vấn đề", "Giới thiệu");
+        settings.Close();
+    }
+}

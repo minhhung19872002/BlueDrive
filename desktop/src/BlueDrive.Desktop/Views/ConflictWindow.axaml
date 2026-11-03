@@ -1,0 +1,49 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:BlueDrive.Desktop.ViewModels"
+        x:Class="BlueDrive.Desktop.Views.ConflictWindow"
+        x:DataType="vm:ConflictViewModel"
+        x:Name="Root"
+        Title="Giải quyết xung đột" Width="760" Height="520" WindowStartupLocation="CenterScreen" Icon="/Assets/bluedrive.ico">
+  <Window.DataTemplates>
+    <DataTemplate x:DataType="vm:VersionInfo">
+      <Border BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="14">
+        <DockPanel>
+          <StackPanel DockPanel.Dock="Top" Spacing="3">
+            <TextBlock Text="{Binding Title}" Classes="h2" />
+            <TextBlock><Run Text="Kích thước: " /><Run Text="{Binding Size}" /></TextBlock>
+            <TextBlock><Run Text="Sửa lúc: " /><Run Text="{Binding Modified}" /></TextBlock>
+            <TextBlock Text="{Binding Who}" Classes="muted" TextWrapping="Wrap" />
+            <Button Content="Mở" Command="{Binding #Root.((vm:ConflictViewModel)DataContext).OpenCommand}" CommandParameter="{Binding}" Margin="0,6,0,0" />
+          </StackPanel>
+          <Panel Margin="0,10,0,0">
+            <Image Source="{Binding ImagePreview}" Stretch="Uniform" />
+            <ScrollViewer IsVisible="{Binding TextPreview, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+              <TextBlock Text="{Binding TextPreview}" FontFamily="Consolas,monospace" FontSize="12" TextWrapping="Wrap" />
+            </ScrollViewer>
+          </Panel>
+        </DockPanel>
+      </Border>
+    </DataTemplate>
+  </Window.DataTemplates>
+  <DockPanel Margin="24">
+    <StackPanel DockPanel.Dock="Top" Spacing="6">
+      <TextBlock Classes="h1" Text="{Binding FileName}" TextTrimming="CharacterEllipsis" />
+      <TextBlock TextWrapping="Wrap" Classes="muted" Text="Tệp này đã được sửa ở cả máy này và nơi khác. BlueDrive đang giữ cả hai bản — chọn bản bạn muốn giữ." />
+    </StackPanel>
+    <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,16,0,0">
+      <TextBlock Text="{Binding Message}" Foreground="#b42318" TextWrapping="Wrap" />
+      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+        <Button Content="Giữ bản trên BlueDrive" Command="{Binding KeepServerCommand}" IsEnabled="{Binding CanChoose}" />
+        <Button Content="Giữ bản trên máy" Command="{Binding KeepLocalCommand}" IsEnabled="{Binding CanChoose}" />
+        <Button Content="Giữ cả hai" Command="{Binding KeepBothCommand}" Classes="accent" />
+      </StackPanel>
+      <TextBlock Classes="muted" FontSize="12" TextWrapping="Wrap"
+                 Text="Giữ bản trên máy: bản đó thành phiên bản mới trên BlueDrive, bản cũ vẫn còn trong lịch sử phiên bản. Giữ bản trên BlueDrive: bản xung đột trên máy được chuyển vào Thùng rác." />
+    </StackPanel>
+    <Grid ColumnDefinitions="*,16,*" Margin="0,16,0,0">
+      <ContentControl Content="{Binding Server}" />
+      <ContentControl Grid.Column="2" Content="{Binding Local}" />
+    </Grid>
+  </DockPanel>
+</Window>

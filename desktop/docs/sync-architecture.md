@@ -151,3 +151,15 @@ bluedrive-sync logout https://bluedrive.bluestar.com.vn                         
 Tệp theo yêu cầu dùng cho ổ NTFS trên Windows 10 1809 trở lên; ổ FAT32/exFAT/ổ mạng dùng chế độ đồng bộ đầy đủ (mục 8). `bluedrive-sync login … --full` để chọn đồng bộ đầy đủ.
 
 Kiểm thử (`desktop/tests/BlueDrive.Sync.Windows.Tests`, chỉ chạy trên Windows, tự đăng ký rồi gỡ sync root tạm): tệp xuất hiện dạng giữ chỗ và chỉ tải khi mở; giải phóng / luôn giữ (cả bằng `attrib +P/+U` như Explorer); sửa trên máy lên máy chủ, bản mới từ web thay giữ chỗ; chương trình khác không xóa được tệp chỉ xem.
+
+## 10. Ứng dụng `BlueDrive.Desktop` (Avalonia 11)
+
+- `Program`: một phiên bản duy nhất (mutex dùng chung với `bluedrive-sync`; lần mở thứ hai gửi tín hiệu qua named pipe để phiên đang chạy hiện bảng),
+  nhật ký Serilog `%LOCALAPPDATA%\BlueDrive\logs` (xoay vòng theo ngày, giữ 14 ngày). `--background` khi khởi động cùng Windows.
+- `AppHost`: các tài khoản (`AccountSession` = `SyncAgent` + kết nối SQLite chỉ đọc riêng cho giao diện), cài đặt `settings.json`
+  (không chứa bí mật), giới hạn băng thông dùng chung, proxy, khởi động cùng Windows (`HKCU\…\Run`, chỉ ghi sau khi người dùng xác nhận),
+  công việc "giải phóng dung lượng tệp lâu không dùng", hủy liên kết (gỡ tệp giữ chỗ chưa tải + gỡ sync root), đổi chế độ tệp theo yêu cầu.
+- `SyncAgent` bổ sung cho giao diện: tạm dừng có thời hạn, chọn thư mục gốc đồng bộ (lưu `excluded_roots`), giải quyết xung đột, tiến độ
+  truyền tải, khóa lượt (thao tác từ giao diện không chạy đè engine), gói chẩn đoán (`Diagnostics`, che token/mật khẩu).
+- Cửa sổ: `WizardWindow`, `FlyoutWindow` (góc phải trên thanh tác vụ, tự ẩn khi mất focus), `SettingsWindow`, `ConflictWindow`; thông báo Windows
+  qua `Microsoft.Toolkit.Uwp.Notifications`. Hướng dẫn người dùng: `huong-dan-su-dung-desktop.md`.

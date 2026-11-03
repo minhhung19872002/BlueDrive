@@ -25,6 +25,8 @@ public sealed class RemoteStoreOptions
     public TimeSpan RetryBaseDelay { get; set; } = TimeSpan.FromSeconds(1);
 
     public BandwidthLimiter UploadLimit { get; set; } = new();
+    /// <summary>(name, upload?, bytes done, bytes total) while a file is transferred: the tray flyout shows it.</summary>
+    public Action<string, bool, long, long>? Progress { get; set; }
     public BandwidthLimiter DownloadLimit { get; set; } = new();
 }
 
@@ -156,6 +158,7 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
                 written = 0;
             }
             await using var body = await res.Content.ReadAsStreamAsync(t);
+            var startedAt = written;
             var buffer = new byte[81920];
             try
             {
@@ -165,6 +168,7 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
                     await _opt.DownloadLimit.WaitAsync(n, t);
                     await destination.WriteAsync(buffer.AsMemory(0, n), t);
                     written += n;
+                    _opt.Progress?.Invoke(_nameOf.GetValueOrDefault(itemId) ?? itemId, false, written, res.Content.Headers.ContentLength is { } cl ? startedAt + cl : -1);
                 }
             }
             catch (Exception ex) when (ex is IOException or HttpRequestException && !t.IsCancellationRequested)
@@ -332,7 +336,9 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
                 patch.Content.Headers.ContentType = new MediaTypeHeaderValue("application/offset+octet-stream");
                 using var pr = await SendAsync(patch, HttpCompletionOption.ResponseContentRead, t);
                 await EnsureAsync(pr, subject, t, name);
-                return pr.Headers.TryGetValues("Upload-Offset", out var no) ? long.Parse(no.First()) : offset + n;
+                var next = pr.Headers.TryGetValues("Upload-Offset", out var no) ? long.Parse(no.First()) : offset + n;
+                _opt.Progress?.Invoke(meta["filename"], true, next, length);
+                return next;
             }, ct);
         }
 

@@ -835,7 +835,7 @@ public sealed class SyncEngine(
         var b = c.BaseByRemote.GetValueOrDefault(r.Id) ?? new BaseItem { RootId = c.RootId };
         Record(b, r, NameMapper.NameOf(path), fs.Stat(Abs(c, path)));
         if (!c.BaseByRemote.ContainsKey(r.Id)) { c.Base.Add(b); c.BaseByRemote[r.Id] = b; }
-        Log(r.IsFolder ? "Đã tạo thư mục" : "Đã tải xuống", path);
+        Log(r.IsFolder ? "Đã tạo thư mục" : _placeholders.OnDemand ? "Đã thêm (tải khi mở)" : "Đã tải xuống", path);
         return true;
     }
 
@@ -848,7 +848,7 @@ public sealed class SyncEngine(
         if (_placeholders.OnDemand) await _placeholders.UpdatePlaceholderAsync(Abs(c, path), r, ct);
         else await WriteRemoteAsync(c, r, path, ct);
         Record(b, r, b.Name, fs.Stat(Abs(c, path)), location: false);
-        Log("Đã tải xuống", path, "Phiên bản mới");
+        Log(_placeholders.OnDemand ? "Có phiên bản mới" : "Đã tải xuống", path, "Phiên bản mới");
         return true;
     }
 

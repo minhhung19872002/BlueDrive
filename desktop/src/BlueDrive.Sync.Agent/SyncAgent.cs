@@ -55,13 +55,16 @@ public sealed class SyncAgent : IAsyncDisposable
     private readonly OnDemandContext? _onDemand;
     private readonly object _gate = new();
     private readonly SemaphoreSlim _wake = new(0);
+    /// <summary>One engine user at a time: the loop's passes and UI actions (conflicts, selective sync) share the state database.</summary>
+    private readonly SemaphoreSlim _pass = new(1, 1);
     private readonly CancellationTokenSource _stop = new();
     private SyncNotifications? _notes;
     private LocalChangeWatcher? _watcher;
     private Task? _loop;
     private DateTime? _remoteDue, _localDue, _localFirst, _retryDue;
     private TimeSpan _backoff = TimeSpan.Zero;
-    private bool _paused;
+    private DateTime? _pausedUntil;
+    private const string ExcludedRootsKey = "excluded_roots";
 
     public AgentStatus Status { get; private set; } = new(AgentState.Starting, "Đang khởi động…", null, 0, []);
     public event Action<AgentStatus>? StatusChanged;
@@ -131,12 +134,114 @@ public sealed class SyncAgent : IAsyncDisposable
     /// <summary>"Đồng bộ ngay".</summary>
     public void SyncNow() => RequestRemote();
 
-    public void Pause(bool paused)
+    public void Pause(bool paused) => PauseFor(paused ? Timeout.InfiniteTimeSpan : null);
+
+    /// <summary>"Tạm dừng" for 2 / 8 / 24 hours (or until resumed: <see cref="Timeout.InfiniteTimeSpan"/>); null resumes.</summary>
+    public void PauseFor(TimeSpan? duration)
     {
-        _paused = paused;
-        if (paused) SetStatus(AgentState.Paused, "Đã tạm dừng đồng bộ.");
-        else RequestRemote();
+        if (duration is null)
+        {
+            _pausedUntil = null;
+            RequestRemote();
+            return;
+        }
+        _pausedUntil = duration == Timeout.InfiniteTimeSpan ? DateTime.MaxValue : DateTime.UtcNow + duration.Value;
+        SetStatus(AgentState.Paused, _pausedUntil == DateTime.MaxValue
+            ? "Đã tạm dừng đồng bộ."
+            : $"Đã tạm dừng đồng bộ đến {_pausedUntil.Value.ToLocalTime():HH:mm dd/MM}.");
+        if (_pausedUntil != DateTime.MaxValue) lock (_gate) _retryDue = _pausedUntil;
     }
+
+    public bool IsPaused => _pausedUntil is { } u && u > DateTime.UtcNow;
+
+    /// <summary>Workspaces / roots of the account as last seen (name, quota) — the flyout header and the selective sync list.</summary>
+    public IReadOnlyList<HttpRemoteStore.RootDto> Roots { get; private set; } = [];
+
+    /// <summary>Roots the user chose not to sync (selective sync, root level).</summary>
+    public IReadOnlySet<string> ExcludedRoots =>
+        _db.GetAccount(ExcludedRootsKey) is { } json ? System.Text.Json.JsonSerializer.Deserialize<HashSet<string>>(json) ?? [] : new HashSet<string>();
+
+    /// <summary>
+    /// Selective sync: stop syncing a root (its local folder goes to the Recycle Bin once everything in it is on the server) or start again.
+    /// Returns false (and keeps syncing) when the folder still has changes that are not on the server.
+    /// </summary>
+    public async Task<bool> SetRootIncludedAsync(string rootId, bool include, CancellationToken ct = default)
+    {
+        await _pass.WaitAsync(ct);
+        try { return await SetRootIncludedCoreAsync(rootId, include, ct); }
+        finally { _pass.Release(); }
+    }
+
+    private async Task<bool> SetRootIncludedCoreAsync(string rootId, bool include, CancellationToken ct)
+    {
+        var excluded = ExcludedRoots.ToHashSet();
+        if (include) excluded.Remove(rootId);
+        else
+        {
+            var root = _db.GetRoot(rootId);
+            if (root is not null && root.Enabled)
+            {
+                var result = await _engine.SyncAsync(ct);
+                if (result.Errors.Count > 0 || result.MassDeletePending > 0) return false;
+                var dir = _fs.Abs(root.LocalPath);
+                if (Directory.Exists(dir) && root.LocalPath.Length > 0) _fs.Delete(root.LocalPath);
+                _db.ForgetRoot(rootId);
+                _db.UpsertRoot(rootId, root.LocalPath, false);
+            }
+            excluded.Add(rootId);
+        }
+        _db.SetAccount(ExcludedRootsKey, System.Text.Json.JsonSerializer.Serialize(excluded));
+        RequestRemote();
+        return true;
+    }
+
+    /// <summary>Choices of the conflict window (spec 8.4).</summary>
+    public enum ConflictChoice { KeepBoth, KeepLocal, KeepServer }
+
+    /// <summary>
+    /// Resolves a conflict: keep both (default), keep the computer's copy (it becomes the new version of the original; the server copy stays in the
+    /// version history), or keep BlueDrive's copy (the conflict copy goes to the Recycle Bin). The next pass carries the change to the server.
+    /// </summary>
+    public async Task ResolveConflictAsync(ConflictEntry conflict, ConflictChoice choice)
+    {
+        await _pass.WaitAsync();
+        try { ResolveConflictCore(conflict, choice); }
+        finally { _pass.Release(); }
+        RequestLocal();
+    }
+
+    private void ResolveConflictCore(ConflictEntry conflict, ConflictChoice choice)
+    {
+        var root = _db.GetRoot(conflict.RootId);
+        string Rel(string p) => root is null || root.LocalPath.Length == 0 ? p : NameMapper.Combine(root.LocalPath, p);
+        var original = Rel(conflict.Path);
+        var copy = Rel(conflict.ConflictPath);
+        if (conflict.Kind == "content" && File.Exists(_fs.Abs(copy)))
+        {
+            if (choice == ConflictChoice.KeepLocal)
+            {
+                File.Copy(_fs.Abs(copy), _fs.Abs(original), overwrite: true);
+                _fs.Delete(copy);
+            }
+            else if (choice == ConflictChoice.KeepServer) _fs.Delete(copy);
+        }
+        _db.ResolveConflict(conflict.Id);
+        _db.Log("Đã xử lý xung đột", conflict.Path, choice switch
+        {
+            ConflictChoice.KeepLocal => "Giữ bản trên máy",
+            ConflictChoice.KeepServer => "Giữ bản trên BlueDrive",
+            _ => "Giữ cả hai",
+        });
+    }
+
+    /// <summary>Absolute path of a path stored relative to a root (activity, conflicts) — "Mở vị trí".</summary>
+    public string LocalPathOf(string rootId, string path)
+    {
+        var root = _db.GetRoot(rootId);
+        return _fs.Abs(root is null || root.LocalPath.Length == 0 ? path : NameMapper.Combine(root.LocalPath, path));
+    }
+
+    public string SyncFolder => _fs.Root;
 
     /// <summary>Answer to "Bạn vừa xóa N tệp. Xóa cả trên BlueDrive?" for every root waiting for it.</summary>
     public void ResolveMassDelete(bool deleteOnServer)
@@ -193,11 +298,18 @@ public sealed class SyncAgent : IAsyncDisposable
     {
         while (await WaitDueAsync(ct))
         {
-            if (_paused) continue;
+            if (IsPaused) continue;
+            if (_pausedUntil is not null)
+            {
+                _pausedUntil = null; // the pause ran out
+                SetStatus(AgentState.Starting, "Tiếp tục đồng bộ…");
+            }
             if (Status.State is AgentState.NeedsSignIn or AgentState.Revoked or AgentState.Wiped or AgentState.UpdateRequired) continue;
             try
             {
-                await PassAsync(ct);
+                await _pass.WaitAsync(ct);
+                try { await PassAsync(ct); }
+                finally { _pass.Release(); }
                 _backoff = TimeSpan.Zero;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
@@ -258,12 +370,14 @@ public sealed class SyncAgent : IAsyncDisposable
     private async Task RefreshRootsAsync(CancellationToken ct)
     {
         var roots = await _remote.RootsAsync(ct);
+        Roots = roots;
+        var excluded = ExcludedRoots;
         var known = _db.Roots().ToDictionary(r => r.RootId);
         var used = new HashSet<string>(known.Values.Select(r => r.LocalPath), StringComparer.OrdinalIgnoreCase);
         foreach (var r in roots)
         {
             // Online-only workspaces (policy): placeholders only with Files On-Demand; not synced at all in full mode.
-            var enabled = !r.OnlineOnly || _platform is not null;
+            var enabled = (!r.OnlineOnly || _platform is not null) && !excluded.Contains(r.RootId);
             string folder;
             if (known.TryGetValue(r.RootId, out var existing))
             {

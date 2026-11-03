@@ -1,0 +1,110 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:BlueDrive.Desktop.ViewModels"
+        xmlns:svc="using:BlueDrive.Desktop.Services"
+        x:Class="BlueDrive.Desktop.Views.FlyoutWindow"
+        x:DataType="vm:FlyoutViewModel"
+        Title="BlueDrive" Width="380" Height="560" CanResize="False" ShowInTaskbar="False" Topmost="True"
+        SystemDecorations="BorderOnly" ExtendClientAreaToDecorationsHint="True" WindowStartupLocation="Manual">
+  <DockPanel>
+    <!-- Header: account + quota -->
+    <Border DockPanel.Dock="Top" Background="{StaticResource BrandBrush}" Padding="16,14">
+      <StackPanel Spacing="6">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Text="BlueDrive" Foreground="White" FontSize="16" FontWeight="SemiBold" />
+          <ComboBox Grid.Column="1" IsVisible="{Binding MultipleAccounts}" ItemsSource="{Binding Accounts}" SelectedItem="{Binding Session}" MinWidth="120">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="svc:AccountSession">
+                <TextBlock Text="{Binding Config.Username}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </Grid>
+        <TextBlock Text="{Binding AccountName}" Foreground="White" />
+        <ProgressBar Value="{Binding QuotaPercent}" Maximum="100" Height="4" Foreground="White" Background="#4dffffff" />
+        <TextBlock Text="{Binding QuotaText}" Foreground="#d9e6f2" FontSize="12" />
+      </StackPanel>
+    </Border>
+    <!-- Footer buttons -->
+    <Border DockPanel.Dock="Bottom" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" Padding="8">
+      <UniformGrid Columns="4">
+        <Button Command="{Binding OpenFolderCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Background="Transparent" ToolTip.Tip="Mở thư mục BlueDrive">
+          <StackPanel Spacing="2"><TextBlock Text="📁" HorizontalAlignment="Center" /><TextBlock Text="Mở thư mục" FontSize="11" HorizontalAlignment="Center" /></StackPanel>
+        </Button>
+        <Button Command="{Binding OpenWebCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Background="Transparent" ToolTip.Tip="Xem trên web">
+          <StackPanel Spacing="2"><TextBlock Text="🌐" HorizontalAlignment="Center" /><TextBlock Text="Xem trên web" FontSize="11" HorizontalAlignment="Center" /></StackPanel>
+        </Button>
+        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Background="Transparent" ToolTip.Tip="Tạm dừng / tiếp tục đồng bộ">
+          <StackPanel Spacing="2"><TextBlock Text="⏸" HorizontalAlignment="Center" /><TextBlock Text="Tạm dừng" FontSize="11" HorizontalAlignment="Center" /></StackPanel>
+          <Button.Flyout>
+            <MenuFlyout>
+              <MenuItem Header="Tiếp tục đồng bộ" Command="{Binding ResumeCommand}" IsVisible="{Binding IsPaused}" />
+              <MenuItem Header="Tạm dừng 2 giờ" Command="{Binding PauseCommand}" CommandParameter="2" />
+              <MenuItem Header="Tạm dừng 8 giờ" Command="{Binding PauseCommand}" CommandParameter="8" />
+              <MenuItem Header="Tạm dừng 24 giờ" Command="{Binding PauseCommand}" CommandParameter="24" />
+              <MenuItem Header="Tạm dừng tới khi tiếp tục" Command="{Binding PauseCommand}" CommandParameter="0" />
+              <Separator />
+              <MenuItem Header="Đồng bộ ngay" Command="{Binding SyncNowCommand}" />
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
+        <Button HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Background="Transparent" ToolTip.Tip="Trợ giúp và cài đặt">
+          <StackPanel Spacing="2"><TextBlock Text="⚙" HorizontalAlignment="Center" /><TextBlock Text="Cài đặt" FontSize="11" HorizontalAlignment="Center" /></StackPanel>
+          <Button.Flyout>
+            <MenuFlyout>
+              <MenuItem Header="Cài đặt" Command="{Binding SettingsCommand}" />
+              <MenuItem Header="Trợ giúp" Command="{Binding HelpCommand}" />
+              <Separator />
+              <MenuItem Header="Thoát BlueDrive" Command="{Binding QuitCommand}" />
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
+      </UniformGrid>
+    </Border>
+    <StackPanel DockPanel.Dock="Top" Margin="16,12,16,4" Spacing="4">
+      <TextBlock Text="{Binding StatusText}" Classes="h2" />
+      <TextBlock Text="{Binding StatusDetail}" Classes="muted" TextWrapping="Wrap" IsVisible="{Binding StatusDetail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      <StackPanel IsVisible="{Binding TransferText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Spacing="2">
+        <TextBlock Text="{Binding TransferText}" FontSize="12" TextTrimming="CharacterEllipsis" />
+        <ProgressBar Value="{Binding TransferPercent}" Maximum="100" Height="3" />
+      </StackPanel>
+      <Border IsVisible="{Binding MassDeletePending}" Background="#fff4e5" CornerRadius="6" Padding="10" Margin="0,6,0,0">
+        <StackPanel Spacing="6">
+          <TextBlock Text="{Binding StatusDetail}" TextWrapping="Wrap" Foreground="#663c00" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Content="Xóa cả trên BlueDrive" Command="{Binding ConfirmMassDeleteCommand}" />
+            <Button Content="Khôi phục các tệp" Command="{Binding RestoreMassDeleteCommand}" Classes="accent" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+      <Button IsVisible="{Binding ProblemBanner, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Command="{Binding ProblemsCommand}"
+              HorizontalAlignment="Stretch" Background="#fdecea" Margin="0,6,0,0" Padding="10,8">
+        <TextBlock Text="{Binding ProblemBanner}" Foreground="#8a1c1c" TextWrapping="Wrap" />
+      </Button>
+      <TextBlock Text="Hoạt động gần đây" Classes="muted" FontSize="12" Margin="0,10,0,0" />
+    </StackPanel>
+    <ListBox ItemsSource="{Binding Activity}" Margin="8,0" Background="Transparent" x:Name="ActivityList">
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="vm:ActivityItem">
+          <Grid ColumnDefinitions="40,*" Background="Transparent">
+            <Grid.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="Mở" Command="{Binding #ActivityList.((vm:FlyoutViewModel)DataContext).OpenActivityCommand}" CommandParameter="{Binding}" />
+                <MenuItem Header="Mở vị trí" Command="{Binding #ActivityList.((vm:FlyoutViewModel)DataContext).OpenActivityLocationCommand}" CommandParameter="{Binding}" />
+              </ContextMenu>
+            </Grid.ContextMenu>
+            <Border Width="32" Height="32" CornerRadius="6" Background="#e6eef7" VerticalAlignment="Center">
+              <TextBlock Text="{Binding Glyph}" FontSize="10" FontWeight="Bold" Foreground="{StaticResource BrandBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <StackPanel Grid.Column="1" Spacing="1" Margin="8,0,0,0">
+              <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+              <TextBlock Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis">
+                <Run Text="{Binding Action}" /><Run Text=" · " /><Run Text="{Binding When}" />
+              </TextBlock>
+            </StackPanel>
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </DockPanel>
+</Window>

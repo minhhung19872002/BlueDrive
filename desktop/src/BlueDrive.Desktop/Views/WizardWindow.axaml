@@ -1,0 +1,79 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:BlueDrive.Desktop.ViewModels"
+        x:Class="BlueDrive.Desktop.Views.WizardWindow"
+        x:DataType="vm:WizardViewModel"
+        Title="Thiết lập BlueDrive" Width="620" Height="520" CanResize="False" WindowStartupLocation="CenterScreen"
+        Icon="/Assets/bluedrive.ico">
+  <DockPanel Margin="28,24">
+    <StackPanel DockPanel.Dock="Top" Spacing="6">
+      <Image Source="/Assets/bluedrive-256.png" Width="48" Height="48" HorizontalAlignment="Left" />
+      <TextBlock Text="{Binding Title}" Classes="h1" />
+    </StackPanel>
+    <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto,Auto" Margin="0,16,0,0">
+      <TextBlock Text="{Binding Error}" Foreground="#b42318" TextWrapping="Wrap" VerticalAlignment="Center" />
+      <Button Grid.Column="1" Content="Quay lại" Command="{Binding BackCommand}" IsVisible="{Binding CanBack}" Margin="8,0" />
+      <Button Grid.Column="2" Content="{Binding NextText}" Command="{Binding NextCommand}" Classes="accent" MinWidth="110" HorizontalContentAlignment="Center" />
+    </Grid>
+    <ProgressBar DockPanel.Dock="Bottom" IsIndeterminate="True" IsVisible="{Binding Busy}" Margin="0,12,0,0" />
+    <Panel Margin="0,18,0,0">
+      <!-- 0: server -->
+      <StackPanel Spacing="10" IsVisible="{Binding Step, Converter={x:Static vm:StepIs.Instance}, ConverterParameter=0}">
+        <TextBlock TextWrapping="Wrap" Text="BlueDrive đưa tư liệu trên hệ thống lưu trữ xuống thư mục trên máy tính: làm việc như tệp thường, thay đổi tự đồng bộ hai chiều." />
+        <TextBlock Text="Địa chỉ máy chủ BlueDrive" Margin="0,8,0,0" />
+        <TextBox Text="{Binding Server}" Watermark="https://bluedrive.bluestar.com.vn" IsReadOnly="{Binding ServerLocked}" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" Text="Địa chỉ do đơn vị cung cấp, giống địa chỉ bạn dùng để mở BlueDrive trên trình duyệt." />
+      </StackPanel>
+      <!-- 1: sign in -->
+      <StackPanel Spacing="12" IsVisible="{Binding Step, Converter={x:Static vm:StepIs.Instance}, ConverterParameter=1}">
+        <TextBlock TextWrapping="Wrap" Text="Bấm nút dưới đây: trình duyệt sẽ mở trang đăng nhập BlueDrive. Sau khi đăng nhập và cho phép, quay lại cửa sổ này." />
+        <Button Content="Đăng nhập bằng trình duyệt" Command="{Binding SignInCommand}" Classes="accent" />
+        <TextBlock Text="{Binding SignedIn}" Foreground="#067647" FontWeight="SemiBold" />
+        <TextBlock Classes="muted" TextWrapping="Wrap" Text="Ứng dụng không bao giờ hỏi mật khẩu của bạn; thông tin đăng nhập được mã hóa và chỉ lưu trên máy này." />
+      </StackPanel>
+      <!-- 2: folder -->
+      <StackPanel Spacing="10" IsVisible="{Binding Step, Converter={x:Static vm:StepIs.Instance}, ConverterParameter=2}">
+        <TextBlock Text="Tư liệu sẽ được đồng bộ vào thư mục:" />
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBox Text="{Binding Folder}" />
+          <Button Grid.Column="1" Content="Chọn…" Margin="8,0,0,0" x:Name="BrowseButton" />
+        </Grid>
+        <TextBlock Text="{Binding FolderInfo}" TextWrapping="Wrap" Classes="muted" />
+        <CheckBox IsChecked="{Binding OnDemand}" IsEnabled="{Binding OnDemandAvailable}">
+          <StackPanel>
+            <TextBlock Text="Tệp theo yêu cầu (khuyên dùng)" FontWeight="SemiBold" />
+            <TextBlock Classes="muted" TextWrapping="Wrap" Text="Mọi tệp hiện đầy đủ trong Explorer nhưng chỉ tải về khi mở, tiết kiệm dung lượng ổ đĩa. Bỏ chọn để tải tất cả về máy." />
+          </StackPanel>
+        </CheckBox>
+      </StackPanel>
+      <!-- 3: what to sync -->
+      <DockPanel IsVisible="{Binding Step, Converter={x:Static vm:StepIs.Instance}, ConverterParameter=3}">
+        <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Text="Chọn các thư mục sẽ hiện trên máy này. Có thể đổi lại trong Cài đặt." Margin="0,0,0,8" />
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding Roots}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:RootChoice">
+                <CheckBox IsChecked="{Binding Selected}" Margin="0,4">
+                  <StackPanel>
+                    <TextBlock Text="{Binding Name}" />
+                    <TextBlock Text="{Binding Note}" Classes="muted" FontSize="12" />
+                  </StackPanel>
+                </CheckBox>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </DockPanel>
+      <!-- 4: options -->
+      <StackPanel Spacing="12" IsVisible="{Binding Step, Converter={x:Static vm:StepIs.Instance}, ConverterParameter=4}">
+        <CheckBox IsChecked="{Binding StartWithWindows}" Content="Khởi động BlueDrive cùng Windows" />
+        <CheckBox IsChecked="{Binding Notifications}" Content="Hiện thông báo (xung đột, lỗi cần xử lý, sắp hết dung lượng)" />
+      </StackPanel>
+      <!-- 5: done -->
+      <StackPanel Spacing="12" IsVisible="{Binding Step, Converter={x:Static vm:StepIs.Instance}, ConverterParameter=5}">
+        <TextBlock TextWrapping="Wrap" Text="Thư mục BlueDrive đã có trong Explorer. Biểu tượng BlueDrive ở khay hệ thống (góc phải thanh tác vụ) cho biết tình trạng đồng bộ." />
+        <Button Content="Mở thư mục BlueDrive" Command="{Binding OpenFolderCommand}" Classes="accent" />
+      </StackPanel>
+    </Panel>
+  </DockPanel>
+</Window>

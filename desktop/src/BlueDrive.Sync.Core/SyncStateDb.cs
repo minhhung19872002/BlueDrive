@@ -264,6 +264,13 @@ public sealed class SyncStateDb : IDisposable
     internal string Diagnostics() =>
         $"remote_items={_db.ExecuteScalar<long>("SELECT COUNT(*) FROM remote_items")} roots={string.Join(",", _db.Query<string>("SELECT DISTINCT root_id FROM remote_items"))} cursor={GetAccount("cursor")}";
 
+    public void ResolveConflict(long id) => _db.Execute("UPDATE conflicts SET resolved = 1 WHERE id = @id", new { id });
+
+    /// <summary>Selective sync: a root no longer synced is forgotten (its base, remote tree and queue); the cursor is kept.</summary>
+    public void ForgetRoot(string rootId) => _db.Execute("""
+        DELETE FROM items WHERE root_id = @rootId; DELETE FROM remote_items WHERE root_id = @rootId; DELETE FROM operations WHERE root_id = @rootId;
+        """, new { rootId });
+
     /// <summary>Remote wipe: forgets everything about the account (trees, base, queue, conflicts, activity, cursor).</summary>
     public void ClearAll() => _db.Execute("""
         DELETE FROM operations; DELETE FROM conflicts; DELETE FROM activity_log; DELETE FROM items; DELETE FROM remote_items;

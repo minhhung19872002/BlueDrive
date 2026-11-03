@@ -7,7 +7,7 @@ using Windows.Win32.Storage.FileSystem;
 namespace BlueDrive.Sync.Windows;
 
 /// <summary>Small helpers over the generated Cloud Files P/Invoke (CsWin32).</summary>
-internal static class CloudNative
+public static class CloudNative
 {
     public const uint STATUS_SUCCESS = 0;
     public const uint STATUS_UNSUCCESSFUL = 0xC0000001;
@@ -22,7 +22,7 @@ internal static class CloudNative
     /// <summary>ERROR_NOT_A_CLOUD_FILE as HRESULT.</summary>
     public const int NotACloudFile = unchecked((int)0x80070178);
 
-    public static void Check(HRESULT hr, string what)
+    internal static void Check(HRESULT hr, string what)
     {
         if (hr.Failed) throw new IOException($"{what} thất bại (0x{(uint)hr.Value:X8}).", hr.Value);
     }
@@ -31,7 +31,7 @@ internal static class CloudNative
     /// A handle good enough for placeholder updates (WRITE_DAC is accepted by CfUpdatePlaceholder / CfSetInSyncState / CfSetPinState),
     /// shared with every other reader / writer and without reading data (no hydration).
     /// </summary>
-    public static SafeFileHandle OpenForPlaceholder(string path)
+    internal static SafeFileHandle OpenForPlaceholder(string path)
     {
         var h = PInvoke.CreateFile(path, (uint)(FILE_ACCESS_RIGHTS.WRITE_DAC | FILE_ACCESS_RIGHTS.FILE_READ_ATTRIBUTES),
             FILE_SHARE_MODE.FILE_SHARE_READ | FILE_SHARE_MODE.FILE_SHARE_WRITE | FILE_SHARE_MODE.FILE_SHARE_DELETE, null, FILE_CREATION_DISPOSITION.OPEN_EXISTING,
