@@ -119,10 +119,22 @@ public sealed class CloudPlaceholders(string root) : IPlaceholderProvider
     }
 
     /// <summary>"Giải phóng dung lượng": keeps the placeholder, drops the content (only for files already on the server).</summary>
+    /// <summary>
+    /// Frees the content (the file stays as a placeholder). Just after a download, or while an antivirus / the indexer still reads the
+    /// file, Windows can refuse for a moment (sharing violation, "not in sync"): retried a few times before giving up.
+    /// </summary>
     public static void Dehydrate(string abs)
     {
-        using var h = CloudNative.OpenForPlaceholder(abs);
-        CloudNative.Check(PInvoke.CfDehydratePlaceholder(h, 0, -1, CF_DEHYDRATE_FLAGS.CF_DEHYDRATE_FLAG_NONE), "Giải phóng dung lượng");
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                using var h = CloudNative.OpenForPlaceholder(abs);
+                CloudNative.Check(PInvoke.CfDehydratePlaceholder(h, 0, -1, CF_DEHYDRATE_FLAGS.CF_DEHYDRATE_FLAG_NONE), "Giải phóng dung lượng");
+                return;
+            }
+            catch (IOException) when (attempt < 4) { Thread.Sleep(250 * attempt); }
+        }
     }
 
     public static bool IsDehydrated(string abs) => File.Exists(abs) && File.GetAttributes(abs).HasFlag(CloudNative.RecallOnDataAccess);

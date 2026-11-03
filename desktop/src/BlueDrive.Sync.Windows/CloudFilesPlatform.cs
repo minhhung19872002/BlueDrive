@@ -75,6 +75,25 @@ public sealed class CloudFilesPlatform : IOnDemandPlatform
     /// <summary>Explorer changed the pin state ("Luôn giữ trên thiết bị" / "Giải phóng dung lượng").</summary>
     private void OnAttributes(string full)
     {
+        // Right after a download (or while another program still holds the file) the change can fail for a moment: try again a few times.
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                ApplyAttributes(full);
+                return;
+            }
+            catch (IOException) when (attempt < 5) { Thread.Sleep(300 * attempt); }
+            catch (IOException ex)
+            {
+                Problem?.Invoke(Rel(full), ex.Message);
+                return;
+            }
+        }
+    }
+
+    private void ApplyAttributes(string full)
+    {
         try
         {
             if (!File.Exists(full) && !Directory.Exists(full)) return;
@@ -92,7 +111,6 @@ public sealed class CloudFilesPlatform : IOnDemandPlatform
             else if (attrs.HasFlag(CloudNative.Unpinned) && File.Exists(full) && !CloudPlaceholders.IsDehydrated(full))
                 CloudPlaceholders.Dehydrate(full);
         }
-        catch (IOException ex) { Problem?.Invoke(Rel(full), ex.Message); }
         catch (UnauthorizedAccessException) { }
     }
 
