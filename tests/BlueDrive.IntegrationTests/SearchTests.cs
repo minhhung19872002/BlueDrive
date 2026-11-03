@@ -59,8 +59,10 @@ public class SearchTests(ApiFactory factory)
         (await Search(c, new { q = marker, catalogItemIds = new[] { topic } })).GetProperty("total").GetInt32().Should().Be(1);
         (await Search(c, new { q = marker, organizationId = dept })).GetProperty("total").GetInt32().Should().Be(2, "#51 filter by uploading unit");
         (await Search(c, new { q = marker, organizationId = orgTree[0].GetProperty("children")[0].GetProperty("id").GetGuid() })).GetProperty("total").GetInt32().Should().Be(0);
-        (await Search(c, new { q = marker, from = DateTime.UtcNow.AddDays(1).ToString("yyyy-MM-dd") })).GetProperty("total").GetInt32().Should().Be(0);
-        (await Search(c, new { q = marker, from = DateTime.UtcNow.AddDays(-1).ToString("yyyy-MM-dd"), to = DateTime.UtcNow.AddDays(1).ToString("yyyy-MM-dd"), extensions = new[] { "txt" } }))
+        // Dates are Vietnam dates (UTC+7): "tomorrow" in UTC is still today in Vietnam from 17:00 UTC.
+        var today = DateTime.UtcNow.AddHours(7).Date;
+        (await Search(c, new { q = marker, from = today.AddDays(1).ToString("yyyy-MM-dd") })).GetProperty("total").GetInt32().Should().Be(0);
+        (await Search(c, new { q = marker, from = today.AddDays(-1).ToString("yyyy-MM-dd"), to = today.AddDays(1).ToString("yyyy-MM-dd"), extensions = new[] { "txt" } }))
             .GetProperty("items")[0].GetProperty("item").GetProperty("id").GetGuid().Should().Be(txt);
 
         await (await c.PostAsJsonAsync("/api/v1/search/saved", new { name = "Ảnh chủ đề", criteria = new { q = marker, mediaTypes = new[] { "image" } } })).ReadJsonAsync();
