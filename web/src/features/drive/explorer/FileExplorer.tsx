@@ -133,10 +133,7 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
 
   const actions = useDriveActions({
     onOpenFolder: (item) => onFolderChange(item.id),
-    onShowInfo: (item) => {
-      setSelected(new Set([itemKey(item)]))
-      setInfoOpen(true)
-    },
+    // "Thông tin" opens the details drawer over the listing (like "Phiên bản"), the list keeps its width.
     siblingFileIds: fileIds,
   })
 

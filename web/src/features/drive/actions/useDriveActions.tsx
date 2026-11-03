@@ -328,7 +328,7 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
           onClose={() => setRenaming(null)}
         />
       )}
-      <Drawer open={!!infoItem} onClose={() => setInfoItem(null)} title={infoItem?.name ?? t('actions.info')} width={420} destroyOnHidden>
+      <Drawer open={!!infoItem} onClose={() => setInfoItem(null)} title={infoItem?.name ?? t('actions.info')} width="min(460px, 100vw)" destroyOnHidden>
         {infoItem?.type === 'file' ? (
           <FileDetailsTabs fileId={infoItem.id} tab={infoTab} onTab={setInfoTab} onManageAccess={setAccessTarget} />
         ) : (

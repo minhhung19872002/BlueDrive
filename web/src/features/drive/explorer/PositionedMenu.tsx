@@ -26,7 +26,10 @@ export default function PositionedMenu({
           menu.onClick?.(info)
         },
       }}
-      trigger={['contextMenu']}
+      // Not "contextMenu": antd then aligns to the pointer (alignPoint) and rc-trigger closes such popups on
+      // any scroll, e.g. when the page height changes right after the right-click. The anchor is already at
+      // the pointer; "click" keeps closing on a click / right-click outside.
+      trigger={['click']}
       onOpenChange={(open) => !open && onClose()}
       destroyOnHidden
     >

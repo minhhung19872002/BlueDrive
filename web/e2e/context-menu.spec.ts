@@ -69,9 +69,12 @@ test('menu ngữ cảnh: mọi thao tác trên tệp', async ({ page }) => {
 
   // Thông tin / Phiên bản / Thảo luận: details drawer with tabs.
   await clickMenu(page, fileName, / Thông tin$/)
-  // Info opens the side panel of the listing.
-  await expect(page.getByText('Ai có quyền truy cập')).toBeVisible()
+  // Info opens the details drawer over the listing (like "Phiên bản"); the list keeps its width.
   const drawer = page.locator('.ant-drawer-content')
+  await expect(drawer.getByRole('tab', { name: /Thông tin/, selected: true })).toBeVisible()
+  await expect(drawer.getByText('Ai có quyền truy cập')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(drawer).toHaveCount(0)
   await clickMenu(page, fileName, / Phiên bản$/)
   await expect(drawer.getByRole('tab', { name: /Phiên bản/, selected: true })).toBeVisible()
   await page.keyboard.press('Escape')

@@ -160,7 +160,10 @@ export default function ItemListView(props: ItemListViewProps) {
         },
         onContextMenu: (e) => props.onContextMenu(item, e),
       })}
-      scroll={{ x: isMobile ? undefined : 640 }}
+      // Minimum table width: with the info panel open the list scrolls horizontally instead of squeezing the name.
+      scroll={{ x: isMobile ? undefined : 960 }}
+      // Header row and horizontal scrollbar stay on screen (below the app header / at the bottom of the window).
+      sticky={isMobile ? undefined : { offsetHeader: 64 }}
     />
   )
 }
