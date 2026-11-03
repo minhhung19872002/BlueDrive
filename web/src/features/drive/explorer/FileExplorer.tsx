@@ -87,6 +87,14 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
     setScopeQ('')
     setScopeInput('')
   }
+  // Another folder: the previous results no longer match the search scope (reset while rendering, React's "adjust state on prop change").
+  const scopeKey = `${workspaceId}/${folderId ?? ''}`
+  const [scopeAt, setScopeAt] = useState(scopeKey)
+  if (scopeAt !== scopeKey) {
+    setScopeAt(scopeKey)
+    setScopeQ('')
+    setScopeInput('')
+  }
 
   const clipboard = useDriveUi((s) => s.clipboard)
   const setClipboard = useDriveUi((s) => s.setClipboard)
@@ -383,11 +391,19 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
   }
 
   const pasteCount = clipboard && canUpload ? clipboard.items.length : 0
-  const scopeName = folderInfo.data
+  const workspaceName = folderInfo.data
     ? folderInfo.data.workspaceType === 'personal'
       ? t('menu.myDrive')
       : folderInfo.data.workspaceName
     : ''
+  // Inside a folder the search covers that folder and its sub-folders; at the top, the whole workspace.
+  const inFolder = !!folderId && !!folderInfo.data
+  const scopeName = inFolder ? t('collab.search.folderScope', { name: folderInfo.data!.name }) : workspaceName
+  const searchPlaceholder = inFolder
+    ? t('collab.search.folderPlaceholder', { name: folderInfo.data!.name })
+    : workspaceName
+      ? t('collab.search.scopedPlaceholder', { scope: workspaceName })
+      : t('common.search')
 
   return (
     <div className="bd-explorer" tabIndex={-1} onKeyDown={onKeyDown} {...rootDrag}>
@@ -408,17 +424,17 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
         className="bd-scoped-search"
         allowClear
         enterButton={<SearchOutlined />}
-        placeholder={scopeName ? t('collab.search.scopedPlaceholder', { scope: scopeName }) : t('common.search')}
+        placeholder={searchPlaceholder}
         value={scopeInput}
         onSearch={(v) => setScopeQ(v.trim())}
         onChange={(e) => {
           setScopeInput(e.target.value)
           if (!e.target.value) setScopeQ('')
         }}
-        aria-label={t('collab.search.scopedPlaceholder', { scope: scopeName })}
+        aria-label={searchPlaceholder}
       />
       {scopeQ ? (
-        <ScopedSearchResults workspaceId={workspaceId} scopeName={scopeName} q={scopeQ} onClose={closeScoped} />
+        <ScopedSearchResults workspaceId={workspaceId} folderId={folderId} scopeName={scopeName} q={scopeQ} onClose={closeScoped} />
       ) : (
       <>
       <ExplorerToolbar

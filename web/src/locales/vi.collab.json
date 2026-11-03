@@ -190,6 +190,8 @@
         "size": "Dung lượng lớn nhất"
       },
       "scopedPlaceholder": "Tìm trong toàn bộ {{scope}} (tên, tiêu đề, mô tả, thẻ)",
+      "folderPlaceholder": "Tìm trong thư mục \"{{name}}\" và các thư mục con (tên, tiêu đề, mô tả, thẻ)",
+      "folderScope": "thư mục \"{{name}}\"",
       "scopedFound": "{{count}} kết quả cho \"{{q}}\" trong {{scope}}",
       "scopedSearching": "Đang tìm \"{{q}}\" trong {{scope}}...",
       "advanced": "Tìm kiếm nâng cao",

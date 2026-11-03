@@ -14,6 +14,8 @@ const PAGE_SIZE = 20
 
 interface ScopedSearchResultsProps {
   workspaceId: string
+  /** Current folder: only it and its sub-folders are searched (null = the whole workspace). */
+  folderId?: string | null
   /** Workspace label shown in the header ("Tài liệu của tôi" or the group name). */
   scopeName: string
   q: string
@@ -21,10 +23,10 @@ interface ScopedSearchResultsProps {
 }
 
 /** Full-text results restricted to one workspace (#20 personal, #32 group), shown inside the explorer. */
-export default function ScopedSearchResults({ workspaceId, scopeName, q, onClose }: ScopedSearchResultsProps) {
+export default function ScopedSearchResults({ workspaceId, folderId, scopeName, q, onClose }: ScopedSearchResultsProps) {
   const { t } = useTranslation()
   const [page, setPage] = useState(1)
-  const criteria = { q, workspaceId, page, pageSize: PAGE_SIZE }
+  const criteria = { q, workspaceId, folderId: folderId ?? undefined, page, pageSize: PAGE_SIZE }
   const result = useQuery({ queryKey: qkc.search(criteria), queryFn: () => searchFiles(criteria), placeholderData: keepPreviousData })
   const hits = result.data?.items ?? []
   const actions = useDriveActions({ siblingFileIds: hits.map((h) => h.item.id) })
