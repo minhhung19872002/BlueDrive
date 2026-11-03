@@ -64,10 +64,21 @@ public class SharingTests(ApiFactory factory)
         folderAccess.GetProperty("access").GetProperty("canEdit").GetBoolean().Should().BeTrue();
         (await outsider.GetAsync($"/api/v1/files/{deepFile}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
 
+        // The share dialog of a sub-folder / file lists the inherited share with its origin (read-only).
+        var listed = await (await owner.GetAsync($"/api/v1/shares?resourceType=file&resourceId={deepFile}")).ReadJsonAsync();
+        var viaParent = listed.EnumerateArray().Single(x => x.GetProperty("sharedWithId").GetGuid() == friendId);
+        viaParent.GetProperty("inheritedFromId").GetGuid().Should().Be(parent);
+        viaParent.GetProperty("inheritedFromName").GetString().Should().Be("Dự án");
+        var acl = await (await owner.GetAsync($"/api/v1/access/folder/{grandChild}")).ReadJsonAsync();
+        acl.GetProperty("entries").EnumerateArray().Should().Contain(e => e.GetProperty("source").GetString() == "share" && e.GetProperty("principalId").GetGuid() == friendId);
+
         // Breaking inheritance on "Hồ sơ" (without copying grants) stops the share below it.
         (await owner.PutAsJsonAsync($"/api/v1/access/folder/{child}", new { entries = Array.Empty<object>(), breakInheritance = true })).StatusCode.Should().Be(HttpStatusCode.NoContent);
         (await friend.GetAsync($"/api/v1/files/{deepFile}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await friend.GetAsync($"/api/v1/workspaces/{ws}/items?folderId={parent}")).StatusCode.Should().Be(HttpStatusCode.OK, "the shared folder itself stays visible");
+        (await (await owner.GetAsync($"/api/v1/shares?resourceType=folder&resourceId={grandChild}")).ReadJsonAsync()).GetArrayLength().Should().Be(0);
+        (await (await owner.GetAsync($"/api/v1/access/folder/{grandChild}")).ReadJsonAsync()).GetProperty("entries").EnumerateArray()
+            .Should().NotContain(e => e.GetProperty("source").GetString() == "share");
     }
 
     [Fact]

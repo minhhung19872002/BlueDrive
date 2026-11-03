@@ -1,52 +1,79 @@
-import { Button, Empty, Form, Input, List, Popconfirm, Select, Skeleton, Space, Tag, Typography } from 'antd'
-import { DeleteOutlined, ShareAltOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
-import { useTranslation } from 'react-i18next'
-import { qk } from '@/api/queryKeys'
-import { createShare, deleteShare, listShares } from '@/api/sharing'
-import { useApiMutation } from '@/hooks/useApiMutation'
-import type { AccessLevel, ResourceType } from '@/types/sharing'
-import { formatDateTime } from '@/utils/format'
-import { LEVEL_COLORS, SHARE_LEVELS, splitPrincipal, type PrincipalValue } from './levels'
-import PrincipalIcon from './PrincipalIcon'
-import PrincipalSelect from './PrincipalSelect'
+import {
+  Button,
+  Empty,
+  Form,
+  Input,
+  List,
+  Popconfirm,
+  Select,
+  Skeleton,
+  Space,
+  Tag,
+  Tooltip,
+  Typography,
+} from "antd";
+import { DeleteOutlined, ShareAltOutlined } from "@ant-design/icons";
+import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import { qk } from "@/api/queryKeys";
+import { createShare, deleteShare, listShares } from "@/api/sharing";
+import { useApiMutation } from "@/hooks/useApiMutation";
+import type { AccessLevel, ResourceType } from "@/types/sharing";
+import { formatDateTime } from "@/utils/format";
+import {
+  LEVEL_COLORS,
+  SHARE_LEVELS,
+  splitPrincipal,
+  type PrincipalValue,
+} from "./levels";
+import PrincipalIcon from "./PrincipalIcon";
+import PrincipalSelect from "./PrincipalSelect";
 
 interface InternalShareTabProps {
-  resourceType: ResourceType
-  resourceId: string
+  resourceType: ResourceType;
+  resourceId: string;
 }
 
 interface ShareForm {
-  targets: PrincipalValue[]
-  accessLevel: AccessLevel
-  message?: string
+  targets: PrincipalValue[];
+  accessLevel: AccessLevel;
+  message?: string;
 }
 
 /** #49 internal sharing with users, groups and organization units. */
-export default function InternalShareTab({ resourceType, resourceId }: InternalShareTabProps) {
-  const { t } = useTranslation()
-  const [form] = Form.useForm<ShareForm>()
+export default function InternalShareTab({
+  resourceType,
+  resourceId,
+}: InternalShareTabProps) {
+  const { t } = useTranslation();
+  const [form] = Form.useForm<ShareForm>();
   const shares = useQuery({
     queryKey: qk.shares(resourceType, resourceId),
     queryFn: () => listShares(resourceType, resourceId),
-  })
+  });
 
   const share = useApiMutation(createShare, {
-    successMessage: (r) => t('sharing.shared', { count: r.shared }),
-    invalidate: [qk.shares(resourceType, resourceId), qk.access(resourceType, resourceId)],
+    successMessage: (r) => t("sharing.shared", { count: r.shared }),
+    invalidate: [
+      qk.shares(resourceType, resourceId),
+      qk.access(resourceType, resourceId),
+    ],
     onSuccess: () => form.resetFields(),
-  })
+  });
   const remove = useApiMutation(deleteShare, {
-    successMessage: t('sharing.unshared'),
-    invalidate: [qk.shares(resourceType, resourceId), qk.access(resourceType, resourceId)],
-  })
+    successMessage: t("sharing.unshared"),
+    invalidate: [
+      qk.shares(resourceType, resourceId),
+      qk.access(resourceType, resourceId),
+    ],
+  });
 
   return (
     <>
       <Form<ShareForm>
         form={form}
         layout="vertical"
-        initialValues={{ accessLevel: 'view', targets: [] }}
+        initialValues={{ accessLevel: "view", targets: [] }}
         onFinish={(v) =>
           share.mutate({
             resourceType,
@@ -59,25 +86,52 @@ export default function InternalShareTab({ resourceType, resourceId }: InternalS
       >
         <Form.Item
           name="targets"
-          label={t('sharing.targets')}
-          extra={t('sharing.targetsHint')}
-          rules={[{ required: true, type: 'array', min: 1, message: t('sharing.targetsRequired') }]}
+          label={t("sharing.targets")}
+          extra={t("sharing.targetsHint")}
+          rules={[
+            {
+              required: true,
+              type: "array",
+              min: 1,
+              message: t("sharing.targetsRequired"),
+            },
+          ]}
         >
-          <PrincipalSelect multiple types={['user', 'group', 'organization']} />
+          <PrincipalSelect multiple types={["user", "group", "organization"]} />
         </Form.Item>
-        <Form.Item name="accessLevel" label={t('sharing.level')}>
-          <Select options={SHARE_LEVELS.map((l) => ({ value: l, label: t(`sharing.levels.${l}`) }))} />
+        <Form.Item name="accessLevel" label={t("sharing.level")}>
+          <Select
+            options={SHARE_LEVELS.map((l) => ({
+              value: l,
+              label: t(`sharing.levels.${l}`),
+            }))}
+          />
         </Form.Item>
-        <Form.Item name="message" label={t('sharing.message')} rules={[{ max: 1000, message: t('validation.maxLength', { max: 1000 }) }]}>
-          <Input.TextArea rows={2} maxLength={1000} placeholder={t('sharing.messagePlaceholder')} />
+        <Form.Item
+          name="message"
+          label={t("sharing.message")}
+          rules={[
+            { max: 1000, message: t("validation.maxLength", { max: 1000 }) },
+          ]}
+        >
+          <Input.TextArea
+            rows={2}
+            maxLength={1000}
+            placeholder={t("sharing.messagePlaceholder")}
+          />
         </Form.Item>
-        <Button type="primary" htmlType="submit" icon={<ShareAltOutlined />} loading={share.isPending}>
-          {t('sharing.share')}
+        <Button
+          type="primary"
+          htmlType="submit"
+          icon={<ShareAltOutlined />}
+          loading={share.isPending}
+        >
+          {t("sharing.share")}
         </Button>
       </Form>
 
       <Typography.Title level={5} style={{ marginTop: 24 }}>
-        {t('sharing.currentShares')}
+        {t("sharing.currentShares")}
       </Typography.Title>
       {shares.isLoading ? (
         <Skeleton active paragraph={{ rows: 2 }} />
@@ -85,35 +139,72 @@ export default function InternalShareTab({ resourceType, resourceId }: InternalS
         <List
           size="small"
           dataSource={shares.data ?? []}
-          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('sharing.noShares')} /> }}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={t("sharing.noShares")}
+              />
+            ),
+          }}
           renderItem={(s) => (
             <List.Item
-              actions={[
-                <Popconfirm
-                  key="remove"
-                  title={t('sharing.unshareConfirm', { name: s.sharedWithName })}
-                  okText={t('common.confirm')}
-                  cancelText={t('common.cancel')}
-                  onConfirm={() => remove.mutate(s.id)}
-                >
-                  <Button type="text" danger size="small" icon={<DeleteOutlined />} aria-label={t('sharing.unshare')} />
-                </Popconfirm>,
-              ]}
+              actions={
+                s.inheritedFromId
+                  ? []
+                  : [
+                      <Popconfirm
+                        key="remove"
+                        title={t("sharing.unshareConfirm", {
+                          name: s.sharedWithName,
+                        })}
+                        okText={t("common.confirm")}
+                        cancelText={t("common.cancel")}
+                        onConfirm={() => remove.mutate(s.id)}
+                      >
+                        <Button
+                          type="text"
+                          danger
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          aria-label={t("sharing.unshare")}
+                        />
+                      </Popconfirm>,
+                    ]
+              }
             >
               <List.Item.Meta
                 avatar={<PrincipalIcon type={s.sharedWithType} />}
                 title={
                   <Space wrap size={4}>
                     <span>{s.sharedWithName}</span>
-                    <Tag color={LEVEL_COLORS[s.accessLevel]}>{t(`sharing.levels.${s.accessLevel}`)}</Tag>
+                    <Tag color={LEVEL_COLORS[s.accessLevel]}>
+                      {t(`sharing.levels.${s.accessLevel}`)}
+                    </Tag>
+                    {s.inheritedFromId && (
+                      <Tooltip
+                        title={t("sharing.inheritedHint", {
+                          name: s.inheritedFromName ?? "",
+                        })}
+                      >
+                        <Tag>
+                          {t("sharing.inheritedFrom", {
+                            name: s.inheritedFromName ?? "",
+                          })}
+                        </Tag>
+                      </Tooltip>
+                    )}
                   </Space>
                 }
-                description={t('sharing.sharedByAt', { name: s.sharedByName, date: formatDateTime(s.createdAt) })}
+                description={t("sharing.sharedByAt", {
+                  name: s.sharedByName,
+                  date: formatDateTime(s.createdAt),
+                })}
               />
             </List.Item>
           )}
         />
       )}
     </>
-  )
+  );
 }

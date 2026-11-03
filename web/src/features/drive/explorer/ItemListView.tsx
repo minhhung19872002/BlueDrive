@@ -110,17 +110,22 @@ export default function ItemListView(props: ItemListViewProps) {
           },
         ]
       : []),
-    {
-      key: 'actions',
-      width: 48,
-      render: (_, item) => (
-        <span className="bd-row-actions">
-          <Dropdown menu={props.rowMenu(item)} trigger={['click']} placement="bottomRight">
-            <Button type="text" size="small" icon={<MoreOutlined />} aria-label={t('common.actions')} />
-          </Dropdown>
-        </span>
-      ),
-    },
+    // Phones have no hover: they keep a trailing "..." column (desktop shows it next to the name on hover).
+    ...(isMobile
+      ? [
+          {
+            key: 'actions',
+            width: 48,
+            render: (_: unknown, item: DriveItem) => (
+              <span className="bd-row-actions">
+                <Dropdown menu={props.rowMenu(item)} trigger={['click']} placement="bottomRight">
+                  <Button type="text" size="small" icon={<MoreOutlined />} aria-label={t('common.actions')} />
+                </Dropdown>
+              </span>
+            ),
+          },
+        ]
+      : []),
   ]
 
   return (

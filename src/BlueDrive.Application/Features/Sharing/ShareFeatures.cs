@@ -11,7 +11,8 @@ using Microsoft.EntityFrameworkCore;
 namespace BlueDrive.Application.Features.Sharing;
 
 public sealed record ShareDto(Guid Id, ResourceType ResourceType, Guid ResourceId, PrincipalType SharedWithType, Guid SharedWithId, string SharedWithName,
-    AccessLevel AccessLevel, string? Message, Guid SharedBy, string SharedByName, DateTime CreatedAt);
+    AccessLevel AccessLevel, string? Message, Guid SharedBy, string SharedByName, DateTime CreatedAt,
+    Guid? InheritedFromId = null, string? InheritedFromName = null);
 
 /// <summary>#49 internal sharing with users, groups or organizations: Xem / Xem + Tải xuống / Chỉnh sửa.</summary>
 public sealed record CreateShareCommand(ResourceType ResourceType, Guid ResourceId, IReadOnlyList<PrincipalRef> Targets, AccessLevel AccessLevel, string? Message) : IRequest<int>;
@@ -71,9 +72,50 @@ public sealed class ListSharesOfResourceHandler(IAppDbContext db, ICurrentUser m
     {
         await auth.EnsureAsync(me.RequireUserId(), q.ResourceType, q.ResourceId, AccessLevel.View, ct);
         var rows = await db.Shares.AsNoTracking().Where(s => s.ResourceType == q.ResourceType && s.ResourceId == q.ResourceId).OrderByDescending(s => s.CreatedAt).ToListAsync(ct);
-        var names = await PrincipalNames.ResolveAsync(db, rows.Select(r => (r.SharedWithType, r.SharedWithId)).Concat(rows.Select(r => (PrincipalType.User, r.SharedBy))), ct);
-        return rows.Select(s => new ShareDto(s.Id, s.ResourceType, s.ResourceId, s.SharedWithType, s.SharedWithId, names.GetValueOrDefault((s.SharedWithType, s.SharedWithId), ""),
-            s.AccessLevel, s.Message, s.SharedBy, names.GetValueOrDefault((PrincipalType.User, s.SharedBy), ""), s.CreatedAt)).ToList();
+
+        // Shares of ancestor folders apply here too (same rule as ResourceAuthorizationService): nearest first,
+        // stopping at a folder that breaks inheritance. They are listed read-only with their origin.
+        var ancestors = await InheritanceChainAsync(q, ct);
+        var ancestorIds = ancestors.Select(a => a.Id).ToList();
+        var inherited = ancestorIds.Count == 0 ? []
+            : await db.Shares.AsNoTracking().Where(s => s.ResourceType == ResourceType.Folder && ancestorIds.Contains(s.ResourceId)).ToListAsync(ct);
+        inherited = inherited.OrderBy(s => ancestorIds.IndexOf(s.ResourceId)).ThenByDescending(s => s.CreatedAt).ToList();
+        var folderNames = ancestors.ToDictionary(a => a.Id, a => a.Name);
+
+        var all = rows.Concat(inherited).ToList();
+        var names = await PrincipalNames.ResolveAsync(db, all.Select(r => (r.SharedWithType, r.SharedWithId)).Concat(all.Select(r => (PrincipalType.User, r.SharedBy))), ct);
+        ShareDto Map(Share s, bool viaParent) => new(s.Id, s.ResourceType, s.ResourceId, s.SharedWithType, s.SharedWithId, names.GetValueOrDefault((s.SharedWithType, s.SharedWithId), ""),
+            s.AccessLevel, s.Message, s.SharedBy, names.GetValueOrDefault((PrincipalType.User, s.SharedBy), ""), s.CreatedAt,
+            viaParent ? s.ResourceId : null, viaParent ? folderNames.GetValueOrDefault(s.ResourceId) : null);
+        return rows.Select(s => Map(s, false)).Concat(inherited.Select(s => Map(s, true))).ToList();
+    }
+
+    /// <summary>Ancestor folders whose shares are inherited by the resource, nearest first.</summary>
+    private async Task<List<(Guid Id, string Name)>> InheritanceChainAsync(ListSharesOfResourceQuery q, CancellationToken ct)
+    {
+        string? path;
+        var selfBreaks = false;
+        if (q.ResourceType == ResourceType.File)
+            path = await db.Files.AsNoTracking().Where(f => f.Id == q.ResourceId).Select(f => f.Folder != null ? f.Folder.Path : null).FirstOrDefaultAsync(ct);
+        else if (q.ResourceType == ResourceType.Folder)
+        {
+            var self = await db.Folders.AsNoTracking().Where(f => f.Id == q.ResourceId).Select(f => new { f.Path, f.BreakInheritance }).FirstOrDefaultAsync(ct);
+            path = self?.Path;
+            selfBreaks = self?.BreakInheritance ?? false;
+        }
+        else return [];
+        if (selfBreaks || string.IsNullOrEmpty(path)) return [];
+        var ids = path.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Guid.Parse).Reverse().Where(id => id != q.ResourceId).ToList();
+        if (ids.Count == 0) return [];
+        var folders = await db.Folders.AsNoTracking().Where(f => ids.Contains(f.Id)).Select(f => new { f.Id, f.Name, f.BreakInheritance }).ToDictionaryAsync(f => f.Id, ct);
+        var chain = new List<(Guid, string)>();
+        foreach (var id in ids)
+        {
+            if (!folders.TryGetValue(id, out var f)) break;
+            chain.Add((f.Id, f.Name));
+            if (f.BreakInheritance) break;
+        }
+        return chain;
     }
 }
 

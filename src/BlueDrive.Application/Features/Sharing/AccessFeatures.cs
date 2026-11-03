@@ -114,7 +114,7 @@ public sealed class GetResourceAccessHandler(IAppDbContext db, ICurrentUser me, 
             .ToListAsync(ct);
         var members = broken ? await db.WorkspaceMembers.AsNoTracking().Where(m => m.WorkspaceId == wsId && (m.MemberRole == WorkspaceMemberRole.Owner || m.MemberRole == WorkspaceMemberRole.Manager)).ToListAsync(ct)
             : await db.WorkspaceMembers.AsNoTracking().Where(m => m.WorkspaceId == wsId).ToListAsync(ct);
-        var shares = await db.Shares.AsNoTracking().Where(s => (s.ResourceType == q.Type && s.ResourceId == q.Id) || (s.ResourceType == ResourceType.Folder && chain.Contains(s.ResourceId))).ToListAsync(ct);
+        var shares = await db.Shares.AsNoTracking().Where(s => (s.ResourceType == q.Type && s.ResourceId == q.Id) || (s.ResourceType == ResourceType.Folder && inheritedFolders.Contains(s.ResourceId))).ToListAsync(ct);
 
         var names = await PrincipalNames.ResolveAsync(db,
             direct.Select(a => (a.PrincipalType, a.PrincipalId)).Concat(inherited.Select(a => (a.PrincipalType, a.PrincipalId)))

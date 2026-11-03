@@ -77,6 +77,9 @@ export interface ShareDto {
   sharedBy: string
   sharedByName: string
   createdAt: string
+  /** Set when the share comes from an ancestor folder (inherited, managed on that folder). */
+  inheritedFromId?: string | null
+  inheritedFromName?: string | null
 }
 
 export interface CreateShareRequest {
