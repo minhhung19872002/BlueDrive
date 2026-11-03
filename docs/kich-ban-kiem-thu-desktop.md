@@ -33,7 +33,9 @@ tài khoản `bien_tap`, trình duyệt đăng nhập tài khoản đó; tài kh
 | 20 | Nhấp đúp tệp Office → cùng soạn | Cài đặt → Đồng bộ → "Luôn mở chế độ cùng soạn"; nhấp đúp `.docx` trong BlueDrive; tắt mạng rồi nhấp đúp lại; nhấp đúp `.docx` ngoài BlueDrive | Có mạng: mở trong ONLYOFFICE Desktop Editors (chế độ cùng soạn); mất mạng: mở bản trên máy bằng Word; ngoài BlueDrive: Word như thường; tắt tùy chọn trả lại như cũ | `PackagingTests.Double_click_on_office_documents_can_open_co_editing_only_inside_bluedrive_folders`; chạy tay 03–04/11/2026 trên Windows 11 (ONLYOFFICE 10.0, Microsoft Word): nhấp đúp chuột thật trong Explorer — trong BlueDrive mở ONLYOFFICE cùng soạn, ngoài BlueDrive mở Word | Đạt (một máy) |
 
 Còn phải chạy tay trên 2 máy Windows vật lý trước nghiệm thu: các mục **Tự động** ở trên (kiểm thử tự động đã dùng API thật và đĩa thật, nhưng
-một máy / thiết bị giả lập). Ghi kết quả vào cột cuối kèm ngày và người chạy.
+một máy / thiết bị giả lập). Ghi kết quả vào cột cuối kèm ngày và người chạy. Theo thống nhất ngày 04/11/2026, bên dự án tự chạy phần này
+trên 2 máy Windows thật (gồm cả **Đồng bộ trong mạng LAN** qua mạng thật: bật ở cả hai máy, mở tường lửa bằng `install-bluedrive.ps1 -LanSync 1`,
+máy thứ hai tải tệp lớn mà máy thứ nhất đã có — nhật ký máy thứ hai ghi tải xong nhanh, máy chủ chỉ ghi lượt cấp vé).
 
 ## Kết quả nghiệm thu tự động — mục 15, hai thiết bị
 
