@@ -26,7 +26,11 @@ public sealed class AccountStore(string? baseDir = null)
 
     public string AccountDir(Guid id) => Path.Combine(BaseDir, id.ToString("N"));
     public string StateDbPath(Guid id) => Path.Combine(AccountDir(id), "state.db");
-    public ITokenStore Tokens(Guid id) => new ProtectedFileTokenStore(Path.Combine(AccountDir(id), "tokens.dat"));
+    /// <summary>Windows: DPAPI-encrypted file; macOS: login Keychain; Linux: file readable only by the user.</summary>
+    public ITokenStore Tokens(Guid id) =>
+        OperatingSystem.IsMacOS() ? new KeychainTokenStore($"{BaseDir}|{id:N}")
+        : OperatingSystem.IsWindows() ? new ProtectedFileTokenStore(Path.Combine(AccountDir(id), "tokens.dat"))
+        : new UserOnlyFileTokenStore(Path.Combine(AccountDir(id), "tokens.json"));
 
     public IReadOnlyList<AccountConfig> Load()
     {
@@ -97,10 +101,37 @@ public sealed class ProtectedFileTokenStore(string path) : ITokenStore
         ? ProtectedData.Unprotect(data, Entropy, DataProtectionScope.CurrentUser)
         : throw new PlatformNotSupportedException("Lưu thông tin đăng nhập trên hệ điều hành này dùng Keychain (macOS, Sync-Phase 10).");
 
-    // Keeps the access token expiry (the record's JSON shape is the server's token response).
-    private sealed record StoredTokens(string AccessToken, string RefreshToken, int ExpiresIn, Guid DeviceId, string? DeviceSecret, DateTime AccessExpiresAt)
+}
+
+/// <summary>Tokens as stored (keeps the access token expiry; the record's JSON shape is the server's token response).</summary>
+internal sealed record StoredTokens(string AccessToken, string RefreshToken, int ExpiresIn, Guid DeviceId, string? DeviceSecret, DateTime AccessExpiresAt)
+{
+    public static StoredTokens From(DeviceTokens t) => new(t.AccessToken, t.RefreshToken, t.ExpiresIn, t.DeviceId, t.DeviceSecret, t.AccessExpiresAt);
+    public DeviceTokens ToTokens() => new(AccessToken, RefreshToken, ExpiresIn, DeviceId, DeviceSecret) { AccessExpiresAt = AccessExpiresAt };
+}
+
+/// <summary>Linux (Sync-Phase 11): JSON file created with mode 0600 in the user's data folder (no Secret Service dependency).</summary>
+public sealed class UserOnlyFileTokenStore(string path) : ITokenStore
+{
+    public DeviceTokens? Load()
     {
-        public static StoredTokens From(DeviceTokens t) => new(t.AccessToken, t.RefreshToken, t.ExpiresIn, t.DeviceId, t.DeviceSecret, t.AccessExpiresAt);
-        public DeviceTokens ToTokens() => new(AccessToken, RefreshToken, ExpiresIn, DeviceId, DeviceSecret) { AccessExpiresAt = AccessExpiresAt };
+        if (!System.IO.File.Exists(path)) return null;
+        try { return JsonSerializer.Deserialize<StoredTokens>(System.IO.File.ReadAllBytes(path))?.ToTokens(); }
+        catch (JsonException) { return null; }
+    }
+
+    public void Save(DeviceTokens tokens)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var tmp = path + ".tmp";
+        var options = new FileStreamOptions { Mode = FileMode.Create, Access = FileAccess.Write };
+        if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+        using (var f = new FileStream(tmp, options)) f.Write(JsonSerializer.SerializeToUtf8Bytes(StoredTokens.From(tokens)));
+        System.IO.File.Move(tmp, path, overwrite: true);
+    }
+
+    public void Clear()
+    {
+        if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
     }
 }

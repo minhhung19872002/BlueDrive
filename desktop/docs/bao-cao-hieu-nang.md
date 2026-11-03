@@ -10,10 +10,10 @@ Số liệu gốc: [`perf/ket-qua.json`](perf/ket-qua.json).
 
 | Chỉ số (mục 10) | Mục tiêu | Đo được | Kết quả |
 |---|---|---|---|
-| Tạo tệp giữ chỗ lần đầu, 100 000 tệp / 5 000 thư mục | < 5 phút | **150 giây** (105 000 mục) | Đạt |
+| Tạo tệp giữ chỗ lần đầu, 100 000 tệp / 5 000 thư mục | < 5 phút | **210 giây** (105 000 mục) | Đạt |
 | Quét khởi động khi không có thay đổi (100 000 tệp) | < 30 giây | **4,5 giây** | Đạt |
-| RAM nền sau khi đồng bộ 100 000 tệp | < 200 MB | **108 MB** (tác tử trên máy chủ thật: 118 MB) | Đạt |
-| CPU nền khi rảnh | gần 0% | **0,05%** một lõi (máy chủ thật, 60 giây: 0,16%) | Đạt |
+| RAM nền sau khi đồng bộ 100 000 tệp | < 200 MB | **105 MB** (tác tử trên máy chủ thật: 118 MB) | Đạt |
+| CPU nền khi rảnh | gần 0% | **0%** một lõi (máy chủ thật, 60 giây: 0,16%) | Đạt |
 | Thay đổi trên web xuất hiện trên máy (SignalR) | < 5 giây | trung vị **0,73 giây**, p95 0,85 giây (10 lượt) | Đạt |
 | Lưu tệp Office (2 MB) trên máy → có trên máy chủ | < 10 giây | trung vị **3,25 giây**, p95 3,32 giây (10 lượt) | Đạt |
 | Tải lên / tải xuống 5 GB qua mạng chập chờn: tiếp tục đúng, mã băm khớp | — | Kiểm thử tự động (mục 3) | Đạt |
@@ -51,5 +51,5 @@ dotnet $perf latency --server http://localhost:8088 --user admin --password '<m�
 | Trước | Sau | Thay đổi |
 |---|---|---|
 | Quét 10 500 mục: 3,7 giây (≈ 37 giây cho 105 000) | 0,6 giây (4,5 giây cho 105 000) | Quét thư mục bằng `GetFileInformationByHandleEx(FileIdExtdDirectoryInfo)`: một lần gọi cho mỗi thư mục trả về mã tệp NTFS, kích thước, ngày sửa, thuộc tính — thay vì mở một handle cho mỗi tệp (ổ không hỗ trợ: quay về cách cũ). |
-| Lần đầu 10 500 mục: 32 giây (≈ 5 phút 20 giây cho 105 000) | 13,6 giây (150 giây cho 105 000) | `Stat` một handle (mã tệp + thuộc tính + loại reparse); kiểm tra tồn tại chỉ đọc thuộc tính; không đánh dấu lại "đã đồng bộ" tệp giữ chỗ vừa tạo (đã tạo ở trạng thái đó). |
-| RAM sau lần đầu: 300 MB | 108 MB | Sau lượt đồng bộ lớn (≥ 2 000 thao tác) tác tử trả bộ nhớ trống của GC cho Windows; nhật ký kế hoạch của lượt (chẩn đoán) giới hạn 2 000 dòng. |
+| Lần đầu 10 500 mục: 32 giây (≈ 5 phút 20 giây cho 105 000) | 210 giây cho 105 000 | `Stat` một handle (mã tệp + thuộc tính + loại reparse); kiểm tra tồn tại chỉ đọc thuộc tính. (Bỏ qua bước đánh dấu lại "đã đồng bộ" tệp giữ chỗ vừa tạo nhanh hơn — 150 giây — nhưng làm "Giải phóng dung lượng" thỉnh thoảng lỗi khi thư mục cha chưa là tệp giữ chỗ, nên giữ bước này.) |
+| RAM sau lần đầu: 300 MB | 105 MB | Sau lượt đồng bộ lớn (≥ 2 000 thao tác) tác tử trả bộ nhớ trống của GC cho Windows; nhật ký kế hoạch của lượt (chẩn đoán) giới hạn 2 000 dòng. |

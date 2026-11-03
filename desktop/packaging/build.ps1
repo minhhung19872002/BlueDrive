@@ -38,7 +38,7 @@ $numeric = ($Version -split '-')[0]
 
 Write-Host "==> Biên dịch BlueDrive Desktop $Version ($Runtime)"
 if (Test-Path $publish) { Remove-Item $publish -Recurse -Force }
-dotnet publish $project -c Release -r $Runtime --self-contained true -p:Version=$Version -p:FileVersion=$numeric.0 `
+dotnet publish $project -f net10.0-windows10.0.19041.0 -c Release -r $Runtime --self-contained true -p:Version=$Version -p:FileVersion=$numeric.0 `
     -p:InformationalVersion=$Version -p:PublishReadyToRun=true -p:DebugType=none -o $publish -v q --nologo
 if ($LASTEXITCODE -ne 0) { throw 'dotnet publish không thành công' }
 if ($Server) {

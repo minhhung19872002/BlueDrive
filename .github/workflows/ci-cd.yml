@@ -1,6 +1,6 @@
 # BlueDrive CI/CD
 #   CI  (push, pull request): backend build + unit/integration tests (Testcontainers), web lint + build,
-#        mobile typecheck + lint, docker compose config.
+#        mobile typecheck + lint, docker compose config, BlueDrive Desktop on macOS (sync tests + app build).
 #   CD  (push to main, CI green): deploy to the VM over SSH. The deploy key is pinned on the VM to
 #        ~/apps/bluedrive-deploy.sh (command= in ~/.ssh/authorized_keys), which receives the commit SHA only.
 #   Secrets: DEPLOY_SSH_KEY (private key), DEPLOY_KNOWN_HOSTS (ssh-keyscan of the VM), DEPLOY_TARGET (user@host).
@@ -68,6 +68,20 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npx tsc --noEmit
       - run: npx expo lint
+
+  desktop-macos:
+    name: Desktop (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Sync engine tests on a real macOS disk (inode, NFD → NFC, Trash, Keychain)
+        run: dotnet test desktop/tests/BlueDrive.Sync.Tests --nologo -v q
+      - name: Build the macOS app (full sync mode)
+        run: dotnet publish desktop/src/BlueDrive.Desktop -f net10.0 -r osx-arm64 -c Release --self-contained -o artifacts/macos --nologo -v q
 
   compose:
     name: Docker compose config

@@ -23,6 +23,8 @@ cd deploy
 # Shown in "Thông tin hệ thống"; the environment overrides the GIT_SHA written to .env at install time.
 GIT_SHA=$(git rev-parse --short HEAD)
 export GIT_SHA
+# Created by us (not by Docker as root) so that sync-desktop-downloads.sh can write into it.
+mkdir -p downloads
 step docker compose up -d --build --wait --wait-timeout 600 --remove-orphans
 port=$(grep '^HTTP_PORT=' .env | cut -d= -f2)
 i=0

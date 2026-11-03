@@ -1,13 +1,4 @@
 {
-  "scale": {
-    "files": 100000,
-    "folders": 5000,
-    "entriesOnDisk": 105000,
-    "firstPassSeconds": 150.3,
-    "unchangedPassSeconds": 4.5,
-    "workingSetMb": 108,
-    "idleCpuPercent": 0.05
-  },
   "machine": "LAPTOP-KGTEG72G, 16 CPU, Microsoft Windows NT 10.0.26300.0",
   "latency": {
     "server": "http://localhost:8088/",
@@ -38,5 +29,14 @@
     ],
     "workingSetMb": 118,
     "idleCpuPercent": 0.16
+  },
+  "scale": {
+    "files": 100000,
+    "folders": 5000,
+    "entriesOnDisk": 105000,
+    "firstPassSeconds": 209.9,
+    "unchangedPassSeconds": 4.5,
+    "workingSetMb": 105,
+    "idleCpuPercent": 0
   }
 }

@@ -10,7 +10,6 @@ using BlueDrive.Desktop.Services;
 using BlueDrive.Desktop.ViewModels;
 using BlueDrive.Desktop.Views;
 using BlueDrive.Sync.Agent;
-using Microsoft.Toolkit.Uwp.Notifications;
 using Serilog;
 
 namespace BlueDrive.Desktop;
@@ -346,10 +345,11 @@ public partial class App : Application
 
     private void ShowToast(string title, string text)
     {
-        try { new ToastContentBuilder().AddText(title).AddText(text).Show(); }
-        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException or UnauthorizedAccessException)
+        try { Notifier.Show(title, text); }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException or UnauthorizedAccessException
+                                       or System.ComponentModel.Win32Exception)
         {
-            Log.Warning(ex, "Không hiện được thông báo Windows");
+            Log.Warning(ex, "Không hiện được thông báo hệ thống");
         }
     }
 

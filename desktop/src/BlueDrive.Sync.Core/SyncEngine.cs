@@ -75,8 +75,6 @@ public sealed class SyncEngine(
     private const string RevokedKey = "revoked";
     private readonly SyncEngineOptions _o = options ?? new();
     private readonly IPlaceholderProvider _placeholders = placeholders ?? NoPlaceholders.Instance;
-    /// <summary>Placeholders created during this pass: already "in sync" (created with that state), skipped by <see cref="MarkSyncedAsync"/>.</summary>
-    private readonly HashSet<string> _createdInSync = [];
 
     /// <summary>Operations executed since the engine was created (tests check that a converged state stays quiet).</summary>
     public int TotalOperations { get; private set; }
@@ -263,7 +261,6 @@ public sealed class SyncEngine(
     public async Task<SyncPassResult> SyncAsync(CancellationToken ct)
     {
         LastPlan.Clear();
-        _createdInSync.Clear();
         var started = clock.UtcNow;
         await RefreshRemoteAsync(ct);
         var total = 0;
@@ -326,7 +323,7 @@ public sealed class SyncEngine(
     {
         var items = state.Items(root.RootId);
         var byRemote = items.ToDictionary(i => i.RemoteId);
-        foreach (var b in items.Where(i => i.SyncState == "in_sync" && i.LastSyncedAt >= since && !_createdInSync.Contains(i.RemoteId)))
+        foreach (var b in items.Where(i => i.SyncState == "in_sync" && i.LastSyncedAt >= since))
         {
             var parts = new List<string> { b.Name };
             var cur = b.ParentRemoteId;
@@ -944,7 +941,6 @@ public sealed class SyncEngine(
         if (_placeholders.OnDemand)
         {
             await _placeholders.CreatePlaceholderAsync(Abs(c, path), r, ct);
-            _createdInSync.Add(r.Id);
             return true;
         }
         // Streamed straight into the temporary file of the atomic write; a wrong hash aborts the write (the old file stays).

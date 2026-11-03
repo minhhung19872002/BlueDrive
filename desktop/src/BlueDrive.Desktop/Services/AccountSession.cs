@@ -1,7 +1,6 @@
 using BlueDrive.Sync.Agent;
 using BlueDrive.Sync.Client;
 using BlueDrive.Sync.Core;
-using BlueDrive.Sync.Windows;
 
 namespace BlueDrive.Desktop.Services;
 
@@ -20,7 +19,7 @@ public sealed class AccountSession : IAsyncDisposable
 
     public AccountConfig Config { get; private set; }
     public SyncAgent Agent { get; }
-    public CloudFilesPlatform? Platform { get; private set; }
+    public IOnDemandPlatform? Platform { get; private set; }
     public TransferInfo? Transfer { get; private set; }
 
     /// <summary>Raised (on a background thread) whenever status, activity or transfer progress changed.</summary>
@@ -45,7 +44,7 @@ public sealed class AccountSession : IAsyncDisposable
         {
             Server = new Uri(config.ServerUrl), SyncFolder = config.SyncFolder, StateDbPath = store.StateDbPath(config.Id), Tokens = store.Tokens(config.Id),
             UserDisplayName = config.DisplayName, AppVersion = appVersion, AccountId = config.Id, Transfer = transfer,
-            OnDemand = config.OnDemand && OnDemandSupport.IsSupported(config.SyncFolder) ? ctx => Platform = NewPlatform(ctx, appVersion) : null,
+            OnDemand = config.OnDemand && CloudFiles.Supported(config.SyncFolder) ? ctx => Platform = NewPlatform(ctx, appVersion) : null,
         });
         var lastConflicts = -1;
         var lastState = AgentState.Starting;
@@ -73,12 +72,8 @@ public sealed class AccountSession : IAsyncDisposable
         if (config.Paused) Agent.Pause(true);
     }
 
-    private CloudFilesPlatform NewPlatform(OnDemandContext ctx, string version)
-    {
-        var p = new CloudFilesPlatform(ctx, Environment.ProcessPath is { } exe ? $"{exe},0" : null, version);
-        p.Problem += (path, message) => Notify?.Invoke("BlueDrive", $"{path}: {message}");
-        return p;
-    }
+    private IOnDemandPlatform NewPlatform(OnDemandContext ctx, string version) =>
+        CloudFiles.NewPlatform(ctx, version, (path, message) => Notify?.Invoke("BlueDrive", $"{path}: {message}"));
 
     public Task StartAsync() => Agent.StartAsync();
 
@@ -165,12 +160,9 @@ public sealed class AccountSession : IAsyncDisposable
 }
 
 /// <summary>Files On-Demand needs Windows 10 1809+ and an NTFS volume (FAT32 / exFAT / network drives: full sync, spec 7.3).</summary>
+/// <summary>Kept for callers: Files On-Demand availability (see <see cref="CloudFiles.Supported"/>).</summary>
 public static class OnDemandSupport
 {
-    public static bool IsSupported(string folder)
-    {
-        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763)) return false;
-        try { return new DriveInfo(Path.GetPathRoot(Path.GetFullPath(folder))!).DriveFormat == "NTFS"; }
-        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException) { return false; }
-    }
+    public static bool IsSupported(string folder) => CloudFiles.Supported(folder);
 }
+

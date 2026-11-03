@@ -112,5 +112,7 @@ internal static class Program
                 rollOnFileSizeLimit: true, shared: true)
             .CreateLogger();
 
-    public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>().UsePlatformDetect().WithInterFont().LogToTrace();
+    // macOS: a menu bar app (no Dock icon), like the Windows tray app.
+    public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>().UsePlatformDetect().WithInterFont().LogToTrace()
+        .With(new MacOSPlatformOptions { ShowInDock = false });
 }

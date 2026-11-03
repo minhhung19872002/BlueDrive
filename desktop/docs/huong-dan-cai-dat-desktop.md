@@ -13,6 +13,13 @@ Dành cho người dùng (cài đơn lẻ) và bộ phận CNTT (cài hàng lo�
 
 ## 2. Cài đơn lẻ
 
+**macOS** (Apple silicon, macOS 14 Sonoma trở lên — yêu cầu của .NET 10): tải **macOS (Apple silicon)** trên trang Tải ứng dụng máy tính, mở `BlueDrive.pkg` và làm theo
+trình cài. BlueDrive ở thanh menu (góc trên bên phải). Bản chưa notarize: lần đầu chuột phải ứng dụng → **Mở**. Trên macOS BlueDrive tải toàn bộ
+tệp của các thư mục đã chọn (chưa có chế độ tệp theo yêu cầu); mã đăng nhập được giữ trong Keychain. Triển khai hàng loạt (MDM): đặt
+`/Library/Application Support/BlueDrive/deploy.json` với `{ "server": "https://…", "channel": "stable" }`.
+
+**Windows:**
+
 1. Đăng nhập BlueDrive trên web → menu tài khoản (góc phải) → **Tải ứng dụng máy tính** → **Tải BlueDrive … cho Windows**.
 2. Chạy `BlueDriveSetup.exe`. Bộ cài chạy ngay, không hỏi gì; BlueDrive mở và hiện trình hướng dẫn: nhập địa chỉ máy chủ (nếu chưa có sẵn), đăng nhập
    trên trình duyệt, chọn thư mục đồng bộ, chọn thư mục muốn có trên máy, tùy chọn **Cài ONLYOFFICE Desktop Editors để cùng soạn thảo tài liệu**

@@ -39,20 +39,29 @@ public sealed record Deployment(string? Server, bool? InstallOnlyOffice, string?
     {
         string? server = Arg(args, "server"), channel = Arg(args, "channel");
         var oo = Flag(Arg(args, "with-onlyoffice"));
-        var file = Path.Combine(appDir ?? AppContext.BaseDirectory, "deploy.json");
-        if (File.Exists(file))
+        bool? off = null;
+        foreach (var file in new[] { Path.Combine(appDir ?? AppContext.BaseDirectory, "deploy.json"), MachineFile }.OfType<string>())
         {
+            if (!File.Exists(file)) continue;
             try
             {
                 var root = JsonDocument.Parse(File.ReadAllText(file)).RootElement;
                 if (server is null && root.TryGetProperty("server", out var s)) server = s.GetString();
                 if (oo is null && root.TryGetProperty("withOnlyOffice", out var w) && w.ValueKind is JsonValueKind.True or JsonValueKind.False) oo = w.GetBoolean();
                 if (channel is null && root.TryGetProperty("channel", out var c)) channel = c.GetString();
+                if (off is null && root.TryGetProperty("disableUpdates", out var d) && d.ValueKind is JsonValueKind.True) off = true;
             }
             catch (JsonException) { }
         }
-        return new(Clean(server), oo, NormalizeChannel(channel), false);
+        return new(Clean(server), oo, NormalizeChannel(channel), off ?? false);
     }
+
+    /// <summary>
+    /// macOS / Linux mass deployment (no registry policies): a deploy.json the administrator (MDM, Ansible…) puts for the whole computer:
+    /// <c>/Library/Application Support/BlueDrive/deploy.json</c>, <c>/etc/bluedrive/deploy.json</c>. Overridable in tests.
+    /// </summary>
+    public static string? MachineFile { get; set; } =
+        OperatingSystem.IsMacOS() ? "/Library/Application Support/BlueDrive/deploy.json" : OperatingSystem.IsLinux() ? "/etc/bluedrive/deploy.json" : null;
 
     private static string? Clean(string? server) =>
         Uri.TryCreate(server?.Trim(), UriKind.Absolute, out var u) && u.Scheme is "https" or "http" ? u.ToString().TrimEnd('/') : null;

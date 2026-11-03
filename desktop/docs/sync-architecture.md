@@ -216,4 +216,23 @@ Chi tiết cài đặt: `huong-dan-cai-dat-desktop.md`; hiệu năng: `bao-cao-h
 | ONLYOFFICE (`OnlyOfficeSetup`) | Tải bộ cài chính thức theo kiến trúc, `WinVerifyTrust` + chủ thể "Ascensio System SIA", một lần nâng quyền cài im lặng + chép provider; phiên bản tối thiểu 8.0. Tùy chọn ở trình hướng dẫn (mặc định bật) hoặc chính sách. |
 | Phát hành | `.github/workflows/desktop-release.yml` (tag `desktop-v*`, máy Windows) → GitHub Release; VM: `scripts/sync-desktop-downloads.sh` (gọi trong `deploy-vm.sh`) chép bản ổn định/beta mới nhất vào `deploy/downloads/desktop/`, nginx phục vụ `/downloads/desktop/` (tệp JSON không cache). |
 | Web | `/desktop-app` "Tải ứng dụng máy tính" (menu tài khoản, trang Thiết bị đã kết nối): tải EXE/MSIX, SHA-256, ghi chú phát hành, kênh beta, lệnh triển khai hàng loạt. |
-| Hiệu năng | Quét thư mục bằng `FileIdExtdDirectoryInfo` (một lời gọi mỗi thư mục, không mở handle từng tệp), `Stat` một handle, bỏ đánh dấu lại tệp giữ chỗ vừa tạo, trả bộ nhớ GC sau lượt lớn. Công cụ đo: `desktop/tools/BlueDrive.Sync.Perf`. |
+| Hiệu năng | Quét thư mục bằng `FileIdExtdDirectoryInfo` (một lời gọi mỗi thư mục, không mở handle từng tệp), `Stat` một handle, trả bộ nhớ GC sau lượt lớn. Công cụ đo: `desktop/tools/BlueDrive.Sync.Perf`. |
+
+## 15. macOS (Sync-Phase 10)
+
+Chế độ đồng bộ đầy đủ với cùng engine .NET (Tệp theo yêu cầu kiểu File Provider chưa làm — mục tùy chọn của đặc tả).
+
+| Thành phần | Việc làm |
+|---|---|
+| Ứng dụng | `BlueDrive.Desktop` build hai đích: `net10.0-windows10.0.19041.0` (Cloud Files, Explorer, toast) và `net10.0` (macOS/Linux). Mã chỉ dành cho Windows nằm sau `#if WINDOWS` (`CloudFiles`, `Notifier`, WinRT trong `ConditionsMonitor` / `PackageInfo`). Biểu tượng ở thanh menu, không hiện trên Dock (`MacOSPlatformOptions.ShowInDock = false`); bảng BlueDrive mở ở góc trên bên phải. |
+| Theo dõi thay đổi | `FileSystemWatcher` (FSEvents trên macOS) + quét định kỳ như Windows. |
+| Mã tệp | inode (`lstat`: `u:<thiết bị>:<inode>`) — đổi tên/di chuyển vẫn là cùng tệp (đặc tả 6.1). |
+| Tên tệp | macOS trả tên dạng NFD: `PhysicalFileSystem` chuẩn hóa NFC khi quét; APFS không phân biệt dạng chuẩn hóa nên mở bằng tên NFC vẫn đúng tệp. |
+| Mã đăng nhập | Keychain đăng nhập của người dùng (`KeychainTokenStore`, dịch vụ "BlueDrive", mỗi tài khoản một mục). |
+| Xóa | Vào Thùng rác (`~/.Trash`); Linux: thùng rác freedesktop (`~/.local/share/Trash` + `.trashinfo`). |
+| Khởi động cùng máy | LaunchAgent `~/Library/LaunchAgents/vn.bluestar.bluedrive.plist` (`--background`). |
+| Thông báo | Notification Center (`osascript display notification`). |
+| Tạm dừng khi pin yếu | `pmset -g batt` (mạng tính phí: chưa đo được trên macOS). |
+| Triển khai hàng loạt | `/Library/Application Support/BlueDrive/deploy.json` (`server`, `withOnlyOffice`, `channel`, `disableUpdates`). |
+| Đóng gói, cập nhật | `desktop/packaging/macos/build-macos.sh` (trên máy Mac): publish `osx-arm64`, biểu tượng `.icns`, Velopack `.app` + `BlueDrive.pkg`, kênh cập nhật `osx-stable` / `osx-beta` cùng thư mục `/downloads/desktop/`. Ký Developer ID + notarize khi có chứng thư (biến `BLUEDRIVE_MAC_*`). |
+| Kiểm thử | Job CI `Desktop (macOS)` (máy macOS của GitHub): `Sync.Tests` gồm `UnixDiskTests` (inode qua đổi tên, NFD→NFC, Thùng rác, Keychain, đồng bộ hai chiều trên đĩa thật) + build ứng dụng `osx-arm64`; các test Unix cũng chạy trên Linux trong job backend. |

@@ -11,6 +11,7 @@ const releases = {
       minimumOs: 'Windows 10 1809 (17763)',
       setup: { file: 'BlueDriveSetup.exe', size: 85_000_000, sha256: 'a'.repeat(64) },
       msix: { file: 'BlueDrive.msix', size: 73_000_000, sha256: 'b'.repeat(64) },
+      macos: { file: 'BlueDrive.pkg', size: 90_000_000, sha256: 'd'.repeat(64) },
       notes: 'BlueDrive Desktop 1.2.0\n- Đồng bộ nhanh hơn',
     },
     beta: {
@@ -35,6 +36,7 @@ test('tải ứng dụng máy tính: phiên bản, liên kết tải, kênh beta
   const main = page.getByRole('main')
   await expect(main.getByRole('link', { name: /Tải BlueDrive 1\.2\.0 cho Windows/ })).toHaveAttribute('href', '/downloads/desktop/BlueDriveSetup.exe')
   await expect(main.getByRole('link', { name: /Gói MSIX/ })).toHaveAttribute('href', '/downloads/desktop/BlueDrive.msix')
+  await expect(main.getByRole('link', { name: /macOS \(Apple silicon\)/ })).toHaveAttribute('href', '/downloads/desktop/BlueDrive.pkg')
   await expect(main.getByText('a'.repeat(64))).toBeVisible()
   await expect(main.getByText('81,1 MB (BlueDriveSetup.exe)')).toBeVisible()
 

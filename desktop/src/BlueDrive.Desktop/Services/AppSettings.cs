@@ -66,14 +66,38 @@ public sealed class AppSettings
     }
 }
 
-/// <summary>"Khởi động cùng Windows": HKCU\...\Run (per user, no admin rights).</summary>
+/// <summary>
+/// "Khởi động cùng Windows / máy tính" (per user, no administrator rights): Windows HKCU\...\Run (MSIX: the package StartupTask),
+/// macOS a LaunchAgent (~/Library/LaunchAgents/vn.bluestar.bluedrive.plist), Linux an XDG autostart entry (~/.config/autostart).
+/// </summary>
 public static class StartupRegistration
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string Name = "BlueDrive";
+    public const string MacLabel = "vn.bluestar.bluedrive";
+
+    /// <summary>Overridable in tests (home folder for the macOS / Linux files).</summary>
+    public static string Home { get; set; } = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+    public static string MacAgentPath => Path.Combine(Home, "Library", "LaunchAgents", MacLabel + ".plist");
+    public static string LinuxAutostartPath => Path.Combine(Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } c ? c : Path.Combine(Home, ".config"),
+        "autostart", "bluedrive.desktop");
 
     public static void Set(bool enabled, string? exePath = null)
     {
+        exePath ??= Environment.ProcessPath;
+        if (OperatingSystem.IsMacOS() || OperatingSystem.IsLinux())
+        {
+            var path = OperatingSystem.IsMacOS() ? MacAgentPath : LinuxAutostartPath;
+            if (!enabled)
+            {
+                if (File.Exists(path)) File.Delete(path);
+                return;
+            }
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, OperatingSystem.IsMacOS() ? MacAgent(exePath!) : LinuxDesktopEntry(exePath!));
+            return;
+        }
         if (!OperatingSystem.IsWindows()) return;
         if (PackageInfo.IsPackaged)
         {
@@ -86,8 +110,33 @@ public static class StartupRegistration
         else key.DeleteValue(Name, throwOnMissingValue: false);
     }
 
+    public static string MacAgent(string exe) => $"""
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+          <key>Label</key><string>{MacLabel}</string>
+          <key>ProgramArguments</key><array><string>{System.Security.SecurityElement.Escape(exe)}</string><string>--background</string></array>
+          <key>RunAtLoad</key><true/>
+          <key>ProcessType</key><string>Interactive</string>
+        </dict>
+        </plist>
+        """;
+
+    public static string LinuxDesktopEntry(string exe) => $"""
+        [Desktop Entry]
+        Type=Application
+        Name=BlueDrive
+        Comment=Đồng bộ tư liệu BlueDrive
+        Exec="{exe}" --background
+        Icon=bluedrive
+        X-GNOME-Autostart-enabled=true
+        """;
+
     public static bool IsSet()
     {
+        if (OperatingSystem.IsMacOS()) return File.Exists(MacAgentPath);
+        if (OperatingSystem.IsLinux()) return File.Exists(LinuxAutostartPath);
         if (!OperatingSystem.IsWindows()) return false;
         using var key = Registry.CurrentUser.OpenSubKey(RunKey);
         return key?.GetValue(Name) is string;
@@ -114,12 +163,17 @@ public static class PackageInfo
     public static bool LaunchedAtStartup()
     {
         if (!IsPackaged || !OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763)) return false;
+#if WINDOWS
         try { return Windows.ApplicationModel.AppInstance.GetActivatedEventArgs()?.Kind == Windows.ApplicationModel.Activation.ActivationKind.StartupTask; }
         catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException) { return false; }
+#else
+        return false;
+#endif
     }
 
     public static void SetStartupTask(bool enabled)
     {
+#if WINDOWS
         if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763)) return;
         try
         {
@@ -128,6 +182,7 @@ public static class PackageInfo
             else if (!enabled && task.State == Windows.ApplicationModel.StartupTaskState.Enabled) task.Disable();
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException or ArgumentException) { }
+#endif
     }
 
     [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]

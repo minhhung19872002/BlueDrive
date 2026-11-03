@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using BlueDrive.Sync.Agent;
 using BlueDrive.Sync.Client;
-using BlueDrive.Sync.Windows;
 using Serilog;
 
 namespace BlueDrive.Desktop.Services;
@@ -94,7 +93,7 @@ public sealed class AppHost : IAsyncDisposable
         Sessions.Remove(s);
         var dehydrated = s.Config.OnDemand && Directory.Exists(s.Config.SyncFolder)
             ? Directory.EnumerateFiles(s.Config.SyncFolder, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true })
-                .Where(CloudPlaceholders.IsDehydrated).ToList()
+                .Where(CloudFiles.IsDehydrated).ToList()
             : [];
         await s.DisposeAsync();
         if (s.Config.OnDemand)
@@ -105,7 +104,7 @@ public sealed class AppHost : IAsyncDisposable
                 try { File.Delete(f); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Warning(ex, "Không xóa được tệp giữ chỗ {Path}", f); }
             }
-            SyncRootRegistrar.Unregister(new SyncRootInfo(s.Config.SyncFolder, s.Config.Id, "", AppVersion, "", null));
+            CloudFiles.Unregister(s.Config.SyncFolder, s.Config.Id, AppVersion);
         }
         Store.Remove(s.Config.Id);
         RegisterShell();
@@ -122,16 +121,16 @@ public sealed class AppHost : IAsyncDisposable
         if (s.Config.OnDemand == onDemand) return s;
         if (!onDemand && s.Platform is not null)
         {
-            var files = Directory.EnumerateFiles(s.Config.SyncFolder, "*", SearchOption.AllDirectories).Where(CloudPlaceholders.IsDehydrated).ToList();
+            var files = Directory.EnumerateFiles(s.Config.SyncFolder, "*", SearchOption.AllDirectories).Where(CloudFiles.IsDehydrated).ToList();
             for (var i = 0; i < files.Count; i++)
             {
                 progress?.Report($"Đang tải về máy {i + 1}/{files.Count}: {Path.GetFileName(files[i])}");
-                await Task.Run(() => CloudPlaceholders.Hydrate(files[i]));
+                await Task.Run(() => CloudFiles.Hydrate(files[i]));
             }
         }
         Sessions.Remove(s);
         await s.DisposeAsync();
-        if (!onDemand) SyncRootRegistrar.Unregister(new SyncRootInfo(s.Config.SyncFolder, s.Config.Id, "", AppVersion, "", null));
+        if (!onDemand) CloudFiles.Unregister(s.Config.SyncFolder, s.Config.Id, AppVersion);
         var acc = s.Config with { OnDemand = onDemand };
         Store.Save(acc);
         return await StartSessionAsync(acc);
@@ -178,12 +177,12 @@ public sealed class AppHost : IAsyncDisposable
                 foreach (var f in Directory.EnumerateFiles(s.Config.SyncFolder, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true }))
                 {
                     var info = new FileInfo(f);
-                    if (CloudPlaceholders.IsDehydrated(f) || info.Attributes.HasFlag(CloudNative.Pinned)) continue;
+                    if (CloudFiles.IsDehydrated(f) || CloudFiles.IsPinned(info.Attributes)) continue;
                     var used = info.LastAccessTimeUtc > info.LastWriteTimeUtc ? info.LastAccessTimeUtc : info.LastWriteTimeUtc;
                     if (used > limit) continue;
                     try
                     {
-                        CloudPlaceholders.Dehydrate(f);
+                        CloudFiles.Dehydrate(f);
                         freed++;
                     }
                     catch (IOException) { } // not synced yet / open: next time

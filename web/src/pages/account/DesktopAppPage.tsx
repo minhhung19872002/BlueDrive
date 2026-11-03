@@ -1,5 +1,5 @@
 import { Alert, Button, Card, Col, Collapse, Descriptions, Row, Skeleton, Space, Tag, Typography } from 'antd'
-import { CheckCircleOutlined, DownloadOutlined, WindowsOutlined } from '@ant-design/icons'
+import { AppleOutlined, CheckCircleOutlined, DownloadOutlined, WindowsOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import PageHeader from '@/components/PageHeader'
@@ -18,6 +18,8 @@ interface ChannelRelease {
   minimumOs: string
   setup: ReleaseFile | null
   msix: ReleaseFile | null
+  /** BlueDrive.pkg for macOS (Apple silicon, full sync mode). */
+  macos?: ReleaseFile | null
   notes: string | null
 }
 
@@ -49,6 +51,11 @@ function Release({ release, beta }: { release: ChannelRelease; beta?: boolean })
         {release.msix && (
           <Button size="large" href={BASE + release.msix.file}>
             {t('desktopApp.downloadMsix')}
+          </Button>
+        )}
+        {release.macos && (
+          <Button size="large" icon={<AppleOutlined />} href={BASE + release.macos.file}>
+            {t('desktopApp.downloadMac')}
           </Button>
         )}
       </Space>

@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using BlueDrive.Sync.Agent;
-using BlueDrive.Sync.Windows;
 using Serilog;
 
 namespace BlueDrive.Desktop.Services;
@@ -64,9 +63,9 @@ public static class Uninstaller
         {
             if (!deleteFiles)
                 foreach (var f in Directory.EnumerateFiles(acc.SyncFolder, "*", new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true })
-                             .Where(CloudPlaceholders.IsDehydrated).ToList())
+                             .Where(CloudFiles.IsDehydrated).ToList())
                     TryRun(() => File.Delete(f), f);
-            TryRun(() => SyncRootRegistrar.Unregister(new SyncRootInfo(acc.SyncFolder, acc.Id, "", "", "", null)), "sync root");
+            TryRun(() => CloudFiles.Unregister(acc.SyncFolder, acc.Id, ""), "sync root");
         }
         if (deleteFiles) DeleteTree(acc.SyncFolder);
     }

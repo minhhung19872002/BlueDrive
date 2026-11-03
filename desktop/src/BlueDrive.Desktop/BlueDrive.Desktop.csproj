@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <!-- Windows (Files On-Demand, Explorer, toasts) and macOS / Linux (full sync mode, Sync-Phase 10/11). -->
+    <TargetFrameworks>net10.0-windows10.0.19041.0;net10.0</TargetFrameworks>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <RootNamespace>BlueDrive.Desktop</RootNamespace>
     <AssemblyName>BlueDrive</AssemblyName>
     <Description>BlueDrive Desktop: tray app, first-run wizard, settings, conflicts (Avalonia, 100% Vietnamese UI).</Description>
@@ -15,8 +15,21 @@
     <Company>BLUESTAR</Company>
     <Product>BlueDrive</Product>
   </PropertyGroup>
-  <ItemGroup>
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'">
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <!-- macOS: a menu bar app (no Dock icon) once bundled (Info.plist LSUIElement, desktop/packaging/macos). -->
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows10.0.19041.0'">
     <ProjectReference Include="..\BlueDrive.Sync.Windows\BlueDrive.Sync.Windows.csproj" />
+    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
+    <!-- Microsoft.Toolkit.Uwp.Notifications pulls System.Drawing.Common 4.7.0 (GHSA-rxg9-xrhp-64gj). -->
+    <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\BlueDrive.Sync.Agent\BlueDrive.Sync.Agent.csproj" />
   </ItemGroup>
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
@@ -34,11 +47,8 @@
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.22" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="Microsoft.Toolkit.Uwp.Notifications" Version="7.1.3" />
     <PackageReference Include="Serilog" Version="4.4.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageReference Include="Velopack" Version="1.2.161" />
-    <!-- Microsoft.Toolkit.Uwp.Notifications pulls System.Drawing.Common 4.7.0 (GHSA-rxg9-xrhp-64gj). -->
-    <PackageReference Include="System.Drawing.Common" Version="10.0.0" />
   </ItemGroup>
 </Project>

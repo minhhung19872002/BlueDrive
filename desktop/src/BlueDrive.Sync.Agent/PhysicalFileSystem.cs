@@ -18,7 +18,12 @@ public class PhysicalFileSystem(string root, bool useRecycleBin = true) : ILocal
 
     public string Abs(string path) => path.Length == 0 ? Root : Path.Combine(Root, path.Replace('/', Path.DirectorySeparatorChar));
 
-    private string Rel(string abs) => Path.GetRelativePath(Root, abs).Replace(Path.DirectorySeparatorChar, '/');
+    /// <summary>Relative, "/" separated; NFC on macOS (its file system hands out decomposed NFD names; the engine and server use NFC).</summary>
+    private string Rel(string abs)
+    {
+        var rel = Path.GetRelativePath(Root, abs).Replace(Path.DirectorySeparatorChar, '/');
+        return OperatingSystem.IsMacOS() ? NameMapper.Nfc(rel) : rel;
+    }
 
     public IReadOnlyList<LocalEntry> Scan(string path)
     {
@@ -195,7 +200,7 @@ public class PhysicalFileSystem(string root, bool useRecycleBin = true) : ILocal
         var isDir = Directory.Exists(abs);
         if (!isDir && !File.Exists(abs)) return;
         if (!isDir) Writable(abs);
-        if (useRecycleBin && OperatingSystem.IsWindows() && RecycleBin.TrySend(abs)) return;
+        if (useRecycleBin && (OperatingSystem.IsWindows() ? RecycleBin.TrySend(abs) : UnixTrash.TrySend(abs))) return;
         if (isDir) Directory.Delete(abs, recursive: true);
         else File.Delete(abs);
     }
@@ -289,7 +294,7 @@ public class PhysicalFileSystem(string root, bool useRecycleBin = true) : ILocal
 
     internal static string FileId(string abs, bool isFolder)
     {
-        if (!OperatingSystem.IsWindows()) return "p:" + abs;
+        if (!OperatingSystem.IsWindows()) return UnixNative.FileId(abs) ?? throw new IOException($"Không đọc được mã tệp của {abs}.");
         using var h = Native.CreateFileW(LongPath(abs), 0, FileShare.ReadWrite | FileShare.Delete, IntPtr.Zero, FileMode.Open,
             Native.FILE_FLAG_BACKUP_SEMANTICS | Native.FILE_FLAG_OPEN_REPARSE_POINT, IntPtr.Zero);
         if (h.IsInvalid) throw new IOException($"Không mở được {abs} (mã lỗi {Marshal.GetLastPInvokeError()}).");
@@ -387,6 +392,50 @@ public class PhysicalFileSystem(string root, bool useRecycleBin = true) : ILocal
                 wFunc = FO_DELETE, pFrom = abs + "\0\0", fFlags = FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI,
             };
             return SHFileOperationW(ref op) == 0 && op.fAnyOperationsAborted == 0 && !File.Exists(abs) && !Directory.Exists(abs);
+        }
+    }
+
+    /// <summary>
+    /// macOS: ~/.Trash (Finder's Trash); Linux: the freedesktop.org trash (~/.local/share/Trash, with the .trashinfo restore record).
+    /// False when the trash is on another volume (the move would copy everything): the item is then deleted.
+    /// </summary>
+    private static class UnixTrash
+    {
+        public static bool TrySend(string abs)
+        {
+            try
+            {
+                var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                var name = Path.GetFileName(abs.TrimEnd('/'));
+                if (OperatingSystem.IsMacOS())
+                {
+                    var trash = Path.Combine(home, ".Trash");
+                    if (!Directory.Exists(trash)) return false;
+                    return MoveUnique(abs, trash, name, out _);
+                }
+                var dataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME") is { Length: > 0 } x ? x : Path.Combine(home, ".local", "share");
+                var files = Path.Combine(dataHome, "Trash", "files");
+                var info = Path.Combine(dataHome, "Trash", "info");
+                Directory.CreateDirectory(files);
+                Directory.CreateDirectory(info);
+                if (!MoveUnique(abs, files, name, out var used)) return false;
+                File.WriteAllText(Path.Combine(info, used + ".trashinfo"),
+                    $"[Trash Info]\nPath={Uri.EscapeDataString(abs).Replace("%2F", "/")}\nDeletionDate={DateTime.Now:yyyy-MM-ddTHH:mm:ss}\n");
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
+        }
+
+        private static bool MoveUnique(string abs, string dir, string name, out string used)
+        {
+            used = name;
+            for (var i = 2; File.Exists(Path.Combine(dir, used)) || Directory.Exists(Path.Combine(dir, used)); i++)
+                used = $"{Path.GetFileNameWithoutExtension(name)} {i}{Path.GetExtension(name)}";
+            var target = Path.Combine(dir, used);
+            if (Path.GetPathRoot(abs) != Path.GetPathRoot(target)) return false;
+            if (Directory.Exists(abs)) Directory.Move(abs, target);
+            else File.Move(abs, target);
+            return true;
         }
     }
 }

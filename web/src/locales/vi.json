@@ -1015,6 +1015,7 @@
     "download": "Tải BlueDrive {{version}} cho Windows",
     "downloadBeta": "Tải bản thử nghiệm {{version}}",
     "downloadMsix": "Gói MSIX (Intune / App Installer)",
+    "downloadMac": "macOS (Apple silicon)",
     "version": "Phiên bản",
     "published": "Ngày phát hành",
     "size": "Dung lượng",

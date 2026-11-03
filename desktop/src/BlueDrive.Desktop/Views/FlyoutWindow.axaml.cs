@@ -42,7 +42,9 @@ public partial class FlyoutWindow : Window
         {
             var area = screen.WorkingArea;
             var scale = screen.Scaling;
-            Position = new PixelPoint(area.Right - (int)((Width + 12) * scale), area.Bottom - (int)((Height + 12) * scale));
+            // Next to the tray: bottom right on Windows (taskbar), top right on macOS / Linux desktops (menu bar / top panel).
+            var y = OperatingSystem.IsWindows() ? area.Bottom - (int)((Height + 12) * scale) : area.Y + (int)(8 * scale);
+            Position = new PixelPoint(area.Right - (int)((Width + 12) * scale), y);
         }
         Activate();
     }

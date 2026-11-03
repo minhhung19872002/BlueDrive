@@ -2,7 +2,6 @@ using System.Collections.ObjectModel;
 using BlueDrive.Desktop.Services;
 using BlueDrive.Sync.Agent;
 using BlueDrive.Sync.Core;
-using BlueDrive.Sync.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 

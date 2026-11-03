@@ -114,6 +114,34 @@ public sealed class PackagingTests : IDisposable
     }
 
     [Fact]
+    public void Macos_and_linux_start_with_the_computer_and_read_the_battery()
+    {
+        var plist = System.Xml.Linq.XDocument.Parse(StartupRegistration.MacAgent("/Applications/BlueDrive.app/Contents/MacOS/BlueDrive"));
+        var values = plist.Descendants("string").Select(e => e.Value).ToList();
+        values.Should().ContainInOrder(StartupRegistration.MacLabel, "/Applications/BlueDrive.app/Contents/MacOS/BlueDrive", "--background");
+        StartupRegistration.LinuxDesktopEntry("/opt/bluedrive/BlueDrive").Should().Contain("Exec=\"/opt/bluedrive/BlueDrive\" --background")
+            .And.StartWith("[Desktop Entry]");
+
+        ConditionsMonitor.ParsePmset("Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234)\t15%; discharging; 0:42 remaining present: true")
+            .Should().Be((true, 15));
+        ConditionsMonitor.ParsePmset("Now drawing from 'AC Power'\n -InternalBattery-0 (id=1234)\t100%; charged; 0:00 remaining").Should().Be((false, 100));
+    }
+
+    [Fact]
+    public void Machine_wide_deploy_json_presets_macos_and_linux_computers()
+    {
+        var old = Deployment.MachineFile;
+        try
+        {
+            Deployment.MachineFile = Path.Combine(_dir, "machine-deploy.json");
+            File.WriteAllText(Deployment.MachineFile, """{ "server": "https://drive.example.gov.vn", "withOnlyOffice": false, "disableUpdates": true }""");
+            Deployment.FromArgs([], Path.Combine(_dir, "app")).Should().Be(new Deployment("https://drive.example.gov.vn", false, null, true));
+            Deployment.FromArgs(["--server=https://khac.vn"], Path.Combine(_dir, "app")).Server.Should().Be("https://khac.vn");
+        }
+        finally { Deployment.MachineFile = old; }
+    }
+
+    [Fact]
     public void Updates_come_from_the_bluedrive_server()
     {
         Updater.FeedUrl("https://drive.example.gov.vn/").Should().Be("https://drive.example.gov.vn/downloads/desktop/");

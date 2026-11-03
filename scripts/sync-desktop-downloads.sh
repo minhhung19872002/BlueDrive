@@ -44,9 +44,11 @@ for ch in stable beta; do
       jq -n --arg f "$1" --argjson s "$(wc -c < "$work/new/$1" | tr -d ' ')" --arg h "$(sha256sum "$work/new/$1" | cut -d' ' -f1)" '{file:$f,size:$s,sha256:$h}'
     else echo null; fi
   }
+  pkg=BlueDrive.pkg; [ "$ch" = stable ] || pkg="BlueDrive-$ch.pkg"
   jq --arg ch "$ch" --arg v "$version" --argjson setup "$(describe "$setup")" --argjson msix "$(describe "$msix")" \
-     --arg at "$(jq -r '.published_at' "$work/$ch.json")" --arg notes "$(jq -r '.body // ""' "$work/$ch.json")" \
-     '.[$ch] = {version:$v, publishedAt:$at, runtime:"win-x64", minimumOs:"Windows 10 1809 (17763)", setup:$setup, msix:$msix,
+     --argjson macos "$(describe "$pkg")" \
+     --arg at "$(jq -r '.published_at' "$work/$ch.json")" --arg notes "$(jq -r '.body // ""' "$work/$ch.json" | tr -d '\r')" \
+     '.[$ch] = {version:$v, publishedAt:$at, runtime:"win-x64", minimumOs:"Windows 10 1809 (17763)", setup:$setup, msix:$msix, macos:$macos,
                 notes:(if $notes == "" then null else $notes end)}' "$work/channels.json" > "$work/channels.tmp"
   mv "$work/channels.tmp" "$work/channels.json"
 done

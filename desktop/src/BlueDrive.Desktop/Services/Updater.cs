@@ -24,6 +24,9 @@ public sealed class Updater(Func<string?> server, Func<string> channel, Func<boo
 
     public event Action? Changed;
 
+    public static string OsChannel(string channel) =>
+        OperatingSystem.IsMacOS() ? "osx-" + channel : OperatingSystem.IsLinux() ? "linux-" + channel : channel;
+
     public static string FeedUrl(string server) => $"{server.TrimEnd('/')}/{FeedPath}/";
 
     public static bool IsInstalled
@@ -41,9 +44,10 @@ public sealed class Updater(Func<string?> server, Func<string> channel, Func<boo
         if (disabled() || server() is not { } s) return false;
         try
         {
-            var ch = channel();
+            // One feed folder for every OS: Velopack channels "stable" / "beta" (Windows), "osx-stable", "linux-stable"…
+            var ch = OsChannel(channel());
             // Switching beta → stable installs the (older) stable version.
-            _mgr = new UpdateManager(new SimpleWebSource(FeedUrl(s)), new UpdateOptions { ExplicitChannel = ch, AllowVersionDowngrade = ch == "stable" });
+            _mgr = new UpdateManager(new SimpleWebSource(FeedUrl(s)), new UpdateOptions { ExplicitChannel = ch, AllowVersionDowngrade = ch.EndsWith("stable", StringComparison.Ordinal) });
             if (!_mgr.IsInstalled) return false;
             LastCheck = DateTime.Now;
             var info = await _mgr.CheckForUpdatesAsync();
