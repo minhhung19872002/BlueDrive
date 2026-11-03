@@ -871,3 +871,226 @@ body {
   max-height: calc(100vh - 24px);
   overflow-y: auto;
 }
+
+/* ---------- "Sao chép tới / Di chuyển tới" picker (SharePoint-like) ---------- */
+.bd-picker {
+  display: flex;
+  gap: 0;
+  height: min(560px, 70vh);
+}
+
+.bd-picker-side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 240px;
+  flex-shrink: 0;
+  padding: 4px 12px 12px 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--bd-border);
+}
+
+.bd-picker-title {
+  font-size: 20px;
+  font-weight: 600;
+  padding: 0 8px;
+}
+
+.bd-picker-subtitle {
+  color: rgba(0, 0, 0, 0.45);
+  padding: 0 8px 12px;
+}
+
+.bd-picker-section {
+  margin-top: 12px;
+  padding: 4px 8px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.65);
+}
+
+.bd-picker-place {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bd-picker-place:hover:not(:disabled) {
+  background: #f0f4f9;
+}
+
+.bd-picker-place:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.bd-picker-place-active {
+  background: #e6eef7;
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 #0b5394;
+}
+
+.bd-picker-place-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bd-picker-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  padding-left: 16px;
+}
+
+.bd-picker-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0 12px;
+}
+
+.bd-picker-crumbs {
+  font-size: 16px;
+  min-width: 0;
+}
+
+.bd-picker-tools {
+  display: flex;
+  gap: 8px;
+}
+
+.bd-picker-list {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--bd-border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.bd-picker-head,
+.bd-picker-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px 170px 20px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+}
+
+.bd-picker-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 44px;
+  background: #fff;
+  border-bottom: 1px solid var(--bd-border);
+  font-weight: 600;
+}
+
+.bd-picker-row {
+  min-height: 56px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.bd-picker-row-folder {
+  cursor: pointer;
+}
+
+.bd-picker-row-folder:hover,
+.bd-picker-row-folder:focus-visible {
+  background: #f5f7fa;
+  outline: none;
+}
+
+.bd-picker-row-folder:hover .bd-picker-name {
+  text-decoration: underline;
+}
+
+/* Files (and folders being moved) are shown for context only. */
+.bd-picker-row-off {
+  color: rgba(0, 0, 0, 0.35);
+  cursor: default;
+}
+
+.bd-picker-row-off img,
+.bd-picker-row-off svg {
+  opacity: 0.45;
+}
+
+.bd-picker-cell-name {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.bd-picker-name-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bd-picker-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bd-picker-meta {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.bd-picker-row-off .bd-picker-meta {
+  color: rgba(0, 0, 0, 0.3);
+}
+
+.bd-picker-cell {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bd-picker-chevron {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+.bd-picker-empty {
+  padding: 48px 0;
+  text-align: center;
+}
+
+.bd-picker-alert {
+  margin-top: 8px;
+}
+
+@media (max-width: 767px) {
+  .bd-picker {
+    flex-direction: column;
+    height: 70vh;
+  }
+
+  .bd-picker-main {
+    padding-left: 0;
+  }
+
+  .bd-picker-tools {
+    width: 100%;
+  }
+
+  .bd-picker-head,
+  .bd-picker-row {
+    grid-template-columns: minmax(0, 1fr) 20px;
+  }
+}

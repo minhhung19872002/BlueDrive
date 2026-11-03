@@ -217,11 +217,11 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
     [],
   )
   const copyTo = useCallback(
-    (items: DriveItem[]) => items.length && setCopyMove({ mode: 'copy', items: items.map(toRef), workspaceId: items[0].workspaceId }),
+    (items: DriveItem[]) => items.length && setCopyMove({ mode: 'copy', items: items.map(toRef), workspaceId: items[0].workspaceId, folderId: items[0].parentId }),
     [],
   )
   const moveTo = useCallback(
-    (items: DriveItem[]) => items.length && setCopyMove({ mode: 'move', items: items.map(toRef), workspaceId: items[0].workspaceId }),
+    (items: DriveItem[]) => items.length && setCopyMove({ mode: 'move', items: items.map(toRef), workspaceId: items[0].workspaceId, folderId: items[0].parentId }),
     [],
   )
 

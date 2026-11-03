@@ -52,14 +52,12 @@ async function clickMenu(page: Page, item: string, name: RegExp) {
   await page.getByRole('menuitem', { name }).click()
 }
 
-/** Destination tree of "Sao chép tới / Di chuyển tới": search without diacritics, then pick the node. */
+/** "Sao chép tới / Di chuyển tới" (SharePoint-like picker): search the current folder without diacritics, then open the folder. */
 async function pickFolder(page: Page, name: string) {
-  await page.getByRole('dialog').locator('.ant-tree-select').click()
-  // Wait for the folder tree (root + its folders) before searching: a search typed earlier keeps nodes collapsed.
-  await expect(page.locator('.ant-select-tree-treenode').nth(1)).toBeVisible({ timeout: 15_000 })
-  await page.keyboard.type(name.normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/gi, 'd'))
-  await page.locator('.ant-select-tree').getByTitle(name, { exact: true }).click()
-  await expect(page.getByRole('dialog').getByTitle(name, { exact: true })).toBeVisible()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByPlaceholder('Tìm trong thư mục hiện tại').fill(name.normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/gi, 'd'))
+  await dialog.getByRole('button', { name, exact: true }).click()
+  await expect(dialog.locator('.bd-picker-crumbs strong', { hasText: name })).toBeVisible()
 }
 
 test('menu ngữ cảnh: mọi thao tác trên tệp', async ({ page }) => {
