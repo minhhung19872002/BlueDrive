@@ -9,7 +9,7 @@ namespace BlueDrive.Sync.Agent;
 /// <see cref="Root"/>, "/" separated. Windows: NTFS File ID identifies a file across renames/moves (spec 6.1), deletions go to the
 /// Recycle Bin. Symbolic links / junctions and hidden+system files are never followed nor synced (spec 6.2, 9).
 /// </summary>
-public sealed class PhysicalFileSystem(string root, bool useRecycleBin = true) : ILocalFileSystem
+public class PhysicalFileSystem(string root, bool useRecycleBin = true) : ILocalFileSystem
 {
     public string Root { get; } = Path.GetFullPath(root);
 
@@ -54,7 +54,8 @@ public sealed class PhysicalFileSystem(string root, bool useRecycleBin = true) :
     private bool Include(FileSystemInfo info)
     {
         var a = info.Attributes;
-        if (a.HasFlag(FileAttributes.ReparsePoint))
+        // Symbolic links / junctions only: Files On-Demand placeholders are reparse points too, and are synced.
+        if (a.HasFlag(FileAttributes.ReparsePoint) && info.LinkTarget is not null)
         {
             Skipped?.Invoke(Rel(info.FullName), "Liên kết tượng trưng / junction không được đồng bộ.");
             return false;
@@ -84,7 +85,7 @@ public sealed class PhysicalFileSystem(string root, bool useRecycleBin = true) :
         if (path.Length == 0) return new LocalEntry("", true, "root", 0, default);
         var abs = Abs(path);
         FileSystemInfo info = Directory.Exists(abs) ? new DirectoryInfo(abs) : new FileInfo(abs);
-        if (!info.Exists || info.Attributes.HasFlag(FileAttributes.ReparsePoint)) return null;
+        if (!info.Exists || info.LinkTarget is not null) return null;
         var e = Entry(info);
         // Keep the caller's spelling of the path (the disk may differ only in case).
         return e is null ? null : e with { Path = ActualCase(path, e.Path) };
@@ -151,7 +152,7 @@ public sealed class PhysicalFileSystem(string root, bool useRecycleBin = true) :
         else throw new FileNotFoundException(from);
     }
 
-    public void Delete(string path)
+    public virtual void Delete(string path)
     {
         var abs = Abs(path);
         var isDir = Directory.Exists(abs);

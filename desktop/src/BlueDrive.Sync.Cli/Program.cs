@@ -1,6 +1,7 @@
 using System.Text;
 using BlueDrive.Sync.Agent;
 using BlueDrive.Sync.Client;
+using BlueDrive.Sync.Windows;
 
 // bluedrive-sync: BlueDrive Desktop without the tray UI (full sync mode). Used for the Sync-Phase 4 demo and headless deployments.
 Console.OutputEncoding = Encoding.UTF8;
@@ -29,7 +30,9 @@ int Help()
         BlueDrive Desktop - đồng bộ tư liệu xuống máy tính (chế độ đồng bộ đầy đủ)
 
         Cách dùng:
-          bluedrive-sync login <địa chỉ máy chủ> [--folder <thư mục>]   Đăng nhập bằng trình duyệt, thêm tài khoản
+          bluedrive-sync login <địa chỉ máy chủ> [--folder <thư mục>] [--full]
+                                                                        Đăng nhập bằng trình duyệt, thêm tài khoản. Mặc định
+                                                                        "Tệp theo yêu cầu" (chỉ tải khi mở); --full: tải hết về máy
           bluedrive-sync run                                            Chạy đồng bộ cho mọi tài khoản (Ctrl+C để dừng)
           bluedrive-sync status                                         Xem các tài khoản và trạng thái gần nhất
           bluedrive-sync logout <địa chỉ máy chủ>                       Gỡ tài khoản (tệp trên máy được giữ nguyên)
@@ -80,8 +83,12 @@ async Task<int> LoginAsync(string[] a)
         Console.Error.WriteLine($"Thư mục {folder} đã được một tài khoản khác dùng. Hãy chọn thư mục khác bằng --folder.");
         return 1;
     }
-    store.Save(new AccountConfig(id, BlueDriveHttp.Normalize(server).ToString(), folder, me.Username, me.FullName, tokens.DeviceId));
+    var onDemand = !a.Contains("--full") && SupportsOnDemand(folder);
+    store.Save(new AccountConfig(id, BlueDriveHttp.Normalize(server).ToString(), folder, me.Username, me.FullName, tokens.DeviceId) { OnDemand = onDemand });
     Console.WriteLine($"Đã đăng nhập {me.FullName} ({me.Username}). Tư liệu sẽ được đồng bộ vào: {folder}");
+    Console.WriteLine(onDemand
+        ? "Chế độ: Tệp theo yêu cầu — tệp hiện đủ trong Explorer, chỉ tải về khi mở (chuột phải → \"Luôn giữ trên thiết bị\" để tải sẵn)."
+        : "Chế độ: Đồng bộ đầy đủ — mọi tệp được tải về máy.");
     Console.WriteLine("Chạy \"bluedrive-sync run\" để bắt đầu đồng bộ.");
     return 0;
 }
@@ -117,7 +124,8 @@ async Task<int> RunAsync()
         var agent = new SyncAgent(new AgentOptions
         {
             Server = new Uri(acc.ServerUrl), SyncFolder = acc.SyncFolder, StateDbPath = store.StateDbPath(acc.Id), Tokens = store.Tokens(acc.Id),
-            UserDisplayName = acc.DisplayName, AppVersion = Version(),
+            UserDisplayName = acc.DisplayName, AppVersion = Version(), AccountId = acc.Id,
+            OnDemand = acc.OnDemand && SupportsOnDemand(acc.SyncFolder) ? ctx => Platform(ctx, acc, Print) : null,
         });
         agent.StatusChanged += s =>
         {
@@ -169,9 +177,26 @@ int Logout(string[] a)
         Console.Error.WriteLine("Không tìm thấy tài khoản. Hãy ghi rõ địa chỉ máy chủ.");
         return 1;
     }
+    if (acc.OnDemand && OperatingSystem.IsWindows())
+        SyncRootRegistrar.Unregister(new SyncRootInfo(acc.SyncFolder, acc.Id, "", Version(), "", null));
     store.Remove(acc.Id);
     Console.WriteLine($"Đã gỡ tài khoản {acc.Username}. Các tệp trong {acc.SyncFolder} được giữ nguyên trên máy.");
     return 0;
+}
+
+static CloudFilesPlatform Platform(OnDemandContext ctx, AccountConfig acc, Action<AccountConfig, string> print)
+{
+    var p = new CloudFilesPlatform(ctx, Environment.ProcessPath is { } exe ? $"{exe},0" : null, Version());
+    p.Problem += (path, message) => print(acc, $"{path}: {message}");
+    return p;
+}
+
+/// <summary>Files On-Demand needs Windows 10 1809+ and an NTFS volume (not FAT32 / exFAT / network drives: full sync there, spec 7.3).</summary>
+static bool SupportsOnDemand(string folder)
+{
+    if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763)) return false;
+    try { return new DriveInfo(Path.GetPathRoot(Path.GetFullPath(folder))!).DriveFormat == "NTFS"; }
+    catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException) { return false; }
 }
 
 static bool SameServer(string a, Uri b) => string.Equals(new Uri(a).GetLeftPart(UriPartial.Authority), b.GetLeftPart(UriPartial.Authority), StringComparison.OrdinalIgnoreCase);

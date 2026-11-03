@@ -1,0 +1,185 @@
+using System.Diagnostics;
+using BlueDrive.Sync.Agent;
+using BlueDrive.Sync.Core;
+using FluentAssertions;
+
+namespace BlueDrive.Sync.Windows.Tests;
+
+/// <summary>Sync-Phase 5: Files On-Demand through the Cloud Files API on this computer (temporary sync root under %TEMP%).</summary>
+public sealed class FilesOnDemandTests : IAsyncLifetime
+{
+    // Under the user profile: Windows silently ignores shell sync root registrations in %TEMP% / AppData.
+    private static readonly string Parent = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "BlueDrive-tests");
+    private readonly string _tmp = Path.Combine(Parent, "cf-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly FakeRemoteStore _remote = new(new FakeClock(DateTime.UtcNow));
+    private CloudFilesPlatform _platform = null!;
+    private SyncStateDb _db = null!;
+    private SyncEngine _engine = null!;
+    private string Root => Path.Combine(_tmp, "BlueDrive");
+
+    /// <summary>Hydration source over the fake server.</summary>
+    private sealed class FakeRange(FakeRemoteStore remote) : IRemoteRangeReader
+    {
+        public int Reads;
+
+        public async Task ReadRangeAsync(string itemId, long offset, long length, Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask> sink, CancellationToken ct)
+        {
+            Interlocked.Increment(ref Reads);
+            var data = remote.Data(itemId);
+            for (var pos = offset; pos < offset + length; pos += 100_000)
+                await sink(data.AsMemory((int)pos, (int)Math.Min(100_000, offset + length - pos)), ct);
+        }
+    }
+
+    private FakeRange _range = null!;
+    private readonly Guid _accountId = Guid.NewGuid();
+
+    public async Task InitializeAsync()
+    {
+        Directory.CreateDirectory(Root);
+        var dbPath = Path.Combine(_tmp, "state.db");
+        _db = new SyncStateDb(dbPath);
+        _db.UpsertRoot(FakeRemoteStore.Root, "", true);
+        _range = new FakeRange(_remote);
+        _platform = new CloudFilesPlatform(new OnDemandContext(Root, _accountId, "Kiểm thử", new Uri("https://bluedrive.example/"), _range, dbPath));
+        await _platform.StartAsync(CancellationToken.None);
+        _engine = new SyncEngine(_db, _remote, _platform.FileSystem, SystemClock.Instance,
+            new SyncEngineOptions { UserDisplayName = "Người thử", DeviceName = "PC-CF" }, _platform.Placeholders);
+    }
+
+    public async Task DisposeAsync()
+    {
+        await _platform.UnregisterAsync();
+        await _platform.DisposeAsync();
+        SyncRootRegistrar.IsRegistered(_accountId).Should().BeFalse("signing out removes the sync root");
+        _db.Dispose();
+        try
+        {
+            Directory.Delete(_tmp, recursive: true);
+            if (!Directory.EnumerateFileSystemEntries(Parent).Any()) Directory.Delete(Parent);
+        }
+        catch (IOException) { }
+    }
+
+    private string Abs(string rel) => Path.Combine(Root, rel.Replace('/', '\\'));
+
+    private static async Task Until(Func<bool> condition, string what)
+    {
+        var watch = Stopwatch.StartNew();
+        while (!condition())
+        {
+            if (watch.Elapsed > TimeSpan.FromSeconds(15)) throw new TimeoutException(what);
+            await Task.Delay(100);
+        }
+    }
+
+    [Fact]
+    public async Task Server_files_arrive_as_placeholders_and_download_only_when_opened()
+    {
+        var big = new byte[3_000_000];
+        Random.Shared.NextBytes(big);
+        _remote.WebCreateFolder(null, "Ấn phẩm");
+        _remote.WebUpload("Ấn phẩm", "tờ rơi.pdf", big);
+        _remote.WebUpload(null, "ghi chú.txt", Content.Of("xin chào"));
+
+        (await _engine.SyncAsync(CancellationToken.None)).Errors.Should().BeEmpty();
+        // Explorer integration (navigation pane, status column) when the shell accepts the registration.
+        _platform.ShellRegistered.Should().BeTrue("the folder appears in Explorer's navigation pane");
+        (await SyncRootRegistrar.RootIdForFolderAsync(Root)).Should().Be(SyncRootRegistrar.Id(_accountId));
+        var pdf = Abs("Ấn phẩm/tờ rơi.pdf");
+        new FileInfo(pdf).Length.Should().Be(big.Length, "the placeholder shows the real size");
+        CloudPlaceholders.IsDehydrated(pdf).Should().BeTrue("nothing is downloaded before the file is opened");
+        _range.Reads.Should().Be(0);
+
+        // Opening the file downloads it through the provider.
+        (await File.ReadAllBytesAsync(pdf)).Should().Equal(big);
+        CloudPlaceholders.IsDehydrated(pdf).Should().BeFalse();
+        _range.Reads.Should().BeGreaterThan(0);
+
+        // "Giải phóng dung lượng" then "Luôn giữ trên thiết bị".
+        CloudPlaceholders.Dehydrate(pdf);
+        CloudPlaceholders.IsDehydrated(pdf).Should().BeTrue();
+        CloudPlaceholders.Pin(pdf, true);
+        await Until(() => !CloudPlaceholders.IsDehydrated(pdf), "giữ trên thiết bị phải tải tệp về");
+        File.GetAttributes(pdf).HasFlag(CloudNative.Pinned).Should().BeTrue();
+
+        // The engine sees nothing to do: placeholders and hydration do not look like local edits.
+        (await _engine.SyncAsync(CancellationToken.None)).Operations.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Local_edits_upload_and_server_versions_replace_the_placeholder()
+    {
+        var id = _remote.WebUpload(null, "kế hoạch.txt", Content.Of("v1"));
+        await _engine.SyncAsync(CancellationToken.None);
+        var file = Abs("kế hoạch.txt");
+
+        // Edit on the computer (the file hydrates on open) → new version on the server.
+        await File.WriteAllTextAsync(file, "v2 sửa trên máy");
+        (await _engine.SyncAsync(CancellationToken.None)).Errors.Should().BeEmpty();
+        _remote.Data(id).Should().Equal(Content.Of("v2 sửa trên máy"));
+
+        // New version on the web → the placeholder takes the new size and drops the old content.
+        _remote.WebUpload(null, "kế hoạch.txt", Content.Of("v3 từ web, dài hơn"));
+        await _engine.SyncAsync(CancellationToken.None);
+        CloudPlaceholders.IsDehydrated(file).Should().BeTrue();
+        (await File.ReadAllTextAsync(file)).Should().Be("v3 từ web, dài hơn");
+
+        // A new local file becomes a placeholder too once uploaded (so it can be freed later).
+        await File.WriteAllTextAsync(Abs("mới.txt"), "tạo trên máy");
+        await _engine.SyncAsync(CancellationToken.None);
+        CloudPlaceholders.Dehydrate(Abs("mới.txt"));
+        (await File.ReadAllTextAsync(Abs("mới.txt"))).Should().Be("tạo trên máy");
+
+        // Deleted on the web → gone locally; afterwards nothing left to do.
+        _remote.WebDelete("kế hoạch.txt");
+        await _engine.SyncAsync(CancellationToken.None);
+        File.Exists(file).Should().BeFalse();
+        (await _engine.SyncAsync(CancellationToken.None)).Operations.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Explorer_keep_on_device_and_free_up_space_commands_are_honoured()
+    {
+        var data = new byte[600_000];
+        Random.Shared.NextBytes(data);
+        _remote.WebUpload(null, "video.mp4", data);
+        await _engine.SyncAsync(CancellationToken.None);
+        var file = Abs("video.mp4");
+        CloudPlaceholders.IsDehydrated(file).Should().BeTrue();
+
+        // Explorer's commands only set the pin attribute (same as attrib +P / +U); the provider does the rest.
+        Cmd($"attrib +P \"{file}\"");
+        await Until(() => !CloudPlaceholders.IsDehydrated(file), "Luôn giữ trên thiết bị: tệp phải được tải về");
+        (await File.ReadAllBytesAsync(file)).Should().Equal(data);
+
+        Cmd($"attrib -P +U \"{file}\"");
+        await Until(() => CloudPlaceholders.IsDehydrated(file), "Giải phóng dung lượng: nội dung phải được bỏ khỏi máy");
+        new FileInfo(file).Length.Should().Be(data.Length);
+    }
+
+    [Fact]
+    public async Task Another_program_cannot_delete_a_view_only_file()
+    {
+        _remote.WebUpload(null, "chỉ xem.docx", Content.Of("nội dung"));
+        _remote.WebUpload(null, "được sửa.docx", Content.Of("nội dung"));
+        _remote.SetCanEdit("chỉ xem.docx", false);
+        await _engine.SyncAsync(CancellationToken.None);
+
+        // Deletions by other processes go through NOTIFY_DELETE; BlueDrive's own operations are always allowed.
+        Cmd($"del /q \"{Abs("chỉ xem.docx")}\"");
+        Cmd($"del /q \"{Abs("được sửa.docx")}\"");
+        File.Exists(Abs("chỉ xem.docx")).Should().BeTrue("the filter refuses deleting an item the user may only view");
+        File.Exists(Abs("được sửa.docx")).Should().BeFalse();
+    }
+
+    private static void Cmd(string command)
+    {
+        using var p = Process.Start(new ProcessStartInfo("cmd.exe", $"/d /c chcp 65001 >nul & {command}")
+        {
+            UseShellExecute = false, CreateNoWindow = true, RedirectStandardError = true, RedirectStandardOutput = true,
+            StandardOutputEncoding = System.Text.Encoding.UTF8,
+        })!;
+        p.WaitForExit(15_000);
+    }
+}

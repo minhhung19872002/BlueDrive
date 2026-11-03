@@ -29,6 +29,10 @@ public sealed class AgentOptions
     public RemoteStoreOptions Transfer { get; init; } = new();
     /// <summary>Tests: in-memory API handler (and SignalR over long polling).</summary>
     public Func<HttpMessageHandler>? HandlerFactory { get; init; }
+    /// <summary>Identifies the account's sync root to the OS (Files On-Demand).</summary>
+    public Guid AccountId { get; init; } = Guid.NewGuid();
+    /// <summary>Files On-Demand (Windows Cloud Files API); null = full sync mode (every file downloaded).</summary>
+    public Func<OnDemandContext, IOnDemandPlatform>? OnDemand { get; init; }
 }
 
 /// <summary>
@@ -47,6 +51,8 @@ public sealed class SyncAgent : IAsyncDisposable
     private readonly PhysicalFileSystem _fs;
     private readonly SyncEngine _engine;
     private readonly DesktopAuthenticator _auth;
+    private readonly IOnDemandPlatform? _platform;
+    private readonly OnDemandContext? _onDemand;
     private readonly object _gate = new();
     private readonly SemaphoreSlim _wake = new(0);
     private readonly CancellationTokenSource _stop = new();
@@ -75,10 +81,16 @@ public sealed class SyncAgent : IAsyncDisposable
         _auth = new DesktopAuthenticator(server, o.HandlerFactory?.Invoke());
         _http = BlueDriveHttp.Create(server, o.Tokens, _auth, o.HandlerFactory?.Invoke());
         _remote = new HttpRemoteStore(_http, o.Transfer);
-        _fs = new PhysicalFileSystem(o.SyncFolder, o.UseRecycleBin);
+        if (o.OnDemand is not null)
+        {
+            _onDemand = new OnDemandContext(Path.GetFullPath(o.SyncFolder), o.AccountId, o.UserDisplayName, server, _remote, Path.GetFullPath(o.StateDbPath));
+            _platform = o.OnDemand(_onDemand);
+            _platform.FileClosed += _ => RequestLocal();
+        }
+        _fs = _platform?.FileSystem ?? new PhysicalFileSystem(o.SyncFolder, o.UseRecycleBin);
         _fs.Skipped += (path, why) => Activity?.Invoke("Bỏ qua", $"{path}: {why}");
         _engine = new SyncEngine(_db, _remote, _fs, SystemClock.Instance,
-            new SyncEngineOptions { UserDisplayName = o.UserDisplayName, DeviceName = o.DeviceName });
+            new SyncEngineOptions { UserDisplayName = o.UserDisplayName, DeviceName = o.DeviceName }, _platform?.Placeholders);
         _engine.Activity += (action, path) => Activity?.Invoke(action, path);
     }
 
@@ -92,6 +104,7 @@ public sealed class SyncAgent : IAsyncDisposable
             Directory.CreateDirectory(_fs.Root);
             _db.SetAccount(InitializedKey, _fs.Root);
         }
+        if (_platform is not null && Directory.Exists(_fs.Root)) await _platform.StartAsync(ct);
         if (Directory.Exists(_fs.Root)) _watcher = NewWatcher();
         _notes = new SyncNotifications(BlueDriveHttp.Normalize(_o.Server), () => Task.FromResult(_o.Tokens.Load()?.AccessToken), _o.HandlerFactory)
         {
@@ -249,16 +262,25 @@ public sealed class SyncAgent : IAsyncDisposable
         var used = new HashSet<string>(known.Values.Select(r => r.LocalPath), StringComparer.OrdinalIgnoreCase);
         foreach (var r in roots)
         {
-            // Online-only workspaces (policy) cannot be synced in full mode: they stay on the web.
-            var enabled = !r.OnlineOnly;
+            // Online-only workspaces (policy): placeholders only with Files On-Demand; not synced at all in full mode.
+            var enabled = !r.OnlineOnly || _platform is not null;
+            string folder;
             if (known.TryGetValue(r.RootId, out var existing))
             {
-                if (existing.Enabled != enabled) _db.UpsertRoot(r.RootId, existing.LocalPath, enabled);
-                continue;
+                folder = existing.LocalPath;
+                if (existing.Enabled != enabled) _db.UpsertRoot(r.RootId, folder, enabled);
             }
-            var name = NameMapper.NextFree(NameMapper.ToLocal(r.Name), n => used.Contains(n) || IgnoreRules.IsIgnored(n) || n == IgnoreRules.NotSyncedFolder);
-            used.Add(name);
-            _db.UpsertRoot(r.RootId, name, enabled);
+            else
+            {
+                folder = NameMapper.NextFree(NameMapper.ToLocal(r.Name), n => used.Contains(n) || IgnoreRules.IsIgnored(n) || n == IgnoreRules.NotSyncedFolder);
+                used.Add(folder);
+                _db.UpsertRoot(r.RootId, folder, enabled);
+            }
+            if (_onDemand is not null)
+            {
+                if (r.OnlineOnly) _onDemand.OnlineOnlyFolders.Add(folder);
+                else _onDemand.OnlineOnlyFolders.Remove(folder);
+            }
         }
     }
 
@@ -307,6 +329,7 @@ public sealed class SyncAgent : IAsyncDisposable
     {
         _watcher?.Dispose();
         _watcher = null;
+        if (_platform is not null) await _platform.UnregisterAsync();
         if (Directory.Exists(_fs.Root))
             foreach (var r in _db.Roots())
             {
@@ -338,6 +361,7 @@ public sealed class SyncAgent : IAsyncDisposable
         }
         _watcher?.Dispose();
         if (_notes is not null) await _notes.DisposeAsync();
+        if (_platform is not null) await _platform.DisposeAsync();
         _http.Dispose();
         _db.Dispose();
         _stop.Dispose();

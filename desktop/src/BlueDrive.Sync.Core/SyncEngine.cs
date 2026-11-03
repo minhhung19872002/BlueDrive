@@ -212,6 +212,7 @@ public sealed class SyncEngine(
     public async Task<SyncPassResult> SyncAsync(CancellationToken ct)
     {
         LastPlan.Clear();
+        var started = clock.UtcNow;
         await RefreshRemoteAsync(ct);
         var total = 0;
         var errors = new List<string>();
@@ -226,6 +227,7 @@ public sealed class SyncEngine(
                 pendingMass = Math.Max(pendingMass, mass);
                 if (ops == 0) break;
             }
+            if (_placeholders.OnDemand) await MarkSyncedAsync(root, started, ct);
             // Clear processed revocations: the items are gone from the base now.
             var revoked = Revoked();
             var known = state.Items(root.RootId).Select(i => i.RemoteId).ToHashSet();
@@ -234,6 +236,28 @@ public sealed class SyncEngine(
             state.ClearOperations(root.RootId);
         }
         return new SyncPassResult(total, pendingMass, errors.Distinct().ToList());
+    }
+
+    /// <summary>Files On-Demand: everything recorded during this pass is shown as synced in Explorer (status icon).</summary>
+    private async Task MarkSyncedAsync(RootState root, DateTime since, CancellationToken ct)
+    {
+        var items = state.Items(root.RootId);
+        var byRemote = items.ToDictionary(i => i.RemoteId);
+        foreach (var b in items.Where(i => i.SyncState == "in_sync" && i.LastSyncedAt >= since))
+        {
+            var parts = new List<string> { b.Name };
+            var cur = b.ParentRemoteId;
+            for (var guard = 0; cur is not null && guard < 256 && byRemote.TryGetValue(cur, out var p); guard++)
+            {
+                parts.Add(p.Name);
+                cur = p.ParentRemoteId;
+            }
+            parts.Reverse();
+            var path = NameMapper.Combine(root.LocalPath.Length == 0 ? null : root.LocalPath, string.Join('/', parts));
+            if (fs.Stat(path) is null) continue;
+            try { await _placeholders.MarkInSyncAsync(path, b.RemoteId, ct); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } // open elsewhere: next pass
+        }
     }
 
     /// <summary>The user answered the mass delete question: delete on BlueDrive too, or restore the files.</summary>

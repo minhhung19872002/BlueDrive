@@ -87,7 +87,14 @@ public interface IPlaceholderProvider
 
     Task UpdatePlaceholderAsync(string path, RemoteItem item, CancellationToken ct);
 
-    Task MarkInSyncAsync(string path, CancellationToken ct);
+    /// <summary>The item at <paramref name="path"/> matches the server copy <paramref name="remoteId"/> (status icon "đã đồng bộ").</summary>
+    Task MarkInSyncAsync(string path, string remoteId, CancellationToken ct);
+}
+
+/// <summary>Reads part of a server file (Files On-Demand hydration streams the requested range to the file system).</summary>
+public interface IRemoteRangeReader
+{
+    Task ReadRangeAsync(string itemId, long offset, long length, Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask> sink, CancellationToken ct);
 }
 
 public sealed class NoPlaceholders : IPlaceholderProvider
@@ -96,7 +103,7 @@ public sealed class NoPlaceholders : IPlaceholderProvider
     public bool OnDemand => false;
     public Task CreatePlaceholderAsync(string path, RemoteItem item, CancellationToken ct) => Task.CompletedTask;
     public Task UpdatePlaceholderAsync(string path, RemoteItem item, CancellationToken ct) => Task.CompletedTask;
-    public Task MarkInSyncAsync(string path, CancellationToken ct) => Task.CompletedTask;
+    public Task MarkInSyncAsync(string path, string remoteId, CancellationToken ct) => Task.CompletedTask;
 }
 
 // ---------------------------------------------------------------- errors

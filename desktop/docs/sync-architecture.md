@@ -136,3 +136,18 @@ bluedrive-sync run       # đồng bộ mọi tài khoản, Ctrl+C để dừng
 bluedrive-sync status    # tài khoản, số mục, xung đột, hoạt động gần nhất
 bluedrive-sync logout https://bluedrive.bluestar.com.vn                           # gỡ tài khoản, giữ tệp
 ```
+
+## 9. Tệp theo yêu cầu trên Windows (`BlueDrive.Sync.Windows`, Cloud Files API)
+
+![Thư mục BlueDrive trong Explorer: tệp chỉ trên mạng (đám mây) và đã có trên máy (dấu tích)](images/files-on-demand-explorer.png)
+
+| Thành phần | Việc làm |
+|---|---|
+| `SyncRootRegistrar` | Đăng ký thư mục BlueDrive của tài khoản bằng `StorageProviderSyncRootManager` (id `BlueDrive!<SID>!<tài khoản>`): Explorer hiện mục "BlueDrive - <Họ tên>" ở khung điều hướng, cột Trạng thái, lệnh "Luôn giữ trên thiết bị / Giải phóng dung lượng". Windows âm thầm bỏ qua thư mục trong `%TEMP%`/AppData nên sau khi đăng ký luôn kiểm tra lại; không được thì dùng `CfRegisterSyncRoot` (vẫn có tệp theo yêu cầu, không có khung điều hướng). Chính sách: hydrate toàn bộ (cho phép tự giải phóng), tạo sẵn toàn bộ cây (`ALWAYS_FULL`), theo dõi thay đổi để bỏ dấu "đã đồng bộ". |
+| `CloudPlaceholders` | Engine tạo **tệp giữ chỗ** (đúng kích thước, ngày sửa, `FileIdentity` = mã mục BlueDrive) thay vì tải nội dung; bản mới trên máy chủ → cập nhật giữ chỗ và bỏ nội dung cũ (tệp đang "luôn giữ" thì tải lại ngay); sau mỗi lượt các mục vừa đồng bộ được đánh dấu "đã đồng bộ" (tệp/thư mục tạo trên máy được chuyển thành giữ chỗ để sau này giải phóng được). |
+| `CloudProvider` | Callback của bộ lọc: `FETCH_DATA` tải đúng đoạn được yêu cầu bằng HTTP Range (`HttpRemoteStore.ReadRangeAsync`, tự tải tiếp khi rớt mạng), chuyển theo khối 4 MB, báo tiến độ cho Explorer; hủy khi ứng dụng thôi đọc; lỗi → ứng dụng nhận lỗi ngay. `NOTIFY_DELETE/RENAME`: chương trình khác xóa/đổi tên mục **chỉ xem** bị từ chối; thao tác của chính BlueDrive luôn được phép. Đóng tệp sau khi ghi → đồng bộ sớm. |
+| `CloudFilesPlatform` | Ghép các phần trên cho `SyncAgent`. Theo dõi thuộc tính ghim: "Luôn giữ trên thiết bị" → tải về; "Giải phóng dung lượng" → bỏ nội dung. Không gian **chỉ trực tuyến** theo chính sách: không cho ghim, tự giải phóng sau khi đóng tệp. Tệp chưa từng tải bị xóa thì xóa hẳn (không qua Thùng rác). |
+
+Tệp theo yêu cầu dùng cho ổ NTFS trên Windows 10 1809 trở lên; ổ FAT32/exFAT/ổ mạng dùng chế độ đồng bộ đầy đủ (mục 8). `bluedrive-sync login … --full` để chọn đồng bộ đầy đủ.
+
+Kiểm thử (`desktop/tests/BlueDrive.Sync.Windows.Tests`, chỉ chạy trên Windows, tự đăng ký rồi gỡ sync root tạm): tệp xuất hiện dạng giữ chỗ và chỉ tải khi mở; giải phóng / luôn giữ (cả bằng `attrib +P/+U` như Explorer); sửa trên máy lên máy chủ, bản mới từ web thay giữ chỗ; chương trình khác không xóa được tệp chỉ xem.

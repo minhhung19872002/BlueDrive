@@ -179,6 +179,13 @@ public class DesktopClientTests(ApiFactory factory)
         a.Flaky.Cuts.Should().Be(1);
         a.Flaky.Ranges.Should().Contain("bytes=70000-");
         ms.ToArray().Should().Equal(data);
+
+        // Files On-Demand hydration reads exactly the requested range, and resumes it after a drop too.
+        a.Flaky.CutAfter = 10_000;
+        var part = new MemoryStream();
+        await a.Remote.ReadRangeAsync(id, 50_000, 64_000, async (chunk, ct) => await part.WriteAsync(chunk, ct), CancellationToken.None);
+        part.ToArray().Should().Equal(data[50_000..114_000]);
+        a.Flaky.Ranges.Should().Contain("bytes=60000-113999");
     }
 
     [Fact]

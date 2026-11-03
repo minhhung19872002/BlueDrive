@@ -169,6 +169,9 @@ public sealed class SyncStateDb : IDisposable
         "SELECT id, parent_id, name, is_folder, revision, hash, size, modified_at, can_edit, can_download FROM remote_items WHERE root_id = @rootId", new { rootId })
         .Select(r => r.ToItem()).ToDictionary(i => i.Id);
 
+    public RemoteItem? GetRemote(string id) => _db.QueryFirstOrDefault<RemoteRow>(
+        "SELECT id, parent_id, name, is_folder, revision, hash, size, modified_at, can_edit, can_download FROM remote_items WHERE id = @id", new { id })?.ToItem();
+
     public void ReplaceRemoteTree(string rootId, IEnumerable<RemoteItem> items)
     {
         using var tx = _db.BeginTransaction();

@@ -33,7 +33,7 @@ public sealed class RemoteStoreOptions
 /// engine's exceptions: 409 name conflict, 412 precondition (with the current item), 404, 410 cursor expired, 403/413/415/422/423 permanent,
 /// 408/429/5xx/network transient.
 /// </summary>
-public sealed class HttpRemoteStore : IRemoteStore
+public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) } };
     private readonly HttpClient _http;
@@ -171,6 +171,52 @@ public sealed class HttpRemoteStore : IRemoteStore
             {
                 throw new RemoteTransientException("Mất kết nối khi tải xuống.", ex);
             }
+            return null;
+        }, ct);
+    }
+
+    /// <summary>Files On-Demand hydration: streams bytes [offset, offset + length) to <paramref name="sink"/>, resuming after a dropped connection.</summary>
+    public async Task ReadRangeAsync(string itemId, long offset, long length, Func<ReadOnlyMemory<byte>, CancellationToken, ValueTask> sink, CancellationToken ct)
+    {
+        long done = 0;
+        await Idempotent<object?>(async t =>
+        {
+            if (done >= length) return null;
+            var location = await ContentLocationAsync(itemId, t);
+            using var req = new HttpRequestMessage(HttpMethod.Get, location);
+            req.Headers.Range = new RangeHeaderValue(offset + done, offset + length - 1);
+            using var res = await SendAsync(req, HttpCompletionOption.ResponseHeadersRead, t);
+            await EnsureAsync(res, itemId, t);
+            await using var body = await res.Content.ReadAsStreamAsync(t);
+            if (res.StatusCode != HttpStatusCode.PartialContent && offset + done > 0)
+            {
+                // No range support on the way: skip to the requested position.
+                var skip = offset + done;
+                var junk = new byte[81920];
+                while (skip > 0)
+                {
+                    var r = await body.ReadAsync(junk.AsMemory(0, (int)Math.Min(junk.Length, skip)), t);
+                    if (r == 0) throw new RemoteTransientException("Máy chủ trả thiếu dữ liệu.");
+                    skip -= r;
+                }
+            }
+            var buffer = new byte[81920];
+            try
+            {
+                while (done < length)
+                {
+                    var n = await body.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, length - done)), t);
+                    if (n == 0) break;
+                    await _opt.DownloadLimit.WaitAsync(n, t);
+                    await sink(buffer.AsMemory(0, n), t);
+                    done += n;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or HttpRequestException && !t.IsCancellationRequested)
+            {
+                throw new RemoteTransientException("Mất kết nối khi tải xuống.", ex);
+            }
+            if (done < length) throw new RemoteTransientException("Kết nối bị ngắt giữa chừng, đang tải tiếp.");
             return null;
         }, ct);
     }

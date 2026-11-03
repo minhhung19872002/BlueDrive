@@ -9,6 +9,8 @@ namespace BlueDrive.Sync.Agent;
 public sealed record AccountConfig(Guid Id, string ServerUrl, string SyncFolder, string Username, string DisplayName, Guid DeviceId)
 {
     public bool Paused { get; init; }
+    /// <summary>Files On-Demand (placeholders) instead of downloading everything (Windows, NTFS).</summary>
+    public bool OnDemand { get; init; }
 }
 
 /// <summary>
