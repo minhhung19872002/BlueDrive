@@ -37,6 +37,39 @@ public class SharingTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Access_dialog_changes_and_removes_shares_of_the_item_but_not_inherited_ones()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (friend, friendId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var folder = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Thư mục mới 2" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var fileId = (await StorageTests.UploadAsync(owner, ws, folder, "anh.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        await (await owner.PostAsJsonAsync("/api/v1/shares", new { resourceType = "folder", resourceId = folder, targets = new[] { new { type = "user", id = friendId } }, accessLevel = 1 })).ReadJsonAsync();
+        await (await owner.PostAsJsonAsync("/api/v1/shares", new { resourceType = "file", resourceId = fileId, targets = new[] { new { type = "user", id = friendId } }, accessLevel = 3 })).ReadJsonAsync();
+
+        var entries = (await (await owner.GetAsync($"/api/v1/access/file/{fileId}")).ReadJsonAsync()).GetProperty("entries").EnumerateArray()
+            .Where(e => e.GetProperty("source").GetString() == "share").ToList();
+        entries.Should().HaveCount(2);
+        var own = entries.Single(e => e.GetProperty("editable").GetBoolean());
+        own.GetProperty("sourceName").GetString().Should().Be("Chia sẻ trực tiếp mục này");
+        entries.Single(e => !e.GetProperty("editable").GetBoolean()).GetProperty("sourceName").GetString().Should().Contain("Thư mục mới 2");
+
+        // Lower the file share to "view" …
+        (await owner.PutAsJsonAsync($"/api/v1/access/file/{fileId}", new { entries = Array.Empty<object>(), shares = new[] { new { id = own.GetProperty("id").GetGuid(), accessLevel = "view" } } }))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await friend.PutAsJsonAsync($"/api/v1/files/{fileId}/name", new { name = "doi-ten.png" })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        // … then remove it: the share inherited from the folder stays (managed on the folder).
+        (await owner.PutAsJsonAsync($"/api/v1/access/file/{fileId}", new { entries = Array.Empty<object>(), shares = Array.Empty<object>() })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var after = (await (await owner.GetAsync($"/api/v1/access/file/{fileId}")).ReadJsonAsync()).GetProperty("entries").EnumerateArray()
+            .Where(e => e.GetProperty("source").GetString() == "share").ToList();
+        after.Should().ContainSingle().Which.GetProperty("editable").GetBoolean().Should().BeFalse();
+        (await friend.GetAsync($"/api/v1/files/{fileId}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        // A share level above "Chỉnh sửa" is refused.
+        (await owner.PutAsJsonAsync($"/api/v1/access/file/{fileId}", new { entries = Array.Empty<object>(), shares = new[] { new { id = Guid.NewGuid(), accessLevel = "manage" } } }))
+            .StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Folder_share_is_inherited_by_subfolders_and_files_until_inheritance_is_broken()
     {
         var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");

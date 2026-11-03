@@ -63,6 +63,8 @@ export interface SetResourceAccessRequest {
   entries: AclEntryInput[]
   breakInheritance: boolean | null
   copyInheritedOnBreak: boolean
+  /** Shares of this item to keep (with their level); null leaves them unchanged. */
+  shares: { id: string; accessLevel: AccessLevel }[] | null
 }
 
 export interface ShareDto {

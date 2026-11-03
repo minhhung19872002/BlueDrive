@@ -15,7 +15,7 @@ namespace BlueDrive.Application.Features.Office;
 /// <summary>#42: editor config for the current version; edit mode when the user may edit (co-editing shares the key).</summary>
 public sealed record GetOfficeConfigQuery(Guid FileId, bool ForceView = false, bool Mobile = false) : IRequest<OfficeEditorConfig>;
 
-public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms,
+public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth,
     IOfficeEditorProvider office, IContentTicketService tickets, IAuditLogger audit, TimeProvider clock) : IRequestHandler<GetOfficeConfigQuery, OfficeEditorConfig>
 {
     public async Task<OfficeEditorConfig> Handle(GetOfficeConfigQuery q, CancellationToken ct)
@@ -24,7 +24,8 @@ public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IR
         var access = await auth.EnsureAsync(uid, ResourceType.File, q.FileId, AccessLevel.View, ct);
         var f = await db.Files.AsNoTracking().FirstAsync(x => x.Id == q.FileId, ct);
         if (!office.CanView(f.Extension)) throw new AppException($"Định dạng .{f.Extension} không hỗ trợ mở bằng trình soạn thảo trực tuyến.");
-        var canEdit = !q.ForceView && access.CanEdit && office.CanEdit(f.Extension) && await perms.HasAsync(uid, Perm.DocEdit, ct);
+        // The item's own rights decide (like rename / new version): a "Chỉ xem" role shared "Chỉnh sửa" edits that document.
+        var canEdit = !q.ForceView && access.CanEdit && office.CanEdit(f.Extension);
         var name = await db.Users.Where(u => u.Id == uid).Select(u => u.FullName).FirstAsync(ct);
         var docTicket = tickets.Issue(new ContentTicket(uid, "file", f.Id, f.CurrentVersionId, true, null, null), TimeSpan.FromHours(24));
         var config = office.BuildConfig(new OfficeEditorRequest(f.Id, f.CurrentVersionId!.Value, f.Name, f.Extension,

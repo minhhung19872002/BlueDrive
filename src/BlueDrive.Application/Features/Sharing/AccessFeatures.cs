@@ -129,7 +129,9 @@ public sealed class GetResourceAccessHandler(IAppDbContext db, ICurrentUser me, 
                 a.ResourceType == ResourceType.Workspace ? $"Kế thừa từ nhóm \"{ws.Name}\"" : $"Kế thừa từ thư mục \"{folderNames.GetValueOrDefault(a.ResourceId)?.Name}\"", false));
         foreach (var s in shares)
             entries.Add(new AccessEntryDto(s.Id, s.SharedWithType, s.SharedWithId, N(s.SharedWithType, s.SharedWithId), s.AccessLevel, true, null, "share",
-                s.ResourceId == q.Id ? "Được chia sẻ" : $"Chia sẻ từ thư mục \"{folderNames.GetValueOrDefault(s.ResourceId)?.Name}\"", false));
+                s.ResourceId == q.Id ? "Chia sẻ trực tiếp mục này" : $"Chia sẻ từ thư mục \"{folderNames.GetValueOrDefault(s.ResourceId)?.Name}\"",
+                // Shares of this very item can be changed or removed here; shares of a parent folder are managed on that folder.
+                s.ResourceId == q.Id && access.CanManage));
         foreach (var a in direct)
             entries.Add(new AccessEntryDto(a.Id, a.PrincipalType, a.PrincipalId, N(a.PrincipalType, a.PrincipalId), a.AccessLevel, a.Inherit, a.ExpiresAt, "direct", "Phân quyền trực tiếp", access.CanManage));
         return new ResourceAccessListDto(q.Type, q.Id, name, breakInheritance, access.CanManage, entries);
@@ -148,7 +150,11 @@ public static class MemberRoleNames
 public sealed record AclEntryInput(PrincipalType PrincipalType, Guid PrincipalId, AccessLevel AccessLevel, bool Inherit = true, DateTime? ExpiresAt = null);
 
 /// <summary>Replaces the direct ACL of a resource and optionally toggles inheritance (#30, #55, #56).</summary>
-public sealed record SetResourceAccessCommand(ResourceType Type, Guid Id, IReadOnlyList<AclEntryInput> Entries, bool? BreakInheritance, bool CopyInheritedOnBreak = false) : IRequest<Unit>;
+public sealed record ShareLevelInput(Guid Id, AccessLevel AccessLevel);
+
+/// <param name="Shares">When given: the shares of this item to keep, with their level; the item's other shares are revoked.</param>
+public sealed record SetResourceAccessCommand(ResourceType Type, Guid Id, IReadOnlyList<AclEntryInput> Entries, bool? BreakInheritance, bool CopyInheritedOnBreak = false,
+    IReadOnlyList<ShareLevelInput>? Shares = null) : IRequest<Unit>;
 
 public sealed class SetResourceAccessValidator : AbstractValidator<SetResourceAccessCommand>
 {
@@ -156,6 +162,8 @@ public sealed class SetResourceAccessValidator : AbstractValidator<SetResourceAc
     {
         RuleForEach(x => x.Entries).Must(e => e.AccessLevel != AccessLevel.None).WithMessage("Mức quyền không hợp lệ.");
         RuleForEach(x => x.Entries).Must(e => e.ExpiresAt is null || e.ExpiresAt > DateTime.UtcNow).WithMessage("Ngày hết hạn phải ở tương lai.");
+        RuleForEach(x => x.Shares).Must(e => e.AccessLevel is AccessLevel.View or AccessLevel.Download or AccessLevel.Edit)
+            .WithMessage("Mức quyền chia sẻ chỉ gồm Xem, Xem + Tải xuống, Chỉnh sửa.");
         RuleFor(x => x.BreakInheritance).Null().When(x => x.Type != ResourceType.Folder).WithMessage("Chỉ thư mục mới có thể ngắt kế thừa quyền.");
     }
 }
@@ -188,6 +196,22 @@ public sealed class SetResourceAccessHandler(IAppDbContext db, ICurrentUser me, 
         db.ResourcePermissions.RemoveRange(existing);
         foreach (var e in cmd.Entries.GroupBy(e => (e.PrincipalType, e.PrincipalId)).Select(g => g.MaxBy(x => x.AccessLevel)!))
             db.ResourcePermissions.Add(new ResourcePermission { ResourceType = cmd.Type, ResourceId = cmd.Id, PrincipalType = e.PrincipalType, PrincipalId = e.PrincipalId, AccessLevel = e.AccessLevel, Inherit = e.Inherit, ExpiresAt = e.ExpiresAt });
+        object? sharesChange = null;
+        if (cmd.Shares is { } keep)
+        {
+            var shares = await db.Shares.Where(x => x.ResourceType == cmd.Type && x.ResourceId == cmd.Id).ToListAsync(ct);
+            var levels = keep.GroupBy(k => k.Id).ToDictionary(g => g.Key, g => g.Last().AccessLevel);
+            var removed = shares.Where(x => !levels.ContainsKey(x.Id)).ToList();
+            var changed = shares.Where(x => levels.TryGetValue(x.Id, out var l) && l != x.AccessLevel).ToList();
+            foreach (var x in changed) x.AccessLevel = levels[x.Id];
+            db.Shares.RemoveRange(removed);
+            if (removed.Count + changed.Count > 0)
+                sharesChange = new
+                {
+                    removed = removed.Select(x => new { x.Id, x.SharedWithType, x.SharedWithId }),
+                    changed = changed.Select(x => new { x.Id, x.SharedWithType, x.SharedWithId, x.AccessLevel }),
+                };
+        }
         await db.SaveChangesAsync(ct);
         var name = cmd.Type switch
         {
@@ -195,7 +219,7 @@ public sealed class SetResourceAccessHandler(IAppDbContext db, ICurrentUser me, 
             ResourceType.Folder => await db.Folders.Where(f => f.Id == cmd.Id).Select(f => f.Name).FirstAsync(ct),
             _ => await db.Workspaces.Where(f => f.Id == cmd.Id).Select(f => f.Name).FirstAsync(ct),
         };
-        await audit.LogAsync(new AuditEntry(AuditAction.PermissionChange, cmd.Type, cmd.Id, name, null, new { before, after = cmd.Entries, cmd.BreakInheritance }), ct);
+        await audit.LogAsync(new AuditEntry(AuditAction.PermissionChange, cmd.Type, cmd.Id, name, null, new { before, after = cmd.Entries, cmd.BreakInheritance, shares = sharesChange }), ct);
         return Unit.Value;
     }
 }

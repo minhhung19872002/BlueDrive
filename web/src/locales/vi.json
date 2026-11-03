@@ -847,6 +847,7 @@
     "inheritHint": "Quyền được kế thừa xuống các thư mục con và tệp bên trong.",
     "expiresAt": "Hết hạn",
     "noExpiry": "Không hết hạn",
+    "removeShare": "Hủy chia sẻ (khi lưu)",
     "add": "Thêm",
     "saved": "Đã lưu phân quyền.",
     "sources": {

@@ -62,11 +62,12 @@ public class CollaborationTests(ApiFactory factory)
         restored.GetProperty("changeNote").GetString().Should().Contain("phiên bản 1");
         docUrl.Should().StartWith("http://localhost/api/v1/content/");
 
-        // A viewer only gets view mode.
+        // A "Chỉ xem" user edits a document shared with them for editing, and only views one shared for viewing.
         var (viewer, viewerId, _) = await factory.CreateUserClientAsync("chi_xem");
+        await (await c.PostAsJsonAsync("/api/v1/shares", new { resourceType = "file", resourceId = fileId, targets = new[] { new { type = "user", id = viewerId } }, accessLevel = 1 })).ReadJsonAsync();
+        (await (await viewer.GetAsync($"/api/v1/office/config/{fileId}")).ReadJsonAsync()).GetProperty("mode").GetString().Should().Be("view");
         await (await c.PostAsJsonAsync("/api/v1/shares", new { resourceType = "file", resourceId = fileId, targets = new[] { new { type = "user", id = viewerId } }, accessLevel = 3 })).ReadJsonAsync();
-        var viewerCfg = await (await viewer.GetAsync($"/api/v1/office/config/{fileId}")).ReadJsonAsync();
-        viewerCfg.GetProperty("mode").GetString().Should().Be("view", "the Chỉ xem role has no doc.edit permission even with an edit share");
+        (await (await viewer.GetAsync($"/api/v1/office/config/{fileId}")).ReadJsonAsync()).GetProperty("mode").GetString().Should().Be("edit", "the edit share decides, whatever the role");
     }
 
     /// <summary>Any different OOXML (zip) package stands in for the edited document.</summary>

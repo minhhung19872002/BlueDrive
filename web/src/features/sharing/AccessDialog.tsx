@@ -28,7 +28,7 @@ import { useFolderInfo } from '@/features/drive/hooks'
 import { useApiMutation } from '@/hooks/useApiMutation'
 import type { AccessEntry, AccessLevel, PrincipalType, ResourceAccessList, ResourceType } from '@/types/sharing'
 import { formatDateTime, parseUtc } from '@/utils/format'
-import { ACL_LEVELS, LEVEL_COLORS, SOURCE_COLORS, splitPrincipal, type PrincipalValue } from './levels'
+import { ACL_LEVELS, LEVEL_COLORS, SHARE_LEVELS, SOURCE_COLORS, splitPrincipal, type PrincipalValue } from './levels'
 import PrincipalIcon from './PrincipalIcon'
 import PrincipalSelect from './PrincipalSelect'
 
@@ -97,6 +97,11 @@ function AccessEditor({ target, data, onClose }: { target: AccessTarget; data: R
   const [newPrincipal, setNewPrincipal] = useState<PrincipalValue | null>(null)
   const [newLevel, setNewLevel] = useState<AccessLevel>('view')
   const canManage = data.canManage
+  // Shares of this very item (made with "Chia sẻ"): their level can be changed or the share removed here.
+  const ownShares = data.entries.filter((e) => e.source === 'share' && e.editable && e.id)
+  const [shareLevels, setShareLevels] = useState<Record<string, AccessLevel>>(() =>
+    Object.fromEntries(ownShares.map((e) => [e.id!, e.accessLevel])),
+  )
 
   const save = useApiMutation(
     () =>
@@ -110,6 +115,7 @@ function AccessEditor({ target, data, onClose }: { target: AccessTarget; data: R
         })),
         breakInheritance: isFolder ? breakInheritance : null,
         copyInheritedOnBreak: copyInherited,
+        shares: ownShares.length > 0 ? Object.entries(shareLevels).map(([id, accessLevel]) => ({ id, accessLevel })) : null,
       }),
     {
       successMessage: t('access.saved'),
@@ -131,7 +137,8 @@ function AccessEditor({ target, data, onClose }: { target: AccessTarget; data: R
   const patchRow = (key: string, changes: Partial<DirectRow>) =>
     setRows((list) => list.map((r) => (r.key === key ? { ...r, ...changes } : r)))
 
-  const readOnly = data.entries.filter((e) => e.source !== 'direct')
+  const readOnly = data.entries.filter((e) => e.source !== 'direct' && !(e.editable && e.id && e.source === 'share' && !(e.id in shareLevels)))
+  const isOwnShare = (e: AccessEntry) => canManage && e.source === 'share' && e.editable && !!e.id
   const inheritedHidden = breakInheritance && !data.breakInheritance
 
   return (
@@ -303,7 +310,19 @@ function AccessEditor({ target, data, onClose }: { target: AccessTarget; data: R
             title: t('access.level'),
             key: 'level',
             width: 150,
-            render: (_, e) => <Tag color={LEVEL_COLORS[e.accessLevel]}>{t(`sharing.levels.${e.accessLevel}`)}</Tag>,
+            render: (_, e) =>
+              isOwnShare(e) ? (
+                <Select
+                  size="small"
+                  value={shareLevels[e.id!]}
+                  style={{ width: '100%' }}
+                  aria-label={t('access.level')}
+                  onChange={(v: AccessLevel) => setShareLevels((m) => ({ ...m, [e.id!]: v }))}
+                  options={SHARE_LEVELS.map((l) => ({ value: l, label: t(`sharing.levels.${l}`) }))}
+                />
+              ) : (
+                <Tag color={LEVEL_COLORS[e.accessLevel]}>{t(`sharing.levels.${e.accessLevel}`)}</Tag>
+              ),
           },
           {
             title: t('access.source'),
@@ -323,8 +342,35 @@ function AccessEditor({ target, data, onClose }: { target: AccessTarget; data: R
             title: t('access.expiresAt'),
             key: 'expiresAt',
             width: 140,
-            render: (_, e) => formatDateTime(e.expiresAt),
+            render: (_, e) => (e.expiresAt ? formatDateTime(e.expiresAt) : <Typography.Text type="secondary">{t('access.noExpiry')}</Typography.Text>),
           },
+          ...(canManage
+            ? [
+                {
+                  key: 'remove',
+                  width: 48,
+                  render: (_: unknown, e: AccessEntry) =>
+                    isOwnShare(e) ? (
+                      <Tooltip title={t('access.removeShare')}>
+                        <Button
+                          type="text"
+                          danger
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          aria-label={t('access.removeShare')}
+                          onClick={() =>
+                            setShareLevels((m) => {
+                              const next = { ...m }
+                              delete next[e.id!]
+                              return next
+                            })
+                          }
+                        />
+                      </Tooltip>
+                    ) : null,
+                },
+              ]
+            : []),
         ]}
       />
 
