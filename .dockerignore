@@ -12,3 +12,4 @@ docs/
 deploy/.env
 **/*.user
 **/logs/
+desktop/

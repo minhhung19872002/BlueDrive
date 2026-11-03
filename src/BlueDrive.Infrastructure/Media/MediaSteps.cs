@@ -122,7 +122,8 @@ public sealed class ThumbnailStep(IFileContentService content, PlainCopy plain, 
         using (var canvas = new SKCanvas(flat))
         {
             canvas.Clear(SKColors.White);
-            canvas.DrawBitmap(resized, 0, 0);
+            using var src = SKImage.FromBitmap(resized);
+            canvas.DrawImage(src, 0, 0, new SKSamplingOptions(SKFilterMode.Linear));
         }
         using var image = SKImage.FromBitmap(flat);
         using var data = image.Encode(SKEncodedImageFormat.Jpeg, 82);

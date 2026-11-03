@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>BlueDrive.Sync.Core</RootNamespace>
+    <Description>BlueDrive Desktop sync engine (OS independent): state, reconciler, operation queue.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Dapper" Version="2.1.66" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="BlueDrive.Sync.Tests" />
+  </ItemGroup>
+</Project>

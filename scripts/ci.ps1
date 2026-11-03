@@ -24,6 +24,7 @@ function Step($name, [scriptblock]$block) {
 
 Step 'dotnet build' { dotnet build BlueDrive.slnx -c Release --nologo }
 Step 'unit tests' { dotnet test tests/BlueDrive.UnitTests -c Release --no-build --nologo }
+Step 'desktop sync engine tests (reconciler, scenarios, simulation)' { dotnet test desktop/tests/BlueDrive.Sync.Tests -c Release --no-build --nologo }
 if (-not $SkipIntegration) {
     Step 'integration tests (Testcontainers, cần Docker)' { dotnet test tests/BlueDrive.IntegrationTests -c Release --no-build --nologo }
 }
