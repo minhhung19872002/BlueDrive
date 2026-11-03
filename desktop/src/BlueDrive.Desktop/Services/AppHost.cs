@@ -147,6 +147,7 @@ public sealed class AppHost : IAsyncDisposable
     private void RegisterShell()
     {
         if (Environment.ProcessPath is not { } exe || !exe.EndsWith("BlueDrive.exe", StringComparison.OrdinalIgnoreCase)) return; // tests, tools
+        if (PackageInfo.IsPackaged) return; // MSIX: the package's Windows 11 menu (BlueDrive.Shell.dll) instead of the classic one
         try { ExplorerMenu.Register(Sessions.Select(x => x.Config.SyncFolder).ToList(), exe); }
         catch (UnauthorizedAccessException ex) { Log.Warning(ex, "Không đăng ký được menu chuột phải"); }
     }

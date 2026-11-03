@@ -69,7 +69,13 @@ $msixName = $null
 if ($Msix) {
     Write-Host '==> Đóng gói MSIX'
     $msixName = if ($Channel -eq 'stable') { 'BlueDrive.msix' } else { "BlueDrive-$Channel.msix" }
-    & (Join-Path $PSScriptRoot 'msix/build-msix.ps1') -PublishDir $publish -Version "$numeric.0" -Out (Join-Path $Out $msixName) -NoSign:$NoSign
+    # Windows 11 context menu: NativeAOT COM server (needs the Visual Studio C++ build tools).
+    $shell = Join-Path $work 'shell'
+    dotnet publish (Join-Path $root 'desktop/src/BlueDrive.Shell/BlueDrive.Shell.csproj') -c Release -o $shell -v q --nologo
+    if ($LASTEXITCODE -ne 0) { throw 'Biên dịch BlueDrive.Shell (NativeAOT) không thành công — cần Visual Studio Build Tools (C++).' }
+    if (-not $NoSign) { & $sign (Join-Path $shell 'BlueDrive.Shell.dll') }
+    & (Join-Path $PSScriptRoot 'msix/build-msix.ps1') -PublishDir $publish -Version "$numeric.0" -Out (Join-Path $Out $msixName) -NoSign:$NoSign `
+        -ShellDll (Join-Path $shell 'BlueDrive.Shell.dll')
 }
 
 Write-Host '==> releases.json'

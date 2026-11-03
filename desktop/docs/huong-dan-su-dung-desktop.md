@@ -36,7 +36,10 @@ Tải bộ cài trên web: menu tài khoản → **Tải ứng dụng máy tính
 
 ### Menu chuột phải "BlueDrive"
 
-Chuột phải một tệp/thư mục trong thư mục BlueDrive → **BlueDrive** (Windows 11: **Hiện thêm tùy chọn** → BlueDrive):
+Chuột phải một tệp/thư mục trong thư mục BlueDrive → **BlueDrive** (bản cài MSIX: ngay trong menu Windows 11; bản cài EXE: **Hiện thêm tùy chọn** → BlueDrive):
+
+![Menu BlueDrive trong Windows 11](images/menu-windows11.png)
+
 
 - **Chia sẻ…**: mời người hoặc nhóm (Chỉ xem / Xem và tải xuống / Chỉnh sửa, kèm lời nhắn), xem ai đang được chia sẻ (kể cả kế thừa từ thư mục cha)
   và hủy chia sẻ; tab **Liên kết** tạo liên kết có thể đặt mật khẩu, ngày hết hạn, bắt buộc đăng nhập — liên kết tự được sao chép.

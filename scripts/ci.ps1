@@ -28,6 +28,7 @@ Step 'desktop sync engine tests (reconciler, scenarios, simulation)' { dotnet te
 if ($env:OS -eq 'Windows_NT') {
     Step 'desktop Files On-Demand tests (Cloud Files API, Windows only)' { dotnet test desktop/tests/BlueDrive.Sync.Windows.Tests -c Release --no-build --nologo }
     Step 'desktop app tests (view models, headless windows)' { dotnet test desktop/tests/BlueDrive.Desktop.Tests -c Release --no-build --nologo }
+    Step 'desktop Windows 11 context menu (BlueDrive.Shell, COM)' { dotnet build desktop/src/BlueDrive.Shell -c Release --nologo -v q }
 }
 if (-not $SkipIntegration) {
     Step 'integration tests (Testcontainers, cần Docker)' { dotnet test tests/BlueDrive.IntegrationTests -c Release --no-build --nologo }

@@ -11,6 +11,8 @@ param(
     [Parameter(Mandatory = $true)][string]$Out,
     [ValidateSet('x64', 'arm64')][string]$Arch = 'x64',
     [string]$Publisher,
+    # BlueDrive.Shell.dll (Windows 11 context menu, NativeAOT): published by ../build.ps1.
+    [string]$ShellDll,
     [switch]$NoSign
 )
 $ErrorActionPreference = 'Stop'
@@ -41,6 +43,8 @@ if (Test-Path $layout) { Remove-Item $layout -Recurse -Force }
 New-Item -ItemType Directory -Force $layout | Out-Null
 Copy-Item (Join-Path $PublishDir '*') $layout -Recurse -Force
 Copy-Item (Join-Path $PSScriptRoot 'Assets') (Join-Path $layout 'Assets') -Recurse -Force
+if ($ShellDll) { Copy-Item $ShellDll (Join-Path $layout 'BlueDrive.Shell.dll') -Force }
+elseif (-not (Test-Path (Join-Path $layout 'BlueDrive.Shell.dll'))) { throw 'Thiếu BlueDrive.Shell.dll (menu chuột phải Windows 11): truyền -ShellDll.' }
 $manifest = (Get-Content (Join-Path $PSScriptRoot 'AppxManifest.template.xml') -Raw -Encoding UTF8).
     Replace('{{PUBLISHER}}', [Security.SecurityElement]::Escape($Publisher)).Replace('{{VERSION}}', $Version).Replace('{{ARCH}}', $Arch)
 [IO.File]::WriteAllText((Join-Path $layout 'AppxManifest.xml'), $manifest, (New-Object Text.UTF8Encoding $false))
