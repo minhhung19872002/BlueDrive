@@ -1,5 +1,5 @@
-import { Button, Dropdown, Space, Table, Tag, Typography, type TableProps } from 'antd'
-import { MoreOutlined, StarFilled } from '@ant-design/icons'
+import { Button, Dropdown, Table, Tag, Typography, type TableProps } from 'antd'
+import { DownloadOutlined, LinkOutlined, MoreOutlined, ShareAltOutlined, StarFilled } from '@ant-design/icons'
 import type { SorterResult, SortOrder } from 'antd/es/table/interface'
 import { useTranslation } from 'react-i18next'
 import type { DriveItem } from '@/types/drive'
@@ -14,6 +14,13 @@ interface ItemListViewProps extends ItemViewProps {
 }
 
 const SORTABLE = ['name', 'size', 'updatedAt']
+
+/** Quick actions shown next to the name while the row is hovered (only those the item's menu offers). */
+const QUICK_ACTIONS = [
+  { key: 'share', icon: <ShareAltOutlined />, label: 'actions.share' },
+  { key: 'copyLink', icon: <LinkOutlined />, label: 'actions.copyLink' },
+  { key: 'download', icon: <DownloadOutlined />, label: 'actions.download' },
+] as const
 
 /** Clicks on these elements must not change the selection (checkbox cell, action buttons). */
 const IGNORE_CLICK = '.ant-table-selection-column, .ant-checkbox-wrapper, button, a, .bd-row-actions'
@@ -31,18 +38,45 @@ export default function ItemListView(props: ItemListViewProps) {
       sorter: true,
       sortOrder: order('name'),
       ellipsis: true,
-      render: (_, item) => (
-        <Space size={10} style={{ minWidth: 0, maxWidth: '100%' }}>
-          <FileTypeIcon type={item.type} mediaType={item.mediaType} extension={item.extension} size={22} />
-          <Typography.Text ellipsis style={{ maxWidth: isMobile ? 180 : 420 }} title={item.name}>
-            {item.name}
-          </Typography.Text>
-          {item.isStarred && <StarFilled style={{ color: '#faad14' }} />}
-          {item.approvalStatus && item.approvalStatus !== 'approved' && (
-            <Tag color={APPROVAL_COLORS[item.approvalStatus]}>{t(`approval.status.${item.approvalStatus}`)}</Tag>
-          )}
-        </Space>
-      ),
+      render: (_, item) => {
+        const menu = props.rowMenu(item)
+        const offered = new Set((menu.items ?? []).map((m) => (m && 'key' in m ? String(m.key) : '')))
+        return (
+          <div className="bd-name-cell">
+            <FileTypeIcon type={item.type} mediaType={item.mediaType} extension={item.extension} size={24} />
+            <Typography.Text ellipsis className="bd-item-name" title={item.name}>
+              {item.name}
+            </Typography.Text>
+            {item.isStarred && <StarFilled style={{ color: '#faad14', flex: 'none' }} />}
+            {item.approvalStatus && item.approvalStatus !== 'approved' && (
+              <Tag color={APPROVAL_COLORS[item.approvalStatus]} style={{ flex: 'none', marginInlineEnd: 0 }}>
+                {t(`approval.status.${item.approvalStatus}`)}
+              </Tag>
+            )}
+            {!isMobile && (
+              <span className="bd-row-actions bd-quick-actions">
+                <Dropdown menu={menu} trigger={['click']} placement="bottomLeft">
+                  <Button type="text" size="small" icon={<MoreOutlined />} aria-label={t('actions.more')} title={t('actions.more')} />
+                </Dropdown>
+                {QUICK_ACTIONS.filter((a) => offered.has(a.key)).map((a) => (
+                  <Button
+                    key={a.key}
+                    type="text"
+                    size="small"
+                    icon={a.icon}
+                    aria-label={t(a.label)}
+                    title={t(a.label)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      props.runAction(a.key, item)
+                    }}
+                  />
+                ))}
+              </span>
+            )}
+          </div>
+        )
+      },
     },
     ...(!isMobile
       ? [

@@ -28,6 +28,8 @@ export interface ItemViewProps {
   onContextMenu: (item: DriveItem, e: MouseEvent) => void
   onSelectionChange: (keys: string[]) => void
   rowMenu: (item: DriveItem) => MenuProps
+  /** Hover quick action (share, copy link, download) on one item. */
+  runAction: (action: string, item: DriveItem) => void
   dragProps: (item: DriveItem) => {
     draggable: boolean
     onDragStart: (e: DragEvent) => void

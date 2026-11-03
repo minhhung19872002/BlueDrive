@@ -37,6 +37,62 @@ public class SharingTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Folder_share_is_inherited_by_subfolders_and_files_until_inheritance_is_broken()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (friend, friendId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (outsider, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var parent = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Dự án" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var child = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, parentId = parent, name = "Hồ sơ" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var grandChild = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, parentId = child, name = "Ảnh" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var deepFile = (await StorageTests.UploadAsync(owner, ws, grandChild, "sau.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+
+        // Share only the top folder with edit rights.
+        await (await owner.PostAsJsonAsync("/api/v1/shares", new { resourceType = "folder", resourceId = parent, targets = new[] { new { type = "user", id = friendId } }, accessLevel = 3 })).ReadJsonAsync();
+
+        // Sub-folders and files inherit: browse, open, edit, upload, create folders.
+        var inParent = await (await friend.GetAsync($"/api/v1/workspaces/{ws}/items?folderId={parent}")).ReadJsonAsync();
+        inParent.GetProperty("items").EnumerateArray().Should().Contain(i => i.GetProperty("id").GetGuid() == child);
+        var inGrandChild = await (await friend.GetAsync($"/api/v1/workspaces/{ws}/items?folderId={grandChild}")).ReadJsonAsync();
+        inGrandChild.GetProperty("items").EnumerateArray().Should().Contain(i => i.GetProperty("id").GetGuid() == deepFile);
+        (await friend.GetAsync($"/api/v1/files/{deepFile}/download-url")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await friend.PutAsJsonAsync($"/api/v1/files/{deepFile}/name", new { name = "sau-da-sua.png" })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await StorageTests.UploadAsync(friend, ws, grandChild, "ban-gui.png", StorageTests.Png)).GetProperty("fileId").GetGuid().Should().NotBeEmpty();
+        (await friend.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, parentId = child, name = "Mới" })).StatusCode.Should().Be(HttpStatusCode.OK);
+        var folderAccess = await (await friend.GetAsync($"/api/v1/workspaces/{ws}/folder-info?folderId={grandChild}")).ReadJsonAsync();
+        folderAccess.GetProperty("access").GetProperty("canEdit").GetBoolean().Should().BeTrue();
+        (await outsider.GetAsync($"/api/v1/files/{deepFile}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        // Breaking inheritance on "Hồ sơ" (without copying grants) stops the share below it.
+        (await owner.PutAsJsonAsync($"/api/v1/access/folder/{child}", new { entries = Array.Empty<object>(), breakInheritance = true })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await friend.GetAsync($"/api/v1/files/{deepFile}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await friend.GetAsync($"/api/v1/workspaces/{ws}/items?folderId={parent}")).StatusCode.Should().Be(HttpStatusCode.OK, "the shared folder itself stays visible");
+    }
+
+    [Fact]
+    public async Task Link_cannot_be_switched_to_download_without_download_right()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (friend, friendId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var fileId = (await StorageTests.UploadAsync(owner, ws, null, "chi-xem.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        await (await owner.PostAsJsonAsync("/api/v1/shares", new { resourceType = "file", resourceId = fileId, targets = new[] { new { type = "user", id = friendId } }, accessLevel = 1 })).ReadJsonAsync();
+
+        // The view-only friend may share a view-only link and edit its settings...
+        var link = await (await friend.PostAsJsonAsync("/api/v1/share-links", new { resourceType = "file", resourceId = fileId, allowDownload = false, requireLogin = true })).ReadJsonAsync();
+        var id = link.GetProperty("id").GetGuid();
+        var token = link.GetProperty("token").GetString();
+        var edited = await (await friend.PutAsJsonAsync($"/api/v1/share-links/{id}", new { resourceType = "file", resourceId = fileId, allowDownload = false, requireLogin = false })).ReadJsonAsync();
+        edited.GetProperty("token").GetString().Should().Be(token, "editing keeps the same URL");
+        edited.GetProperty("requireLogin").GetBoolean().Should().BeFalse();
+
+        // ...but cannot turn downloads on afterwards.
+        var res = await friend.PutAsJsonAsync($"/api/v1/share-links/{id}", new { resourceType = "file", resourceId = fileId, allowDownload = true, requireLogin = false });
+        res.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
     public async Task Folder_acl_inherits_and_break_inheritance_stops_it()
     {
         var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");

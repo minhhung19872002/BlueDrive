@@ -2,6 +2,7 @@ import { Button, Checkbox, Dropdown, Spin, Tag, Typography } from 'antd'
 import { MoreOutlined, StarFilled } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { formatBytes } from '@/utils/format'
+import FileTypeIcon from '../components/FileTypeIcon'
 import Thumbnail from '../components/Thumbnail'
 import { APPROVAL_COLORS, itemKey } from '../utils'
 import type { ItemViewProps } from './types'
@@ -50,10 +51,13 @@ export default function ItemGridView(props: ItemViewProps) {
               </span>
               <Thumbnail item={item} iconSize={item.type === 'folder' ? 56 : 48} />
               <div className="bd-tile-name">
-                <Typography.Text ellipsis style={{ maxWidth: '100%' }}>
-                  {item.isStarred && <StarFilled style={{ color: '#faad14', marginInlineEnd: 4 }} />}
-                  {item.name}
-                </Typography.Text>
+                <span className="bd-tile-title">
+                  {item.type === 'file' && <FileTypeIcon type="file" mediaType={item.mediaType} extension={item.extension} size={18} />}
+                  <Typography.Text ellipsis style={{ minWidth: 0 }}>
+                    {item.isStarred && <StarFilled style={{ color: '#faad14', marginInlineEnd: 4 }} />}
+                    {item.name}
+                  </Typography.Text>
+                </span>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                   {item.type === 'folder' ? t('info.folder') : formatBytes(item.sizeBytes)}
                   {item.approvalStatus && item.approvalStatus !== 'approved' && (

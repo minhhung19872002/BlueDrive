@@ -11,6 +11,7 @@ import {
   FormOutlined,
   HistoryOutlined,
   InfoCircleOutlined,
+  LinkOutlined,
   SafetyOutlined,
   ScissorOutlined,
   ShareAltOutlined,
@@ -31,6 +32,7 @@ import { useCan } from '@/hooks/usePermissions'
 import { useAuthStore } from '@/stores/auth'
 import type { DriveItem } from '@/types/drive'
 import { getMessage } from '@/utils/antdStatic'
+import { copyText } from '@/utils/clipboard'
 import CopyMoveModal, { type CopyMoveRequest } from '../dialogs/CopyMoveModal'
 import NameModal from '../dialogs/NameModal'
 import FileDetailsTabs, { type DetailsTab } from '../info/FileDetailsTabs'
@@ -67,6 +69,7 @@ export type ItemAction =
   | 'openEditorView'
   | 'download'
   | 'share'
+  | 'copyLink'
   | 'rename'
   | 'copyTo'
   | 'moveTo'
@@ -199,6 +202,15 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
     setInfoItem(item)
   }, [])
   const info = useCallback((item: DriveItem) => (onShowInfo ? onShowInfo(item) : details(item, 'info')), [details, onShowInfo])
+  /** Internal link (sign-in + access required), like SharePoint "Copy link" for people with access. */
+  const copyLink = useCallback(
+    (item: DriveItem) =>
+      copyText(
+        window.location.origin +
+          (item.type === 'folder' ? folderUrl(item.workspaceId, item.id, personalWorkspaceId) : `/files/${item.id}`),
+      ),
+    [personalWorkspaceId],
+  )
   const share = useCallback((item: DriveItem) => setShareTarget({ type: item.type, id: item.id, name: item.name }), [])
   const manageAccess = useCallback(
     (item: DriveItem) => setAccessTarget({ type: item.type, id: item.id, name: item.name, workspaceId: item.workspaceId }),
@@ -236,6 +248,7 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
       }
       if (canDownload && shown('download')) list.push({ key: 'download', icon: <DownloadOutlined />, label: t('actions.download') })
       if (single && can('doc.share') && shown('share')) list.push({ key: 'share', icon: <ShareAltOutlined />, label: t('actions.share') })
+      if (single && shown('copyLink')) list.push({ key: 'copyLink', icon: <LinkOutlined />, label: t('actions.copyLink') })
       list.push({ type: 'divider' })
       if (single && canEdit && shown('rename')) list.push({ key: 'rename', icon: <EditOutlined />, label: t('actions.rename'), extra: 'F2' })
       if (shown('copyTo')) list.push({ key: 'copyTo', icon: <CopyOutlined />, label: t('actions.copyTo') })
@@ -273,6 +286,8 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
           return void download(items)
         case 'share':
           return share(single)
+        case 'copyLink':
+          return void copyLink(single)
         case 'rename':
           return setRenaming(single)
         case 'copyTo':
@@ -294,7 +309,7 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
           return remove(items)
       }
     },
-    [copyTo, details, download, info, manageAccess, moveTo, navigate, open, remove, setStar, share],
+    [copyLink, copyTo, details, download, info, manageAccess, moveTo, navigate, open, remove, setStar, share],
   )
 
   const dialogs: ReactNode = (
@@ -327,6 +342,7 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
     open,
     download,
     share,
+    copyLink,
     rename: setRenaming,
     copyTo,
     moveTo,

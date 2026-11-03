@@ -166,6 +166,26 @@ test('hai người dùng chia sẻ tài liệu qua lại', async ({ browser }) =
   })
   expect(forbidden.status()).toBeGreaterThanOrEqual(403)
 
+  // Folder shares are inherited: B browses A's shared folder down to a file in a sub-folder.
+  const folderName = `Thu-muc-chung-${stamp}`
+  const top = (await (await api.post('/api/v1/folders', { headers: bearer(a), data: { workspaceId: a.ws, name: folderName } })).json()).id
+  const sub = (await (await api.post('/api/v1/folders', { headers: bearer(a), data: { workspaceId: a.ws, parentId: top, name: 'Thư mục con' } })).json()).id
+  const deep = await api.post('/api/v1/files/upload', {
+    headers: bearer(a),
+    multipart: { file: { name: `sau-${stamp}.txt`, mimeType: 'text/plain', buffer: Buffer.from('Tệp trong thư mục con') }, workspaceId: a.ws, folderId: sub },
+  })
+  expect(deep.ok()).toBeTruthy()
+  await pageA.goto('/my-drive')
+  await shareWith(pageA, folderName, b, /^Xem$/)
+  await pageB.goto('/shared')
+  await pageB.getByRole('row', { name: new RegExp(folderName) }).getByText(folderName).click()
+  await expect(pageB).toHaveURL(new RegExp(`folder=${top}`))
+  await pageB.getByRole('row', { name: /Thư mục con/ }).getByText('Thư mục con').click()
+  await expect(pageB).toHaveURL(new RegExp(`folder=${sub}`))
+  await pageB.getByRole('row', { name: new RegExp(`sau-${stamp}`) }).getByText(`sau-${stamp}.txt`).click()
+  await expect(pageB.getByText('Tệp trong thư mục con')).toBeVisible({ timeout: 15_000 })
+  await pageB.getByRole('button', { name: 'Đóng' }).first().click()
+
   // A revokes the share → B no longer sees nor opens the file.
   const shares = await (await api.get(`/api/v1/shares?resourceType=file&resourceId=${fileAId}`, { headers: bearer(a) })).json()
   for (const s of shares.items ?? shares) expect((await api.delete(`/api/v1/shares/${s.id}`, { headers: bearer(a) })).ok()).toBeTruthy()

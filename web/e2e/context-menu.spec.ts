@@ -55,6 +55,8 @@ async function clickMenu(page: Page, item: string, name: RegExp) {
 /** Destination tree of "Sao chép tới / Di chuyển tới": search without diacritics, then pick the node. */
 async function pickFolder(page: Page, name: string) {
   await page.getByRole('dialog').locator('.ant-tree-select').click()
+  // Wait for the folder tree (root + its folders) before searching: a search typed earlier keeps nodes collapsed.
+  await expect(page.locator('.ant-select-tree-treenode').nth(1)).toBeVisible({ timeout: 15_000 })
   await page.keyboard.type(name.normalize('NFD').replace(/\p{M}/gu, '').replace(/đ/gi, 'd'))
   await page.locator('.ant-select-tree').getByTitle(name, { exact: true }).click()
   await expect(page.getByRole('dialog').getByTitle(name, { exact: true })).toBeVisible()
@@ -157,4 +159,22 @@ test('ảnh mới tải lên tự hiện ảnh thu nhỏ ở chế độ lưới
   // The worker renders the thumbnail a few seconds after the upload: the tile switches from the icon to it.
   const tile = page.locator('.bd-thumb').filter({ has: page.locator('img') })
   await expect(tile).toHaveCount(1, { timeout: 30_000 })
+})
+
+test('rê chuột vào dòng: nút thao tác nhanh cạnh tên', async ({ page }) => {
+  await page.goto(`/my-drive?folder=${folderId}`)
+  await page.waitForLoadState('networkidle')
+  const row = page.getByRole('row').filter({ hasText: /\.(txt|png)/ }).first()
+  const copy = row.getByRole('button', { name: 'Sao chép liên kết' })
+  await expect(copy).toBeHidden()
+  await row.hover()
+  await expect(copy).toBeVisible()
+  await expect(row.getByRole('button', { name: 'Tải xuống' })).toBeVisible()
+  await copy.click()
+  await expect(page.getByText(/Đã sao chép/).first()).toBeVisible()
+  // The quick action must not open the file.
+  await expect(page).toHaveURL(new RegExp(`folder=${folderId}`))
+  await row.hover()
+  await row.getByRole('button', { name: 'Chia sẻ' }).click()
+  await expect(page.getByRole('dialog')).toContainText('Chia sẻ')
 })

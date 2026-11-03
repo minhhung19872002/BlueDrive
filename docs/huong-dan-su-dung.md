@@ -33,7 +33,7 @@ BlueDrive là hệ thống lưu trữ, tìm kiếm, khai thác và chia sẻ s�
 - Chuyển chế độ xem **danh sách / lưới (ảnh thu nhỏ)**, sắp xếp theo tên, kích thước, ngày sửa; lọc theo loại tư liệu; tìm trong thư mục hoặc trong toàn bộ Tài liệu của tôi (gõ có dấu hoặc không dấu).
 - **Mới**: Thư mục, Tài liệu Word, Bảng tính Excel, Trình chiếu PowerPoint, Văn bản (.txt). Tài liệu mới mở ngay trong trình soạn thảo trực tuyến.
 - **Tải lên**: tệp hoặc cả thư mục (giữ nguyên cây thư mục), hoặc **kéo thả** từ máy tính vào cửa sổ. Chọn tệp xong là tải lên ngay; tiêu đề, mô tả, thẻ, danh mục nhập sau trong **Thông tin** của tệp (chuột phải → Thông tin), hoặc chọn nhiều tệp → **Cập nhật thông tin hàng loạt**. Hàng đợi tải lên ở góc phải dưới: xem tiến độ, **tạm dừng / tiếp tục**, hủy, thử lại. Tệp lớn (vài GB) tiếp tục được từ chỗ dừng khi mạng gián đoạn.
-- **Nhấp** vào thư mục/tệp để mở. Chọn mục bằng **ô chọn** đầu dòng (hoặc Ctrl/Shift + nhấp để chọn nhiều), **chuột phải** để mở menu: Mở, Tải xuống, Chia sẻ, Đổi tên, Sao chép tới..., Di chuyển tới..., Đánh dấu quan trọng, Thông tin, Quản lý quyền truy cập, Xóa.
+- **Nhấp** vào thư mục/tệp để mở. Rê chuột vào một dòng để hiện nút nhanh cạnh tên: **⋯** (menu), **Chia sẻ**, **Sao chép liên kết** (liên kết nội bộ, người nhận đăng nhập và có quyền mới mở được), **Tải xuống**. Chọn mục bằng **ô chọn** đầu dòng (hoặc Ctrl/Shift + nhấp để chọn nhiều), **chuột phải** để mở menu: Mở, Tải xuống, Chia sẻ, Đổi tên, Sao chép tới..., Di chuyển tới..., Đánh dấu quan trọng, Thông tin, Quản lý quyền truy cập, Xóa.
 - **Phím tắt**: `Del` xóa, `F2` đổi tên, `Ctrl+C` / `Ctrl+X` rồi `Ctrl+V` để sao chép/di chuyển vào thư mục đang mở, `Enter` mở. **Kéo thả** tệp vào một thư mục để di chuyển.
 - Tải nhiều tệp/thư mục cùng lúc: hệ thống nén thành một tệp ZIP.
 - **Panel thông tin** (nút ⓘ): kích thước, loại, người tạo, ngày tạo/sửa, vị trí, danh mục, mô tả, thẻ, phiên bản, **ai có quyền truy cập**. Có thể sửa tiêu đề, mô tả, thẻ, danh mục.
@@ -49,7 +49,7 @@ BlueDrive là hệ thống lưu trữ, tìm kiếm, khai thác và chia sẻ s�
 
 - Chuột phải > **Chia sẻ**:
   - **Chia sẻ nội bộ**: chọn người dùng, nhóm người dùng hoặc đơn vị; quyền *Xem*, *Xem + Tải xuống* hoặc *Chỉnh sửa*; kèm lời nhắn. Người nhận được thông báo.
-  - **Chia sẻ qua liên kết**: bật/tắt cho phép tải xuống, đặt mật khẩu, ngày hết hạn, số lượt truy cập tối đa, yêu cầu đăng nhập; **sao chép liên kết** hoặc **mã QR**; **thu hồi** khi không cần nữa. Người nhận mở liên kết để xem ảnh, video, PDF, tài liệu Office (chỉ xem).
+  - **Chia sẻ qua liên kết**: mở tab là có ngay liên kết của tài liệu (mặc định *yêu cầu đăng nhập*, chỉ người có tài khoản mở được) — bấm **Sao chép** hoặc **mã QR**. Đổi cài đặt của chính liên kết đó (cho phép tải xuống, mật khẩu, ngày hết hạn, số lượt truy cập tối đa, tắt *yêu cầu đăng nhập* để công khai) rồi bấm **Lưu cài đặt**; **thu hồi** khi không cần nữa. Người nhận mở liên kết để xem ảnh, video, PDF, tài liệu Office (chỉ xem).
 - Mục **Được chia sẻ**: tư liệu người khác chia sẻ với bạn, lọc theo người chia sẻ, thời gian; tab *Tệp đính kèm* liệt kê tệp đính kèm trong các thảo luận.
 
 ![Được chia sẻ](images/duoc-chia-se.png)
@@ -70,7 +70,7 @@ BlueDrive là hệ thống lưu trữ, tìm kiếm, khai thác và chia sẻ s�
 - Trong nhóm có đầy đủ thao tác như Tài liệu của tôi (tạo mới, tải lên, tìm kiếm, chia sẻ, phiên bản, thảo luận).
 - Tab **Tổng hợp tư liệu**: số lượng, dung lượng tư liệu theo từng thành viên; lọc tư liệu theo thành viên.
 - Tab **Lịch sử chỉnh sửa**: dòng thời gian thao tác của các thành viên.
-- **Quản lý quyền truy cập** (chuột phải thư mục/tệp): cấp quyền cho người, nhóm, đơn vị; quyền thư mục được kế thừa xuống thư mục con, có thể **ngắt kế thừa**. Bật **Cần phê duyệt khi tải lên** cho thư mục: tư liệu tải lên chờ người có vai trò Phê duyệt duyệt trước khi hiển thị cho người chỉ xem.
+- **Quản lý quyền truy cập** (chuột phải thư mục/tệp): cấp quyền cho người, nhóm, đơn vị; quyền (và chia sẻ) của thư mục được kế thừa xuống mọi thư mục con và tệp bên trong, có thể **ngắt kế thừa** tại một thư mục con. Bật **Cần phê duyệt khi tải lên** cho thư mục: tư liệu tải lên chờ người có vai trò Phê duyệt duyệt trước khi hiển thị cho người chỉ xem.
 
 ## 8. Phê duyệt (#43, #54)
 Người có vai trò **Phê duyệt** vào mục *Phê duyệt*: xem trước tư liệu chờ duyệt, **Duyệt** hoặc **Từ chối** (nhập lý do). Người tải lên nhận thông báo kết quả.

@@ -67,6 +67,11 @@ export async function createShareLink(body: SaveShareLinkRequest): Promise<Share
   return data
 }
 
+export async function updateShareLink(id: string, body: SaveShareLinkRequest): Promise<ShareLink> {
+  const { data } = await api.put<ShareLink>(`/share-links/${id}`, body)
+  return data
+}
+
 export async function revokeShareLink(id: string): Promise<void> {
   await api.delete(`/share-links/${id}`)
 }

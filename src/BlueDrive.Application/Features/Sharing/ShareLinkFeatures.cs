@@ -52,6 +52,10 @@ public sealed class SaveShareLinkHandler(IAppDbContext db, ICurrentUser me, IRes
         {
             link = await db.ShareLinks.FirstOrDefaultAsync(l => l.Id == id, ct) ?? throw new NotFoundException("Không tìm thấy liên kết chia sẻ.");
             if (link.CreatedBy != uid) await auth.EnsureAsync(uid, link.ResourceType, link.ResourceId, AccessLevel.Manage, ct);
+            // Same rule as on creation: a link cannot be switched to "download allowed" by someone who may not download.
+            if (cmd.AllowDownload && !link.AllowDownload
+                && !(await auth.EnsureAsync(uid, link.ResourceType, link.ResourceId, AccessLevel.View, ct)).CanDownload)
+                throw new ForbiddenException("Bạn không có quyền tải xuống nên không thể cho phép tải xuống qua liên kết.");
         }
         else
         {

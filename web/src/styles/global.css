@@ -286,6 +286,13 @@ body {
   font-size: 15px;
 }
 
+/* No scroll anchoring: a layout change (toolbar switching to selection mode) must not scroll the page,
+   because a scroll closes the open context menu. */
+html,
+body {
+  overflow-anchor: none;
+}
+
 .bd-explorer-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -340,8 +347,43 @@ body {
 }
 
 .bd-explorer-table .ant-table-tbody > tr {
-  cursor: default;
+  cursor: pointer;
   user-select: none;
+}
+
+/* Like SharePoint: a click opens, the name is underlined while hovering the row. */
+.bd-explorer-table .ant-table-tbody > tr:hover .bd-item-name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.bd-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.bd-name-cell .bd-item-name {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.bd-name-cell > svg {
+  flex: none;
+}
+
+.bd-quick-actions {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  visibility: hidden;
+}
+
+.bd-explorer-table .ant-table-tbody > tr:hover .bd-quick-actions,
+.bd-quick-actions:focus-within,
+.bd-quick-actions:has(.ant-dropdown-open) {
+  visibility: visible;
 }
 
 .bd-explorer-table .ant-table-tbody > tr.bd-row-selected > td {
@@ -393,7 +435,7 @@ body {
   border-radius: 8px;
   background: #fff;
   overflow: hidden;
-  cursor: default;
+  cursor: pointer;
   user-select: none;
   transition: box-shadow 0.15s, border-color 0.15s;
 }
@@ -764,4 +806,16 @@ body {
   .bd-public-stage {
     height: calc(100vh - 160px);
   }
+}
+
+.bd-tile-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.bd-tile:hover .bd-tile-title .ant-typography {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }

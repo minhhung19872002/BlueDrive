@@ -194,9 +194,10 @@ public sealed class ResourceAuthorizationService(IAppDbContext db, IPermissionSe
             if (a.AccessLevel >= AccessLevel.Edit) canUpload = true;
         }
 
+        // A folder share is inherited by sub-folders and files, down to a folder that breaks inheritance.
         var shares = await db.Shares.AsNoTracking()
             .Where(s => (fileId != null && s.ResourceType == ResourceType.File && s.ResourceId == fileId) ||
-                        (s.ResourceType == ResourceType.Folder && folderChain.Contains(s.ResourceId)))
+                        (s.ResourceType == ResourceType.Folder && effectiveChain.Contains(s.ResourceId)))
             .ToListAsync(ct);
         foreach (var s in shares.Where(s => p.Matches(s.SharedWithType, s.SharedWithId)))
         {

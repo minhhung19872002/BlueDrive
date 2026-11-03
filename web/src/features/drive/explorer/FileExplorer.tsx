@@ -379,6 +379,7 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
         actions.run(key, menuTargets(item))
       },
     }),
+    runAction: (action, item) => actions.run(action, [item]),
     dragProps,
     empty,
   }
@@ -458,6 +459,8 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
         extraNewMenuItems={extraNewMenuItems}
         onExtra={(ext) => ext.onClick({ workspaceId, folderId })}
         onDownload={() => void actions.download(selectedItems)}
+        onShare={selectedItems.length === 1 && can('doc.share') ? () => actions.share(selectedItems[0]) : undefined}
+        onCopyLink={selectedItems.length === 1 ? () => void actions.copyLink(selectedItems[0]) : undefined}
         onCopyTo={() => actions.copyTo(selectedItems)}
         onMoveTo={() => actions.moveTo(selectedItems)}
         onDelete={() => actions.remove(selectedItems)}

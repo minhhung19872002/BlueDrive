@@ -3,6 +3,8 @@ import { openContextMenu } from './helpers'
 
 /** Main business flows through the real UI (needs the docker stack incl. ONLYOFFICE). */
 const stamp = Date.now().toString().slice(-6)
+/** Word document created by the ONLYOFFICE test and reused by the link sharing test (never a user's file). */
+const docName = `Kế hoạch E2E ${stamp}`
 
 async function openMyDrive(page: Page) {
   await page.goto('/my-drive')
@@ -69,7 +71,6 @@ test('tạo tài liệu Word mới và mở trình soạn thảo ONLYOFFICE', as
   await page.getByRole('main').getByRole('button', { name: /Mới$/ }).first().click()
   await page.getByRole('menuitem', { name: /Word/ }).click()
   // Type key by key like a user: the pre-selected default name must not swallow what is typed.
-  const docName = `Kế hoạch E2E ${stamp}`
   const nameBox = page.getByRole('dialog').getByRole('textbox')
   await nameBox.press('Control+A')
   await nameBox.pressSequentially(docName)
@@ -101,15 +102,24 @@ test('tạo tài liệu Word mới và mở trình soạn thảo ONLYOFFICE', as
 
 test('chia sẻ qua liên kết công khai có mật khẩu', async ({ page, browser }) => {
   await openMyDrive(page)
-  const row = page.getByRole('row').filter({ hasText: /\.(txt|docx)/ }).first()
-  await openContextMenu(page, row)
+  const row = page.getByRole('row', { name: new RegExp(`${docName}\\.docx`) })
+  await openContextMenu(page, row.getByText(`${docName}.docx`))
   await page.getByRole('menuitem', { name: /Chia sẻ$/ }).click()
   await page.getByRole('tab', { name: /liên kết/i }).click()
-  await page.getByPlaceholder(/mật khẩu/i).fill('1234')
-  await page.getByRole('button', { name: /Tạo liên kết/ }).click()
-  const linkBox = page.getByRole('dialog').locator('input[value*="/s/"]').first()
-  await expect(linkBox).toBeVisible()
+  // Like SharePoint the link is there right away (signed-in users only by default).
+  const dialog = page.getByRole('dialog')
+  const linkBox = dialog.getByRole('textbox', { name: 'Liên kết của tài liệu' })
+  await expect(linkBox).toHaveValue(/\/s\//, { timeout: 15_000 })
+  await expect(dialog.getByText('Yêu cầu đăng nhập').last()).toBeVisible()
   const link = await linkBox.inputValue()
+  // Make it public with a password: the same link is updated.
+  await dialog.getByPlaceholder(/mật khẩu/i).fill('1234')
+  await dialog.getByRole('switch').nth(1).click()
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes('/api/v1/share-links/') && r.request().method() === 'PUT' && r.ok()),
+    dialog.getByRole('button', { name: /Lưu cài đặt/ }).click(),
+  ])
+  await expect(linkBox).toHaveValue(link)
   const path = new URL(link!.trim(), 'http://x').pathname
   const anon = await browser.newContext({ storageState: { cookies: [], origins: [] } })
   const pub = await anon.newPage()
