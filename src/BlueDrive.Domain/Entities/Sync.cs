@@ -25,6 +25,8 @@ public class ChangeJournalEntry
     public Guid? ModifiedBy { get; set; }
     public Guid? DeviceId { get; set; }
     public DateTime OccurredAt { get; set; }
+    /// <summary>Permission changes: who was granted / lost access (user, group, organisation or role), so that only they are told.</summary>
+    public Guid? PrincipalId { get; set; }
 }
 
 /// <summary>A computer running BlueDrive Desktop (one per installation and account).</summary>

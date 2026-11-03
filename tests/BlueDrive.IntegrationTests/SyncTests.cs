@@ -212,7 +212,7 @@ public class SyncTests(ApiFactory factory)
     [Fact]
     public async Task Shared_root_lists_shares_flags_view_only_and_reports_access_revoked()
     {
-        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (owner, _, ownerName) = await factory.CreateUserClientAsync("bien_tap");
         var (friend, friendId, _) = await factory.CreateUserClientAsync("bien_tap");
         var ws = await StorageTests.PersonalWorkspaceAsync(owner);
         var folder = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Chia sẻ đồng bộ" })).ReadJsonAsync()).GetProperty("id").GetGuid();
@@ -224,9 +224,17 @@ public class SyncTests(ApiFactory factory)
         var device = await DeviceAsync(friend);
         long cursor = 0;
         var shared = await SnapshotAsync(device.Client, "shared", c => cursor = c);
+        // Spec 7.2 "Được chia sẻ với tôi\<Tên người chia sẻ>": a read-only virtual folder per person, listed before what it holds.
+        var sharer = shared.Single(i => i.GetProperty("virtual").GetBoolean());
+        sharer.GetProperty("parentId").ValueKind.Should().Be(JsonValueKind.Null, "top level of the shared root");
+        sharer.GetProperty("name").GetString().Should().Be("Người dùng " + ownerName);
+        sharer.GetProperty("canEdit").GetBoolean().Should().BeFalse();
+        shared.IndexOf(sharer).Should().Be(0);
         var top = shared.Single(i => i.GetProperty("id").GetGuid() == folder);
-        top.GetProperty("parentId").ValueKind.Should().Be(JsonValueKind.Null, "top level of the shared root");
+        top.GetProperty("parentId").GetGuid().Should().Be(sharer.GetProperty("id").GetGuid(), "inside the folder of the person who shares it");
         top.GetProperty("rootId").GetString().Should().Be("shared");
+        (await (await device.Client.GetAsync($"/api/v1/sync/items/{sharer.GetProperty("id").GetGuid()}")).ReadJsonAsync()).GetProperty("name").GetString()
+            .Should().Be("Người dùng " + ownerName, "the virtual folder can be asked for like any item");
         shared.Single(i => i.GetProperty("id").GetGuid() == inside).GetProperty("canEdit").GetBoolean().Should().BeTrue("the folder share is inherited");
         shared.Single(i => i.GetProperty("id").GetGuid() == viewOnly).GetProperty("canDownload").GetBoolean().Should().BeFalse();
         (await device.Client.GetAsync($"/api/v1/sync/items/{viewOnly}/content")).StatusCode.Should().Be(HttpStatusCode.Forbidden, "view-only files are never synced down");
@@ -242,6 +250,14 @@ public class SyncTests(ApiFactory factory)
         foreach (var s in shares.EnumerateArray()) await owner.DeleteAsync($"/api/v1/shares/{s.GetProperty("id").GetGuid()}");
         var changes = await ChangesAsync(device.Client, cursor);
         changes.Should().Contain(c => c.GetProperty("itemId").GetGuid() == folder && c.GetProperty("op").GetString() == "access_revoked");
+        changes.Should().NotContain(c => c.GetProperty("itemId").GetGuid() == sharer.GetProperty("id").GetGuid(), "the view-only file is still shared");
+
+        // Nothing of the owner is shared any more: the person's folder goes too.
+        var fileShares = await (await owner.GetAsync($"/api/v1/shares?resourceType=file&resourceId={viewOnly}")).ReadJsonAsync();
+        foreach (var s in fileShares.EnumerateArray()) await owner.DeleteAsync($"/api/v1/shares/{s.GetProperty("id").GetGuid()}");
+        changes = await ChangesAsync(device.Client, cursor);
+        changes.Should().Contain(c => c.GetProperty("itemId").GetGuid() == sharer.GetProperty("id").GetGuid() && c.GetProperty("op").GetString() == "access_revoked");
+        (await SnapshotAsync(device.Client, "shared")).Should().BeEmpty();
     }
 
     [Fact]

@@ -52,6 +52,8 @@ public sealed class AgentOptions
 public sealed class SyncAgent : IAsyncDisposable
 {
     private const string InitializedKey = "sync_folder";
+    private const string LayoutKey = "layout";
+    private const string CurrentLayout = "2";
     private readonly AgentOptions _o;
     private readonly SyncStateDb _db;
     private readonly HttpClient _http;
@@ -166,6 +168,13 @@ public sealed class SyncAgent : IAsyncDisposable
                 try { File.Delete(f); }
                 catch (IOException) { }
             }
+        // Layout 2 (spec 7.2): shared items under "Được chia sẻ với tôi\<Tên người chia sẻ>". A device synced before lists everything once
+        // so that what it already has moves into those folders (the change feed only brings new changes).
+        if (_db.GetAccount(LayoutKey) != CurrentLayout)
+        {
+            if (_db.GetAccount(InitializedKey) is not null) _engine.RequestFullSnapshot();
+            _db.SetAccount(LayoutKey, CurrentLayout);
+        }
         if (_db.GetAccount(InitializedKey) is null)
         {
             // First start: the folder is created (or adopted when it already holds files: they are matched by path + hash).

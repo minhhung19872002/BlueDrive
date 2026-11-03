@@ -109,6 +109,37 @@ public sealed class SyncAgentTests(ApiFactory factory) : IDisposable
     }
 
     [Fact]
+    public async Task Shared_files_are_grouped_by_the_person_who_shares_them()
+    {
+        var (owner, _, ownerName) = await factory.CreateUserClientAsync("bien_tap");
+        var (friend, friendId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var fileId = (await StorageTests.UploadAsync(owner, ws, null, "kế hoạch chung.txt", "kế hoạch"u8.ToArray())).GetProperty("fileId").GetGuid();
+        await (await owner.PostAsJsonAsync("/api/v1/shares", new { resourceType = "file", resourceId = fileId, targets = new[] { new { type = "user", id = friendId } }, accessLevel = 3 })).ReadJsonAsync();
+
+        await using var agent = Agent(await SignInAsync(friend));
+        await agent.StartAsync();
+        var person = Path.Combine(_tmp, "BlueDrive", "Được chia sẻ với tôi", "Người dùng " + ownerName);
+        var shared = Path.Combine(person, "kế hoạch chung.txt");
+        await Until(() => Task.FromResult(File.Exists(shared) && agent.Status.State == AgentState.Idle), "Được chia sẻ với tôi\\<người chia sẻ>\\tệp", 30);
+        (await File.ReadAllTextAsync(shared)).Should().Be("kế hoạch");
+
+        // The person's folder is not a folder on the server: nothing can be created straight in it.
+        await File.WriteAllTextAsync(Path.Combine(person, "của tôi.txt"), "x");
+        agent.SyncNow();
+        bool Aside() => Directory.EnumerateFiles(Path.Combine(_tmp, "BlueDrive"), "của tôi.txt", SearchOption.AllDirectories)
+            .Any(f => f.Contains("_Không đồng bộ được", StringComparison.Ordinal));
+        await Until(() => Task.FromResult(Aside()), "tệp đặt vào thư mục người chia sẻ được chuyển sang _Không đồng bộ được", 30);
+        File.Exists(Path.Combine(person, "của tôi.txt")).Should().BeFalse();
+
+        // The owner takes the share back: the file and the person's folder leave this computer.
+        var shares = await (await owner.GetAsync($"/api/v1/shares?resourceType=file&resourceId={fileId}")).ReadJsonAsync();
+        foreach (var s in shares.EnumerateArray()) await owner.DeleteAsync($"/api/v1/shares/{s.GetProperty("id").GetGuid()}");
+        agent.SyncNow();
+        await Until(() => Task.FromResult(!Directory.Exists(person)), "thư mục người chia sẻ bị gỡ", 30);
+    }
+
+    [Fact]
     public async Task Group_workspaces_are_under_nhom_and_nothing_else_can_live_there()
     {
         var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");

@@ -419,6 +419,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("path");
 
+                    b.Property<Guid?>("PrincipalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("principal_id");
+
                     b.Property<long>("Revision")
                         .HasColumnType("bigint")
                         .HasColumnName("revision");

@@ -101,19 +101,20 @@ public sealed class ChangeJournalInterceptor(ICurrentUser currentUser, TimeProvi
             rows.Add(Row(e.Entity.Id, e.Entity.Id, ChangeItemType.Workspace, ChangeOp.Purge));
 
         // Permission changes: the client re-checks access to the item (or the whole root for a workspace).
-        var grants = new List<(ResourceType Type, Guid Id)>();
+        var grants = new List<(ResourceType Type, Guid Id, Guid? Principal)>();
         foreach (var e in ctx.ChangeTracker.Entries<Share>().Where(x => x.State is EntityState.Added or EntityState.Deleted or EntityState.Modified))
-            grants.Add((e.Entity.ResourceType, e.Entity.ResourceId));
+            grants.Add((e.Entity.ResourceType, e.Entity.ResourceId, e.Entity.SharedWithId));
         foreach (var e in ctx.ChangeTracker.Entries<ResourcePermission>().Where(x => x.State is EntityState.Added or EntityState.Deleted or EntityState.Modified))
-            grants.Add((e.Entity.ResourceType, e.Entity.ResourceId));
+            grants.Add((e.Entity.ResourceType, e.Entity.ResourceId, e.Entity.PrincipalId));
         foreach (var e in ctx.ChangeTracker.Entries<WorkspaceMember>().Where(x => x.State is EntityState.Added or EntityState.Deleted or EntityState.Modified))
-            grants.Add((ResourceType.Workspace, e.Entity.WorkspaceId));
-        foreach (var (type, id) in grants.Distinct())
+            grants.Add((ResourceType.Workspace, e.Entity.WorkspaceId, e.Entity.UserId));
+        foreach (var (type, id, principal) in grants.Distinct())
         {
             var ws = await WorkspaceOfAsync(ctx, type, id, ct);
             if (ws is null) continue;
             var r = Row(ws.Value, id, type switch { ResourceType.File => ChangeItemType.File, ResourceType.Folder => ChangeItemType.Folder, _ => ChangeItemType.Workspace },
                 ChangeOp.PermissionChanged);
+            r.PrincipalId = principal;
             rows.Add(r);
         }
 

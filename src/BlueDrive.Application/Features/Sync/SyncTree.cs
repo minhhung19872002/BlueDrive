@@ -14,10 +14,13 @@ namespace BlueDrive.Application.Features.Sync;
 public sealed record SyncRootDto(string RootId, string Kind, string Name, Guid? WorkspaceId, bool CanUpload, bool CanEdit, bool Locked, bool OnlineOnly,
     long QuotaBytes, long UsedBytes);
 
-/// <summary>Item as seen by the sync client. ETag = quoted revision; ParentId null = top level of the root.</summary>
+/// <summary>
+/// Item as seen by the sync client. ETag = quoted revision; ParentId null = top level of the root. <see cref="Virtual"/>: the folder of one
+/// person (or group) in "Được chia sẻ với tôi" — not a folder on the server, nothing can be created, renamed or deleted there.
+/// </summary>
 public sealed record SyncItemDto(
     Guid Id, string Type, string RootId, Guid WorkspaceId, Guid? ParentId, string Name, string ETag, long Revision,
-    Guid? VersionId, long? Size, string? Hash, DateTime ModifiedAt, bool CanDownload, bool CanEdit, bool Deleted);
+    Guid? VersionId, long? Size, string? Hash, DateTime ModifiedAt, bool CanDownload, bool CanEdit, bool Deleted, bool Virtual = false);
 
 public static class SyncIds
 {
@@ -33,6 +36,23 @@ public static class SyncIds
         ifMatch is null || ifMatch.Split(',').Select(t => t.Trim()).Any(t => t == "*" || Normalize(t) == revision.ToString());
 
     private static string Normalize(string tag) => (tag.StartsWith("W/", StringComparison.Ordinal) ? tag[2..] : tag).Trim('"');
+
+    private static readonly byte[] SharerMask = Convert.FromHexString("5B1E0D1E5A0C4E7F8B0B5348415245FF");
+
+    /// <summary>
+    /// Spec 7.2 "Được chia sẻ với tôi\&lt;Tên người chia sẻ&gt;": the virtual folder grouping what one workspace (a person's documents or a
+    /// group) shares with the user. Its id is the workspace id masked, so it is stable and the workspace can be found back from it.
+    /// </summary>
+    public static Guid SharerFolder(Guid workspaceId) => Mask(workspaceId);
+
+    public static Guid WorkspaceOfSharerFolder(Guid folderId) => Mask(folderId);
+
+    private static Guid Mask(Guid g)
+    {
+        var b = g.ToByteArray();
+        for (var i = 0; i < b.Length; i++) b[i] ^= SharerMask[i];
+        return new Guid(b);
+    }
 }
 
 /// <summary>Loads <see cref="WorkspaceAccessMap"/>s for one user and caches them for the request.</summary>
@@ -50,6 +70,13 @@ public sealed class SyncAccessContext(IAppDbContext db, IResourceAuthorizationSe
         _maps.Clear();
         _principals = await auth.GetPrincipalsAsync(userId, ct);
         _perms = await perms.GetPermissionsAsync(userId, ct);
+    }
+
+    /// <summary>The user, or one of their groups / organisations / roles.</summary>
+    public bool Concerns(Guid principalId)
+    {
+        var p = _principals!;
+        return p.UserId == principalId || p.GroupIds.Contains(principalId) || p.OrganizationIds.Contains(principalId) || p.RoleIds.Contains(principalId);
     }
 
     public async Task<WorkspaceAccessMap?> MapAsync(Guid workspaceId, CancellationToken ct)
@@ -80,13 +107,25 @@ public sealed class SyncAccessContext(IAppDbContext db, IResourceAuthorizationSe
     public SyncItemDto Folder(WorkspaceAccessMap map, Guid id, Guid? parentId, string name, long revision, DateTime modifiedAt)
     {
         var level = map.FolderLevel(id);
-        return new SyncItemDto(id, "folder", RootOf(map), map.WorkspaceId, map.IsRoot ? parentId : map.VisibleParent(parentId), name, SyncIds.ETag(revision), revision,
+        return new SyncItemDto(id, "folder", RootOf(map), map.WorkspaceId, ParentOf(map, parentId), name, SyncIds.ETag(revision), revision,
             null, null, null, modifiedAt, level >= AccessLevel.Download, level >= AccessLevel.Edit && !map.Locked, false);
     }
 
     public SyncItemDto File(WorkspaceAccessMap map, AccessLevel level, Guid id, Guid? folderId, string name, long revision, Guid? versionId, long size, string? hash, DateTime modifiedAt) =>
-        new(id, "file", RootOf(map), map.WorkspaceId, map.IsRoot ? folderId : map.VisibleParent(folderId), name, SyncIds.ETag(revision), revision,
+        new(id, "file", RootOf(map), map.WorkspaceId, ParentOf(map, folderId), name, SyncIds.ETag(revision), revision,
             versionId, size, hash, modifiedAt, level >= AccessLevel.Download, level >= AccessLevel.Edit && !map.Locked, false);
+
+    /// <summary>In "Được chia sẻ với tôi", what has no visible parent goes in the folder of the person / group who shares it.</summary>
+    private static Guid? ParentOf(WorkspaceAccessMap map, Guid? parentId) =>
+        map.IsRoot ? parentId : map.VisibleParent(parentId) ?? SyncIds.SharerFolder(map.WorkspaceId);
+
+    /// <summary>The virtual folder of <paramref name="map"/>'s workspace in "Được chia sẻ với tôi" (read-only; the revision follows its name).</summary>
+    public static SyncItemDto SharerFolder(WorkspaceAccessMap map)
+    {
+        var revision = 1 + (BitConverter.ToInt64(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(map.SharerName))) & 0x3FFF_FFFF_FFFF_FFFF);
+        return new SyncItemDto(SyncIds.SharerFolder(map.WorkspaceId), "folder", SyncIds.SharedRoot, map.WorkspaceId, null, map.SharerName,
+            SyncIds.ETag(revision), revision, null, null, null, DateTime.UnixEpoch, true, false, false, Virtual: true);
+    }
 
     public static string RootOf(WorkspaceAccessMap map) => map.IsRoot ? SyncIds.Root(map.WorkspaceId) : SyncIds.SharedRoot;
 }
@@ -176,6 +215,13 @@ public sealed class SyncSnapshotHandler(IAppDbContext db, ICurrentUser me, IReso
             var ws = workspaces[wsIndex];
             var map = await access.MapAsync(ws, ct);
             if (map is null) continue;
+            if (phase == 0 && afterPath is null && subtree is null && !map.IsRoot && map.HasAnyAccess)
+            {
+                // "Được chia sẻ với tôi\<Tên người chia sẻ>" first, then what it holds.
+                items.Add(SyncAccessContext.SharerFolder(map));
+                afterPath = ""; // every folder path sorts after ""
+                if (items.Count == PageSize) return Page(items, new SnapshotToken(token.Cursor, 0, ws, afterPath, null), token.Cursor);
+            }
             if (phase == 0)
             {
                 // Folders, parents before children (path order).
@@ -272,6 +318,7 @@ public sealed class SyncChangesHandler(IAppDbContext db, ICurrentUser me, IResou
             .Select(f => new { f.Id, f.WorkspaceId, f.ParentId, f.Name, f.Revision, f.IsDeleted, Modified = f.UpdatedAt ?? f.CreatedAt }).ToDictionaryAsync(f => f.Id, ct);
 
         var changes = new List<SyncChangeDto>();
+        var sharerFolders = new HashSet<Guid>();
         foreach (var r in rows)
         {
             var map = await access.MapAsync(r.WorkspaceId, ct);
@@ -301,8 +348,21 @@ public sealed class SyncChangesHandler(IAppDbContext db, ICurrentUser me, IResou
                 if (map.FolderLevel(fo.Id) >= AccessLevel.View) item = access.Folder(map, fo.Id, fo.ParentId, fo.Name, fo.Revision, fo.Modified);
             }
 
-            if (item is not null) changes.Add(Bare(Op(r.Op)) with { Item = item });
-            else if (r.Op is ChangeOp.PermissionChanged or ChangeOp.UpdateMeta && inScope) changes.Add(Bare("access_revoked"));
+            if (item is not null)
+            {
+                // The person's / group's folder in "Được chia sẻ với tôi" comes first (the client may not have it yet).
+                if (item.ParentId == SyncIds.SharerFolder(r.WorkspaceId) && sharerFolders.Add(r.WorkspaceId))
+                    changes.Add(new SyncChangeDto(r.Seq, "update_meta", "folder", item.ParentId.Value, r.WorkspaceId, SyncAccessContext.SharerFolder(map!), r.OccurredAt, null));
+                changes.Add(Bare(Op(r.Op)) with { Item = item });
+            }
+            else if (r.Op is ChangeOp.PermissionChanged or ChangeOp.UpdateMeta
+                     && (inScope || r.PrincipalId is { } who && access.Concerns(who))) // the last share taken back: only the person concerned is told
+            {
+                changes.Add(Bare("access_revoked"));
+                // Nothing of that workspace is shared any more: its folder in "Được chia sẻ với tôi" goes too.
+                if (map is { IsRoot: false, HasAnyAccess: false } && r.PrincipalId is { } p && access.Concerns(p))
+                    changes.Add(new SyncChangeDto(r.Seq, "access_revoked", "folder", SyncIds.SharerFolder(r.WorkspaceId), r.WorkspaceId, null, r.OccurredAt, null));
+            }
         }
         var next = rows.Count > 0 ? rows[^1].Seq : q.Cursor;
         return new SyncChangesDto(changes, next, rows.Count == limit);
@@ -346,7 +406,12 @@ public static class SyncItems
         }
         var fo = await db.Folders.AsNoTracking().Where(x => x.Id == id && !x.IsDeleted)
             .Select(x => new { x.Id, x.WorkspaceId, x.ParentId, x.Name, x.Revision, Modified = x.UpdatedAt ?? x.CreatedAt }).FirstOrDefaultAsync(ct);
-        if (fo is null) return null;
+        if (fo is null)
+        {
+            var ws = SyncIds.WorkspaceOfSharerFolder(id);
+            var smap = await db.Workspaces.AnyAsync(w => w.Id == ws, ct) ? await access.MapAsync(ws, ct) : null;
+            return smap is { IsRoot: false, HasAnyAccess: true } ? SyncAccessContext.SharerFolder(smap) : null;
+        }
         var fmap = await access.MapAsync(fo.WorkspaceId, ct);
         return fmap is null || fmap.FolderLevel(fo.Id) < AccessLevel.View ? null : access.Folder(fmap, fo.Id, fo.ParentId, fo.Name, fo.Revision, fo.Modified);
     }

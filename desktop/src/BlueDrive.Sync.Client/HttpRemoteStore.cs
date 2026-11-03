@@ -67,6 +67,8 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
     private readonly ConcurrentDictionary<string, Guid> _workspaceOf = new();
     private readonly ConcurrentDictionary<string, string> _nameOf = new();
     private readonly ConcurrentDictionary<string, long> _sizeOf = new();
+    /// <summary>Folders of a person / group in "Được chia sẻ với tôi" (not folders on the server).</summary>
+    private readonly ConcurrentDictionary<string, byte> _virtual = new();
 
     public HttpRemoteStore(HttpClient http, RemoteStoreOptions? options = null)
     {
@@ -90,7 +92,7 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
     // ------------------------------------------------------------ DTOs (server JSON, camelCase)
 
     internal sealed record ItemDto(Guid Id, string Type, string RootId, Guid WorkspaceId, Guid? ParentId, string Name, string ETag, long Revision,
-        Guid? VersionId, long? Size, string? Hash, DateTime ModifiedAt, bool CanDownload, bool CanEdit, bool Deleted);
+        Guid? VersionId, long? Size, string? Hash, DateTime ModifiedAt, bool CanDownload, bool CanEdit, bool Deleted, bool Virtual = false);
 
     private sealed record SnapshotDto(List<ItemDto> Items, string? NextPageToken, long Cursor);
     private sealed record ChangeDto(long Seq, string Op, string ItemType, Guid ItemId, Guid WorkspaceId, ItemDto? Item, DateTime OccurredAt, Guid? DeviceId);
@@ -104,6 +106,7 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
         _workspaceOf[d.Id.ToString()] = d.WorkspaceId;
         _nameOf[d.Id.ToString()] = d.Name;
         if (d.Size is { } size) _sizeOf[d.Id.ToString()] = size;
+        if (d.Virtual) _virtual[d.Id.ToString()] = 0;
         return new RemoteItem(d.Id.ToString(), d.ParentId?.ToString(), d.Name, d.Type == "folder", d.Revision, d.Hash, d.Size ?? 0,
             DateTime.SpecifyKind(d.ModifiedAt, DateTimeKind.Utc), d.CanEdit, d.CanDownload);
     }
@@ -535,9 +538,11 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
 
     public async Task<RemoteItem> MoveAsync(string itemId, long revision, string rootId, string? newParentId, string newName, CancellationToken ct)
     {
+        if (_virtual.ContainsKey(itemId)) throw SharerFolderFixed(itemId);
         var current = await TryGetAsync(itemId, ct) ?? throw new RemoteNotFoundException(itemId);
         if (current.Revision != revision) throw new RemotePreconditionFailedException(current);
-        var targetWs = WorkspaceFor(rootId, newParentId);
+        // Renamed where it is (its parent may be a person's folder in "Được chia sẻ với tôi"): same workspace.
+        var targetWs = newParentId == current.ParentId && _workspaceOf.TryGetValue(itemId, out var here) ? here : WorkspaceFor(rootId, newParentId);
         var ifMatch = $"\"{revision}\"";
         var ops = new List<object>();
         var renamed = !string.Equals(current.Name, newName, StringComparison.Ordinal);
@@ -561,8 +566,14 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
         return last is not null ? Map(last) : await GetItemAsync(itemId, ct);
     }
 
-    public async Task DeleteAsync(string itemId, long revision, CancellationToken ct) =>
+    public async Task DeleteAsync(string itemId, long revision, CancellationToken ct)
+    {
+        if (_virtual.ContainsKey(itemId)) throw SharerFolderFixed(itemId);
         await BatchOneAsync(new { op = "delete", itemId = Guid.Parse(itemId), ifMatch = $"\"{revision}\"" }, itemId, null, ct);
+    }
+
+    private RemotePermanentException SharerFolderFixed(string id) =>
+        new($"\"{_nameOf.GetValueOrDefault(id)}\" là thư mục của người chia sẻ trong \"Được chia sẻ với tôi\": không đổi tên, di chuyển hay xóa được.", 403);
 
     private async Task<BatchResultDto> BatchOneAsync(object op, string subject, string? name, CancellationToken ct)
     {
@@ -587,6 +598,9 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
 
     private Guid WorkspaceFor(string rootId, string? parentId)
     {
+        if (parentId is not null && _virtual.ContainsKey(parentId))
+            throw new RemotePermanentException(
+                $"Không thể tạo hoặc chuyển mục vào thẳng \"{_nameOf.GetValueOrDefault(parentId)}\" (thư mục của người chia sẻ); hãy đặt vào một thư mục được chia sẻ có quyền sửa.", 403);
         if (parentId is not null && _workspaceOf.TryGetValue(parentId, out var ws)) return ws;
         if (rootId.StartsWith("ws:", StringComparison.Ordinal) && Guid.TryParse(rootId[3..], out ws)) return ws;
         if (parentId is null) throw new RemotePermanentException("Không thể tạo mục ở cấp cao nhất của \"Được chia sẻ với tôi\".", 403);

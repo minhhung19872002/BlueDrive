@@ -20,6 +20,8 @@ public sealed class WorkspaceAccessMap
     /// <summary>Owner, member or workspace-level ACL: the workspace is one of the user's sync roots.</summary>
     public bool IsRoot { get; private init; }
     public bool CanApproveAll { get; private init; }
+    /// <summary>Name of the folder grouping this workspace in "Được chia sẻ với tôi": the owner of a personal workspace, else the workspace.</summary>
+    public string SharerName { get; private init; } = "";
 
     private readonly Dictionary<Guid, (Guid? Parent, AccessLevel Level, AccessLevel Down)> _folders = [];
     private readonly Dictionary<Guid, AccessLevel> _fileGrants = [];
@@ -51,11 +53,15 @@ public sealed class WorkspaceAccessMap
         shares = shares.Where(s => p.Matches(s.SharedWithType, s.SharedWithId)).ToList();
 
         var owner = ws.OwnerId == p.UserId;
+        var sharer = ws.Type == WorkspaceType.Personal
+            ? await db.Users.AsNoTracking().Where(u => u.Id == ws.OwnerId).Select(u => u.FullName).FirstOrDefaultAsync(ct)
+            : null;
         var wsAcl = acl.Where(a => a.ResourceType == ResourceType.Workspace).Select(a => a.AccessLevel).DefaultIfEmpty(AccessLevel.None).Max();
         var isRoot = owner || member.HasValue || wsAcl > AccessLevel.None;
         var map = new WorkspaceAccessMap
         {
             WorkspaceId = ws.Id, WorkspaceType = ws.Type, WorkspaceName = ws.Name, Locked = ws.IsLocked, IsRoot = isRoot, _userId = p.UserId,
+            SharerName = string.IsNullOrWhiteSpace(sharer) ? ws.Name : sharer.Trim(),
             CanApproveAll = owner || p.IsDocAdmin && isRoot || member is WorkspaceMemberRole.Owner or WorkspaceMemberRole.Manager or WorkspaceMemberRole.Approver
                             || perms.Contains(Perm.DocApprove),
         };

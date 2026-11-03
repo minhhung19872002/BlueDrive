@@ -94,6 +94,9 @@ public sealed class SyncEngine(
     SyncStateDb state, IRemoteStore remote, ILocalFileSystem fs, IClock clock, SyncEngineOptions? options = null, IPlaceholderProvider? placeholders = null)
 {
     private const string CursorKey = "cursor";
+
+    /// <summary>The next pass lists every root again (as after a 410) and reconciles: nothing is deleted locally before it is done.</summary>
+    public void RequestFullSnapshot() => state.SetAccount(CursorKey, null);
     private const string RevokedKey = "revoked";
     private const string RestoreKey = "restore_local_deletions";
 

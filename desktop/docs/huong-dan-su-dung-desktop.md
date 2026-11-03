@@ -22,7 +22,8 @@ Tải bộ cài trên web: menu tài khoản → **Tải ứng dụng máy tính
 
 ![Thư mục BlueDrive trong Explorer](images/files-on-demand-explorer.png)
 
-- Mục **"BlueDrive - <Họ tên>"** ở khung bên trái Explorer.
+- Mục **"BlueDrive - <Tên đơn vị>"** ở khung bên trái Explorer. Bên trong: **Tài liệu của tôi**, **Nhóm** (mỗi nhóm một thư mục),
+  **Được chia sẻ với tôi** (mỗi người chia sẻ — hoặc nhóm — một thư mục mang tên họ).
 - Cột **Trạng thái**:
   - ☁ đám mây: tệp chỉ có trên mạng, không chiếm dung lượng; mở là tự tải về (có tiến độ).
   - ✔ dấu tích viền xanh: đã có trên máy (sau khi mở), có thể được giải phóng khi cần.
@@ -56,7 +57,8 @@ Chuột phải một tệp/thư mục trong thư mục BlueDrive → **BlueDrive
   thì tài liệu mở trên trình duyệt. Trong ONLYOFFICE, BlueDrive cũng hiện ở **Đám mây đã kết nối** để duyệt và mở tệp.
 - **Cùng soạn thảo trên trình duyệt**: mở trình soạn thảo trên trang BlueDrive.
 
-Không thể tạo tệp/thư mục ngay ở cấp ngoài cùng của thư mục BlueDrive, ở cấp ngoài cùng "Được chia sẻ với tôi" hoặc trong thư mục chỉ xem:
+Không thể tạo tệp/thư mục ngay ở cấp ngoài cùng của thư mục BlueDrive, ngay trong "Nhóm", ngay trong "Được chia sẻ với tôi" hoặc thư mục
+của một người chia sẻ, hay trong thư mục chỉ xem:
 những mục đó được chuyển vào `_Không đồng bộ được` và hiện trong **Cài đặt → Vấn đề**.
 
 ## 3. Biểu tượng khay hệ thống và bảng BlueDrive
