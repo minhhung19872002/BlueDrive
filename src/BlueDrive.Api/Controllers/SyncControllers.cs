@@ -58,6 +58,11 @@ public class SyncController : ApiControllerBase
         return Redirect(url.Url);
     }
 
+    /// <summary>Tài liệu đang được cùng soạn (người dùng xem được): tên tệp và những người đang chỉnh sửa.</summary>
+    [HttpGet("editing")]
+    public Task<IReadOnlyList<BlueDrive.Application.Features.Office.EditingFileDto>> Editing() =>
+        Mediator.Send(new BlueDrive.Application.Features.Office.ListEditingFilesQuery());
+
     /// <summary>Các khối nội dung (FastCDC) của phiên bản hiện tại, cho tải lên theo khối thay đổi.</summary>
     [HttpGet("items/{id:guid}/chunks")]
     public Task<ChunkListDto> Chunks(Guid id) => Mediator.Send(new GetFileChunksQuery(id));

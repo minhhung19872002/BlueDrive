@@ -21,6 +21,37 @@ public class CollaborationTests(ApiFactory factory)
             new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(ApiFactory.OnlyOfficeSecret)), SecurityAlgorithms.HmacSha256));
 
     [Fact]
+    public async Task Desktop_sees_who_is_co_editing_a_document_until_it_is_closed()
+    {
+        var (owner, ownerId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (friend, friendId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (outsider, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var fileId = (await (await owner.PostAsJsonAsync("/api/v1/office/new", new { workspaceId = ws, kind = "docx", name = "Báo cáo quý" })).ReadJsonAsync())
+            .GetProperty("fileId").GetGuid();
+        await (await owner.PostAsJsonAsync("/api/v1/shares", new { resourceType = "file", resourceId = fileId, targets = new[] { new { type = "user", id = friendId } }, accessLevel = 3 })).ReadJsonAsync();
+        var anon = factory.CreateClient();
+        async Task Callback(int status, params Guid[] users) =>
+            (await (await anon.PostAsJsonAsync($"/api/office/callback/{fileId}", new { token = SignForDocumentServer(new { key = "k", status, users = users.Select(u => u.ToString()) }) }))
+                .ReadJsonAsync()).GetProperty("error").GetInt32().Should().Be(0);
+
+        await Callback(1, ownerId, friendId);
+        var editing = await (await friend.GetAsync("/api/v1/sync/editing")).ReadJsonAsync();
+        var row = editing.EnumerateArray().Single(e => e.GetProperty("fileId").GetGuid() == fileId);
+        row.GetProperty("name").GetString().Should().Be("Báo cáo quý.docx");
+        row.GetProperty("editors").GetArrayLength().Should().Be(2);
+        (await (await outsider.GetAsync("/api/v1/sync/editing")).ReadJsonAsync()).EnumerateArray()
+            .Should().NotContain(e => e.GetProperty("fileId").GetGuid() == fileId, "only people who can see the document");
+
+        await Callback(1, friendId); // the owner left
+        (await (await friend.GetAsync("/api/v1/sync/editing")).ReadJsonAsync()).EnumerateArray()
+            .Single(e => e.GetProperty("fileId").GetGuid() == fileId).GetProperty("editors").GetArrayLength().Should().Be(1);
+        await Callback(4); // closed without changes
+        (await (await friend.GetAsync("/api/v1/sync/editing")).ReadJsonAsync()).EnumerateArray()
+            .Should().NotContain(e => e.GetProperty("fileId").GetGuid() == fileId);
+    }
+
+    [Fact]
     public async Task New_document_opens_in_editor_and_callback_saves_a_new_version_then_restore()
     {
         var (c, userId, _) = await factory.CreateUserClientAsync("bien_tap");

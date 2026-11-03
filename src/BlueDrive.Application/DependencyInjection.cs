@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<Security.IResourceAuthorizationService, Security.ResourceAuthorizationService>();
         services.AddScoped<Abstractions.IResourceAccessChecker, Security.ResourceAccessChecker>();
         services.AddScoped<Features.Storage.QuotaService>();
+        services.AddSingleton<Features.Office.OfficeEditingTracker>();
         services.AddScoped<Features.Storage.TrashPurger>();
         services.AddScoped<Features.Sync.SyncPolicyService>();
         services.AddScoped<Features.Sync.SyncAccessContext>();

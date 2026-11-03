@@ -68,6 +68,16 @@ public static class CloudFiles
 #endif
     }
 
+    /// <summary>BlueDrive's state of an item in Explorer (co-editing, conflict); null clears it. Files On-Demand sync roots only.</summary>
+    public static async Task SetStatusAsync(string path, string? text)
+    {
+#if WINDOWS
+        await ItemStatus.SetAsync(path, text, Environment.ProcessPath is { } exe ? $"{exe},0" : Path.Combine(Environment.SystemDirectory, "imageres.dll") + ",-1015");
+#else
+        await Task.CompletedTask;
+#endif
+    }
+
     /// <summary>Removes the sync root registration (the folder leaves Explorer's navigation pane).</summary>
     public static void Unregister(string folder, Guid accountId, string version)
     {

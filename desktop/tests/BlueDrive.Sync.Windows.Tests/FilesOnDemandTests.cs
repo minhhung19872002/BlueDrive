@@ -74,6 +74,19 @@ public sealed class FilesOnDemandTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Explorer_shows_bluedrive_states_on_items()
+    {
+        _remote.WebUpload(null, "đang cùng soạn.docx", Content.Of("x"));
+        (await _engine.SyncAsync(CancellationToken.None)).Errors.Should().BeEmpty();
+        if (!_platform.ShellRegistered) return; // the shell refused the folder (see Server_files_arrive…): nothing to show
+        var path = Abs("đang cùng soạn.docx");
+        var icon = Path.Combine(Environment.SystemDirectory, "imageres.dll") + ",-1015";
+        await ItemStatus.SetAsync(path, "Đang được Nguyễn Văn A chỉnh sửa", icon);
+        await ItemStatus.SetAsync(path, null, icon);
+        CloudPlaceholders.IsDehydrated(path).Should().BeTrue("setting the state does not download the file");
+    }
+
+    [Fact]
     public async Task Server_files_arrive_as_placeholders_and_download_only_when_opened()
     {
         var big = new byte[3_000_000];

@@ -26,6 +26,8 @@ public sealed class AgentOptions
     public TimeSpan PeriodicPass { get; init; } = TimeSpan.FromMinutes(15);
     public TimeSpan MaxBackoff { get; init; } = TimeSpan.FromMinutes(30);
     public bool UseRecycleBin { get; init; } = true;
+    /// <summary>"Số luồng tải song song" (Cài đặt → Mạng): files downloaded at once in full sync mode (1–8).</summary>
+    public int ParallelTransfers { get; init; } = 4;
     public RemoteStoreOptions Transfer { get; init; } = new();
     /// <summary>Tests: in-memory API handler (and SignalR over long polling).</summary>
     public Func<HttpMessageHandler>? HandlerFactory { get; init; }
@@ -97,7 +99,10 @@ public sealed class SyncAgent : IAsyncDisposable
         _fs = _platform?.FileSystem ?? new PhysicalFileSystem(o.SyncFolder, o.UseRecycleBin);
         _fs.Skipped += (path, why) => Activity?.Invoke("Bỏ qua", $"{path}: {why}");
         _engine = new SyncEngine(_db, _remote, _fs, SystemClock.Instance,
-            new SyncEngineOptions { UserDisplayName = o.UserDisplayName, DeviceName = o.DeviceName, SnapshotDirectory = SnapshotDir }, _platform?.Placeholders);
+            new SyncEngineOptions
+            {
+                UserDisplayName = o.UserDisplayName, DeviceName = o.DeviceName, SnapshotDirectory = SnapshotDir, ParallelDownloads = Math.Clamp(o.ParallelTransfers, 1, 8),
+            }, _platform?.Placeholders);
         _engine.Activity += (action, path) => Activity?.Invoke(action, path);
     }
 

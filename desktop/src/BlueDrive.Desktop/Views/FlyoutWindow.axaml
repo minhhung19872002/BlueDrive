@@ -81,6 +81,9 @@
               HorizontalAlignment="Stretch" Background="#fdecea" Margin="0,6,0,0" Padding="10,8">
         <TextBlock Text="{Binding ProblemBanner}" Foreground="#8a1c1c" TextWrapping="Wrap" />
       </Button>
+      <Border IsVisible="{Binding CoEditBanner, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" Background="#e8f1fb" CornerRadius="4" Padding="10,8" Margin="0,6,0,0">
+        <TextBlock Text="{Binding CoEditBanner}" Foreground="#0b5394" TextWrapping="Wrap" />
+      </Border>
       <TextBlock Text="Hoạt động gần đây" Classes="muted" FontSize="12" Margin="0,10,0,0" />
     </StackPanel>
     <ListBox ItemsSource="{Binding Activity}" Margin="8,0" Background="Transparent" x:Name="ActivityList">

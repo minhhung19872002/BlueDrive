@@ -21,6 +21,17 @@ public sealed class SyncEngineOptions
     public string? SnapshotDirectory { get; init; }
     /// <summary>Files up to this size are snapshotted in memory.</summary>
     public long MemorySnapshotLimit { get; init; } = 32L * 1024 * 1024;
+
+    /// <summary>
+    /// "Số luồng tải song song" (spec 8.3): full sync mode downloads the content of up to this many files at once before the steps run
+    /// (one after the other, as always). 1 = no prefetch (default; the app sets it from Cài đặt → Mạng). The remote store must accept
+    /// concurrent downloads (HttpRemoteStore does).
+    /// </summary>
+    public int ParallelDownloads { get; init; } = 1;
+
+    /// <summary>Only files up to this size are prefetched (larger ones stream straight into place), at most <see cref="PrefetchBudget"/> per round.</summary>
+    public long PrefetchMaxFile { get; init; } = 64L * 1024 * 1024;
+    public long PrefetchBudget { get; init; } = 1024L * 1024 * 1024;
 }
 
 /// <summary>Write-through stream that hashes what passes (downloads are verified without a second read).</summary>
@@ -75,6 +86,8 @@ public sealed class SyncEngine(
     private const string RevokedKey = "revoked";
     private readonly SyncEngineOptions _o = options ?? new();
     private readonly IPlaceholderProvider _placeholders = placeholders ?? NoPlaceholders.Instance;
+    /// <summary>Content downloaded ahead in parallel: remote id → (verified temporary file, revision).</summary>
+    private readonly Dictionary<string, (string Path, long Revision)> _prefetched = [];
 
     /// <summary>Operations executed since the engine was created (tests check that a converged state stays quiet).</summary>
     public int TotalOperations { get; private set; }
@@ -285,6 +298,7 @@ public sealed class SyncEngine(
             state.SetAccount(RevokedKey, JsonSerializer.Serialize(revoked));
             state.ClearOperations(root.RootId);
         }
+        ClearPrefetch();
         return new SyncPassResult(total, pendingMass, errors.Distinct().ToList());
     }
 
@@ -393,6 +407,7 @@ public sealed class SyncEngine(
         }
         else if (root.MassDeleteDecision is not null && deletes.Count == 0) state.SetMassDelete(rootId, 0, null);
 
+        await PrefetchAsync(plan, ct);
         var ops = 0;
         var stuckMoves = new List<Step>();
         Plan($"-- vòng {rootId}: {plan.Count} mục, {plan.Count(p => p.Decision.Actions != SyncAction.None)} cần xử lý");
@@ -936,8 +951,75 @@ public sealed class SyncEngine(
         return true;
     }
 
+    /// <summary>Downloads the files this round will write, <see cref="SyncEngineOptions.ParallelDownloads"/> at a time, into verified temporary files.</summary>
+    private async Task PrefetchAsync(List<Step> plan, CancellationToken ct)
+    {
+        ClearPrefetch();
+        if (_placeholders.OnDemand || _o.ParallelDownloads <= 1) return;
+        long budget = _o.PrefetchBudget;
+        var wanted = new List<RemoteItem>();
+        foreach (var r in plan.Where(p => (p.Decision.Has(SyncAction.CreateLocal) || p.Decision.Has(SyncAction.Download)) && !p.Decision.Has(SyncAction.Conflict))
+                     .Select(p => p.Remote).OfType<RemoteItem>().Where(r => !r.IsFolder && r.CanDownload && r.Size <= _o.PrefetchMaxFile).DistinctBy(r => r.Id))
+        {
+            if (r.Size > budget) break;
+            budget -= r.Size;
+            wanted.Add(r);
+        }
+        if (wanted.Count < 2) return;
+        var dir = Path.Combine(_o.SnapshotDirectory ?? Path.GetTempPath(), "prefetch");
+        Directory.CreateDirectory(dir);
+        var done = new System.Collections.Concurrent.ConcurrentDictionary<string, (string, long)>();
+        await Parallel.ForEachAsync(wanted, new ParallelOptions { MaxDegreeOfParallelism = _o.ParallelDownloads, CancellationToken = ct }, async (r, token) =>
+        {
+            var tmp = Path.Combine(dir, Guid.NewGuid().ToString("N"));
+            try
+            {
+                await using (var file = File.Create(tmp))
+                await using (var hashing = new HashingStream(file))
+                {
+                    await remote.DownloadAsync(r.Id, hashing, token);
+                    if (r.Hash is not null && hashing.Hash() != r.Hash) throw new IOException("hash");
+                }
+                done[r.Id] = (tmp, r.Revision);
+            }
+            catch (Exception ex) when (ex is IOException or RemoteTransientException or RemotePermanentException or RemoteNotFoundException or UnauthorizedAccessException)
+            {
+                TryDelete(tmp); // the step downloads it again (and reports the error) when it runs
+            }
+        });
+        foreach (var (id, v) in done) _prefetched[id] = v;
+    }
+
+    private void ClearPrefetch()
+    {
+        foreach (var (path, _) in _prefetched.Values) TryDelete(path);
+        _prefetched.Clear();
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { File.Delete(path); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
     private async Task<bool> WriteRemoteAsync(Ctx c, RemoteItem r, string path, CancellationToken ct)
     {
+        if (!_placeholders.OnDemand && _prefetched.Remove(r.Id, out var pre))
+        {
+            try
+            {
+                if (pre.Revision == r.Revision)
+                {
+                    await fs.WriteAtomicAsync(Abs(c, path), async dest =>
+                    {
+                        await using var src = File.OpenRead(pre.Path);
+                        await src.CopyToAsync(dest, ct);
+                    }, r.ModifiedAt, ct);
+                    return true;
+                }
+            }
+            finally { TryDelete(pre.Path); }
+        }
         if (_placeholders.OnDemand)
         {
             await _placeholders.CreatePlaceholderAsync(Abs(c, path), r, ct);

@@ -58,6 +58,7 @@ public partial class SettingsViewModel : ObservableObject
         _app = app;
         var s = host.Settings;
         _uploadLimit = s.UploadLimitKBps;
+        _parallelTransfers = s.ParallelTransfers;
         _downloadLimit = s.DownloadLimitKBps;
         _proxyIndex = (int)s.Proxy;
         _proxyAddress = s.ProxyAddress ?? "";
@@ -92,6 +93,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string? _syncMessage;
     [ObservableProperty] private string _folder = "";
     [ObservableProperty] private int _uploadLimit;
+    [ObservableProperty] private int _parallelTransfers;
     [ObservableProperty] private int _downloadLimit;
     [ObservableProperty] private int _proxyIndex;
     [ObservableProperty] private string _proxyAddress = "";
@@ -291,6 +293,7 @@ public partial class SettingsViewModel : ObservableObject
     {
         var s = _host.Settings;
         s.UploadLimitKBps = Math.Max(0, UploadLimit);
+        s.ParallelTransfers = Math.Clamp(ParallelTransfers, 1, 8);
         s.DownloadLimitKBps = Math.Max(0, DownloadLimit);
         s.Proxy = (ProxyChoice)ProxyIndex;
         s.ProxyAddress = ProxyAddress.Trim();

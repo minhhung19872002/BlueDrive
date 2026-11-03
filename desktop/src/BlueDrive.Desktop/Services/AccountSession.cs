@@ -44,6 +44,7 @@ public sealed class AccountSession : IAsyncDisposable
         {
             Server = new Uri(config.ServerUrl), SyncFolder = config.SyncFolder, StateDbPath = store.StateDbPath(config.Id), Tokens = store.Tokens(config.Id),
             UserDisplayName = config.DisplayName, AppVersion = appVersion, AccountId = config.Id, Transfer = transfer,
+            ParallelTransfers = settings.ParallelTransfers,
             OnDemand = config.OnDemand && CloudFiles.Supported(config.SyncFolder) ? ctx => Platform = NewPlatform(ctx, appVersion) : null,
         });
         var lastConflicts = -1;
@@ -71,8 +72,14 @@ public sealed class AccountSession : IAsyncDisposable
         Agent.Activity += (_, _) => Changed?.Invoke(this);
         Agent.StatusChanged += s =>
         {
-            if (s.State == AgentState.Idle) _ = CheckSharesAsync();
+            if (s.State == AgentState.Idle)
+            {
+                _ = CheckSharesAsync();
+                _ = RefreshEditingAsync();
+            }
         };
+        _editingTimer = new Timer(_ => _ = RefreshEditingAsync(), null, TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(30));
+        WatchOfficeLocks();
         if (config.Paused) Agent.Pause(true);
     }
 
@@ -80,6 +87,96 @@ public sealed class AccountSession : IAsyncDisposable
         CloudFiles.NewPlatform(ctx, version, (path, message) => Notify?.Invoke("BlueDrive", $"{path}: {message}"));
 
     public Task StartAsync() => Agent.StartAsync();
+
+    // ---------------------------------------------------------------- co-editing (spec 13A)
+
+    private readonly Timer _editingTimer;
+    private FileSystemWatcher? _locks;
+    private int _refreshingEditing;
+
+    /// <summary>Documents of this account being co-edited online now (remote id → name, editors).</summary>
+    public IReadOnlyDictionary<string, BlueDriveApi.EditingFile> Editing { get; private set; } = new Dictionary<string, BlueDriveApi.EditingFile>();
+
+    /// <summary>A document being co-edited online was opened from this computer in Word / Excel / PowerPoint: (local path, editors).</summary>
+    public event Action<string, IReadOnlyList<string>>? CoEditWarning;
+
+    private async Task RefreshEditingAsync()
+    {
+        if (Interlocked.Exchange(ref _refreshingEditing, 1) == 1) return;
+        try
+        {
+            var list = await Agent.Api.EditingAsync();
+            var next = list.ToDictionary(e => e.FileId.ToString(), e => e);
+            if (!next.Keys.ToHashSet().SetEquals(Editing.Keys) || next.Any(e => !Editing.TryGetValue(e.Key, out var old) || !old.Editors.SequenceEqual(e.Value.Editors)))
+            {
+                Editing = next;
+                Changed?.Invoke(this);
+            }
+            await ApplyExplorerStatesAsync();
+        }
+        catch (Exception ex) when (ex is RemoteTransientException or RemotePermanentException or RemoteNotFoundException or SignInRequiredException) { }
+        finally { Interlocked.Exchange(ref _refreshingEditing, 0); }
+    }
+
+    private Dictionary<string, string> _explorerStates = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Explorer shows BlueDrive's own state next to the sync status (spec 7.2): "Đang được … chỉnh sửa trực tuyến" for documents being
+    /// co-edited, "Có xung đột" on conflict copies. Files On-Demand accounts (registered sync root) only; only the changes are written.
+    /// </summary>
+    private async Task ApplyExplorerStatesAsync()
+    {
+        if (Platform is null) return;
+        var wanted = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (id, e) in Editing)
+            if (Read(db => LocalIndex.AbsPathOf(db, Config.SyncFolder, id), null) is { } path)
+                wanted[path] = $"Đang được {string.Join(", ", e.Editors.Take(3))} chỉnh sửa trực tuyến";
+        foreach (var c in Conflicts()) wanted[Agent.LocalPathOf(c.RootId, c.ConflictPath)] = "Có xung đột — mở BlueDrive để chọn bản giữ lại";
+        foreach (var (path, text) in wanted.Where(w => !_explorerStates.TryGetValue(w.Key, out var old) || old != w.Value)
+                     .Concat(_explorerStates.Where(o => !wanted.ContainsKey(o.Key)).Select(o => new KeyValuePair<string, string>(o.Key, null!))))
+        {
+            try { await CloudFiles.SetStatusAsync(path, text); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException or ArgumentException
+                                           or FileNotFoundException) { }
+        }
+        _explorerStates = wanted;
+    }
+
+    /// <summary>
+    /// Soft lock: Office creates its owner file "~$…" next to a document when it opens it. If that document is being co-edited online, the
+    /// local edits would end as a conflict copy: warn and offer the co-editing mode.
+    /// </summary>
+    private void WatchOfficeLocks()
+    {
+        if (!Directory.Exists(Config.SyncFolder)) return;
+        try
+        {
+            _locks = new FileSystemWatcher(Config.SyncFolder, "~$*") { IncludeSubdirectories = true, NotifyFilter = NotifyFilters.FileName };
+            _locks.Created += (_, e) => _ = OnOfficeLockAsync(e.FullPath);
+            _locks.EnableRaisingEvents = true;
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException) { }
+    }
+
+    /// <summary>The document an Office owner file belongs to: Word drops the first two characters of long names ("~$o cáo.docx"), Excel keeps them.</summary>
+    public static string? DocumentForLock(string lockPath)
+    {
+        var dir = Path.GetDirectoryName(lockPath);
+        var tail = Path.GetFileName(lockPath)[2..];
+        if (dir is null || tail.Length == 0 || !Directory.Exists(dir)) return null;
+        var exact = Path.Combine(dir, tail);
+        if (File.Exists(exact)) return exact;
+        return Directory.EnumerateFiles(dir).FirstOrDefault(f => !Path.GetFileName(f).StartsWith("~$", StringComparison.Ordinal)
+                                                               && Path.GetFileName(f).EndsWith(tail, StringComparison.OrdinalIgnoreCase)
+                                                               && Path.GetFileName(f).Length == tail.Length + 2);
+    }
+
+    private async Task OnOfficeLockAsync(string lockPath)
+    {
+        if (DocumentForLock(lockPath) is not { } doc || FindItem(doc) is not { } hit) return;
+        await RefreshEditingAsync();
+        if (Editing.TryGetValue(hit.Item.RemoteId, out var e) && e.Editors.Count > 0) CoEditWarning?.Invoke(doc, e.Editors);
+    }
 
     // Only what arrives while the app runs; at most once a minute.
     private DateTime _sharesSince = DateTime.UtcNow;
@@ -180,6 +277,8 @@ public sealed class AccountSession : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        _locks?.Dispose();
+        await _editingTimer.DisposeAsync();
         await Agent.DisposeAsync();
         lock (_readGate) _reader?.Dispose();
     }

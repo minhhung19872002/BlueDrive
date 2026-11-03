@@ -53,6 +53,22 @@ public partial class App : Application
             });
             ApplyTheme(_host.Settings.Theme);
             _host.Notification += ShowToast;
+            _host.CoEditWarning += (path, editors) => Dispatcher.UIThread.Post(() =>
+            {
+                try
+                {
+                    Notifier.ShowWithAction("Tài liệu đang được cùng soạn trực tuyến",
+                        $"\"{Path.GetFileName(path)}\" đang được {string.Join(", ", editors.Take(3))} chỉnh sửa. Thay đổi của bạn trên bản ở máy có thể tạo bản xung đột. Mở chế độ cùng soạn?",
+                        "Mở chế độ cùng soạn", "coedit", path);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException or UnauthorizedAccessException
+                                               or System.ComponentModel.Win32Exception) { Log.Warning(ex, "Không hiện được thông báo"); }
+            });
+            Notifier.Activated += (action, value) =>
+            {
+                if (action == "coedit") Dispatcher.UIThread.Post(() => _ = HandleArgsAsync(["--coedit", value]));
+            };
+            Notifier.Listen();
             _host.Changed += () => Dispatcher.UIThread.Post(UpdateTray);
             BuildTray();
             _ = ListenForActivationAsync(_stop.Token);

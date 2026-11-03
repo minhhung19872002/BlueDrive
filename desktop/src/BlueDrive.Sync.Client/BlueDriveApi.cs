@@ -23,6 +23,11 @@ public sealed class BlueDriveApi(HttpClient http)
     public sealed record Version(Guid Id, int VersionNo, long SizeBytes, string? ChangeNote, string? CreatedByName, DateTime CreatedAt, bool IsCurrent);
 
     public sealed record EditorLink(string Url, string BrowserUrl, bool CanEdit);
+    public sealed record EditingFile(Guid FileId, string Name, IReadOnlyList<string> Editors);
+
+    /// <summary>Documents being co-edited now (ONLYOFFICE) that the user can see, with who is editing.</summary>
+    public async Task<IReadOnlyList<EditingFile>> EditingAsync(CancellationToken ct = default) => await GetAsync<List<EditingFile>>("api/v1/sync/editing", ct);
+
     public sealed record Notification(Guid Id, string Type, string Title, string? Body, string? Link, bool IsRead, DateTime CreatedAt);
 
     /// <summary>The user's latest unread notifications (the web's bell): "X đã chia sẻ … với bạn"…</summary>

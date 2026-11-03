@@ -145,6 +145,17 @@ public sealed class PackagingTests : IDisposable
     }
 
     [Fact]
+    public void Office_owner_files_point_to_the_document_opened_locally()
+    {
+        File.WriteAllText(Path.Combine(_dir, "Báo cáo quý.docx"), "x");
+        File.WriteAllText(Path.Combine(_dir, "Kế hoạch.xlsx"), "x");
+        // Word drops the first two characters of the name, Excel keeps the whole name.
+        AccountSession.DocumentForLock(Path.Combine(_dir, "~$o cáo quý.docx")).Should().Be(Path.Combine(_dir, "Báo cáo quý.docx"));
+        AccountSession.DocumentForLock(Path.Combine(_dir, "~$Kế hoạch.xlsx")).Should().Be(Path.Combine(_dir, "Kế hoạch.xlsx"));
+        AccountSession.DocumentForLock(Path.Combine(_dir, "~$không có.docx")).Should().BeNull();
+    }
+
+    [Fact]
     public void Updates_come_from_the_bluedrive_server()
     {
         Updater.FeedUrl("https://drive.example.gov.vn/").Should().Be("https://drive.example.gov.vn/downloads/desktop/");

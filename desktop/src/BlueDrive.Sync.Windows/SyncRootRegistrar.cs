@@ -48,6 +48,8 @@ public static class SyncRootRegistrar
                 Context = CryptographicBuffer.ConvertStringToBinary(info.AccountId.ToString("N"), BinaryStringEncoding.Utf8),
             };
             if (info.RecycleBin is not null) root.RecycleBinUri = info.RecycleBin;
+            // Custom state shown by Explorer next to the sync status (spec 7.2): "Đang được … chỉnh sửa", "Có xung đột", "Lỗi đồng bộ".
+            root.StorageProviderItemPropertyDefinitions.Add(new StorageProviderItemPropertyDefinition { Id = ItemStatus.PropertyId, DisplayNameResource = "Trạng thái BlueDrive" });
             StorageProviderSyncRootManager.Register(root);
             // Windows accepts the call but ignores some folders (e.g. under %TEMP%): check it really took.
             if (StorageProviderSyncRootManager.GetSyncRootInformationForFolder(folder)?.Id == root.Id) return true;

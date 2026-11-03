@@ -94,12 +94,13 @@ public interface IFileStorageTemp
 public sealed record OfficeCallbackCommand(Guid FileId, string Body, string? AuthorizationHeader) : IRequest<int>;
 
 public sealed class OfficeCallbackHandler(IAppDbContext db, IOfficeEditorProvider office, IFileContentService content, QuotaService quota, IBackgroundJobs jobs,
-    IFileStorageTemp temp, IAuditLogger audit, TimeProvider clock, ILogger<OfficeCallbackHandler> logger) : IRequestHandler<OfficeCallbackCommand, int>
+    IFileStorageTemp temp, IAuditLogger audit, TimeProvider clock, ILogger<OfficeCallbackHandler> logger, OfficeEditingTracker editing) : IRequestHandler<OfficeCallbackCommand, int>
 {
     public async Task<int> Handle(OfficeCallbackCommand cmd, CancellationToken ct)
     {
         var cb = office.ParseCallback(cmd.Body, cmd.AuthorizationHeader);
         if (cb is null) return 1;
+        editing.OnCallback(cmd.FileId, cb.Status, cb.Users);
         if (cb.Status is not (2 or 6) || string.IsNullOrEmpty(cb.DownloadUrl)) return 0;
         var file = await db.Files.FirstOrDefaultAsync(f => f.Id == cmd.FileId && !f.IsDeleted, ct);
         if (file is null) return 1;

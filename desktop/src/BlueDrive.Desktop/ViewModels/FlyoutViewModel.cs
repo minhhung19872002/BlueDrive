@@ -48,6 +48,8 @@ public partial class FlyoutViewModel : ObservableObject
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private string _statusDetail = "";
     [ObservableProperty] private string? _problemBanner;
+    /// <summary>"Đang cùng soạn trực tuyến: …" (spec 13A: who is editing).</summary>
+    [ObservableProperty] private string? _coEditBanner;
     [ObservableProperty] private bool _isPaused;
     [ObservableProperty] private string? _transferText;
     [ObservableProperty] private double _transferPercent;
@@ -81,6 +83,9 @@ public partial class FlyoutViewModel : ObservableObject
         var conflicts = s.Conflicts().Count;
         var problems = st.Problems.Count + conflicts;
         ProblemBanner = problems > 0 ? $"{problems} mục không đồng bộ được hoặc bị xung đột – Xem" : null;
+        CoEditBanner = s.Editing.Count == 0 ? null
+            : "Đang cùng soạn trực tuyến: " + string.Join("; ", s.Editing.Values.Take(3).Select(e => $"\"{e.Name}\" — {string.Join(", ", e.Editors.Take(3))}"))
+              + (s.Editing.Count > 3 ? $" và {s.Editing.Count - 3} tài liệu khác" : "");
         if (s.Transfer is { } t)
         {
             TransferText = $"{(t.Upload ? "Đang tải lên" : "Đang tải xuống")} {t.Name}" + (t.Total > 0 ? $" — {Formatting.Bytes(t.Done)} / {Formatting.Bytes(t.Total)}" : "");

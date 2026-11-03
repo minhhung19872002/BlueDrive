@@ -26,6 +26,20 @@ public static class LocalIndex
         return null;
     }
 
+    /// <summary>Where the BlueDrive item <paramref name="remoteId"/> is on this computer (null when it is not synced here).</summary>
+    public static string? AbsPathOf(SyncStateDb db, string syncFolder, string remoteId)
+    {
+        foreach (var root in db.Roots().Where(r => r.Enabled))
+        {
+            var byRemote = db.Items(root.RootId).ToDictionary(i => i.RemoteId);
+            if (!byRemote.TryGetValue(remoteId, out var b)) continue;
+            var rel = PathOf(b, byRemote);
+            var full = root.LocalPath.Length == 0 ? rel : root.LocalPath + "/" + rel;
+            return Path.Combine(Path.GetFullPath(syncFolder), full.Replace('/', Path.DirectorySeparatorChar));
+        }
+        return null;
+    }
+
     internal static string PathOf(BaseItem b, IReadOnlyDictionary<string, BaseItem> byRemote)
     {
         var parts = new List<string> { b.Name };

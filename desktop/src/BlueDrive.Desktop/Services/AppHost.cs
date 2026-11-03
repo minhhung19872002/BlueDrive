@@ -18,6 +18,8 @@ public sealed class AppHost : IAsyncDisposable
 
     /// <summary>(title, text) to show as a Windows notification (when enabled in settings).</summary>
     public event Action<string, string>? Notification;
+    /// <summary>A document being co-edited online was opened locally in Office: (local path, editors).</summary>
+    public event Action<string, IReadOnlyList<string>>? CoEditWarning;
     /// <summary>Any session changed (status, activity, transfer): the tray icon and the flyout refresh.</summary>
     public event Action? Changed;
 
@@ -62,6 +64,11 @@ public sealed class AppHost : IAsyncDisposable
             if (Settings.Notifications) Notification?.Invoke(title, text);
         };
         s.Agent.Activity += (action, path) => Log.Information("[{Account}] {Action}: {Path}", acc.Username, action, path);
+        s.CoEditWarning += (path, editors) =>
+        {
+            Log.Information("Mở bản trên máy của tài liệu đang cùng soạn: {Path}", path);
+            CoEditWarning?.Invoke(path, editors);
+        };
         Sessions.Add(s);
         RegisterShell();
         if (_autoPause is not null) s.Agent.SetAutoPause(_autoPause);

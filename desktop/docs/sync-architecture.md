@@ -259,3 +259,13 @@ Cùng đích `net10.0` với macOS, chế độ đồng bộ đầy đủ.
 | Máy | Phiên bản mới của tệp ≥ 8 MB: lấy danh sách khối (cùng revision với base), chia khối bản trên máy, nếu phần thay đổi ≤ 70 % thì gửi delta (đọc thẳng từ ảnh chụp nội dung, không nạp RAM); ngược lại, máy chủ cũ, hay base đã đổi → tải lên toàn bộ như trước (tus, tiếp tục được). |
 | Kết quả | Sửa 1 MB giữa tệp 20 MB: gửi ~2 MB thay vì 20 MB (IT `DesktopClientTests.Editing_part_of_a_large_file_sends_only_the_changed_chunks`). |
 | Chưa làm (tùy chọn trong đặc tả) | **Máy chủ lưu khối dùng chung (dedup)**: máy chủ vẫn lưu mỗi phiên bản thành một blob mã hóa riêng (AES-256-GCM theo blob, sao lưu/khôi phục, thùng rác, hạn mức đều dựa trên mô hình này) — đổi sang kho khối là thay đổi lớn về lưu trữ, chưa làm. **Đồng bộ trong mạng LAN** giữa các máy: cần cơ chế máy ngang hàng chứng minh quyền với nhau (vé do máy chủ cấp, mã hóa kênh) — chưa làm; tải lên theo khối đã giảm phần lớn băng thông với tệp lớn bị sửa. |
+
+## 18. Bổ sung theo đặc tả (sau Sync-Phase 12)
+
+| Mục đặc tả | Thực hiện |
+|---|---|
+| 8.3 Số luồng song song | Cài đặt → Mạng → "Số luồng tải song song" (1–8, mặc định 4): ở chế độ đồng bộ đầy đủ, mỗi vòng tải trước song song nội dung các tệp cần tải về (≤ 64 MB/tệp, ≤ 1 GB/vòng) vào tệp tạm đã kiểm mã băm; các bước vẫn chạy lần lượt (trạng thái SQLite, thứ tự cha–con không đổi). Tải lên vẫn từng tệp (tus tiếp tục được, tải lên theo khối). |
+| 13A Ai đang chỉnh sửa | Máy chủ ghi nhận người đang soạn từ callback Document Server (trạng thái 1: danh sách người; 2/3/4: đóng) — `OfficeEditingTracker`; `GET /api/v1/sync/editing` trả tài liệu người dùng xem được. Ứng dụng hỏi mỗi 30 giây / sau mỗi lượt: bảng BlueDrive hiện "Đang cùng soạn trực tuyến: …"; Explorer hiện trạng thái "Đang được … chỉnh sửa trực tuyến" bên cạnh biểu tượng đồng bộ (`StorageProviderItemProperties`, chế độ tệp theo yêu cầu). |
+| 13A Khóa mềm | Khi Word/Excel/PowerPoint mở bản trên máy (tệp chủ sở hữu `~$…` xuất hiện) của tài liệu đang có phiên cùng soạn: thông báo "Tài liệu đang được cùng soạn trực tuyến… Mở chế độ cùng soạn?" với nút mở ONLYOFFICE (Windows). |
+| 7.2 Trạng thái tùy chỉnh trong Explorer | Thuộc tính "Trạng thái BlueDrive" khai báo khi đăng ký sync root: "Đang được … chỉnh sửa trực tuyến", "Có xung đột — mở BlueDrive để chọn bản giữ lại". |
+| 13A Nhấp đúp luôn mở chế độ cùng soạn | Chưa làm: Windows không cho gán ứng dụng mặc định theo thư mục, cần shell extension có định danh gói (MSIX) — cùng việc với menu chuột phải kiểu Windows 11. |
