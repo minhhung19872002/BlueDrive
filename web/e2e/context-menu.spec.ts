@@ -145,3 +145,19 @@ test('menu ngữ cảnh: mọi thao tác trên tệp', async ({ page }) => {
 
   expect(errors).toEqual([])
 })
+
+test('ảnh mới tải lên tự hiện ảnh thu nhỏ ở chế độ lưới (không cần tải lại trang)', async ({ page }) => {
+  await page.goto(`/my-drive?folder=${folderId}`)
+  await page.waitForLoadState('networkidle')
+  await page.getByTitle('Dạng lưới').first().click()
+  const name = `anh-moi-${stamp}.png`
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
+  const chooser = page.waitForEvent('filechooser')
+  await page.getByRole('main').getByRole('button', { name: /Tải lên$/ }).first().click()
+  const tệp = page.getByRole('menuitem', { name: /Tải lên tệp/ })
+  if (await tệp.isVisible().catch(() => false)) await tệp.click()
+  await (await chooser).setFiles({ name, mimeType: 'image/png', buffer: png })
+  // The worker renders the thumbnail a few seconds after the upload: the tile switches from the icon to it.
+  const tile = page.locator('.bd-thumb').filter({ has: page.locator('img') })
+  await expect(tile).toHaveCount(1, { timeout: 30_000 })
+})

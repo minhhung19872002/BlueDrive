@@ -140,6 +140,36 @@ public class CollaborationTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Transparent_png_thumbnail_has_white_background()
+    {
+        var (c, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(c);
+        // A logo-like PNG: transparent canvas with a green square in the middle.
+        using var bmp = new SKBitmap(new SKImageInfo(400, 400, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using (var canvas = new SKCanvas(bmp))
+        {
+            canvas.Clear(SKColors.Transparent);
+            using var paint = new SKPaint { Color = SKColors.Green };
+            canvas.DrawRect(150, 150, 100, 100, paint);
+        }
+        var png = SKImage.FromBitmap(bmp).Encode(SKEncodedImageFormat.Png, 100).ToArray();
+        var up = await StorageTests.UploadAsync(c, ws, null, "logo.png", png);
+        var fileId = up.GetProperty("fileId").GetGuid();
+
+        using (var scope = factory.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<IFileProcessor>().ProcessAsync(fileId, up.GetProperty("versionId").GetGuid(), CancellationToken.None);
+
+        var detail = await (await c.GetAsync($"/api/v1/files/{fileId}")).ReadJsonAsync();
+        using var thumb = SKBitmap.Decode(await factory.CreateClient().GetByteArrayAsync(detail.GetProperty("thumbnailUrl").GetString()!));
+        var corner = thumb.GetPixel(5, 5);
+        corner.Red.Should().BeGreaterThan(240, "transparent areas must not turn black");
+        corner.Green.Should().BeGreaterThan(240);
+        corner.Blue.Should().BeGreaterThan(240);
+        var center = thumb.GetPixel(thumb.Width / 2, thumb.Height / 2);
+        center.Green.Should().BeGreaterThan(center.Red);
+    }
+
+    [Fact]
     public async Task Group_summary_and_member_activity()
     {
         var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");

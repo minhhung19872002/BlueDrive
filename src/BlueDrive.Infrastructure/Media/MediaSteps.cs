@@ -117,7 +117,14 @@ public sealed class ThumbnailStep(IFileContentService content, PlainCopy plain, 
         var w = Math.Max(1, (int)(source.Width * scale));
         var h = Math.Max(1, (int)(source.Height * scale));
         using var resized = scale < 1 ? source.Resize(new SKImageInfo(w, h), new SKSamplingOptions(SKCubicResampler.Mitchell)) : source.Copy();
-        using var image = SKImage.FromBitmap(resized);
+        // JPEG has no alpha: flatten transparent images (PNG logos, icons) onto white instead of black.
+        using var flat = new SKBitmap(new SKImageInfo(resized.Width, resized.Height, SKColorType.Rgb888x, SKAlphaType.Opaque));
+        using (var canvas = new SKCanvas(flat))
+        {
+            canvas.Clear(SKColors.White);
+            canvas.DrawBitmap(resized, 0, 0);
+        }
+        using var image = SKImage.FromBitmap(flat);
         using var data = image.Encode(SKEncodedImageFormat.Jpeg, 82);
         await using var ms = new MemoryStream(data.ToArray());
         return DerivedKeys.Compose(await content.SaveAsync(ms, $"thumbs/{fileId:N}", ct));
