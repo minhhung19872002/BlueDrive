@@ -10,5 +10,7 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="BlueDrive.Sync.Tests" />
+    <InternalsVisibleTo Include="BlueDrive.Sync.Testing" />
+    <InternalsVisibleTo Include="BlueDrive.IntegrationTests" />
   </ItemGroup>
 </Project>

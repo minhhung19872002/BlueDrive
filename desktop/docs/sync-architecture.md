@@ -101,3 +101,17 @@ phân quyền trực tiếp; mục có thư mục cha không được thấy n�
 - **Chính sách** (`/admin/settings`, nhóm "Đồng bộ máy tính"): `sync.enabled`, `sync.allowed_roles`, `sync.allowed_organizations`
   (gồm đơn vị con), `sync.max_file_size_mb`, `sync.blocked_extensions`, `sync.online_only_workspaces`, `sync.min_client_version`,
   `sync.view_only_as_link`, `sync.device_refresh_days`, `sync.journal_retention_days`, `sync.poll_seconds`.
+
+## 7. Thư viện máy khách `BlueDrive.Sync.Client`
+
+| Thành phần | Việc làm |
+|---|---|
+| `DesktopAuthenticator` | Đăng nhập OAuth 2.0 + PKCE (S256): mở trình duyệt tới `/connect/authorize`, nhận mã qua socket loopback `127.0.0.1:<cổng ngẫu nhiên>/callback` (kiểm tra `state`), đổi mã tại `/api/v1/connect/token`. |
+| `DeviceAuthHandler` | Gắn access token; hết hạn hoặc gặp 401 → làm mới một lần (token xoay vòng). Làm mới thất bại (thiết bị bị thu hồi/xóa từ xa) → xóa token, báo `SignInRequiredException`. |
+| `HttpRemoteStore` | Cài đặt `IRemoteStore`: snapshot/changes, tải xuống qua URL ký có **Range** (mất kết nối → tải tiếp từ byte đã nhận), tải lên ≤ 4 MB bằng multipart, lớn hơn bằng **tus** (khối 8 MB, `HEAD` lấy offset để tải tiếp), tạo thư mục / đổi tên / di chuyển / xóa qua `/sync/batch` với `if_match`. |
+| Ánh xạ lỗi | 409 → trùng tên, 412 → bản máy chủ đã đổi (kèm mục hiện tại), 404 → đúng mục bị thiếu (mục hay thư mục đích), 410 → đồng bộ lại toàn bộ, 401 → đăng nhập lại, 408/429/5xx/mạng → tạm thời, còn lại (403, 413, 415, chặn loại tệp…) → vĩnh viễn. |
+| Thử lại | Polly: chỉ các yêu cầu **lũy đẳng** (liệt kê, tải xuống, khối tus) được thử lại với backoff lũy thừa + jitter, ngắt mạch khi máy chủ lỗi liên tục. Thao tác thay đổi dữ liệu không gửi lại mù quáng; engine lập lại kế hoạch ở vòng sau (mất phản hồi → hai bên cùng hash → liên kết, không tạo bản trùng). |
+| `BandwidthLimiter`, `ThrottledStream` | Giới hạn băng thông tải lên/tải xuống (byte/giây, đổi được khi đang chạy, 0 = không giới hạn). |
+| `SyncNotifications` | SignalR `/hubs/sync` (`changes_available`, `device_status`, tự kết nối lại + `Resubscribe`) và hỏi định kỳ dự phòng (5 phút; 30 giây khi mất kết nối hub). |
+
+Kiểm thử: `tests/BlueDrive.IntegrationTests/DesktopClientTests.cs` chạy engine thật trên API thật (Testcontainers): 2 máy tạo/sửa/đổi tên/xung đột/xóa, tải tiếp bằng Range, ánh xạ lỗi, làm mới token, đẩy SignalR; `desktop/tests/BlueDrive.Sync.Tests/ClientTests.cs`: PKCE loopback, chặn `state` giả, giới hạn băng thông.

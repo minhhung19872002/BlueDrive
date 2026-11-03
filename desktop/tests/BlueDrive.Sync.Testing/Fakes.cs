@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using BlueDrive.Sync.Core;
 
-namespace BlueDrive.Sync.Tests;
+namespace BlueDrive.Sync.Testing;
 
 public sealed class FakeClock(DateTime start) : IClock
 {

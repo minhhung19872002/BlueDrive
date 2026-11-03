@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Description>Test doubles for the BlueDrive sync engine: in-memory disk, in-memory server, clock.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BlueDrive.Sync.Core\BlueDrive.Sync.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -13,8 +13,11 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\BlueDrive.Sync.Core\BlueDrive.Sync.Core.csproj" />
+    <ProjectReference Include="..\..\src\BlueDrive.Sync.Client\BlueDrive.Sync.Client.csproj" />
+    <ProjectReference Include="..\BlueDrive.Sync.Testing\BlueDrive.Sync.Testing.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="BlueDrive.Sync.Testing" />
   </ItemGroup>
 </Project>
