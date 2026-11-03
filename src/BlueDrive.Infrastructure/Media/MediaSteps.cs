@@ -171,8 +171,9 @@ public sealed class ThumbnailStep(IFileContentService content, PlainCopy plain, 
         var tmp = await plain.ExtractAsync(version, file.Extension, ct);
         try
         {
-            await ProbeAsync(file, tmp, ct);
-            using var cover = await FfmpegFrameAsync(tmp, null, ct); // embedded cover art, if any
+            // Embedded cover art shows up as a video stream; without one ffmpeg has nothing to extract.
+            if (!await ProbeAsync(file, tmp, ct)) return;
+            using var cover = await FfmpegFrameAsync(tmp, null, ct);
             if (cover is not null) await StoreBitmapAsync(file, cover, false, ct);
         }
         finally { File.Delete(tmp); }
@@ -204,7 +205,8 @@ public sealed class ThumbnailStep(IFileContentService content, PlainCopy plain, 
         if (bmp is not null) await StoreBitmapAsync(file, bmp, true, ct);
     }
 
-    private static async Task ProbeAsync(StoredFile file, string path, CancellationToken ct)
+    /// <summary>Reads duration and picture size; returns true when the file has a video (or cover art) stream.</summary>
+    private static async Task<bool> ProbeAsync(StoredFile file, string path, CancellationToken ct)
     {
         var json = await RunAsync("ffprobe", ["-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", path], ct);
         using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
@@ -216,8 +218,9 @@ public sealed class ThumbnailStep(IFileContentService content, PlainCopy plain, 
                 {
                     file.Width = w.GetInt32();
                     file.Height = h.GetInt32();
-                    break;
+                    return true;
                 }
+        return false;
     }
 
     private static async Task<SKBitmap?> FfmpegFrameAsync(string path, double? atSeconds, CancellationToken ct)

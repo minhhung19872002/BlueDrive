@@ -189,6 +189,33 @@ public class StorageTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Retention_job_purges_expired_trash_files_and_folders()
+    {
+        var (c, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await PersonalWorkspaceAsync(c);
+        var folderId = (await (await c.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Hết hạn" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var fileId = (await UploadAsync(c, ws, null, "het-han.png", Png)).GetProperty("fileId").GetGuid();
+        var keptId = (await UploadAsync(c, ws, null, "moi-xoa.png", Png)).GetProperty("fileId").GetGuid();
+        await (await c.PostAsJsonAsync("/api/v1/items/delete", new
+        {
+            items = new object[] { new { type = "folder", id = folderId }, new { type = "file", id = fileId }, new { type = "file", id = keptId } },
+        })).ReadJsonAsync();
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var old = DateTime.UtcNow.AddDays(-400);
+        await db.Files.Where(f => f.Id == fileId).ExecuteUpdateAsync(s => s.SetProperty(f => f.DeletedAt, old));
+        await db.Folders.Where(f => f.Id == folderId).ExecuteUpdateAsync(s => s.SetProperty(f => f.DeletedAt, old));
+
+        var purged = await scope.ServiceProvider.GetRequiredService<MediatR.ISender>().Send(new Application.Features.Storage.PurgeExpiredTrashCommand());
+
+        purged.Should().BeGreaterThanOrEqualTo(2);
+        (await db.Files.IgnoreQueryFilters().AnyAsync(f => f.Id == fileId)).Should().BeFalse();
+        (await db.Folders.IgnoreQueryFilters().AnyAsync(f => f.Id == folderId)).Should().BeFalse();
+        (await db.Files.IgnoreQueryFilters().AnyAsync(f => f.Id == keptId)).Should().BeTrue("deleted today, still within retention");
+    }
+
+    [Fact]
     public async Task Quota_is_enforced_before_upload()
     {
         var admin = await factory.AdminClientAsync();

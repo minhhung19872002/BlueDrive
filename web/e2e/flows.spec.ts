@@ -99,8 +99,13 @@ test('tạo tài liệu Word mới và mở trình soạn thảo ONLYOFFICE', as
 test('chia sẻ qua liên kết công khai có mật khẩu', async ({ page, browser }) => {
   await openMyDrive(page)
   const row = page.getByRole('row').filter({ hasText: /\.(txt|docx)/ }).first()
-  await row.click({ button: 'right' })
-  await page.getByRole('menuitem', { name: /Chia sẻ$/ }).click()
+  // The context menu may re-align (flip above the cursor) right after opening: retry until it is clickable.
+  await expect(async () => {
+    await page.keyboard.press('Escape')
+    await row.click({ button: 'right' })
+    await page.getByRole('menuitem', { name: /Chia sẻ$/ }).click({ timeout: 2_000 })
+    await expect(page.getByRole('tab', { name: /liên kết/i })).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 20_000 })
   await page.getByRole('tab', { name: /liên kết/i }).click()
   await page.getByPlaceholder(/mật khẩu/i).fill('1234')
   await page.getByRole('button', { name: /Tạo liên kết/ }).click()

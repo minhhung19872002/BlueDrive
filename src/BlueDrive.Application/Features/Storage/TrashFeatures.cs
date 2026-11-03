@@ -222,8 +222,10 @@ public sealed class PurgeExpiredTrashHandler(IAppDbContext db, ISettingsService 
         var days = await settings.GetAsync(SettingKeys.TrashRetentionDays, 30, ct);
         if (days <= 0) return 0;
         var cutoff = clock.GetUtcNow().UtcDateTime.AddDays(-days);
-        var items = await db.Files.Where(f => f.IsTrashRoot && f.IsDeleted && f.DeletedAt < cutoff).Select(f => new ItemRef("file", f.Id))
-            .Concat(db.Folders.Where(f => f.IsTrashRoot && f.IsDeleted && f.DeletedAt < cutoff).Select(f => new ItemRef("folder", f.Id))).ToListAsync(ct);
+        // Two queries: EF cannot translate Concat after projecting into a record constructor.
+        var fileIds = await db.Files.Where(f => f.IsTrashRoot && f.IsDeleted && f.DeletedAt < cutoff).Select(f => f.Id).ToListAsync(ct);
+        var folderIds = await db.Folders.Where(f => f.IsTrashRoot && f.IsDeleted && f.DeletedAt < cutoff).Select(f => f.Id).ToListAsync(ct);
+        var items = fileIds.Select(id => new ItemRef("file", id)).Concat(folderIds.Select(id => new ItemRef("folder", id))).ToList();
         foreach (var i in items) await purger.PurgeAsync(i, $"auto_retention_{days}_days", ct);
         return items.Count;
     }

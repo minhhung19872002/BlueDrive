@@ -23,7 +23,7 @@ import { useNavigate } from 'react-router-dom'
 import { deleteItems, getDownloadUrl, getZipUrl, renameFile, setFavorite, startDownload, updateFolder } from '@/api/drive'
 import { showApiError } from '@/api/errors'
 import { qk } from '@/api/queryKeys'
-import { editorUrl, isOfficeEditable, isOfficeFile } from '@/features/office/officeFiles'
+import { editorUrl, isOfficeEditable, isOfficeFile, needsOfficeViewer } from '@/features/office/officeFiles'
 import AccessDialog, { type AccessTarget } from '@/features/sharing/AccessDialog'
 import ShareDialog, { type ShareTarget } from '@/features/sharing/ShareDialog'
 import { useApiMutation } from '@/hooks/useApiMutation'
@@ -128,7 +128,9 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
         else navigate(folderUrl(item.workspaceId, item.id, personalWorkspaceId))
       }
       // Office documents open straight in ONLYOFFICE (edit when allowed, otherwise read-only), like SharePoint.
-      else if (isOfficeFile(item.extension)) navigate(editorUrl(item.id))
+      // PDF / text / CSV keep the built-in preview (ONLYOFFICE asks for an encoding on every text file);
+      // "Mở bằng trình soạn thảo" still edits them.
+      else if (needsOfficeViewer(item.extension)) navigate(editorUrl(item.id))
       else setViewerId(item.id)
     },
     [navigate, onOpenFolder, personalWorkspaceId],
