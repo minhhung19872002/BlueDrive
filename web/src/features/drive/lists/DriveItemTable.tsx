@@ -49,7 +49,10 @@ export default function DriveItemTable<T>({
 
   const menuFor = (row: DriveRow<T>) => ({
     items: actions.menuItems([row.item], flagsFor?.(row)),
-    onClick: ({ key }: { key: string }) => actions.run(key, [row.item]),
+    onClick: ({ key, domEvent }: { key: string; domEvent: { stopPropagation: () => void } }) => {
+      domEvent.stopPropagation()
+      actions.run(key, [row.item])
+    },
   })
 
   const columns: TableProps<DriveRow<T>>['columns'] = [
@@ -126,6 +129,8 @@ export default function DriveItemTable<T>({
         onRow={(row) => ({
           // A click opens (like the explorer); buttons, links and the "..." menu keep their own action.
           onClick: (e) => {
+            // Menus are portals: React still bubbles their clicks to the row, which must not open the item then.
+            if (!e.currentTarget.contains(e.target as Node)) return
             if (e.detail > 1 || (e.target as HTMLElement).closest('button, a, .ant-dropdown-trigger, .ant-checkbox-wrapper')) return
             actions.open(row.item)
           },

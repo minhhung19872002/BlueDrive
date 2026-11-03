@@ -161,7 +161,8 @@ export default function ItemListView(props: ItemListViewProps) {
       onRow={(item) => ({
         ...props.dragProps(item),
         onClick: (e) => {
-          if ((e.target as HTMLElement).closest(IGNORE_CLICK)) return
+          // Clicks inside portaled menus bubble through React to the row: ignore them.
+          if (!e.currentTarget.contains(e.target as Node) || (e.target as HTMLElement).closest(IGNORE_CLICK)) return
           props.onItemClick(item, e)
         },
         onContextMenu: (e) => props.onContextMenu(item, e),
