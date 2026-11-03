@@ -27,8 +27,9 @@ export function useFileHub(fileId: string, onEvent: (e: CommentEvent) => void, e
 
     let disposed = false
     let retryTimer: number | undefined
+    let starting: Promise<unknown> = Promise.resolve()
     const start = () => {
-      connection
+      starting = connection
         .start()
         .then(() => (disposed ? undefined : join()))
         .catch(() => {
@@ -39,10 +40,13 @@ export function useFileHub(fileId: string, onEvent: (e: CommentEvent) => void, e
     return () => {
       disposed = true
       window.clearTimeout(retryTimer)
-      const stop = () => void connection.stop()
-      if (connection.state === HubConnectionState.Connected) {
-        connection.invoke('LeaveFile', fileId).catch(() => undefined).finally(stop)
-      } else stop()
+      // Wait for a pending start: stopping a connection that is still starting logs an error.
+      void starting.finally(() => {
+        const stop = () => void connection.stop()
+        if (connection.state === HubConnectionState.Connected) {
+          connection.invoke('LeaveFile', fileId).catch(() => undefined).finally(stop)
+        } else stop()
+      })
     }
   }, [fileId, enabled])
 }

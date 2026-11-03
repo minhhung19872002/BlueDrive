@@ -26,8 +26,9 @@ export function useNotificationHub(onNotification: (n: NotificationDto) => void,
     // (e.g. the access token was being refreshed at that moment).
     let disposed = false
     let retryTimer: number | undefined
+    let starting: Promise<void> = Promise.resolve()
     const start = () => {
-      connection.start().catch(() => {
+      starting = connection.start().catch(() => {
         if (!disposed) retryTimer = window.setTimeout(start, 30_000)
       })
     }
@@ -35,7 +36,8 @@ export function useNotificationHub(onNotification: (n: NotificationDto) => void,
     return () => {
       disposed = true
       window.clearTimeout(retryTimer)
-      void connection.stop()
+      // Stopping while the connection is still starting logs "Failed to start the HttpConnection before stop()".
+      void starting.finally(() => connection.stop())
     }
   }, [enabled])
 }
