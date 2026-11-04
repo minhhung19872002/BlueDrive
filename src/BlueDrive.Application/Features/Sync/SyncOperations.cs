@@ -72,8 +72,8 @@ public sealed class GetSyncWebUrlHandler(IAppDbContext db, ICurrentUser me, Sync
     }
 }
 
-/// <summary>Context menu "Chia sẻ… / Sao chép liên kết": creates a share link (optional password / expiry) for the item.</summary>
-public sealed record CreateSyncShareLinkCommand(Guid Id, bool AllowDownload, string? Password, DateTime? ExpiresAt, bool RequireLogin) : IRequest<ShareLinkDto>;
+/// <summary>Context menu "Chia sẻ… / Sao chép liên kết": creates a share link (optional expiry) for the item.</summary>
+public sealed record CreateSyncShareLinkCommand(Guid Id, bool AllowDownload, DateTime? ExpiresAt, bool RequireLogin) : IRequest<ShareLinkDto>;
 
 public sealed class CreateSyncShareLinkHandler(IAppDbContext db, ISender mediator) : IRequestHandler<CreateSyncShareLinkCommand, ShareLinkDto>
 {
@@ -81,7 +81,7 @@ public sealed class CreateSyncShareLinkHandler(IAppDbContext db, ISender mediato
     {
         var type = await db.Files.AnyAsync(f => f.Id == cmd.Id, ct) ? ResourceType.File
             : await db.Folders.AnyAsync(f => f.Id == cmd.Id, ct) ? ResourceType.Folder : throw new NotFoundException("Không tìm thấy tài liệu hoặc thư mục.");
-        return await mediator.Send(new SaveShareLinkCommand(null, type, cmd.Id, cmd.AllowDownload, cmd.Password, false, cmd.ExpiresAt, null, cmd.RequireLogin), ct);
+        return await mediator.Send(new SaveShareLinkCommand(null, type, cmd.Id, cmd.AllowDownload, cmd.ExpiresAt, null, cmd.RequireLogin), ct);
     }
 }
 

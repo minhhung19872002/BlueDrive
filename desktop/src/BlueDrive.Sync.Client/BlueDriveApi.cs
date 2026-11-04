@@ -14,7 +14,7 @@ public sealed class BlueDriveApi(HttpClient http)
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) } };
 
     public sealed record WebUrl(string Url);
-    public sealed record ShareLink(Guid Id, string Url, bool AllowDownload, bool HasPassword, DateTime? ExpiresAt, bool RequireLogin);
+    public sealed record ShareLink(Guid Id, string Url, bool AllowDownload, DateTime? ExpiresAt, bool RequireLogin);
     public sealed record UserLookup(Guid Id, string Username, string FullName, string? OrganizationName);
     public sealed record Group(Guid Id, string Name);
     public sealed record Paged<T>(List<T> Items, int Total);
@@ -45,9 +45,8 @@ public sealed class BlueDriveApi(HttpClient http)
 
     public Task<WebUrl> WebUrlAsync(string itemId, CancellationToken ct = default) => GetAsync<WebUrl>($"api/v1/sync/items/{itemId}/web-url", ct);
 
-    public Task<ShareLink> CreateLinkAsync(string itemId, bool allowDownload, string? password, DateTime? expiresAt, bool requireLogin, CancellationToken ct = default) =>
-        SendAsync<ShareLink>(HttpMethod.Post, $"api/v1/sync/items/{itemId}/share-link",
-            new { allowDownload, password = string.IsNullOrWhiteSpace(password) ? null : password, expiresAt, requireLogin }, ct);
+    public Task<ShareLink> CreateLinkAsync(string itemId, bool allowDownload, DateTime? expiresAt, bool requireLogin, CancellationToken ct = default) =>
+        SendAsync<ShareLink>(HttpMethod.Post, $"api/v1/sync/items/{itemId}/share-link", new { allowDownload, expiresAt, requireLogin }, ct);
 
     public async Task<IReadOnlyList<UserLookup>> FindUsersAsync(string q, CancellationToken ct = default) =>
         await GetAsync<List<UserLookup>>($"api/v1/users/lookup?q={Uri.EscapeDataString(q)}&take=20", ct);

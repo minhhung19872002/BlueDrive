@@ -192,7 +192,6 @@ public class ShareLink : AuditableEntity
     public Guid ResourceId { get; set; }
     public bool AllowDownload { get; set; }
     public bool AllowView { get; set; } = true;
-    public string? PasswordHash { get; set; }
     public DateTime? ExpiresAt { get; set; }
     public int? MaxAccessCount { get; set; }
     public int AccessCount { get; set; }

@@ -92,7 +92,7 @@ public class PublicShareController(IAppDbContext db, IPublicLinkTickets tickets,
 
     /// <summary>Mở liên kết (kiểm tra mật khẩu/đăng nhập, tính 1 lượt truy cập).</summary>
     [HttpPost("open")]
-    public Task<PublicAccessGrant> Open(string token, [FromBody] OpenBody? body) => Mediator.Send(new OpenPublicShareCommand(token, body?.Password));
+    public Task<PublicAccessGrant> Open(string token) => Mediator.Send(new OpenPublicShareCommand(token));
 
     [HttpGet("items")]
     public Task<PublicFolderListing> Items(string token, [FromQuery] string access, [FromQuery] Guid? folderId) => Mediator.Send(new ListPublicShareItemsQuery(token, access, folderId));
@@ -113,7 +113,6 @@ public class PublicShareController(IAppDbContext db, IPublicLinkTickets tickets,
         await ContentStreaming.WriteFileAsync(HttpContext, content, version, file.Name, file.MimeType, !download);
     }
 
-    public sealed record OpenBody(string? Password);
 }
 
 /// <summary>Phê duyệt tư liệu (vai trò Phê duyệt).</summary>

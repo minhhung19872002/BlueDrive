@@ -62,7 +62,7 @@ Cột "Kết quả mong đợi" ghi "Thành công" nghĩa là thao tác thực h
 | 46 | Đổi tên, sao chép, cắt/di chuyển | Kéo thả tệp vào thư mục khác; đổi tên; sao chép | | Thành công | ☐ | ☐ | |
 | 47 | Đánh dấu quan trọng, xem thông tin | Đánh dấu sao; mở panel thông tin | | Thành công | ☐ | ☐ | |
 | 48 | Xóa tài liệu | Chọn nhiều, Del, xác nhận | | Vào thùng rác | ☐ | ☐ | |
-| 49 | Chia sẻ nội bộ hoặc qua liên kết | Chia sẻ cho người/nhóm/đơn vị (Xem; Xem + Tải; Chỉnh sửa); tạo liên kết có mật khẩu, hạn dùng, giới hạn 2 lượt, không cho tải; quét QR; thu hồi | | Mở `/s/...` trên máy khác: đúng mật khẩu mới xem; lượt thứ 3 bị từ chối; không có nút tải; thu hồi xong không mở được; lượt truy cập có trong nhật ký | ☐ | ☐ | |
+| 49 | Chia sẻ nội bộ hoặc qua liên kết | Chia sẻ cho người/nhóm/đơn vị (Xem; Xem + Tải; Chỉnh sửa); liên kết mặc định "Hạn chế"; chuyển "Bất kỳ ai có liên kết" với hạn dùng, giới hạn 2 lượt, không cho tải; vai trò Người chỉnh sửa; quét QR; thu hồi | | Mở `/s/...` trên máy khác: "Hạn chế" đòi đăng nhập và có quyền; "Bất kỳ ai" mở được ngay, Người chỉnh sửa vào thẳng trình soạn thảo; lượt thứ 3 bị từ chối; không có nút tải; thu hồi xong không mở được; lượt truy cập có trong nhật ký | ☐ | ☐ | |
 | 50 | Tra cứu theo từ khóa, loại tư liệu | Tìm kiếm nâng cao: từ khóa không dấu, loại tư liệu, danh mục | | Có tô sáng từ khóa; chỉ gồm tư liệu có quyền | ☐ | ☐ | |
 | 51 | Lọc theo đơn vị đăng tải, khoảng thời gian | Lọc đơn vị đăng tải (gồm đơn vị con), khoảng ngày; lưu bộ lọc | | Đúng kết quả; dùng lại bộ lọc đã lưu | ☐ | ☐ | |
 | 52 | Truy cập từ nhiều thiết bị, địa điểm | Đăng nhập qua Internet trên máy tính, máy tính bảng, điện thoại (trình duyệt và ứng dụng) | Mạng 4G | Giao diện co giãn, thao tác được | ☐ | ☐ | |

@@ -44,10 +44,10 @@ export const driveApi = {
   recent: (take = 50) => api<DriveItem[]>('/recent', { query: { take } }),
   downloadUrl: (id: string, inline: boolean) => api<DownloadUrl>(`/files/${id}/download-url`, { query: { inline } }),
   sharedWithMe: (page: number) => api<Paged<SharedItem>>('/shares/with-me', { query: { page, pageSize: PAGE_SIZE } }),
-  createShareLink: (resourceType: 'file' | 'folder', resourceId: string, allowDownload: boolean, password?: string, expiresAt?: string | null) =>
+  createShareLink: (resourceType: 'file' | 'folder', resourceId: string, allowDownload: boolean, expiresAt?: string | null) =>
     api<ShareLink>('/share-links', {
       method: 'POST',
-      body: { resourceType, resourceId, allowDownload, password: password || null, clearPassword: false, expiresAt: expiresAt ?? null, maxAccessCount: null, requireLogin: false },
+      body: { resourceType, resourceId, allowDownload, expiresAt: expiresAt ?? null, maxAccessCount: null, requireLogin: false },
     }),
   officeConfig: (fileId: string) => api<OfficeConfig>(`/office/config/${fileId}`, { query: { view: true, mobile: true } }),
   dashboard: () => api<PersonalDashboard>('/dashboards/personal'),

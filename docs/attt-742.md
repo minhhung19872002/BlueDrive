@@ -38,7 +38,7 @@ Bảng dưới đây đối chiếu từng nhóm yêu cầu với cách hệ th�
 | Mã hóa khi truyền | Caddy cấp TLS (Let's Encrypt) khi có tên miền, chỉ TLS 1.2+, HSTS 1 năm. | `deploy/Caddyfile` |
 | Mã hóa khi lưu | Mỗi tệp/phiên bản được mã hóa AES-256-GCM theo khối 64 KB với khóa dữ liệu riêng, khóa dữ liệu được bọc bằng khóa chủ (envelope encryption); vẫn hỗ trợ HTTP Range. Ảnh thu nhỏ, báo cáo cũng được mã hóa. Khóa Data Protection được mã hóa bằng khóa chủ. Số điện thoại/email trong CSDL được mã hóa (Data Protection). | `StorageTests` (unit, phát hiện sửa đổi bản mã), `StorageTests.Tus_resumable_upload_then_complete_creates_encrypted_file`, `AdminTests.User_crud...` (điện thoại mã hóa) |
 | Liên kết tải có thời hạn | Nội dung chỉ truyền qua URL ký ngắn hạn (Data Protection, 1–6 giờ), kiểm tra lại quyền ở mỗi yêu cầu; không lộ đường dẫn lưu trữ thật. | `ContentController` |
-| Chia sẻ ra ngoài có kiểm soát | Liên kết công khai có mật khẩu, ngày hết hạn, giới hạn số lượt (tăng nguyên tử), yêu cầu đăng nhập, thu hồi; ghi nhật ký mọi lượt truy cập. | `SharingTests.Public_link_with_password_limit_and_revoke` |
+| Chia sẻ ra ngoài có kiểm soát | Liên kết mặc định "Hạn chế" (phải đăng nhập và có quyền với tư liệu); "Bất kỳ ai có liên kết" có ngày hết hạn, giới hạn số lượt (tăng nguyên tử), vai trò Người xem / Người chỉnh sửa (quản trị tắt được chỉnh sửa qua liên kết), thu hồi; ghi nhật ký mọi lượt truy cập. Mật khẩu liên kết đã bỏ (04/11/2026): liên kết cũ có mật khẩu chuyển sang "Hạn chế". | `SharingTests.Public_link_with_access_limit_and_revoke`, `SharingTests.Public_folder_link_lists_and_streams_children_and_require_login` |
 
 ## 5. Kiểm tra đầu vào
 

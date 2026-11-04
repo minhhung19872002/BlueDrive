@@ -112,13 +112,13 @@ public class SyncController : ApiControllerBase
 
     [HttpPost("items/{id:guid}/share-link")]
     public Task<ShareLinkDto> ShareLink(Guid id, ShareLinkBody body) =>
-        Mediator.Send(new CreateSyncShareLinkCommand(id, body.AllowDownload, body.Password, body.ExpiresAt, body.RequireLogin));
+        Mediator.Send(new CreateSyncShareLinkCommand(id, body.AllowDownload, body.ExpiresAt, body.RequireLogin));
 
     /// <summary>Nhiều thao tác trong một yêu cầu (tạo cây thư mục, di chuyển, đổi tên, xóa) — kết quả theo từng thao tác.</summary>
     [HttpPost("batch")]
     public Task<IReadOnlyList<SyncBatchResult>> Batch(SyncBatchCommand cmd) => Mediator.Send(cmd);
 
-    public sealed record ShareLinkBody(bool AllowDownload = true, string? Password = null, DateTime? ExpiresAt = null, bool RequireLogin = false);
+    public sealed record ShareLinkBody(bool AllowDownload = true, DateTime? ExpiresAt = null, bool RequireLogin = false);
 }
 
 /// <summary>Thiết bị đã kết nối: của tôi, hoặc toàn hệ thống (quản trị).</summary>

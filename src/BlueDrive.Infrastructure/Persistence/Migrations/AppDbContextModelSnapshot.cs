@@ -1476,10 +1476,6 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("max_access_count");
 
-                    b.Property<string>("PasswordHash")
-                        .HasColumnType("text")
-                        .HasColumnName("password_hash");
-
                     b.Property<bool>("RequireLogin")
                         .HasColumnType("boolean")
                         .HasColumnName("require_login");

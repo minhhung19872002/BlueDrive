@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { Button, Card, Form, Input, Result, Space, Spin, Typography } from 'antd'
-import { DownloadOutlined, LockOutlined, LoginOutlined } from '@ant-design/icons'
+import { useEffect } from 'react'
+import { Button, Result, Spin, Typography } from 'antd'
+import { DownloadOutlined, LoginOutlined } from '@ant-design/icons'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useParams } from 'react-router-dom'
@@ -24,7 +24,12 @@ function ShareError({ error }: { error: unknown }) {
   return (
     <Result
       status={status === 404 ? '404' : 'warning'}
-      title={status === 410 ? t('publicShare.goneTitle') : status === 404 ? t('publicShare.notFoundTitle') : t('publicShare.errorTitle')}
+      title={
+        status === 410 ? t('publicShare.goneTitle')
+          : status === 404 ? t('publicShare.notFoundTitle')
+          : status === 403 ? t('publicShare.noAccessTitle')
+          : t('publicShare.errorTitle')
+      }
       subTitle={getErrorMessage(error, { 404: t('publicShare.notFound') })}
     />
   )
@@ -41,7 +46,7 @@ function FileView({ token, access, info }: { token: string; access: string; info
   if (needsOfficeViewer(info.extension))
     return (
       <div className="bd-public-stage">
-        <PublicOfficeViewer token={token} access={access} allowEdit={info.allowEdit} name={info.name} extra={download} />
+        <PublicOfficeViewer token={token} access={access} extra={download} />
       </div>
     )
   return (
@@ -66,30 +71,23 @@ function FileView({ token, access, info }: { token: string; access: string; info
   )
 }
 
-/** Public page /s/:token (#49): password / login gate, then file preview or folder browsing. */
+/** Public page /s/:token (#49): login / access gate for restricted links, then file preview or folder browsing. */
 export default function PublicSharePage() {
   const { token = '' } = useParams<{ token: string }>()
   const { t } = useTranslation()
   const location = useLocation()
   const branding = useBranding()
   const loggedIn = useAuthStore((s) => !!s.accessToken)
-  const [form] = Form.useForm<{ password: string }>()
-  const [password, setPassword] = useState<string | undefined>()
 
   const info = useQuery({ queryKey: ['public-share', token], queryFn: () => getPublicShare(token), retry: 0 })
-  const open = useMutation({ mutationFn: (pwd?: string) => openPublicShare(token, pwd) })
+  const open = useMutation({ mutationFn: () => openPublicShare(token) })
   const data = info.data
   const needsLogin = !!data?.requireLogin && !loggedIn
-  const autoOpen = !!data && !data.requiresPassword && !needsLogin
+  const autoOpen = !!data && !needsLogin
 
   useEffect(() => {
-    if (autoOpen && open.isIdle) open.mutate(undefined)
+    if (autoOpen && open.isIdle) open.mutate()
   }, [autoOpen, open])
-
-  const openStatus = errorStatus(open.error)
-  useEffect(() => {
-    if (openStatus === 403 && password !== undefined) form.setFields([{ name: 'password', errors: [getErrorMessage(open.error)] }])
-  }, [openStatus, password, form, open.error])
 
   const access = open.data?.accessToken
 
@@ -111,37 +109,11 @@ export default function PublicSharePage() {
         }
       />
     )
-  else if (data && !access && open.isError && openStatus !== 403) body = <ShareError error={open.error} />
-  else if (data && !access && data.requiresPassword)
-    body = (
-      <Card style={{ maxWidth: 420, width: '100%' }}>
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Typography.Title level={4} style={{ marginTop: 0 }}>
-            <LockOutlined /> {t('publicShare.passwordTitle')}
-          </Typography.Title>
-          <Typography.Text type="secondary">{t('publicShare.passwordHint', { name: data.name })}</Typography.Text>
-          <Form
-            form={form}
-            layout="vertical"
-            onFinish={({ password: pwd }) => {
-              setPassword(pwd)
-              open.mutate(pwd)
-            }}
-          >
-            <Form.Item name="password" rules={[{ required: true, message: t('auth.passwordRequired') }]}>
-              <Input.Password autoFocus placeholder={t('auth.password')} />
-            </Form.Item>
-            <Button type="primary" htmlType="submit" block loading={open.isPending}>
-              {t('publicShare.open')}
-            </Button>
-          </Form>
-        </Space>
-      </Card>
-    )
+  else if (data && !access && open.isError) body = <ShareError error={open.error} />
   else if (data && access)
     body =
       data.resourceType === 'folder' ? (
-        <PublicFolderView token={token} access={access} allowDownload={data.allowDownload} allowEdit={data.allowEdit} rootName={data.name} />
+        <PublicFolderView token={token} access={access} allowDownload={data.allowDownload} rootName={data.name} />
       ) : (
         <FileView token={token} access={access} info={data} />
       )

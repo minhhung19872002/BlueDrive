@@ -2,16 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Button,
-  Checkbox,
   Col,
   DatePicker,
   Divider,
   Form,
   Input,
   InputNumber,
-  List,
   Popconfirm,
   Row,
+  Select,
   Skeleton,
   Space,
   Switch,
@@ -43,12 +42,14 @@ interface LinkShareTabProps {
   canEdit: boolean
 }
 
+/** Google Drive style "general access": restricted (signed in and with access) or anyone with the link. */
+type Audience = 'restricted' | 'anyone'
+type LinkRole = 'viewer' | 'editor'
+
 interface LinkForm {
   allowDownload: boolean
-  allowEdit: boolean
-  requireLogin: boolean
-  password?: string
-  clearPassword?: boolean
+  audience: Audience
+  role: LinkRole
   expiresAt?: Dayjs | null
   maxAccessCount?: number | null
 }
@@ -56,7 +57,8 @@ interface LinkForm {
 /**
  * #49 external sharing via link, SharePoint style: opening the tab shows the item's link right away
  * (the newest active link, or a new one created on the spot). The settings below edit that link:
- * download, login requirement, password, expiry, access limit. QR, revoke, history of earlier links.
+ * general access like Google Drive (restricted: signed in and with access; or anyone with the link, as viewer or editor), download,
+ * and for public links expiry and access limit. QR, revoke; older links still working are offered for revoking.
  */
 export default function LinkShareTab({ resourceType, resourceId, canDownload, canEdit }: LinkShareTabProps) {
   const { t } = useTranslation()
@@ -64,6 +66,7 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
   const canShare = can('doc.share')
   const [form] = Form.useForm<LinkForm>()
   const [qrId, setQrId] = useState<string | null>(null)
+  const audience: Audience = Form.useWatch('audience', form) ?? 'restricted'
   const autoCreated = useRef(false)
   const links = useQuery({
     queryKey: qk.shareLinks(resourceType, resourceId),
@@ -71,16 +74,15 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
   })
   const sorted = useMemo(() => [...(links.data ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [links.data])
   const current: ShareLink | undefined = sorted.find((l) => l.status === 'active')
-  const others = sorted.filter((l) => l.id !== current?.id)
+  // One link per item, like SharePoint: older links that still work are only offered for revoking (revoked / expired ones are hidden).
+  const olderActive = sorted.filter((l) => l.id !== current?.id && l.status === 'active')
 
   const toRequest = (v: LinkForm): SaveShareLinkRequest => ({
     resourceType,
     resourceId,
     allowDownload: v.allowDownload,
-    allowEdit: !!v.allowEdit,
-    requireLogin: v.requireLogin,
-    password: v.password?.trim() || null,
-    clearPassword: !!v.clearPassword,
+    allowEdit: v.audience === 'anyone' && v.role === 'editor',
+    requireLogin: v.audience !== 'anyone',
     expiresAt: v.expiresAt ? v.expiresAt.endOf('day').toISOString() : null,
     maxAccessCount: v.maxAccessCount ?? null,
   })
@@ -90,7 +92,7 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
     successMessage: t('sharing.linkUpdated'),
     invalidate: [qk.shareLinks(resourceType, resourceId)],
     onError: (error) => {
-      applyFieldErrors(form, error, ['password', 'expiresAt', 'maxAccessCount'])
+      applyFieldErrors(form, error, ['expiresAt', 'maxAccessCount'])
     },
   })
   const revoke = useApiMutation(revokeShareLink, {
@@ -109,8 +111,6 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
       allowDownload: canDownload,
       allowEdit: false,
       requireLogin: true,
-      password: null,
-      clearPassword: false,
       expiresAt: null,
       maxAccessCount: null,
     })
@@ -121,10 +121,8 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
     if (!current) return
     form.setFieldsValue({
       allowDownload: current.allowDownload,
-      allowEdit: current.allowEdit,
-      requireLogin: current.requireLogin,
-      password: undefined,
-      clearPassword: false,
+      audience: current.requireLogin ? 'restricted' : 'anyone',
+      role: current.allowEdit ? 'editor' : 'viewer',
       expiresAt: current.expiresAt ? dayjs(current.expiresAt) : null,
       maxAccessCount: current.maxAccessCount,
     })
@@ -173,7 +171,7 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
           type="primary"
           icon={<LinkOutlined />}
           loading={create.isPending}
-          onClick={() => create.mutate(toRequest({ allowDownload: canDownload, allowEdit: false, requireLogin: true }))}
+          onClick={() => create.mutate(toRequest({ allowDownload: canDownload, audience: 'restricted', role: 'viewer' }))}
         >
           {t('sharing.newLink')}
         </Button>
@@ -188,7 +186,33 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
           </Divider>
           <Form<LinkForm> form={form} layout="vertical" onFinish={(v) => update.mutate({ id: current.id, body: toRequest(v) })}>
             <Row gutter={16}>
-              <Col xs={24} sm={12}>
+              <Col xs={24} sm={audience === 'anyone' ? 14 : 24}>
+                <Form.Item
+                  name="audience"
+                  label={t('sharing.generalAccess')}
+                  extra={audience === 'anyone' ? t('sharing.audienceAnyoneHint') : t('sharing.audienceRestrictedHint')}
+                >
+                  <Select
+                    options={[
+                      { value: 'restricted', label: t('sharing.audienceRestricted') },
+                      { value: 'anyone', label: t('sharing.audienceAnyone') },
+                    ]}
+                  />
+                </Form.Item>
+              </Col>
+              {audience === 'anyone' && (
+                <Col xs={24} sm={10}>
+                  <Form.Item name="role" label={t('sharing.linkRole')} extra={!canEdit ? t('sharing.allowEditDenied') : undefined}>
+                    <Select
+                      options={[
+                        { value: 'viewer', label: t('sharing.roleViewer') },
+                        { value: 'editor', label: t('sharing.roleEditor'), disabled: !canEdit && !current.allowEdit },
+                      ]}
+                    />
+                  </Form.Item>
+                </Col>
+              )}
+              <Col xs={24} sm={8}>
                 <Form.Item
                   name="allowDownload"
                   label={t('sharing.allowDownload')}
@@ -198,55 +222,25 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
                   <Switch disabled={!canDownload} />
                 </Form.Item>
               </Col>
-              <Col xs={24} sm={12}>
-                <Form.Item name="requireLogin" label={t('sharing.requireLogin')} valuePropName="checked">
-                  <Switch />
-                </Form.Item>
-              </Col>
-              <Col xs={24}>
-                <Form.Item
-                  name="allowEdit"
-                  label={t('sharing.allowEdit')}
-                  valuePropName="checked"
-                  extra={canEdit ? t('sharing.allowEditHint') : t('sharing.allowEditDenied')}
-                >
-                  <Switch disabled={!canEdit && !current.allowEdit} />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Form.Item
-                  name="password"
-                  label={t('sharing.linkPassword')}
-                  rules={[{ min: 4, message: t('sharing.linkPasswordMin') }, { max: 128, message: t('validation.maxLength', { max: 128 }) }]}
-                  extra={
-                    current.hasPassword ? (
-                      <Form.Item name="clearPassword" valuePropName="checked" noStyle>
-                        <Checkbox>{t('sharing.removePassword')}</Checkbox>
-                      </Form.Item>
-                    ) : undefined
-                  }
-                >
-                  <Input.Password
-                    autoComplete="new-password"
-                    placeholder={current.hasPassword ? t('sharing.keepPassword') : t('sharing.linkPasswordPlaceholder')}
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Form.Item name="expiresAt" label={t('sharing.expiresAt')}>
-                  <DatePicker
-                    style={{ width: '100%' }}
-                    format="DD/MM/YYYY"
-                    placeholder={t('sharing.noExpiry')}
-                    disabledDate={(d) => d.isBefore(dayjs(), 'day')}
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} sm={12}>
-                <Form.Item name="maxAccessCount" label={t('sharing.maxAccessCount')}>
-                  <InputNumber min={1} max={1_000_000} precision={0} style={{ width: '100%' }} placeholder={t('sharing.unlimited')} />
-                </Form.Item>
-              </Col>
+              {audience === 'anyone' && (
+                <>
+                  <Col xs={24} sm={8}>
+                    <Form.Item name="expiresAt" label={t('sharing.expiresAt')}>
+                      <DatePicker
+                        style={{ width: '100%' }}
+                        format="DD/MM/YYYY"
+                        placeholder={t('sharing.noExpiry')}
+                        disabledDate={(d) => d.isBefore(dayjs(), 'day')}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} sm={8}>
+                    <Form.Item name="maxAccessCount" label={t('sharing.maxAccessCount')}>
+                      <InputNumber min={1} max={1_000_000} precision={0} style={{ width: '100%' }} placeholder={t('sharing.unlimited')} />
+                    </Form.Item>
+                  </Col>
+                </>
+              )}
             </Row>
             <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={update.isPending}>
               {t('sharing.saveLinkSettings')}
@@ -255,44 +249,28 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
         </>
       )}
 
-      {others.length > 0 && (
-        <>
-          <Typography.Title level={5} style={{ marginTop: 24 }}>
-            {t('sharing.links')}
-          </Typography.Title>
-          <List
-            size="small"
-            dataSource={others}
-            renderItem={(link) => {
-              const url = absoluteShareUrl(link.url)
-              const active = link.status === 'active'
-              return (
-                <List.Item style={{ display: 'block' }}>
-                  <Space.Compact style={{ width: '100%', marginBottom: 6 }}>
-                    <Input readOnly value={url} disabled={!active} />
-                    <Tooltip title={t('common.copy')}>
-                      <Button icon={<CopyOutlined />} onClick={() => void copyText(url)} disabled={!active} />
-                    </Tooltip>
-                    {active && canShare && (
-                      <Popconfirm
-                        title={t('sharing.revokeConfirm')}
-                        okText={t('common.confirm')}
-                        cancelText={t('common.cancel')}
-                        okButtonProps={{ danger: true }}
-                        onConfirm={() => revoke.mutate(link.id)}
-                      >
-                        <Tooltip title={t('sharing.revoke')}>
-                          <Button danger icon={<StopOutlined />} />
-                        </Tooltip>
-                      </Popconfirm>
-                    )}
-                  </Space.Compact>
-                  <LinkTags link={link} />
-                </List.Item>
-              )
-            }}
-          />
-        </>
+      {olderActive.length > 0 && canShare && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginTop: 20 }}
+          message={t('sharing.olderLinks', { count: olderActive.length })}
+          action={
+            <Popconfirm
+              title={t('sharing.revokeOlderConfirm')}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
+              okButtonProps={{ danger: true }}
+              onConfirm={async () => {
+                for (const l of olderActive) await revoke.mutateAsync(l.id)
+              }}
+            >
+              <Button size="small" danger loading={revoke.isPending}>
+                {t('sharing.revokeOlder')}
+              </Button>
+            </Popconfirm>
+          }
+        />
       )}
       {qrId && <ShareLinkQrModal linkId={qrId} onClose={() => setQrId(null)} />}
     </>
@@ -306,8 +284,7 @@ function LinkTags({ link }: { link: ShareLink }) {
       <Tag color={LINK_STATUS_COLORS[link.status]}>{t(`sharing.linkStatus.${link.status}`)}</Tag>
       <Tag>{link.allowDownload ? t('sharing.tagDownload') : t('sharing.tagViewOnly')}</Tag>
       {link.allowEdit && <Tag color="blue">{t('sharing.tagEdit')}</Tag>}
-      {link.hasPassword && <Tag>{t('sharing.tagPassword')}</Tag>}
-      {link.requireLogin && <Tag>{t('sharing.tagLogin')}</Tag>}
+      <Tag>{link.requireLogin ? t('sharing.audienceRestricted') : t('sharing.audienceAnyone')}</Tag>
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
         {t('sharing.accessCount', { count: link.accessCount, max: link.maxAccessCount ?? t('sharing.unlimitedShort') })}
         {' · '}

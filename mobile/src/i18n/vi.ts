@@ -167,15 +167,12 @@ export const vi = {
   share: {
     title: 'Tạo liên kết chia sẻ',
     allowDownload: 'Cho phép tải xuống',
-    password: 'Mật khẩu (không bắt buộc)',
-    passwordHint: 'Tối thiểu 4 ký tự',
     expires: 'Thời hạn',
     never: 'Không hết hạn',
     days: '{n} ngày',
     create: 'Tạo và chia sẻ',
     creating: 'Đang tạo liên kết...',
     message: 'Liên kết BlueDrive: {name}\n{url}',
-    messageWithPassword: 'Liên kết BlueDrive: {name}\n{url}\nMật khẩu: {password}',
     created: 'Đã tạo liên kết chia sẻ.',
   },
   download: {

@@ -117,11 +117,12 @@ public class CollaborationTests(ApiFactory factory)
         (await (await anon.GetAsync($"/api/v1/public/s/{token}")).ReadJsonAsync()).GetProperty("allowEdit").GetBoolean().Should().BeTrue();
         var access = Uri.EscapeDataString((await (await anon.PostAsJsonAsync($"/api/v1/public/s/{token}/open", new { })).ReadJsonAsync()).GetProperty("accessToken").GetString()!);
         async Task<System.Text.Json.JsonElement> PublicConfig() =>
-            await (await anon.GetAsync($"/api/v1/office/public-config/{token}?access={access}&guest={Uri.EscapeDataString("  Nguyễn   Lan ")}")).ReadJsonAsync();
+            await (await anon.GetAsync($"/api/v1/office/public-config/{token}?access={access}")).ReadJsonAsync();
         var cfg = await PublicConfig();
         cfg.GetProperty("mode").GetString().Should().Be("edit");
+        cfg.GetProperty("config").GetProperty("type").GetString().Should().Be("desktop", "the full editor with its toolbars, not the embedded viewer");
         var editor = cfg.GetProperty("config").GetProperty("editorConfig");
-        editor.GetProperty("user").GetProperty("name").GetString().Should().Be("Nguyễn Lan (khách)");
+        editor.GetProperty("user").GetProperty("name").GetString().Should().Be("Khách");
         var guestId = editor.GetProperty("user").GetProperty("id").GetString()!;
         guestId.Should().StartWith($"link:{link.GetProperty("id").GetGuid():N}:");
         editor.GetProperty("callbackUrl").GetString().Should().Be($"http://localhost/api/office/callback/{fileId}");
@@ -137,10 +138,30 @@ public class CollaborationTests(ApiFactory factory)
         versions.GetArrayLength().Should().Be(2);
         versions[0].GetProperty("createdBy").GetGuid().Should().Be(ownerId);
 
+        // Someone signed in edits under their own account straight away.
+        var (member, memberId, _) = await factory.CreateUserClientAsync("chi_xem");
+        var memberAccess = Uri.EscapeDataString((await (await member.PostAsJsonAsync($"/api/v1/public/s/{token}/open", new { })).ReadJsonAsync()).GetProperty("accessToken").GetString()!);
+        var memberCfg = await (await member.GetAsync($"/api/v1/office/public-config/{token}?access={memberAccess}")).ReadJsonAsync();
+        memberCfg.GetProperty("mode").GetString().Should().Be("edit");
+        memberCfg.GetProperty("config").GetProperty("editorConfig").GetProperty("user").GetProperty("id").GetString().Should().Be(memberId.ToString());
+
         // Only someone who may edit can make an editing link.
         var (friend, friendId, _) = await factory.CreateUserClientAsync("bien_tap");
         await (await owner.PostAsJsonAsync("/api/v1/shares", new { resourceType = "file", resourceId = fileId, targets = new[] { new { type = "user", id = friendId } }, accessLevel = 1 })).ReadJsonAsync();
         (await friend.PostAsJsonAsync("/api/v1/share-links", new { resourceType = "file", resourceId = fileId, allowEdit = true })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        // "Hạn chế" link: each person's own rights decide (the view-only friend views, the owner edits).
+        var restricted = (await (await owner.PostAsJsonAsync("/api/v1/share-links", new { resourceType = "file", resourceId = fileId, requireLogin = true, allowEdit = true })).ReadJsonAsync());
+        restricted.GetProperty("allowEdit").GetBoolean().Should().BeFalse("a restricted link never lets anyone edit by itself");
+        var rToken = restricted.GetProperty("token").GetString()!;
+        async Task<string> ModeFor(HttpClient c)
+        {
+            var a = Uri.EscapeDataString((await (await c.PostAsJsonAsync($"/api/v1/public/s/{rToken}/open", new { })).ReadJsonAsync()).GetProperty("accessToken").GetString()!);
+            return (await (await c.GetAsync($"/api/v1/office/public-config/{rToken}?access={a}")).ReadJsonAsync()).GetProperty("mode").GetString()!;
+        }
+        (await ModeFor(friend)).Should().Be("view");
+        (await ModeFor(owner)).Should().Be("edit");
+        (await anon.PostAsJsonAsync($"/api/v1/public/s/{rToken}/open", new { })).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
         // Turned off by the administrator: links open read-only, new editing links are refused.
         var admin = await factory.AdminClientAsync();

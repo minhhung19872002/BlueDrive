@@ -8,14 +8,13 @@ import { t } from '@/i18n';
 import { toast } from '@/store/toast';
 import { useColors } from '@/theme';
 import { Dialog } from './Sheet';
-import { Button, TextField } from './ui';
+import { Button } from './ui';
 
 const EXPIRY_OPTIONS = [0, 1, 7, 30] as const;
 
 function ShareLinkBody({ item, onClose }: { item: DriveItem; onClose: () => void }) {
   const c = useColors();
   const [allowDownload, setAllowDownload] = useState(true);
-  const [password, setPassword] = useState('');
   const [days, setDays] = useState<number>(7);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,12 +24,10 @@ function ShareLinkBody({ item, onClose }: { item: DriveItem; onClose: () => void
     setError(null);
     try {
       const expiresAt = days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString() : null;
-      const link = await driveApi.createShareLink(item.type, item.id, allowDownload, password.trim() || undefined, expiresAt);
+      const link = await driveApi.createShareLink(item.type, item.id, allowDownload, expiresAt);
       // App:PublicBaseUrl may be unset on the server → the URL is relative; prefix the server address.
       const url = absoluteUrl(link.url) ?? link.url;
-      const message = password.trim()
-        ? t('share.messageWithPassword', { name: item.name, url, password: password.trim() })
-        : t('share.message', { name: item.name, url });
+      const message = t('share.message', { name: item.name, url });
       onClose();
       toast.success(t('share.created'));
       await Share.share({ message, title: item.name });
@@ -50,14 +47,6 @@ function ShareLinkBody({ item, onClose }: { item: DriveItem; onClose: () => void
         <Text style={{ color: c.text, fontSize: 15, flex: 1 }}>{t('share.allowDownload')}</Text>
         <Switch value={allowDownload} onValueChange={setAllowDownload} trackColor={{ true: c.primary }} />
       </View>
-      <TextField
-        label={t('share.password')}
-        placeholder={t('share.passwordHint')}
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        autoCapitalize="none"
-      />
       <Text style={{ color: c.textMuted, fontSize: 13, marginBottom: 6 }}>{t('share.expires')}</Text>
       <View style={styles.chips}>
         {EXPIRY_OPTIONS.map((d) => (

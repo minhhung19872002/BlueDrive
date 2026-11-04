@@ -41,8 +41,8 @@ export async function getPublicShare(token: string): Promise<PublicShareInfo> {
   return data
 }
 
-export async function openPublicShare(token: string, password?: string): Promise<PublicAccessGrant> {
-  const { data } = await publicApi.post<PublicAccessGrant>(`${base(token)}/open`, { password: password || null })
+export async function openPublicShare(token: string): Promise<PublicAccessGrant> {
+  const { data } = await publicApi.post<PublicAccessGrant>(`${base(token)}/open`, {})
   return data
 }
 

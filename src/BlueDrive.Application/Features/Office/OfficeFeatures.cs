@@ -41,10 +41,11 @@ public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IR
 
 /// <summary>
 /// Editor config for a public link (#49: Office files on /s/{token}). View only, unless the link allows editing ("Cho phép chỉnh sửa"):
-/// then anyone with the link edits in the same co-editing session as signed-in users, under the name they typed, as long as the person
+/// then anyone with the link edits in the same co-editing session as signed-in users (signed in: under their account; otherwise as
+/// "Khách"), straight away, as long as the person
 /// who made the link may still edit the document (and the administrator has not turned link editing off).
 /// </summary>
-public sealed record GetPublicOfficeConfigQuery(string Token, string Access, Guid? FileId, string? Guest = null) : IRequest<OfficeEditorConfig>;
+public sealed record GetPublicOfficeConfigQuery(string Token, string Access, Guid? FileId) : IRequest<OfficeEditorConfig>;
 
 public sealed class GetPublicOfficeConfigHandler(IAppDbContext db, IPublicLinkTickets linkTickets, IOfficeEditorProvider office, IResourceAuthorizationService auth,
     ISettingsService settings, ICurrentUser me, IAuditLogger audit, TimeProvider clock)
@@ -57,25 +58,24 @@ public sealed class GetPublicOfficeConfigHandler(IAppDbContext db, IPublicLinkTi
         var f = await PublicLinks.FileInScopeAsync(db, link, q.FileId, ct);
         if (!office.CanView(f.Extension)) throw new AppException("Định dạng không hỗ trợ xem trực tuyến.");
         var url = $"{office.CallbackBaseUrl}/api/v1/public/s/{q.Token}/content?access={Uri.EscapeDataString(q.Access)}&fileId={f.Id}";
-        var edit = link.AllowEdit && office.CanEdit(f.Extension) && link.CreatedBy is { } owner
-                   && await settings.GetAsync(SettingKeys.ShareLinkAllowEdit, true, ct)
-                   && (await auth.GetAccessAsync(owner, ResourceType.File, f.Id, ct)).CanEdit;
+        // Restricted link: the visitor's own rights (they are signed in and may see the item). "Anyone with the link" as editor: the
+        // link creator's right to edit, unless the administrator turned link editing off.
+        var edit = office.CanEdit(f.Extension) && (link.RequireLogin
+            ? me.UserId is { } visitor && (await auth.GetAccessAsync(visitor, ResourceType.File, f.Id, ct)).CanEdit
+            : link.AllowEdit && link.CreatedBy is { } owner && await settings.GetAsync(SettingKeys.ShareLinkAllowEdit, true, ct)
+              && (await auth.GetAccessAsync(owner, ResourceType.File, f.Id, ct)).CanEdit);
         if (!edit)
             return office.BuildConfig(new OfficeEditorRequest(f.Id, f.CurrentVersionId!.Value, f.Name, f.Extension, url, null, false, link.AllowDownload, null, "Khách", true));
-        var name = GuestName(q.Guest);
-        var guestId = $"{LinkEditor.Prefix}{link.Id:N}:{Guid.NewGuid():N}";
+        // Signed in: edits under their own account and name (the version is theirs). Otherwise a guest of the link.
+        var account = me.UserId is { } sid ? await db.Users.Where(u => u.Id == sid).Select(u => u.FullName).FirstOrDefaultAsync(ct) : null;
+        var name = account ?? "Khách";
+        var guestId = account is null ? $"{LinkEditor.Prefix}{link.Id:N}:{Guid.NewGuid():N}" : null;
+        // The full editor (toolbars): the embedded type only shows the document.
         var config = office.BuildConfig(new OfficeEditorRequest(f.Id, f.CurrentVersionId!.Value, f.Name, f.Extension, url,
-            $"{office.CallbackBaseUrl}/api/office/callback/{f.Id}", true, link.AllowDownload, null, name, true, GuestId: guestId));
+            $"{office.CallbackBaseUrl}/api/office/callback/{f.Id}", true, link.AllowDownload, account is null ? null : me.UserId, name, false, GuestId: guestId));
         await audit.LogAsync(new AuditEntry(AuditAction.View, ResourceType.File, f.Id, f.Name, f.WorkspaceId,
-            new { office = config.Mode, shareLink = link.Id, guest = name, signedIn = me.UserId }, me.UserId, null), ct);
+            new { office = config.Mode, shareLink = link.Id, editor = name, guest = account is null }, me.UserId, null), ct);
         return config;
-    }
-
-    private static string GuestName(string? typed)
-    {
-        var name = string.Join(' ', (typed ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).Trim();
-        if (name.Length > 50) name = name[..50];
-        return name.Length == 0 ? "Khách" : $"{name} (khách)";
     }
 }
 

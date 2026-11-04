@@ -17,7 +17,7 @@ public sealed record ShareRow(Guid Id, string Name, string Level, string? Inheri
     public bool CanRemove => Inherited is null;
 }
 
-/// <summary>"Chia sẻ…" from Explorer (spec 7.2): invite people / groups with a permission, or make a link (password, expiry).</summary>
+/// <summary>"Chia sẻ…" from Explorer (spec 7.2): invite people / groups with a permission, or make a link (restricted or anyone with it, expiry).</summary>
 public partial class ShareViewModel : ObservableObject
 {
     private readonly BlueDriveApi _api;
@@ -49,7 +49,6 @@ public partial class ShareViewModel : ObservableObject
     [ObservableProperty] private string? _message;
     [ObservableProperty] private bool _busy;
     [ObservableProperty] private bool _allowDownload = true;
-    [ObservableProperty] private string _password = "";
     [ObservableProperty] private DateTimeOffset? _expires;
     [ObservableProperty] private bool _requireLogin;
     [ObservableProperty] private string? _linkUrl;
@@ -132,10 +131,10 @@ public partial class ShareViewModel : ObservableObject
         Busy = true;
         try
         {
-            var link = await _api.CreateLinkAsync(_itemId, AllowDownload, Password, Expires?.UtcDateTime, RequireLogin);
+            var link = await _api.CreateLinkAsync(_itemId, AllowDownload, Expires?.UtcDateTime, RequireLogin);
             LinkUrl = link.Url;
             if (CopyToClipboard is not null) await CopyToClipboard(link.Url);
-            Message = "Đã tạo liên kết và sao chép vào bộ nhớ tạm" + (link.HasPassword ? " (người nhận cần mật khẩu)." : ".");
+            Message = "Đã tạo liên kết và sao chép vào bộ nhớ tạm" + (link.RequireLogin ? " (người nhận phải đăng nhập và có quyền)." : ".");
         }
         catch (Exception ex) when (ex is RemoteTransientException or RemotePermanentException) { Message = ex.Message; }
         finally { Busy = false; }

@@ -230,7 +230,6 @@ export interface ShareLink {
   token: string;
   url: string;
   allowDownload: boolean;
-  hasPassword: boolean;
   expiresAt?: string | null;
   status: string;
 }

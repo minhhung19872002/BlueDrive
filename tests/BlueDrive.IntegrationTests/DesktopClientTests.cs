@@ -350,9 +350,9 @@ public class DesktopClientTests(ApiFactory factory)
         await api.RemoveShareAsync(shares.Single().Id);
         (await api.SharesAsync("file", item.RemoteId)).Should().BeEmpty();
 
-        // Link with password and expiry.
-        var link = await api.CreateLinkAsync(item.RemoteId, allowDownload: false, password: "Mk@123456", DateTime.UtcNow.AddDays(7), requireLogin: false);
-        link.HasPassword.Should().BeTrue();
+        // Restricted link with an expiry.
+        var link = await api.CreateLinkAsync(item.RemoteId, allowDownload: false, DateTime.UtcNow.AddDays(7), requireLogin: true);
+        link.RequireLogin.Should().BeTrue();
         link.Url.Should().Contain("/s/");
 
         // Lịch sử phiên bản…: save version 1, restore it as current.

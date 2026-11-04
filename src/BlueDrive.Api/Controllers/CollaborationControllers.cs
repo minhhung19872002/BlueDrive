@@ -22,8 +22,8 @@ public class OfficeController : ApiControllerBase
 
     /// <summary>Cấu hình chỉ xem cho trang liên kết công khai.</summary>
     [HttpGet("public-config/{token}"), AllowAnonymous]
-    public Task<OfficeEditorConfig> PublicConfig(string token, [FromQuery] string access, [FromQuery] Guid? fileId, [FromQuery] string? guest) =>
-        Mediator.Send(new GetPublicOfficeConfigQuery(token, access, fileId, guest));
+    public Task<OfficeEditorConfig> PublicConfig(string token, [FromQuery] string access, [FromQuery] Guid? fileId) =>
+        Mediator.Send(new GetPublicOfficeConfigQuery(token, access, fileId));
 
     /// <summary>Tạo tài liệu Word/Excel/PowerPoint/văn bản mới từ mẫu trống.</summary>
     [HttpPost("new")]

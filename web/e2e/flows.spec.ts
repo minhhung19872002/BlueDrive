@@ -126,73 +126,72 @@ test('tạo tài liệu Word mới và mở trình soạn thảo ONLYOFFICE', as
   await expect(page).toHaveURL(/\/files\/.+\/edit/)
 })
 
-test('chia sẻ qua liên kết công khai có mật khẩu', async ({ page, browser }) => {
+/** Opens Chia sẻ → liên kết for the E2E document; returns the dialog and the link box. */
+async function openLinkTab(page: Page) {
   await openMyDrive(page)
   await filterMyDrive(page, docName)
   const row = page.getByRole('row', { name: new RegExp(`${docName}\\.docx`) })
   await openContextMenu(page, row.getByText(`${docName}.docx`))
   await page.getByRole('menuitem', { name: /Chia sẻ$/ }).click()
   await page.getByRole('tab', { name: /liên kết/i }).click()
-  // Like SharePoint the link is there right away (signed-in users only by default).
   const dialog = page.getByRole('dialog')
   const linkBox = dialog.getByRole('textbox', { name: 'Liên kết của tài liệu' })
   await expect(linkBox).toHaveValue(/\/s\//, { timeout: 15_000 })
-  await expect(dialog.getByText('Yêu cầu đăng nhập').last()).toBeVisible()
-  const link = await linkBox.inputValue()
-  // Make it public with a password: the same link is updated.
-  await dialog.getByPlaceholder(/mật khẩu/i).fill('1234')
-  await dialog.getByRole('switch').nth(1).click()
+  return { dialog, linkBox }
+}
+
+/** Picks an option of an AntD select found by its form label. */
+async function choose(page: Page, label: string, option: string) {
+  await page.getByRole('dialog').getByLabel(label).click()
+  await page.locator('.ant-select-item-option', { hasText: option }).click()
+}
+
+async function saveLink(page: Page) {
   await Promise.all([
     page.waitForResponse((r) => r.url().includes('/api/v1/share-links/') && r.request().method() === 'PUT' && r.ok()),
-    dialog.getByRole('button', { name: /Lưu cài đặt/ }).click(),
+    page.getByRole('dialog').getByRole('button', { name: /Lưu cài đặt/ }).click(),
   ])
-  await expect(linkBox).toHaveValue(link)
-  const path = new URL(link!.trim(), 'http://x').pathname
+}
+
+test('chia sẻ qua liên kết: mặc định Hạn chế, chuyển sang Bất kỳ ai có liên kết', async ({ page, browser }) => {
+  // Like Google Drive the link is there right away, restricted (signed in and with access) by default.
+  const { dialog, linkBox } = await openLinkTab(page)
+  await expect(dialog.getByText('Hạn chế').first()).toBeVisible()
+  await expect(dialog.getByPlaceholder(/mật khẩu/i)).toHaveCount(0)
+  const link = await linkBox.inputValue()
+  const path = new URL(link.trim(), 'http://x').pathname
+
   const anon = await browser.newContext({ storageState: { cookies: [], origins: [] } })
   const pub = await anon.newPage()
   await pub.goto(path)
-  await pub.getByPlaceholder(/mật khẩu/i).fill('1234')
-  await pub.getByRole('button', { name: /Mở|Xem|Tiếp tục/ }).click()
+  await expect(pub.getByText('Yêu cầu đăng nhập').first()).toBeVisible({ timeout: 15_000 })
+
+  // Anyone with the link: the same link opens without signing in.
+  await choose(page, 'Quyền truy cập chung', 'Bất kỳ ai có liên kết')
+  await saveLink(page)
+  await expect(linkBox).toHaveValue(link)
+  await pub.reload()
   await expect(pub.getByText(/Chia sẻ bởi|được chia sẻ/i).first()).toBeVisible({ timeout: 15_000 })
   await anon.close()
 })
 
-test('liên kết cho phép chỉnh sửa: người không đăng nhập nhập tên rồi cùng soạn', async ({ page, browser }) => {
-  await openMyDrive(page)
-  await filterMyDrive(page, docName)
-  const row = page.getByRole('row', { name: new RegExp(`${docName}\\.docx`) })
-  await openContextMenu(page, row.getByText(`${docName}.docx`))
-  await page.getByRole('menuitem', { name: /Chia sẻ$/ }).click()
-  await page.getByRole('tab', { name: /liên kết/i }).click()
-  const dialog = page.getByRole('dialog')
-  const linkBox = dialog.getByRole('textbox', { name: 'Liên kết của tài liệu' })
-  await expect(linkBox).toHaveValue(/\/s\//, { timeout: 15_000 })
-  const editSwitch = dialog.getByRole('switch', { name: /Cho phép chỉnh sửa/ })
-  if ((await editSwitch.getAttribute('aria-checked')) !== 'true') await editSwitch.click()
-  await Promise.all([
-    page.waitForResponse((r) => r.url().includes('/api/v1/share-links/') && r.request().method() === 'PUT' && r.ok()),
-    dialog.getByRole('button', { name: /Lưu cài đặt/ }).click(),
-  ])
-  await expect(dialog.getByText('Cho phép chỉnh sửa', { exact: true })).toBeVisible()
+test('liên kết Bất kỳ ai có liên kết, vai trò Người chỉnh sửa: người không đăng nhập mở là sửa được ngay', async ({ page, browser }) => {
+  const { linkBox } = await openLinkTab(page)
+  await choose(page, 'Quyền truy cập chung', 'Bất kỳ ai có liên kết')
+  await choose(page, 'Vai trò', 'Người chỉnh sửa')
+  await saveLink(page)
+  await expect(page.getByRole('dialog').getByText('Cho phép chỉnh sửa', { exact: true })).toBeVisible()
   const path = new URL((await linkBox.inputValue()).trim(), 'http://x').pathname
 
   const anon = await browser.newContext({ storageState: { cookies: [], origins: [] } })
   const pub = await anon.newPage()
+  // No button to press: the editor opens straight away (as "Khách" for someone not signed in), with its toolbars.
+  const configResponse = pub.waitForResponse((r) => r.url().includes('/office/public-config/') && r.ok())
   await pub.goto(path)
-  const password = pub.getByPlaceholder(/mật khẩu/i)
-  await expect(password.or(pub.getByLabel('Họ và tên'))).toBeVisible({ timeout: 15_000 })
-  if (await password.isVisible()) {
-    await password.fill('1234')
-    await pub.getByRole('button', { name: /^Mở$/ }).click()
-  }
-  await pub.getByLabel('Họ và tên').fill('Khách kiểm thử E2E')
-  const [config] = await Promise.all([
-    pub.waitForResponse((r) => r.url().includes('/office/public-config/') && r.ok()),
-    pub.getByRole('button', { name: /Bắt đầu chỉnh sửa/ }).click(),
-  ])
-  const body = await config.json()
+  const body = await (await configResponse).json()
   expect(body.mode).toBe('edit')
-  expect(body.config.editorConfig.user.name).toBe('Khách kiểm thử E2E (khách)')
+  expect(body.config.type).toBe('desktop')
+  expect(body.config.editorConfig.user.name).toBe('Khách')
   await expect(pub.locator('iframe[name="frameEditor"], iframe[src*="/office/"]').first()).toBeAttached({ timeout: 45_000 })
   await anon.close()
 })

@@ -122,7 +122,6 @@ export interface ShareLink {
   resourceId: string
   allowDownload: boolean
   allowView: boolean
-  hasPassword: boolean
   expiresAt: string | null
   maxAccessCount: number | null
   accessCount: number
@@ -138,8 +137,6 @@ export interface SaveShareLinkRequest {
   resourceType: ResourceType
   resourceId: string
   allowDownload: boolean
-  password: string | null
-  clearPassword: boolean
   expiresAt: string | null
   maxAccessCount: number | null
   requireLogin: boolean
@@ -154,7 +151,6 @@ export interface PublicShareInfo {
   mimeType: string | null
   extension: string | null
   allowDownload: boolean
-  requiresPassword: boolean
   requireLogin: boolean
   expiresAt: string | null
   sharedByName: string

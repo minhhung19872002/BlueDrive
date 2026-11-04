@@ -199,29 +199,28 @@ public class SharingTests(ApiFactory factory)
     }
 
     [Fact]
-    public async Task Public_link_with_password_limit_and_revoke()
+    public async Task Public_link_with_access_limit_and_revoke()
     {
         var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
         var ws = await StorageTests.PersonalWorkspaceAsync(owner);
         var fileId = (await StorageTests.UploadAsync(owner, ws, null, "poster.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
-        var link = await (await owner.PostAsJsonAsync("/api/v1/share-links", new { resourceType = "file", resourceId = fileId, allowDownload = false, password = "1234", maxAccessCount = 2 })).ReadJsonAsync();
+        var link = await (await owner.PostAsJsonAsync("/api/v1/share-links", new { resourceType = "file", resourceId = fileId, allowDownload = false, maxAccessCount = 2 })).ReadJsonAsync();
         var token = link.GetProperty("token").GetString()!;
         link.GetProperty("url").GetString().Should().EndWith($"/s/{token}");
         (await owner.GetAsync($"/api/v1/share-links/{link.GetProperty("id").GetGuid()}/qr")).Content.Headers.ContentType!.MediaType.Should().Be("image/png");
 
         var anon = factory.CreateClient();
         var info = await (await anon.GetAsync($"/api/v1/public/s/{token}")).ReadJsonAsync();
-        info.GetProperty("requiresPassword").GetBoolean().Should().BeTrue();
-        (await anon.PostAsJsonAsync($"/api/v1/public/s/{token}/open", new { password = "sai" })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        var grant = await (await anon.PostAsJsonAsync($"/api/v1/public/s/{token}/open", new { password = "1234" })).ReadJsonAsync();
+        info.TryGetProperty("requiresPassword", out _).Should().BeFalse("link passwords were removed");
+        var grant = await (await anon.PostAsJsonAsync($"/api/v1/public/s/{token}/open", new { })).ReadJsonAsync();
         var access = Uri.EscapeDataString(grant.GetProperty("accessToken").GetString()!);
         var view = await anon.GetAsync($"/api/v1/public/s/{token}/content?access={access}");
         view.StatusCode.Should().Be(HttpStatusCode.OK);
         (await view.Content.ReadAsByteArrayAsync()).Should().Equal(StorageTests.Png);
         (await anon.GetAsync($"/api/v1/public/s/{token}/content?access={access}&download=true")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
 
-        await (await anon.PostAsJsonAsync($"/api/v1/public/s/{token}/open", new { password = "1234" })).ReadJsonAsync();
-        (await anon.PostAsJsonAsync($"/api/v1/public/s/{token}/open", new { password = "1234" })).StatusCode.Should().Be(HttpStatusCode.Gone, "max 2 accesses");
+        await (await anon.PostAsJsonAsync($"/api/v1/public/s/{token}/open", new { })).ReadJsonAsync();
+        (await anon.PostAsJsonAsync($"/api/v1/public/s/{token}/open", new { })).StatusCode.Should().Be(HttpStatusCode.Gone, "max 2 accesses");
 
         var link2 = await (await owner.PostAsJsonAsync("/api/v1/share-links", new { resourceType = "file", resourceId = fileId, allowDownload = true })).ReadJsonAsync();
         (await owner.DeleteAsync($"/api/v1/share-links/{link2.GetProperty("id").GetGuid()}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -239,7 +238,10 @@ public class SharingTests(ApiFactory factory)
         var token = link.GetProperty("token").GetString()!;
         (await factory.CreateClient().PostAsJsonAsync($"/api/v1/public/s/{token}/open", new { })).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
-        var (other, _, _) = await factory.CreateUserClientAsync("chi_xem");
+        // "Hạn chế": signed in is not enough, the person needs access to the folder (like Google Drive's Restricted).
+        var (other, otherId, _) = await factory.CreateUserClientAsync("chi_xem");
+        (await other.PostAsJsonAsync($"/api/v1/public/s/{token}/open", new { })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        await (await owner.PostAsJsonAsync("/api/v1/shares", new { resourceType = "folder", resourceId = album, targets = new[] { new { type = "user", id = otherId } }, accessLevel = 2 })).ReadJsonAsync();
         var grant = await (await other.PostAsJsonAsync($"/api/v1/public/s/{token}/open", new { })).ReadJsonAsync();
         var access = Uri.EscapeDataString(grant.GetProperty("accessToken").GetString()!);
         var root = await (await other.GetAsync($"/api/v1/public/s/{token}/items?access={access}")).ReadJsonAsync();

@@ -28,7 +28,7 @@ tài khoản `bien_tap`, trình duyệt đăng nhập tài khoản đó; tài kh
 | 15 | Web ↔ máy | Tạo thư mục trên web; lưu tệp Word trên máy | Xuất hiện trên máy < 5 giây; có trên web < 10 giây | `bluedrive-perf latency`; IT `SyncTests.Sync_hub_pushes_changes_available_within_seconds` | Đạt (0,73 giây / 3,25 giây) |
 | 16 | Rút mạng, sửa 50 tệp, cắm lại | Tắt mạng, sửa 50 tệp, bật mạng | Cả 50 tệp lên máy chủ đúng, không bản trùng | FsCheck (ngắt mạng ngẫu nhiên); `EngineScenarioTests.Lost_responses_and_crashes_converge_without_duplicates` | Đạt (2 máy: 0/50 khi mất mạng, 50/50 sau 49 s) |
 | 17 | Cài đặt, cập nhật, gỡ | `BlueDriveSetup.exe --silent`, phát hành bản mới, gỡ | Cài theo người dùng; tải bản mới nền và cài khi thoát; gỡ sạch (sync root, menu, khởi động cùng Windows, mã đăng nhập) | `PackagingTests` | Đạt (1.0.0 → 1.0.1, 03/11/2026) |
-| 18 | Chia sẻ từ Explorer | Chuột phải → BlueDrive → Chia sẻ… → Liên kết có mật khẩu | Tạo liên kết có mật khẩu, tự sao chép | IT `DesktopClientTests.Explorer_context_menu_commands_work_against_the_api` | Đạt (máy A, prod: không mật khẩu / sai → 403, đúng → mở) |
+| 18 | Chia sẻ từ Explorer | Chuột phải → BlueDrive → Chia sẻ… → Liên kết (Hạn chế hoặc ai có liên kết) | Tạo liên kết, tự sao chép; "Hạn chế": phải đăng nhập và có quyền | IT `DesktopClientTests.Explorer_context_menu_commands_work_against_the_api` | Đạt (máy A, prod, 04/11/2026 với liên kết có mật khẩu: không mật khẩu / sai → 403, đúng → mở; mật khẩu liên kết bỏ theo quyết định ngày 04/11/2026, thay bằng "Hạn chế") |
 | 19 | Máy chủ nội bộ với ghim chứng thư | Đặt `CertificatePins` (chính sách) bằng mã SPKI của máy chủ; thử với chứng thư khác | Kết nối đúng máy chủ; chứng thư khác (dù hợp lệ) bị từ chối | `ClientTests.Certificate_pinning_accepts_only_the_pinned_server_key` | Đạt (máy A, prod: mã sai → không kết nối, "Ngoại tuyến"; đúng mã SPKI → đồng bộ) |
 | 20 | Nhấp đúp tệp Office → cùng soạn | Cài đặt → Đồng bộ → "Luôn mở chế độ cùng soạn"; nhấp đúp `.docx` trong BlueDrive; tắt mạng rồi nhấp đúp lại; nhấp đúp `.docx` ngoài BlueDrive | Có mạng: mở trong ONLYOFFICE Desktop Editors (chế độ cùng soạn); mất mạng: mở bản trên máy bằng Word; ngoài BlueDrive: Word như thường; tắt tùy chọn trả lại như cũ | `PackagingTests.Double_click_on_office_documents_can_open_co_editing_only_inside_bluedrive_folders`; chạy tay 03–04/11/2026 trên Windows 11 (ONLYOFFICE 10.0, Microsoft Word): nhấp đúp chuột thật trong Explorer — trong BlueDrive mở ONLYOFFICE cùng soạn, ngoài BlueDrive mở Word | Đạt (một máy) |
 
@@ -56,7 +56,7 @@ BlueDrive Desktop 1.0.3 → 1.0.6 (các bản sửa bên dưới). Thời gian l
 | Hết dung lượng (hạn mức 1 MB) | Đạt | "Hết dung lượng BlueDrive…", tệp giữ trên máy; trả hạn mức → tự lên máy chủ ở lượt sau (4 phút) |
 | Thu hồi chia sẻ khi B đang mở và sửa tệp | Đạt sau khi sửa | Sau khi đóng tệp: thư mục gỡ khỏi B, bản đã sửa ở `_Không đồng bộ được`. Thu hồi thư mục B không sửa: gỡ sạch |
 | Gỡ BlueDrive (giữ tệp), sửa tệp, cài lại, chọn thư mục cũ | Đạt sau khi sửa | Gỡ: chỉ còn thư mục `logs`; cài lại mở trình hướng dẫn, thư mục cũ được nhận ("tệp trùng sẽ được liên kết"); hai tệp 150 MB "Đã khớp" (không tải lại); tệp sửa khi chưa có ứng dụng được tải lên |
-| Chia sẻ từ Explorer → liên kết có mật khẩu | Đạt | `/s/…` trong bộ nhớ tạm; không mật khẩu / sai mật khẩu → 403, đúng → mở |
+| Chia sẻ từ Explorer → liên kết | Đạt | `/s/…` trong bộ nhớ tạm. Lúc chạy là liên kết có mật khẩu (không mật khẩu / sai → 403, đúng → mở); sau đó mật khẩu liên kết đã bỏ, thay bằng liên kết "Hạn chế" (đăng nhập và có quyền) |
 | Kéo thư mục giữa hai nhóm (`Nhóm\Nhóm truyền thông B` → `Nhóm\Nhóm truyền thông A`) | Đạt sau khi sửa | Cùng thư mục (cùng mã) chuyển sang nhóm A sau 4 s, thùng rác nhóm B trống. Kéo vào "Nhóm chỉ xem" (chỉ có quyền xem) → "Hoàn tác", thư mục về chỗ cũ, máy chủ không đổi |
 | Ghim chứng thư (chính sách `CertificatePins`) | Đạt | Mã SPKI sai → không kết nối máy chủ thật; mã đúng (`iNmwmygd…`) → tệp chờ được tải lên |
 | Xóa từ xa máy B (Quản trị → Thiết bị) | Đạt | Yêu cầu 13:34:37 → B xác nhận 13:34:40; thư mục BlueDrive và mã đăng nhập trên B bị xóa; thiết bị ở trạng thái "đã xóa" |
@@ -106,7 +106,7 @@ Hai lần chạy liên tiếp đều đạt; số liệu dưới đây là của
 | Sửa đồng thời 2 nơi → bản xung đột đúng tên, không mất nội dung | Đạt | `biên bản (Bản xung đột - <Họ tên> - MAY-B - 2026-11-03 2039).txt`, cả hai nội dung còn |
 | Mất mạng, sửa 50 tệp, có mạng lại → lên máy chủ đủ | Đạt | 0 tệp lên khi ngoại tuyến; đủ 50 sau 2,6 s |
 | Xóa hơn 100 tệp → hỏi xác nhận | Đạt | "Bạn vừa xóa 120 tệp. Xóa cả trên BlueDrive?", máy chủ còn đủ 120 |
-| "Chia sẻ…" tạo liên kết có mật khẩu | Đạt | liên kết `/s/…` có mật khẩu |
+| "Chia sẻ…" tạo liên kết | Đạt | liên kết `/s/…` (lúc chạy có mật khẩu; mật khẩu liên kết đã bỏ ngày 04/11/2026, `bluedrive-perf acceptance` nay kiểm liên kết "Hạn chế") |
 | Tệp chỉ quyền Xem không tải xuống máy | Đạt | tệp "Xem + Tải xuống" có trên máy, tệp "Chỉ xem" không |
 | Thu hồi thiết bị; nhật ký có device_id | Đạt | máy B dừng sau 3,1 s ("Cần đăng nhập lại"); nhật ký có device_id của máy A |
 | Tệp theo yêu cầu: mở tự tải, "Luôn giữ", "Giải phóng dung lượng" | Đạt | `FilesOnDemandTests` (Cloud Files thật, Windows 11) |

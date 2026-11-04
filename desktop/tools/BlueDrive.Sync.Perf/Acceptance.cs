@@ -136,11 +136,12 @@ internal static class Acceptance
             a.Agent.ResolveMassDelete(deleteOnServer: false);
             await UntilAsync(() => Task.FromResult(Directory.GetFiles(a.P($"{top}/Xóa nhiều")).Length == 120), 120);
 
-            // 6. Chia sẻ: liên kết có mật khẩu (lệnh "Chia sẻ…" của menu chuột phải).
+            // 6. Chia sẻ: liên kết (lệnh "Chia sẻ…" của menu chuột phải). Mật khẩu liên kết đã bỏ theo quyết định ngày 04/11/2026:
+            //    liên kết "Hạn chế" (đăng nhập và có quyền) thay cho liên kết có mật khẩu.
             await File.WriteAllTextAsync(a.P($"{top}/chia sẻ.txt"), "tài liệu chia sẻ");
             var shareId = await UntilServerAsync(api, ws, top, "chia sẻ.txt", 30);
-            var link = await a.Agent.Api.CreateLinkAsync(shareId.ToString(), allowDownload: true, password: "Mk@2026xyz", DateTime.UtcNow.AddDays(7), requireLogin: false);
-            rows.Add(new("Menu chuột phải \"Chia sẻ…\" tạo được liên kết có mật khẩu", link.HasPassword && link.Url.Contains("/s/"), link.Url));
+            var link = await a.Agent.Api.CreateLinkAsync(shareId.ToString(), allowDownload: true, DateTime.UtcNow.AddDays(7), requireLogin: true);
+            rows.Add(new("Menu chuột phải \"Chia sẻ…\" tạo được liên kết (Hạn chế: đăng nhập và có quyền)", link.RequireLogin && link.Url.Contains("/s/"), link.Url));
 
             // 7. Tệp chỉ có quyền Xem không bị tải xuống máy.
             var (viewName, dlName) = await ShareFromColleagueAsync(api, tag);

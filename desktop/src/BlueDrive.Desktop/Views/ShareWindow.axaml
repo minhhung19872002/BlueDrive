@@ -49,8 +49,7 @@
       <TabItem Header="Liên kết">
         <StackPanel Spacing="10" Margin="0,8,0,0">
           <CheckBox IsChecked="{Binding AllowDownload}" Content="Cho phép tải xuống" />
-          <CheckBox IsChecked="{Binding RequireLogin}" Content="Người nhận phải đăng nhập BlueDrive" />
-          <TextBox Text="{Binding Password}" PasswordChar="•" Watermark="Mật khẩu (không bắt buộc)" />
+          <CheckBox IsChecked="{Binding RequireLogin}" Content="Hạn chế: chỉ người đã đăng nhập và có quyền mới mở được" />
           <StackPanel Orientation="Horizontal" Spacing="8">
             <TextBlock Text="Hết hạn:" VerticalAlignment="Center" />
             <CalendarDatePicker SelectedDate="{Binding Expires}" Watermark="Không hết hạn" />

@@ -16,7 +16,7 @@ using Microsoft.Extensions.Configuration;
 namespace BlueDrive.Application.Features.Sharing;
 
 public sealed record ShareLinkDto(Guid Id, string Token, string Url, ResourceType ResourceType, Guid ResourceId, bool AllowDownload, bool AllowView,
-    bool HasPassword, DateTime? ExpiresAt, int? MaxAccessCount, int AccessCount, bool IsRevoked, bool RequireLogin, DateTime CreatedAt, string Status, bool AllowEdit);
+    DateTime? ExpiresAt, int? MaxAccessCount, int AccessCount, bool IsRevoked, bool RequireLogin, DateTime CreatedAt, string Status, bool AllowEdit);
 
 public static class ShareLinkMapping
 {
@@ -24,10 +24,10 @@ public static class ShareLinkMapping
         : l.MaxAccessCount is { } m && l.AccessCount >= m ? "exhausted" : "active";
 
     public static ShareLinkDto ToDto(ShareLink l, string baseUrl, DateTime now) => new(l.Id, l.Token, $"{baseUrl.TrimEnd('/')}/s/{l.Token}", l.ResourceType, l.ResourceId,
-        l.AllowDownload, l.AllowView, l.PasswordHash is not null, l.ExpiresAt, l.MaxAccessCount, l.AccessCount, l.IsRevoked, l.RequireLogin, l.CreatedAt, StatusOf(l, now), l.AllowEdit);
+        l.AllowDownload, l.AllowView, l.ExpiresAt, l.MaxAccessCount, l.AccessCount, l.IsRevoked, l.RequireLogin, l.CreatedAt, StatusOf(l, now), l.AllowEdit);
 }
 
-public sealed record SaveShareLinkCommand(Guid? Id, ResourceType ResourceType, Guid ResourceId, bool AllowDownload, string? Password, bool ClearPassword,
+public sealed record SaveShareLinkCommand(Guid? Id, ResourceType ResourceType, Guid ResourceId, bool AllowDownload,
     DateTime? ExpiresAt, int? MaxAccessCount, bool RequireLogin, bool AllowEdit = false) : IRequest<ShareLinkDto>;
 
 public sealed class SaveShareLinkValidator : AbstractValidator<SaveShareLinkCommand>
@@ -37,11 +37,10 @@ public sealed class SaveShareLinkValidator : AbstractValidator<SaveShareLinkComm
         RuleFor(x => x.ResourceType).Must(t => t != ResourceType.Workspace).WithMessage("Chỉ tạo liên kết cho thư mục hoặc tệp.");
         RuleFor(x => x.ExpiresAt).Must(d => d is null || d > DateTime.UtcNow).WithMessage("Ngày hết hạn phải ở tương lai.");
         RuleFor(x => x.MaxAccessCount).InclusiveBetween(1, 1_000_000).When(x => x.MaxAccessCount.HasValue).WithMessage("Số lượt truy cập tối đa phải từ 1 trở lên.");
-        RuleFor(x => x.Password).MinimumLength(4).When(x => !string.IsNullOrEmpty(x.Password)).WithMessage("Mật khẩu liên kết tối thiểu 4 ký tự.").MaximumLength(128);
     }
 }
 
-public sealed class SaveShareLinkHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IPasswordService passwords,
+public sealed class SaveShareLinkHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms,
     ITokenService tokens, IConfiguration config, IAuditLogger audit, TimeProvider clock, ISettingsService settings) : IRequestHandler<SaveShareLinkCommand, ShareLinkDto>
 {
     public async Task<ShareLinkDto> Handle(SaveShareLinkCommand cmd, CancellationToken ct)
@@ -65,7 +64,7 @@ public sealed class SaveShareLinkHandler(IAppDbContext db, ICurrentUser me, IRes
             link = new ShareLink { ResourceType = cmd.ResourceType, ResourceId = cmd.ResourceId, Token = tokens.GenerateOpaqueToken(32) };
             db.ShareLinks.Add(link);
         }
-        if (cmd.AllowEdit && !link.AllowEdit)
+        if (cmd.AllowEdit && !cmd.RequireLogin && !link.AllowEdit)
         {
             // Same rule as download: only someone who may edit can let others edit through the link.
             if (!await settings.GetAsync(SettingKeys.ShareLinkAllowEdit, true, ct))
@@ -74,16 +73,14 @@ public sealed class SaveShareLinkHandler(IAppDbContext db, ICurrentUser me, IRes
                 throw new ForbiddenException("Bạn không có quyền chỉnh sửa nên không thể cho phép chỉnh sửa qua liên kết.");
         }
         link.AllowDownload = cmd.AllowDownload;
-        link.AllowEdit = cmd.AllowEdit;
+        link.AllowEdit = cmd.AllowEdit && !cmd.RequireLogin; // restricted: each person's own rights decide
         link.AllowView = true;
         link.ExpiresAt = cmd.ExpiresAt;
         link.MaxAccessCount = cmd.MaxAccessCount;
         link.RequireLogin = cmd.RequireLogin;
-        if (!string.IsNullOrEmpty(cmd.Password)) link.PasswordHash = passwords.Hash(cmd.Password);
-        else if (cmd.ClearPassword) link.PasswordHash = null;
         await db.SaveChangesAsync(ct);
         await audit.LogAsync(new AuditEntry(AuditAction.Share, link.ResourceType, link.ResourceId, null, null,
-            new { shareLink = link.Id, link.AllowDownload, link.AllowEdit, link.ExpiresAt, link.MaxAccessCount, link.RequireLogin, hasPassword = link.PasswordHash != null, created = cmd.Id is null }), ct);
+            new { shareLink = link.Id, link.AllowDownload, link.AllowEdit, link.ExpiresAt, link.MaxAccessCount, link.RequireLogin, created = cmd.Id is null }), ct);
         return ShareLinkMapping.ToDto(link, config["App:PublicBaseUrl"] ?? "", clock.GetUtcNow().UtcDateTime);
     }
 }
@@ -122,7 +119,7 @@ public sealed class RevokeShareLinkHandler(IAppDbContext db, ICurrentUser me, IR
 
 // ---------- Public access (/s/{token}) ----------
 public sealed record PublicShareInfoDto(string Name, ResourceType ResourceType, long SizeBytes, MediaType? MediaType, string? MimeType, string? Extension,
-    bool AllowDownload, bool RequiresPassword, bool RequireLogin, DateTime? ExpiresAt, string SharedByName, string? OrganizationName, bool AllowEdit);
+    bool AllowDownload, bool RequireLogin, DateTime? ExpiresAt, string SharedByName, string? OrganizationName, bool AllowEdit);
 
 public sealed record PublicAccessGrant(string AccessToken, DateTime ExpiresAt);
 
@@ -198,17 +195,18 @@ public sealed class GetPublicShareHandler(IAppDbContext db, TimeProvider clock) 
         if (link.ResourceType == ResourceType.File)
         {
             var f = await db.Files.AsNoTracking().FirstAsync(x => x.Id == link.ResourceId, ct);
-            return new PublicShareInfoDto(f.Name, ResourceType.File, f.SizeBytes, f.MediaType, f.MimeType, f.Extension, link.AllowDownload, link.PasswordHash != null, link.RequireLogin, link.ExpiresAt, sharer?.FullName ?? "", sharer?.Org, link.AllowEdit);
+            return new PublicShareInfoDto(f.Name, ResourceType.File, f.SizeBytes, f.MediaType, f.MimeType, f.Extension, link.AllowDownload, link.RequireLogin, link.ExpiresAt, sharer?.FullName ?? "", sharer?.Org, link.AllowEdit);
         }
         var folder = await db.Folders.AsNoTracking().FirstAsync(x => x.Id == link.ResourceId, ct);
-        return new PublicShareInfoDto(folder.Name, ResourceType.Folder, 0, null, null, null, link.AllowDownload, link.PasswordHash != null, link.RequireLogin, link.ExpiresAt, sharer?.FullName ?? "", sharer?.Org, link.AllowEdit);
+        return new PublicShareInfoDto(folder.Name, ResourceType.Folder, 0, null, null, null, link.AllowDownload, link.RequireLogin, link.ExpiresAt, sharer?.FullName ?? "", sharer?.Org, link.AllowEdit);
     }
 }
 
-/// <summary>Opens a link (password / login check), counts one access and logs it.</summary>
-public sealed record OpenPublicShareCommand(string Token, string? Password) : IRequest<PublicAccessGrant>;
+/// <summary>Opens a link (login / access check for restricted links), counts one access and logs it.</summary>
+public sealed record OpenPublicShareCommand(string Token) : IRequest<PublicAccessGrant>;
 
-public sealed class OpenPublicShareHandler(IAppDbContext db, ICurrentUser me, IPasswordService passwords, IPublicLinkTickets tickets, IAuditLogger audit, TimeProvider clock)
+public sealed class OpenPublicShareHandler(IAppDbContext db, ICurrentUser me, IPublicLinkTickets tickets, IAuditLogger audit, TimeProvider clock,
+    IResourceAuthorizationService auth)
     : IRequestHandler<OpenPublicShareCommand, PublicAccessGrant>
 {
     public async Task<PublicAccessGrant> Handle(OpenPublicShareCommand cmd, CancellationToken ct)
@@ -216,11 +214,9 @@ public sealed class OpenPublicShareHandler(IAppDbContext db, ICurrentUser me, IP
         var now = clock.GetUtcNow().UtcDateTime;
         var link = await PublicLinks.LoadActiveAsync(db, cmd.Token, now, ct);
         if (link.RequireLogin && !me.IsAuthenticated) throw new AppException("Liên kết này yêu cầu đăng nhập hệ thống trước khi xem.", 401);
-        if (link.PasswordHash is not null && (string.IsNullOrEmpty(cmd.Password) || !passwords.Verify(link.PasswordHash, cmd.Password)))
-        {
-            await audit.LogAsync(new AuditEntry(AuditAction.ShareLinkAccess, link.ResourceType, link.ResourceId, null, null, new { shareLink = link.Id, success = false, reason = "wrong_password" }), ct);
-            throw new AppException("Mật khẩu liên kết không đúng.", 403);
-        }
+        // "Hạn chế" (like Google Drive's Restricted): only people who have access to the item open it; the link is just its address.
+        if (link.RequireLogin && !await auth.CanAsync(me.RequireUserId(), link.ResourceType, link.ResourceId, AccessLevel.View, ct))
+            throw new AppException("Bạn chưa có quyền truy cập tư liệu này. Hãy đề nghị người chia sẻ cấp quyền cho bạn.", 403);
         // Atomic increment that also enforces the access limit under concurrency.
         var updated = await db.ShareLinks.Where(l => l.Id == link.Id && !l.IsRevoked && (l.MaxAccessCount == null || l.AccessCount < l.MaxAccessCount))
             .ExecuteUpdateAsync(s => s.SetProperty(l => l.AccessCount, l => l.AccessCount + 1), ct);
