@@ -40,7 +40,9 @@ Những chỗ các bản sao quy tắc đang lệch nhau (sẽ hết khi mọi k
 
 1. **Một tenant.** Hệ thống phục vụ một đơn vị sử dụng (Trung tâm Thông tin, Chuyển đổi số và Dịch vụ dân số); `tenant_id` có trong lược đồ nhưng chỉ một giá trị.
 2. **Không mật khẩu liên kết** (quyết định ngày 04/11/2026, xác nhận lại cùng ngày; giống Google Drive): mục 5.3 / 16 của đặc tả nói "tùy chọn mật khẩu" — không làm. Liên kết cũ từng có mật khẩu đã chuyển sang "Hạn chế".
-3. **Quản trị không tự thấy nội dung** (đặc tả 3.3). Hiện quản trị (`doc.admin`) thấy mọi tệp; sau Perm-Phase 3 chỉ thấy qua "Truy cập khẩn cấp" (Perm-Phase 7). Trong lúc chuyển tiếp, quyền cũ vẫn là nguồn chính.
+3. **Quản trị không tự thấy nội dung** (đặc tả 3.3). Từ Perm-Phase 3 (04/11/2026) quản trị (`doc.admin`) chỉ thấy nội dung của mình và những gì
+   được cấp quyền; để xem nội dung người khác dùng "Truy cập khẩn cấp" (Perm-Phase 7). Mô hình cũ còn được ghi song song (bảng `resource_permissions`,
+   `shares`, `workspace_members`, cờ ngắt kế thừa) và chiếu sang mô hình mới ở mỗi thay đổi; `LegacyResourceAuthorizationService` chỉ còn dùng để đối chiếu.
 4. **Chế độ chia sẻ** mặc định `sharepoint_scope` (chia sẻ một mục trong Space tự ngắt kế thừa kiểu sao chép); `google_additive` làm theo cờ tenant.
 5. **Chuyển dữ liệu không làm mất quyền:** với mọi cặp (người dùng, mục), quyền mới ⊇ quyền cũ, trừ hai chỗ cố ý chặt hơn: quản trị (giả định 3) và "Hạn chế" thay mật khẩu (giả định 2). Script đối chiếu in danh sách khác biệt.
 6. **Chuyển theo từng bước, hệ thống luôn chạy được:** Perm-Phase 1 dựng mô hình mới và **chiếu** (project) dữ liệu cũ sang (trong migration và bằng job dựng lại); mô hình cũ vẫn là nguồn ghi. Perm-Phase 2 chuyển việc ghi và tính quyền sang mô hình mới; Perm-Phase 3 thay mọi bộ lọc SQL viết tay. Bảng cũ chỉ xóa khi không còn chỗ đọc.

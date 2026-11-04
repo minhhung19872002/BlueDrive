@@ -15,7 +15,7 @@ namespace BlueDrive.Api.Realtime;
 /// 1 s by <see cref="SyncChangeBroadcaster"/>) and device_status { deviceId, status }. Call Resubscribe() after a permission change.
 /// </summary>
 [Authorize]
-public sealed class SyncHub(IAppDbContext db, IResourceAuthorizationService auth, SyncAccessContext access) : Hub
+public sealed class SyncHub(IAppDbContext db, SyncAccessContext access) : Hub
 {
     public override async Task OnConnectedAsync()
     {
@@ -31,7 +31,7 @@ public sealed class SyncHub(IAppDbContext db, IResourceAuthorizationService auth
     {
         if (!Guid.TryParse(Context.User?.FindFirstValue("sub"), out var uid)) throw new HubException("Chưa xác thực.");
         var ct = Context.ConnectionAborted;
-        var roots = await (await WorkspaceQueries.AccessibleAsync(db, auth, uid, ct)).Select(w => w.Id).ToListAsync(ct);
+        var roots = await (await WorkspaceQueries.AccessibleAsync(db, uid, ct)).Select(w => w.Id).ToListAsync(ct);
         await access.InitAsync(uid, ct);
         foreach (var ws in roots.Concat(await access.SharedWorkspacesAsync(roots, ct)).Distinct())
             await Groups.AddToGroupAsync(Context.ConnectionId, $"ws:{ws}", ct);

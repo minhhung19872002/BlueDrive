@@ -67,6 +67,41 @@ public class PermissionModelTests(ApiFactory factory)
         live.Memberships.Should().Equal(rebuilt.Memberships);
     }
 
+    /// <summary>Spec 13.3: an item a member may not see leaks on no channel — not its name, nor a count or a size.</summary>
+    [Fact]
+    public async Task A_folder_that_stopped_inheriting_leaks_on_no_channel()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (member, memberId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var marker = "Kin" + Random.Shared.Next(100000, 999999);
+        var ws = (await (await owner.PostAsJsonAsync("/api/v1/workspaces", new { name = "Nhóm có thư mục riêng " + marker, type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        await (await owner.PostAsJsonAsync($"/api/v1/workspaces/{ws}/members", new { userIds = new[] { memberId }, role = "editor" })).ReadJsonAsync();
+        var open = (await StorageTests.UploadAsync(owner, ws, null, $"cong-khai-{marker}.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var secret = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = $"Riêng {marker}" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var hidden = (await StorageTests.UploadAsync(owner, ws, secret, $"bi-mat-{marker}.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        (await owner.PutAsJsonAsync($"/api/v1/access/folder/{secret}", new { entries = Array.Empty<object>(), breakInheritance = true })).EnsureSuccessStatusCode();
+
+        // Listing of the Space: the open file, not the folder.
+        var top = (await (await member.GetAsync($"/api/v1/workspaces/{ws}/items")).ReadJsonAsync()).GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()).ToList();
+        top.Should().Contain(open).And.NotContain(secret);
+        (await member.GetAsync($"/api/v1/workspaces/{ws}/items?folderId={secret}")).StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound);
+        (await member.GetAsync($"/api/v1/files/{hidden}")).StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound, "404, not 403: no sign it exists");
+        // Search: nothing by name, nothing counted.
+        var search = await (await member.PostAsJsonAsync("/api/v1/search", new { q = marker })).ReadJsonAsync();
+        search.GetProperty("items").EnumerateArray().Select(h => h.GetProperty("item").GetProperty("id").GetGuid()).Should().Contain(open).And.NotContain(hidden);
+        search.GetProperty("total").GetInt32().Should().Be(1);
+        // Group dashboard: neither in recent documents nor in the totals by type.
+        var dash = await (await member.GetAsync("/api/v1/dashboards/group")).ReadJsonAsync();
+        dash.GetProperty("recent").EnumerateArray().Select(r => r.GetProperty("id").GetGuid()).Should().NotContain(hidden);
+        var slices = dash.GetProperty("typesByGroup").EnumerateArray().Single(g => g.GetProperty("workspaceId").GetGuid() == ws).GetProperty("slices");
+        slices.EnumerateArray().Sum(s => s.GetProperty("files").GetInt32()).Should().Be(1, "the hidden file is not counted");
+
+        // The owner sees everything.
+        (await (await owner.PostAsJsonAsync("/api/v1/search", new { q = marker })).ReadJsonAsync()).GetProperty("total").GetInt32().Should().Be(2);
+        (await (await owner.GetAsync($"/api/v1/workspaces/{ws}/items")).ReadJsonAsync()).GetProperty("items").EnumerateArray()
+            .Select(i => i.GetProperty("id").GetGuid()).Should().Contain(secret);
+    }
+
     [Fact]
     public async Task The_current_model_is_projected_without_losing_any_right()
     {

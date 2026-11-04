@@ -273,7 +273,7 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock)
             .Select(g => new ScopeGrant { ScopeId = g.Key.ScopeId, PrincipalId = g.Key.PrincipalId, Permissions = g.Aggregate(AccessRight.None, (m, e) => m | levels[e.PermissionLevelId]) })
             .ToList();
         // Versions only grow (cache keys of the permission engine): ticks of the rebuild.
-        var scopes = securables.Where(s => s.HasUniqueAcl).Select(s => new AclScope { ScopeId = s.Id, AclVersion = now.Ticks }).ToList();
+        var scopes = securables.Where(s => s.HasUniqueAcl).Select(s => new AclScope { ScopeId = s.Id, AclVersion = AclVersions.Next(clock) }).ToList();
 
         Detach();
         var own = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(ct) : null;

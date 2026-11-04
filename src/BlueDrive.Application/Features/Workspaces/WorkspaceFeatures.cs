@@ -22,13 +22,17 @@ public static class WorkspaceQueries
         w.QuotaBytes, w.UsedBytes, w.IsLocked, w.Members.Where(m => m.UserId == userId).Select(m => (WorkspaceMemberRole?)m.MemberRole).FirstOrDefault(),
         w.Members.Count, w.CreatedAt));
 
-    /// <summary>Workspaces the user belongs to or has been granted at workspace level (user/group/org/role ACL).</summary>
-    public static async Task<IQueryable<Workspace>> AccessibleAsync(IAppDbContext db, IResourceAuthorizationService auth, Guid userId, CancellationToken ct)
+    /// <summary>
+    /// Workspaces whose root the user may see on the new permission model: their Drive của tôi, Spaces they are a member of (Space groups),
+    /// and Spaces granted to them, one of their groups, units or roles at Space level.
+    /// </summary>
+    public static async Task<IQueryable<Workspace>> AccessibleAsync(IAppDbContext db, Guid userId, CancellationToken ct)
     {
-        var p = await auth.GetPrincipalsAsync(userId, ct);
-        var principalIds = p.GroupIds.Concat(p.OrganizationIds).Concat(p.RoleIds).Append(userId).ToList();
-        return db.Workspaces.AsNoTracking().Where(w => w.OwnerId == userId || w.Members.Any(m => m.UserId == userId) ||
-            db.ResourcePermissions.Any(a => a.ResourceType == ResourceType.Workspace && a.ResourceId == w.Id && principalIds.Contains(a.PrincipalId)));
+        var principals = await db.PrincipalMemberships.Where(m => m.UserId == userId).Select(m => m.PrincipalId).ToListAsync(ct);
+        var scopes = db.ScopeGrants.Where(g => principals.Contains(g.PrincipalId) && (g.Permissions & Domain.Permissions.AccessRight.ViewItems) != 0).Select(g => g.ScopeId);
+        var roots = db.Securables.Where(s => (s.Kind == SecurableKind.Space || s.Kind == SecurableKind.Drive) && !s.IsDeleted
+                                             && (s.OwnerUserId == userId || scopes.Contains(s.AclScopeId))).Select(s => s.Id);
+        return db.Workspaces.AsNoTracking().Where(w => roots.Contains(w.Id));
     }
 }
 
@@ -56,13 +60,13 @@ public static class WorkspaceManagement
 
 public sealed record ListMyWorkspacesQuery(WorkspaceType? Type) : IRequest<IReadOnlyList<WorkspaceDto>>;
 
-public sealed class ListMyWorkspacesHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms)
+public sealed class ListMyWorkspacesHandler(IAppDbContext db, ICurrentUser me, IPermissionService perms)
     : IRequestHandler<ListMyWorkspacesQuery, IReadOnlyList<WorkspaceDto>>
 {
     public async Task<IReadOnlyList<WorkspaceDto>> Handle(ListMyWorkspacesQuery q, CancellationToken ct)
     {
         var uid = me.RequireUserId();
-        var query = await WorkspaceQueries.AccessibleAsync(db, auth, uid, ct);
+        var query = await WorkspaceQueries.AccessibleAsync(db, uid, ct);
         // Group / organization workspaces need "Nhóm tài nguyên - Xem"; the personal space is always listed.
         var seesGroups = await perms.HasAsync(uid, Perm.WorkspaceView, ct);
         query = query.Where(w => w.Type == WorkspaceType.Personal ? w.OwnerId == uid : seesGroups);

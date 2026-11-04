@@ -78,7 +78,8 @@ public static class DriveProjection
 /// <summary>Folder contents: sub-folders first, then files; server-side paging across both (#18, #44).</summary>
 public sealed record ListItemsQuery(Guid WorkspaceId, Guid? FolderId, MediaType? MediaType) : PageQuery, IRequest<PagedResult<DriveItemDto>>;
 
-public sealed class ListItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets) : IRequestHandler<ListItemsQuery, PagedResult<DriveItemDto>>
+public sealed class ListItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets, Access.AccessFilter filter)
+    : IRequestHandler<ListItemsQuery, PagedResult<DriveItemDto>>
 {
     public async Task<PagedResult<DriveItemDto>> Handle(ListItemsQuery q, CancellationToken ct)
     {
@@ -89,30 +90,13 @@ public sealed class ListItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
 
         var folders = db.Folders.AsNoTracking().Where(f => f.WorkspaceId == q.WorkspaceId && f.ParentId == q.FolderId && !f.IsDeleted);
         var files = db.Files.AsNoTracking().Where(f => f.WorkspaceId == q.WorkspaceId && f.FolderId == q.FolderId && !f.IsDeleted);
-        var p = await auth.GetPrincipalsAsync(uid, ct);
-        var principals = p.GroupIds.Concat(p.OrganizationIds).Concat(p.RoleIds).Append(uid).ToList();
-        var grantedFolders = db.Shares.Where(s => s.ResourceType == ResourceType.Folder && principals.Contains(s.SharedWithId)).Select(s => s.ResourceId)
-            .Concat(db.ResourcePermissions.Where(a => a.ResourceType == ResourceType.Folder && principals.Contains(a.PrincipalId)).Select(a => a.ResourceId));
-        var grantedFiles = db.Shares.Where(s => s.ResourceType == ResourceType.File && principals.Contains(s.SharedWithId)).Select(s => s.ResourceId)
-            .Concat(db.ResourcePermissions.Where(a => a.ResourceType == ResourceType.File && principals.Contains(a.PrincipalId)).Select(a => a.ResourceId));
-        if (!access.CanView)
-        {
-            // No access to the container: show only children granted directly (shared items).
-            folders = folders.Where(f => grantedFolders.Contains(f.Id));
-            files = files.Where(f => grantedFiles.Contains(f.Id) && f.ApprovalStatus == ApprovalStatus.Approved);
-            if (!await folders.AnyAsync(ct) && !await files.AnyAsync(ct))
-                throw new NotFoundException("Không tìm thấy thư mục hoặc bạn không có quyền truy cập.");
-        }
-        else
-        {
-            files = DriveProjection.VisibleApproval(files, access, uid);
-            // Items with unique permissions (stopped inheriting) are listed only to those granted on them, the owner and managers.
-            if (access.Source is not ("admin" or "owner" or "member:manager" or "member:owner"))
-            {
-                folders = folders.Where(f => !f.BreakInheritance || grantedFolders.Contains(f.Id));
-                files = files.Where(f => !f.BreakInheritance || grantedFiles.Contains(f.Id));
-            }
-        }
+        // Security trimming in SQL on the new permission model: each child is listed only to who may see it (its own ACL decides for
+        // items that stopped inheriting; items shared alone show up even when the container itself is not visible).
+        var viewer = await filter.ForAsync(uid, ct);
+        folders = filter.Folders(folders, viewer);
+        files = filter.Files(files, viewer);
+        if (!access.CanView && !await folders.AnyAsync(ct) && !await files.AnyAsync(ct))
+            throw new NotFoundException("Không tìm thấy thư mục hoặc bạn không có quyền truy cập.");
 
         if (!string.IsNullOrWhiteSpace(q.Q))
         {

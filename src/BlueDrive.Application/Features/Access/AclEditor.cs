@@ -131,6 +131,25 @@ public sealed class AclEditor(IAppDbContext db, TimeProvider clock)
         await db.SaveChangesAsync(ct);
     }
 
-    /// <summary>Versions only grow, also across rebuilds of the projection (ticks of the clock).</summary>
-    private long NewVersion() => clock.GetUtcNow().UtcTicks;
+    private long NewVersion() => AclVersions.Next(clock);
+}
+
+/// <summary>
+/// ACL versions (cache keys of the permission engine) only grow and are never handed out twice — a scope deleted and created again must
+/// not get a version a cache still holds: the clock's ticks, or one more than the last version given in this process.
+/// </summary>
+public static class AclVersions
+{
+    private static long _last;
+
+    public static long Next(TimeProvider clock)
+    {
+        var ticks = clock.GetUtcNow().UtcTicks;
+        while (true)
+        {
+            var last = Interlocked.Read(ref _last);
+            var next = Math.Max(ticks, last + 1);
+            if (Interlocked.CompareExchange(ref _last, next, last) == last) return next;
+        }
+    }
 }

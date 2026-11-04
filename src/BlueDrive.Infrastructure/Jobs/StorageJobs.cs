@@ -103,6 +103,26 @@ public sealed class PermissionProjectionJob(Application.Features.Access.Permissi
     }
 }
 
+/// <summary>
+/// Grants that ran out leave scope_grants (the SQL trimming of lists and search) with rights nobody holds any more: every 5 minutes the
+/// scopes with an entry expired in the last 15 minutes get their grants rewritten (the engine itself checks expiry on every call).
+/// </summary>
+public sealed class AclExpiryJob(IAppDbContext db, Application.Features.Access.AclEditor editor, TimeProvider clock, ILogger<AclExpiryJob> logger)
+{
+    [AutomaticRetry(Attempts = 1)]
+    [DisableConcurrentExecution(300)]
+    [Queue(HangfireSetup.QueueMaintenance)]
+    public async Task<int> RunAsync(CancellationToken ct)
+    {
+        var now = clock.GetUtcNow().UtcDateTime;
+        var since = now.AddMinutes(-15);
+        var scopes = await db.AclEntries.Where(e => e.ExpiresAt != null && e.ExpiresAt > since && e.ExpiresAt <= now).Select(e => e.ScopeId).Distinct().ToListAsync(ct);
+        foreach (var scope in scopes) await editor.RefreshGrantsAsync(scope, ct);
+        if (scopes.Count > 0) logger.LogInformation("Đã cập nhật quyền hết hạn của {Count} phạm vi", scopes.Count);
+        return scopes.Count;
+    }
+}
+
 public sealed class SyncJournalRetentionJob(ISender mediator, ILogger<SyncJournalRetentionJob> logger)
 {
     [Queue(HangfireSetup.QueueMaintenance)]
@@ -122,7 +142,9 @@ public sealed class StorageRecurringJobs(IRecurringJobManager jobs) : IRecurring
         jobs.AddOrUpdate<SyncJournalRetentionJob>("sync-journal-retention", j => j.RunAsync(CancellationToken.None), "45 1 * * *",
             new RecurringJobOptions { TimeZone = Reporting.VietnamTime.Zone });
         jobs.AddOrUpdate<TextIndexBackfillJob>("text-index-backfill", j => j.RunAsync(CancellationToken.None), "*/10 * * * *");
-        jobs.AddOrUpdate<PermissionProjectionJob>("permission-projection", j => j.RunAsync(CancellationToken.None), "*/15 * * * *");
+        jobs.AddOrUpdate<PermissionProjectionJob>("permission-projection", j => j.RunAsync(CancellationToken.None), "30 2 * * *",
+            new RecurringJobOptions { TimeZone = Reporting.VietnamTime.Zone }); // safety net: the model follows every change (AccessModelInterceptor)
+        jobs.AddOrUpdate<AclExpiryJob>("acl-expiry", j => j.RunAsync(CancellationToken.None), "*/5 * * * *");
         return Task.CompletedTask;
     }
 }

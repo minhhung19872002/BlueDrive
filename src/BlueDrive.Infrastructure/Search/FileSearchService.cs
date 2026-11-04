@@ -13,33 +13,15 @@ namespace BlueDrive.Infrastructure.Search;
 /// PostgreSQL full-text search on files.search_vector and on the text inside documents (file_texts.content_vector), unaccented,
 /// 'simple' config, with prefix matching, plus an unaccented substring fallback on the name. The access scope is expressed in SQL; the handler re-checks each hit.
 /// </summary>
-public sealed class FileSearchService(AppDbContext db, TimeProvider clock) : IFileSearchService
+public sealed class FileSearchService(AppDbContext db, TimeProvider clock, Application.Features.Access.AccessFilter filter) : IFileSearchService
 {
     public async Task<(IReadOnlyList<(Guid FileId, double Rank)> Page, int Total, bool TotalCapped)> SearchAsync(SearchCriteria c, PrincipalSet p, CancellationToken ct)
     {
         var now = clock.GetUtcNow().UtcDateTime;
         IQueryable<StoredFile> q = db.Files.AsNoTracking().Where(f => !f.IsDeleted && f.ScanStatus != ScanStatus.Infected);
 
-        if (!p.IsDocAdmin)
-        {
-            var uid = p.UserId;
-            var principals = p.GroupIds.Concat(p.OrganizationIds).Concat(p.RoleIds).Append(uid).ToList();
-            var wsIds = db.Workspaces.Where(w => w.OwnerId == uid || w.Members.Any(m => m.UserId == uid) ||
-                db.ResourcePermissions.Any(a => a.ResourceType == ResourceType.Workspace && a.ResourceId == w.Id && principals.Contains(a.PrincipalId) && (a.ExpiresAt == null || a.ExpiresAt > now)))
-                .Select(w => w.Id);
-            var folderGrants = db.ResourcePermissions.Where(a => a.ResourceType == ResourceType.Folder && principals.Contains(a.PrincipalId) && (a.ExpiresAt == null || a.ExpiresAt > now))
-                .Select(a => a.ResourceId)
-                .Concat(db.Shares.Where(s => s.ResourceType == ResourceType.Folder && principals.Contains(s.SharedWithId)).Select(s => s.ResourceId));
-            var fileGrants = db.ResourcePermissions.Where(a => a.ResourceType == ResourceType.File && principals.Contains(a.PrincipalId) && (a.ExpiresAt == null || a.ExpiresAt > now))
-                .Select(a => a.ResourceId)
-                .Concat(db.Shares.Where(s => s.ResourceType == ResourceType.File && principals.Contains(s.SharedWithId)).Select(s => s.ResourceId));
-            q = q.Where(f => wsIds.Contains(f.WorkspaceId) || fileGrants.Contains(f.Id) ||
-                             (f.Folder != null && folderGrants.Any(g => f.Folder.Path.Contains("/" + g.ToString() + "/"))));
-            // Unapproved items: only their uploader and workspace editors/approvers see them.
-            WorkspaceMemberRole[] reviewers = [WorkspaceMemberRole.Owner, WorkspaceMemberRole.Manager, WorkspaceMemberRole.Editor, WorkspaceMemberRole.Approver];
-            q = q.Where(f => f.ApprovalStatus == ApprovalStatus.Approved || f.CreatedBy == uid ||
-                             db.WorkspaceMembers.Any(m => m.WorkspaceId == f.WorkspaceId && m.UserId == uid && reviewers.Contains(m.MemberRole)));
-        }
+        // Security trimming in SQL (new permission model): only what the user may see, before paging and counting.
+        q = filter.Files(q, await filter.ForAsync(p.UserId, ct));
 
         if (c.WorkspaceId is { } ws) q = q.Where(f => f.WorkspaceId == ws);
         if (c.FolderId is { } fid)

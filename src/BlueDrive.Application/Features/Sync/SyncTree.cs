@@ -142,7 +142,7 @@ public sealed class ListSyncRootsHandler(IAppDbContext db, ICurrentUser me, IRes
         var uid = me.RequireUserId();
         await policy.EnsureAllowedAsync(uid, ct);
         var p = await policy.GetAsync(ct);
-        var query = await Workspaces.WorkspaceQueries.AccessibleAsync(db, auth, uid, ct);
+        var query = await Workspaces.WorkspaceQueries.AccessibleAsync(db, uid, ct);
         var list = await query.Where(w => w.Type != WorkspaceType.Personal || w.OwnerId == uid).OrderBy(w => w.Type).ThenBy(w => w.Name).ToListAsync(ct);
         var roots = new List<SyncRootDto>();
         foreach (var w in list)
@@ -167,7 +167,7 @@ public sealed record SyncSnapshotDto(IReadOnlyList<SyncItemDto> Items, string? N
 
 internal sealed record SnapshotToken(long Cursor, int Phase, Guid? WorkspaceId, string? AfterPath, Guid? AfterId);
 
-public sealed class SyncSnapshotHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, SyncAccessContext access, SyncPolicyService policy)
+public sealed class SyncSnapshotHandler(IAppDbContext db, ICurrentUser me, SyncAccessContext access, SyncPolicyService policy)
     : IRequestHandler<SyncSnapshotQuery, SyncSnapshotDto>
 {
     private const int PageSize = 1000;
@@ -183,7 +183,7 @@ public sealed class SyncSnapshotHandler(IAppDbContext db, ICurrentUser me, IReso
         List<Guid> workspaces;
         if (q.RootId == SyncIds.SharedRoot)
         {
-            var roots = (await Workspaces.WorkspaceQueries.AccessibleAsync(db, auth, uid, ct)).Select(w => w.Id);
+            var roots = (await Workspaces.WorkspaceQueries.AccessibleAsync(db, uid, ct)).Select(w => w.Id);
             workspaces = (await access.SharedWorkspacesAsync(await roots.ToListAsync(ct), ct)).OrderBy(x => x).ToList();
         }
         else if (SyncIds.TryParseRoot(q.RootId, out var wsId))
@@ -294,7 +294,7 @@ public sealed record SyncChangesQuery(long Cursor, int Limit = 500) : IRequest<S
 /// <summary>410 Gone: the cursor predates the retained journal, the client must run a full resync (snapshot).</summary>
 public sealed class CursorExpiredException() : AppException("Mốc đồng bộ đã quá cũ, cần đồng bộ lại toàn bộ.", 410);
 
-public sealed class SyncChangesHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, SyncAccessContext access, SyncPolicyService policy)
+public sealed class SyncChangesHandler(IAppDbContext db, ICurrentUser me, SyncAccessContext access, SyncPolicyService policy)
     : IRequestHandler<SyncChangesQuery, SyncChangesDto>
 {
     public async Task<SyncChangesDto> Handle(SyncChangesQuery q, CancellationToken ct)
@@ -306,7 +306,7 @@ public sealed class SyncChangesHandler(IAppDbContext db, ICurrentUser me, IResou
         if (min is { } m && q.Cursor + 1 < m) throw new CursorExpiredException();
         var limit = Math.Clamp(q.Limit, 1, 1000);
         var rows = await db.ChangeJournal.AsNoTracking().Where(c => c.Seq > q.Cursor).OrderBy(c => c.Seq).Take(limit).ToListAsync(ct);
-        var roots = (await Workspaces.WorkspaceQueries.AccessibleAsync(db, auth, uid, ct)).Select(w => w.Id);
+        var roots = (await Workspaces.WorkspaceQueries.AccessibleAsync(db, uid, ct)).Select(w => w.Id);
         var rootIds = (await roots.ToListAsync(ct)).ToHashSet();
 
         var fileIds = rows.Where(r => r.ItemType == ChangeItemType.File).Select(r => r.ItemId).Distinct().ToList();

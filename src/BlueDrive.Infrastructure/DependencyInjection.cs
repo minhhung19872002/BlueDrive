@@ -80,6 +80,7 @@ public static class DependencyInjection
         services.AddScoped<Media.IFileProcessingStep>(sp => sp.GetRequiredService<Media.TextIndexStep>());
         services.AddScoped<Jobs.TextIndexBackfillJob>();
         services.AddScoped<Jobs.PermissionProjectionJob>();
+        services.AddScoped<Jobs.AclExpiryJob>();
 
         services.AddScoped<Application.Features.Search.IFileSearchService, Search.FileSearchService>();
         services.AddSingleton<IAuditObserver, UnusualDownloadObserver>();

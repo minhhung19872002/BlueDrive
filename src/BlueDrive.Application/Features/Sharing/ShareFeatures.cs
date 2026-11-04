@@ -146,7 +146,8 @@ public sealed record ListSharedWithMeQuery(Guid? SharedBy, DateTime? From, DateT
 
 public sealed record SharedItemDto(DriveItemDto Item, Guid ShareId, Guid SharedBy, string SharedByName, AccessLevel AccessLevel, string? Message, DateTime SharedAt);
 
-public sealed class ListSharedWithMeHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets) : IRequestHandler<ListSharedWithMeQuery, PagedResult<SharedItemDto>>
+public sealed class ListSharedWithMeHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets, Access.AccessFilter filter)
+    : IRequestHandler<ListSharedWithMeQuery, PagedResult<SharedItemDto>>
 {
     public async Task<PagedResult<SharedItemDto>> Handle(ListSharedWithMeQuery q, CancellationToken ct)
     {
@@ -157,7 +158,9 @@ public sealed class ListSharedWithMeHandler(IAppDbContext db, ICurrentUser me, I
         if (q.SharedBy.HasValue) shares = shares.Where(s => s.SharedBy == q.SharedBy);
         if (q.From.HasValue) shares = shares.Where(s => s.CreatedAt >= q.From);
         if (q.To.HasValue) shares = shares.Where(s => s.CreatedAt < q.To.Value.AddDays(1));
-        // Only resources still alive; newest share per resource.
+        // Only resources still alive and still visible to this user (new permission model); newest share per resource.
+        var visible = filter.Visible(await filter.ForAsync(uid, ct));
+        shares = shares.Where(s => visible.Contains(s.ResourceId));
         var rows = await shares.Where(s => (s.ResourceType == ResourceType.File && db.Files.Any(f => f.Id == s.ResourceId && !f.IsDeleted && f.ApprovalStatus == ApprovalStatus.Approved
                                                 && (q.MediaType == null || f.MediaType == q.MediaType)))
                                            || (s.ResourceType == ResourceType.Folder && q.MediaType == null && db.Folders.Any(f => f.Id == s.ResourceId && !f.IsDeleted)))
