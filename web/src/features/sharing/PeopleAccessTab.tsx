@@ -23,13 +23,17 @@ import dayjs, { type Dayjs } from 'dayjs'
 import { useTranslation } from 'react-i18next'
 import {
   breakInheritance,
+  EXTERNAL_LEVELS,
   getItemPermissions,
+  getItemSharingPolicy,
   grantItemPermission,
   listPermissionLevels,
   restoreInheritance,
   revokeItemPermission,
   setGeneralAccess,
+  setItemExternalSharing,
   updateItemPermission,
+  type ExternalSharing,
   type ItemPermission,
   type PrincipalKind,
   type PrincipalTarget,
@@ -112,6 +116,11 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
   })
   const stop = useApiMutation((copy: boolean) => breakInheritance(itemId, copy), { ...opts, successMessage: t('sharing.people.stopped') })
   const restore = useApiMutation((recursive: boolean) => restoreInheritance(itemId, recursive), { ...opts, successMessage: t('sharing.people.restored') })
+  const policy = useQuery({ queryKey: ['item-sharing-policy', itemId], queryFn: () => getItemSharingPolicy(itemId) })
+  const external = useApiMutation((v: ExternalSharing | null) => setItemExternalSharing(itemId, v), {
+    invalidate: [['item-sharing-policy']],
+    successMessage: t('sharing.people.externalSaved'),
+  })
 
   if (access.isLoading || levels.isLoading) return <Skeleton active />
   if (!access.data) return <Empty />
@@ -249,6 +258,30 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
       <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4 }}>
         {a.generalAccess === 'restricted' ? t('sharing.people.restrictedHint') : t('sharing.people.organizationHint')}
       </Typography.Paragraph>
+
+      {policy.data && (
+        <>
+          <Divider orientation="left" orientationMargin={0}>
+            {t('sharing.people.external')}
+          </Divider>
+          <Space wrap>
+            <Select
+              style={{ minWidth: 280 }}
+              disabled={!policy.data.canChangeItem}
+              value={policy.data.itemExternal ?? 'inherit'}
+              onChange={(v) => external.mutate(v === 'inherit' ? null : (v as ExternalSharing))}
+              options={[
+                { value: 'inherit', label: t('sharing.people.externalInherit') },
+                ...EXTERNAL_LEVELS.map((l) => ({ value: l, label: t(`externalSharing.${l}`) })),
+              ]}
+              aria-label={t('sharing.people.external')}
+            />
+          </Space>
+          <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4 }}>
+            {t('sharing.people.externalEffective', { level: t(`externalSharing.${policy.data.external}`), source: policy.data.externalSource })}
+          </Typography.Paragraph>
+        </>
+      )}
 
       {!isRoot && a.canManage && (
         <>

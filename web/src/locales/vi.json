@@ -784,6 +784,28 @@
     "approved": "Đã duyệt yêu cầu.",
     "rejected": "Đã từ chối yêu cầu."
   },
+  "externalSharing": {
+    "off": "Chỉ nội bộ",
+    "existing_guests": "Chỉ khách đã có trong hệ thống",
+    "new_and_existing_guests": "Khách mới và khách đã có",
+    "anyone": "Bất kỳ ai (liên kết ẩn danh)"
+  },
+  "spaceSharing": {
+    "tab": "Chia sẻ",
+    "title": "Chính sách chia sẻ của Space",
+    "readOnly": "Chỉ Quản lý Space thay đổi được chính sách này.",
+    "external": "Chia sẻ ra ngoài",
+    "externalHint": "Hệ thống đang cho phép: {{level}}. Space chỉ đặt được chặt hơn; thư mục, tệp bên trong có thể đặt chặt hơn nữa.",
+    "inherit": "Theo hệ thống ({{level}})",
+    "membersShareOutside": "Thành viên được chia sẻ cho người ngoài Space",
+    "membersShareOutsideHint": "Tắt: thành viên chỉ chia sẻ được với người trong Space; Quản lý Space không bị giới hạn.",
+    "allowItemSharing": "Cho phép chia sẻ riêng từng tệp, thư mục",
+    "allowItemSharingHint": "Tắt: chỉ Quản lý Space được cấp quyền riêng (ngừng kế thừa) trên tệp, thư mục.",
+    "deciders": "Ai duyệt yêu cầu quyền truy cập",
+    "decidersItemManagers": "Người quản lý quyền của mục (chủ sở hữu, Quản lý nội dung)",
+    "decidersSpaceOwners": "Chỉ Quản lý Space",
+    "saved": "Đã lưu chính sách chia sẻ."
+  },
   "requestAccess": {
     "title": "Bạn cần quyền truy cập",
     "subtitle": "Bạn chưa có quyền mở mục này. Gửi yêu cầu để người quản lý cấp quyền.",
@@ -832,7 +854,11 @@
       "restore": "Khôi phục kế thừa",
       "restoreThis": "Khôi phục cho mục này",
       "restoreAll": "Khôi phục cho mục này và mọi mục con",
-      "restored": "Đã khôi phục kế thừa quyền."
+      "restored": "Đã khôi phục kế thừa quyền.",
+      "external": "Chia sẻ ra ngoài",
+      "externalInherit": "Theo cấp trên",
+      "externalEffective": "Đang áp dụng: {{level}} (theo {{source}}). Tầng chặt nhất thắng.",
+      "externalSaved": "Đã lưu chính sách chia sẻ ra ngoài."
     },
     "tabLink": "Chia sẻ qua liên kết",
     "noPermission": "Vai trò của bạn không có quyền chia sẻ tư liệu.",
@@ -888,6 +914,9 @@
     "legacyLink": "Liên kết được tạo trước khi BlueDrive chỉ lưu mã băm của liên kết",
     "legacyLinkHint": "Liên kết này vẫn mở được nhưng không hiển thị lại địa chỉ để sao chép. Tạo liên kết mới cùng thiết lập (liên kết cũ bị thu hồi) để có địa chỉ sao chép được.",
     "legacyLinkRenew": "Tạo liên kết mới",
+    "anyoneBlocked": "Liên kết cho bất kỳ ai bị tắt theo chính sách chia sẻ ({{source}}: {{level}}).",
+    "anyoneMaxDays": "Theo chính sách, liên kết cho bất kỳ ai dùng tối đa {{days}} ngày.",
+    "expiresDefault": "Mặc định sau {{days}} ngày",
     "roleViewer": "Người xem",
     "roleEditor": "Người chỉnh sửa",
     "allowEditDenied": "Bạn không có quyền chỉnh sửa tư liệu này nên không thể cho phép chỉnh sửa qua liên kết.",

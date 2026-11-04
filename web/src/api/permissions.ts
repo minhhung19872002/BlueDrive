@@ -134,3 +134,51 @@ export async function listAccessRequests(mine = false): Promise<AccessRequest[]>
 export async function decideAccessRequest(id: string, approve: boolean, levelId: string | null, note: string | null): Promise<void> {
   await api.post(`/access-requests/${id}/decide`, { approve, levelId, note })
 }
+
+/** Spec 5.4, strictest first. */
+export const EXTERNAL_LEVELS = ['off', 'existing_guests', 'new_and_existing_guests', 'anyone'] as const
+export type ExternalSharing = (typeof EXTERNAL_LEVELS)[number]
+
+export interface ItemSharingPolicy {
+  external: ExternalSharing
+  externalLabel: string
+  externalSource: string
+  anyoneLinkMaxDays: number
+  anyoneLinksAllowed: boolean
+  membersShareOutside: boolean
+  allowItemSharing: boolean
+  inSpace: boolean
+  itemExternal: ExternalSharing | null
+  canChangeItem: boolean
+}
+
+export interface SpaceSharingPolicy {
+  workspaceId: string
+  external: ExternalSharing | null
+  systemExternal: ExternalSharing
+  membersShareOutside: boolean
+  allowItemSharing: boolean
+  accessRequestDeciders: 'item_managers' | 'space_owners'
+  canEdit: boolean
+}
+
+export async function getItemSharingPolicy(itemId: string): Promise<ItemSharingPolicy> {
+  const { data } = await api.get<ItemSharingPolicy>(`/items/${itemId}/sharing-policy`)
+  return data
+}
+
+export async function setItemExternalSharing(itemId: string, external: ExternalSharing | null): Promise<void> {
+  await api.put(`/items/${itemId}/external-sharing`, { external })
+}
+
+export async function getSpaceSharingPolicy(workspaceId: string): Promise<SpaceSharingPolicy> {
+  const { data } = await api.get<SpaceSharingPolicy>(`/workspaces/${workspaceId}/sharing-policy`)
+  return data
+}
+
+export async function setSpaceSharingPolicy(
+  workspaceId: string,
+  body: Pick<SpaceSharingPolicy, 'external' | 'membersShareOutside' | 'allowItemSharing' | 'accessRequestDeciders'>,
+): Promise<void> {
+  await api.put(`/workspaces/${workspaceId}/sharing-policy`, body)
+}

@@ -227,4 +227,63 @@ public class SharingModelTests(ApiFactory factory)
         await Save(new { resourceType = "file", resourceId = file, scope = "existing", allowDownload = true }, specific.GetProperty("id").GetGuid());
         (await listed.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    [Fact]
+    public async Task Sharing_policies_strictest_tier_wins_and_the_space_rules_hold()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (member, memberId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (_, otherMemberId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (outsider, outsiderId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = (await (await owner.PostAsJsonAsync("/api/v1/workspaces", new { name = "Space chính sách", type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        await (await owner.PostAsJsonAsync($"/api/v1/workspaces/{ws}/members", new { userIds = new[] { memberId, otherMemberId }, role = "editor" })).ReadJsonAsync();
+        var folder = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Nội bộ" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var file = (await StorageTests.UploadAsync(owner, ws, folder, "chinh-sach.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+        object Anyone(DateTime? until = null) => new { resourceType = "file", resourceId = file, scope = "anyone", levelId = levels["viewer"], allowDownload = true, expiresAt = until };
+
+        // An "anyone" link: at most 30 days by default (none given = 30 days).
+        var link = await (await owner.PostAsJsonAsync("/api/v1/share-links", Anyone())).ReadJsonAsync();
+        link.GetProperty("expiresAt").GetDateTime().Should().BeCloseTo(DateTime.UtcNow.AddDays(30), TimeSpan.FromMinutes(5));
+        (await owner.PostAsJsonAsync("/api/v1/share-links", Anyone(DateTime.UtcNow.AddDays(60)))).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        // The folder says "Chỉ nội bộ": no anyone link below it, and the policy says why.
+        (await owner.PutAsJsonAsync($"/api/v1/items/{folder}/external-sharing", new { external = "off" })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var p = await (await owner.GetAsync($"/api/v1/items/{file}/sharing-policy")).ReadJsonAsync();
+        p.GetProperty("external").GetString().Should().Be("off");
+        p.GetProperty("externalSource").GetString().Should().Be("Thư mục \"Nội bộ\"");
+        p.GetProperty("anyoneLinksAllowed").GetBoolean().Should().BeFalse();
+        (await owner.PostAsJsonAsync("/api/v1/share-links", Anyone())).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await member.PutAsJsonAsync($"/api/v1/items/{folder}/external-sharing", new { external = "anyone" })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await owner.PutAsJsonAsync($"/api/v1/items/{folder}/external-sharing", new { external = (string?)null })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        // The Space: stricter outside sharing, members share only with members, only its owners decide access requests.
+        (await member.PutAsJsonAsync($"/api/v1/workspaces/{ws}/sharing-policy", new { external = "off", membersShareOutside = false, allowItemSharing = true, accessRequestDeciders = "space_owners" }))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await owner.PutAsJsonAsync($"/api/v1/workspaces/{ws}/sharing-policy", new { external = "existing_guests", membersShareOutside = false, allowItemSharing = true, accessRequestDeciders = "space_owners" }))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await (await owner.GetAsync($"/api/v1/items/{file}/sharing-policy")).ReadJsonAsync()).GetProperty("externalSource").GetString().Should().Be("Space \"Space chính sách\"");
+        (await owner.PostAsJsonAsync("/api/v1/share-links", Anyone())).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await member.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { User(outsiderId) }, levelId = levels["viewer"], notify = false }))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden, "members share only inside the Space");
+        (await member.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { User(otherMemberId) }, levelId = levels["viewer"], notify = false }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        (await owner.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { User(outsiderId) }, levelId = levels["viewer"], notify = false }))
+            .StatusCode.Should().Be(HttpStatusCode.OK, "who manages the Space is not bound by it");
+
+        // No single items shared by members: neither grants on a folder nor stopping inheritance.
+        (await owner.PutAsJsonAsync($"/api/v1/workspaces/{ws}/sharing-policy", new { external = "existing_guests", membersShareOutside = true, allowItemSharing = false, accessRequestDeciders = "space_owners" }))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await member.PostAsJsonAsync($"/api/v1/items/{folder}/permissions", new { targets = new[] { User(otherMemberId) }, levelId = levels["viewer"], notify = false }))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var space = await (await owner.GetAsync($"/api/v1/workspaces/{ws}/sharing-policy")).ReadJsonAsync();
+        space.GetProperty("allowItemSharing").GetBoolean().Should().BeFalse();
+        space.GetProperty("accessRequestDeciders").GetString().Should().Be("space_owners");
+
+        // Access requests go to the Space's owners.
+        var other = (await StorageTests.UploadAsync(owner, ws, null, "rieng-tu.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        (await outsider.PostAsJsonAsync($"/api/v1/items/{other}/access-requests", new { levelId = levels["viewer"] })).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await (await owner.GetAsync("/api/v1/access-requests")).ReadJsonAsync()).EnumerateArray().Should().Contain(r => r.GetProperty("itemId").GetGuid() == other);
+        (await (await member.GetAsync("/api/v1/access-requests")).ReadJsonAsync()).EnumerateArray().Should().NotContain(r => r.GetProperty("itemId").GetGuid() == other);
+    }
 }

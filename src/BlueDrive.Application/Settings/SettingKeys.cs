@@ -44,6 +44,8 @@ public static class SettingKeys
     public const string SyncJournalRetentionDays = "sync.journal_retention_days";
     public const string SyncPollSeconds = "sync.poll_seconds";
     public const string ShareLinkAllowEdit = "share.link_allow_edit";
+    public const string ShareExternal = "share.external";
+    public const string ShareAnyoneLinkMaxDays = "share.anyone_link_max_days";
 
     public static readonly string[] DefaultAllowedExtensions =
     [
@@ -76,6 +78,8 @@ public static class SettingKeys
         new(TrashRetentionDays, 30, "Lưu trữ", "Số ngày giữ trong thùng rác", "number"),
         new(UploadMaxSizeMb, 5120, "Lưu trữ", "Kích thước tải lên tối đa (MB)", "number"),
         new(UploadAllowedExtensions, DefaultAllowedExtensions, "Lưu trữ", "Định dạng tệp cho phép", "tags"),
+        new(ShareExternal, "anyone", "Chia sẻ", "Chia sẻ ra ngoài (tầng hệ thống; Space, thư mục, tệp chỉ đặt chặt hơn)", "external"),
+        new(ShareAnyoneLinkMaxDays, 30, "Chia sẻ", "Thời hạn tối đa của liên kết cho bất kỳ ai (ngày, 0 = không giới hạn)", "number"),
         new(ShareLinkAllowEdit, true, "Chia sẻ", "Cho phép liên kết chia sẻ cho người không đăng nhập chỉnh sửa tài liệu (Word, Excel, PowerPoint)", "boolean"),
         new(DownloadUnusualPerHour, 200, "Giám sát", "Ngưỡng tải xuống bất thường (tệp/giờ)", "number"),
         new(AlertEmailAdmins, true, "Giám sát", "Gửi email cảnh báo cho quản trị viên", "boolean"),

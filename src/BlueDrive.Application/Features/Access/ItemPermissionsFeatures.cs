@@ -137,13 +137,15 @@ internal static class GrantRules
 }
 
 public sealed class GrantItemPermissionHandler(IAppDbContext db, ICurrentUser me, IItemPermissionService engine, IPermissionService rbac, AclEditor editor,
-    IUserNotifier notify, IAuditLogger audit) : IRequestHandler<GrantItemPermissionCommand, int>
+    IUserNotifier notify, IAuditLogger audit, SharingPolicy policy) : IRequestHandler<GrantItemPermissionCommand, int>
 {
     public async Task<int> Handle(GrantItemPermissionCommand cmd, CancellationToken ct)
     {
         var uid = me.RequireUserId();
         var (_, level) = await GrantRules.CheckAsync(db, engine, rbac, uid, cmd.ItemId, cmd.LevelId, ct);
         var node = await db.Securables.AsNoTracking().FirstAsync(s => s.Id == cmd.ItemId, ct);
+        await policy.EnsureCanShareAsync(uid, cmd.ItemId, cmd.Targets.Where(t => !(t.Kind == PrincipalKind.User && t.Id == uid)).Select(t => (t.Kind, t.Id)).ToList(),
+            breaksInheritance: true, ct);
         var count = 0;
         foreach (var t in cmd.Targets.Distinct())
         {
@@ -245,6 +247,12 @@ public sealed class RevokeItemPermissionHandler(IAppDbContext db, ICurrentUser m
         if (!(entry.PrincipalKind == PrincipalKind.User && entry.PrincipalId == uid))
             await engine.DemandAsync(uid, cmd.ItemId, AccessRight.ManagePermissions, ct);
         await editor.RevokeAsync(entry.Id, ct);
+        // The same person's rows in the old tables (old sharing screens, mobile) go too, so that nothing still reads them as shared.
+        var legacyId = entry.PrincipalKind is PrincipalKind.OrgUnitTree or PrincipalKind.OrgUnit
+            ? await db.Principals.Where(p => p.Id == entry.PrincipalId).Select(p => p.RefId).FirstOrDefaultAsync(ct) ?? entry.PrincipalId
+            : entry.PrincipalId;
+        await db.Shares.Where(s => s.ResourceId == cmd.ItemId && s.SharedWithId == legacyId).ExecuteDeleteAsync(ct);
+        await db.ResourcePermissions.Where(r => r.ResourceId == cmd.ItemId && r.PrincipalId == legacyId).ExecuteDeleteAsync(ct);
         var node = await db.Securables.Where(s => s.Id == cmd.ItemId).Select(s => new { s.Name, s.Kind }).FirstAsync(ct);
         await audit.LogAsync(new AuditEntry(AuditAction.PermissionRevoked, GrantItemPermissionHandler.Kind(node.Kind), cmd.ItemId, node.Name, null,
             new { entry = entry.Id, entry.PrincipalKind, entry.PrincipalId, entry.PermissionLevelId }), ct);
@@ -255,7 +263,7 @@ public sealed class RevokeItemPermissionHandler(IAppDbContext db, ICurrentUser m
 /// <summary>"Ngắt kế thừa" (copy today's access, or start with only who manages) / "Khôi phục kế thừa" (also for everything below).</summary>
 public sealed record SetInheritanceCommand(Guid ItemId, bool Inherit, bool Copy = true, bool Recursive = false) : IRequest<Unit>;
 
-public sealed class SetInheritanceHandler(IAppDbContext db, ICurrentUser me, IItemPermissionService engine, AclEditor editor, IAuditLogger audit)
+public sealed class SetInheritanceHandler(IAppDbContext db, ICurrentUser me, IItemPermissionService engine, AclEditor editor, IAuditLogger audit, SharingPolicy policy)
     : IRequestHandler<SetInheritanceCommand, Unit>
 {
     public async Task<Unit> Handle(SetInheritanceCommand cmd, CancellationToken ct)
@@ -265,7 +273,11 @@ public sealed class SetInheritanceHandler(IAppDbContext db, ICurrentUser me, IIt
         var node = await db.Securables.AsNoTracking().FirstAsync(s => s.Id == cmd.ItemId, ct);
         if (node.ParentId is null) throw new AppException("Space và Drive của tôi luôn có quyền riêng.");
         if (cmd.Inherit) await editor.RestoreInheritanceAsync(cmd.ItemId, cmd.Recursive, ct);
-        else await editor.BreakInheritanceAsync(cmd.ItemId, cmd.Copy, uid, ct);
+        else
+        {
+            await policy.EnsureCanShareAsync(uid, cmd.ItemId, [], breaksInheritance: true, ct);
+            await editor.BreakInheritanceAsync(cmd.ItemId, cmd.Copy, uid, ct);
+        }
         await audit.LogAsync(new AuditEntry(cmd.Inherit ? AuditAction.InheritanceRestored : AuditAction.InheritanceBroken, GrantItemPermissionHandler.Kind(node.Kind),
             node.Id, node.Name, node.SpaceId ?? node.PersonalDriveId, new { cmd.Copy, cmd.Recursive }), ct);
         return Unit.Value;
@@ -284,7 +296,8 @@ public sealed class SetGeneralAccessValidator : AbstractValidator<SetGeneralAcce
     }
 }
 
-public sealed class SetGeneralAccessHandler(IAppDbContext db, ICurrentUser me, IItemPermissionService engine, IPermissionService rbac, AclEditor editor, IAuditLogger audit)
+public sealed class SetGeneralAccessHandler(IAppDbContext db, ICurrentUser me, IItemPermissionService engine, IPermissionService rbac, AclEditor editor, IAuditLogger audit,
+    SharingPolicy policy)
     : IRequestHandler<SetGeneralAccessCommand, Unit>
 {
     public async Task<Unit> Handle(SetGeneralAccessCommand cmd, CancellationToken ct)
@@ -296,6 +309,7 @@ public sealed class SetGeneralAccessHandler(IAppDbContext db, ICurrentUser me, I
         if (cmd.Mode == "organization")
         {
             await GrantRules.CheckAsync(db, engine, rbac, uid, cmd.ItemId, cmd.LevelId!.Value, ct);
+            await policy.EnsureCanShareAsync(uid, cmd.ItemId, [(PrincipalKind.Everyone, StableGuid.Everyone)], breaksInheritance: true, ct);
             await editor.GrantAsync(cmd.ItemId, PrincipalKind.Everyone, StableGuid.Everyone, cmd.LevelId!.Value, null, uid, ct);
         }
         var node = await db.Securables.AsNoTracking().FirstAsync(s => s.Id == cmd.ItemId, ct);

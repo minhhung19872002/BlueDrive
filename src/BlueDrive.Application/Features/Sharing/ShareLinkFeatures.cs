@@ -6,6 +6,7 @@ using BlueDrive.Application.Common;
 using BlueDrive.Application.Features.Storage;
 using BlueDrive.Application.Security;
 using BlueDrive.Application.Settings;
+using BlueDrive.Domain.Common;
 using BlueDrive.Domain.Entities;
 using BlueDrive.Domain.Enums;
 using BlueDrive.Domain.Permissions;
@@ -90,8 +91,8 @@ public sealed class SaveShareLinkValidator : AbstractValidator<SaveShareLinkComm
 }
 
 public sealed class SaveShareLinkHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IItemPermissionService engine,
-    ITokenService tokens, IConfiguration config, IAuditLogger audit, TimeProvider clock, ISettingsService settings, LinkModel model, IUserNotifier notify)
-    : IRequestHandler<SaveShareLinkCommand, ShareLinkDto>
+    ITokenService tokens, IConfiguration config, IAuditLogger audit, TimeProvider clock, ISettingsService settings, LinkModel model, IUserNotifier notify,
+    SharingPolicy policy) : IRequestHandler<SaveShareLinkCommand, ShareLinkDto>
 {
     /// <summary>Levels a link may give.</summary>
     private static readonly Guid[] LinkLevels = [SystemLevels.Viewer, SystemLevels.Commenter, SystemLevels.Editor, SystemLevels.ViewOnly];
@@ -141,12 +142,20 @@ public sealed class SaveShareLinkHandler(IAppDbContext db, ICurrentUser me, IRes
         if (people.Count > 0 && await db.Users.CountAsync(u => people.Contains(u.Id) && u.IsActive, ct) != people.Count)
             throw new AppException("Có người được chọn không tồn tại hoặc đã bị khóa.");
 
+        // Spec 5.4: an "anyone" link only where every tier allows it, within its longest life; a link reaching people outside the Space only
+        // where members may share outside it (and it gives the item its own permissions).
+        var expiresAt = scope == ShareLinkScope.Anyone ? await policy.EnsureAnyoneLinkAsync(link.ResourceId, cmd.ExpiresAt, ct) : cmd.ExpiresAt;
+        if (scope is ShareLinkScope.Organization or ShareLinkScope.Specific or ShareLinkScope.Anyone)
+            await policy.EnsureCanShareAsync(uid, link.ResourceId,
+                scope == ShareLinkScope.Specific ? people.Select(p => (PrincipalKind.User, p)).ToList() : [(PrincipalKind.Everyone, StableGuid.Everyone)],
+                breaksInheritance: scope != ShareLinkScope.Anyone, ct);
+
         link.Scope = scope;
         link.LevelId = levelId;
         link.AllowDownload = allowDownload;
         link.AllowEdit = allowEdit;
         link.AllowView = true;
-        link.ExpiresAt = cmd.ExpiresAt;
+        link.ExpiresAt = expiresAt;
         link.MaxAccessCount = cmd.MaxAccessCount;
         link.RequireLogin = scope != ShareLinkScope.Anyone;
         await db.SaveChangesAsync(ct);

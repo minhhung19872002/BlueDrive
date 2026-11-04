@@ -29,7 +29,7 @@ public sealed class CreateShareValidator : AbstractValidator<CreateShareCommand>
 }
 
 public sealed class CreateShareHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IUserNotifier notify,
-    IAuditLogger audit, TimeProvider clock, Access.LegacyAclSync sync) : IRequestHandler<CreateShareCommand, int>
+    IAuditLogger audit, TimeProvider clock, Access.LegacyAclSync sync, Access.SharingPolicy policy) : IRequestHandler<CreateShareCommand, int>
 {
     public async Task<int> Handle(CreateShareCommand cmd, CancellationToken ct)
     {
@@ -43,6 +43,9 @@ public sealed class CreateShareHandler(IAppDbContext db, ICurrentUser me, IResou
             ? await db.Files.Where(f => f.Id == cmd.ResourceId).Select(f => f.Name).FirstAsync(ct)
             : await db.Folders.Where(f => f.Id == cmd.ResourceId).Select(f => f.Name).FirstAsync(ct);
         var sharer = await db.Users.Where(u => u.Id == uid).Select(u => u.FullName).FirstAsync(ct);
+        var targets = cmd.Targets.Distinct().Where(t => !(t.Type == PrincipalType.User && t.Id == uid)).Select(t => Access.LegacyAclSync.Map(t.Type, t.Id))
+            .Where(p => p is not null).Select(p => p!.Value).ToList();
+        if (await db.Securables.AnyAsync(s => s.Id == cmd.ResourceId, ct)) await policy.EnsureCanShareAsync(uid, cmd.ResourceId, targets, breaksInheritance: true, ct);
         var now = clock.GetUtcNow().UtcDateTime;
         var count = 0;
         foreach (var t in cmd.Targets.Distinct())

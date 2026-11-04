@@ -328,6 +328,33 @@ public class ItemAccessController : ApiControllerBase
         await Mediator.Send(cmd with { ItemId = id });
         return NoContent();
     }
+
+    /// <summary>Chính sách chia sẻ hiệu lực của mục (tầng chặt nhất thắng).</summary>
+    [HttpGet("sharing-policy")]
+    public Task<Application.Features.Access.ItemSharingPolicyDto> SharingPolicy(Guid id) =>
+        Mediator.Send(new Application.Features.Access.GetItemSharingPolicyQuery(id));
+
+    [HttpPut("external-sharing")]
+    public async Task<IActionResult> ExternalSharing(Guid id, Application.Features.Access.SetItemExternalSharingCommand cmd)
+    {
+        await Mediator.Send(cmd with { ItemId = id });
+        return NoContent();
+    }
+}
+
+/// <summary>Chính sách chia sẻ của Space.</summary>
+[Route("api/v1/workspaces/{id:guid}/sharing-policy")]
+public class SpaceSharingPolicyController : ApiControllerBase
+{
+    [HttpGet]
+    public Task<Application.Features.Access.SpaceSharingPolicyDto> Get(Guid id) => Mediator.Send(new Application.Features.Access.GetSpaceSharingPolicyQuery(id));
+
+    [HttpPut]
+    public async Task<IActionResult> Set(Guid id, Application.Features.Access.SetSpaceSharingPolicyCommand cmd)
+    {
+        await Mediator.Send(cmd with { WorkspaceId = id });
+        return NoContent();
+    }
 }
 
 /// <summary>Yêu cầu quyền truy cập.</summary>

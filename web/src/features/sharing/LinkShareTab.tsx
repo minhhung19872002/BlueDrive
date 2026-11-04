@@ -22,7 +22,7 @@ import { CopyOutlined, LinkOutlined, QrcodeOutlined, SaveOutlined, StopOutlined 
 import { useQuery } from '@tanstack/react-query'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useTranslation } from 'react-i18next'
-import { listPermissionLevels } from '@/api/permissions'
+import { getItemSharingPolicy, listPermissionLevels } from '@/api/permissions'
 import { qk } from '@/api/queryKeys'
 import { absoluteShareUrl, createShareLink, listShareLinks, revokeShareLink, updateShareLink } from '@/api/sharing'
 import { applyFieldErrors } from '@/api/formErrors'
@@ -73,6 +73,9 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
   const linkLevels = (levels.data ?? []).filter((l) => LINK_LEVELS.includes(l.code))
   const editorId = linkLevels.find((l) => l.code === 'editor')?.id
   const viewerId = linkLevels.find((l) => l.code === 'viewer')?.id
+  const policy = useQuery({ queryKey: ['item-sharing-policy', resourceId], queryFn: () => getItemSharingPolicy(resourceId) })
+  const anyoneAllowed = policy.data?.anyoneLinksAllowed ?? true
+  const maxDays = audience === 'anyone' ? (policy.data?.anyoneLinkMaxDays ?? 0) : 0
   const autoCreated = useRef(false)
   const links = useQuery({
     queryKey: qk.shareLinks(resourceType, resourceId),
@@ -232,9 +235,21 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
           <Form<LinkForm> form={form} layout="vertical" onFinish={(v) => update.mutate({ id: current.id, body: toRequest(v) })}>
             <Row gutter={16}>
               <Col xs={24} sm={audience === 'existing' ? 24 : 14}>
-                <Form.Item name="audience" label={t('sharing.generalAccess')} extra={t(`sharing.audienceHint.${audience}`)}>
+                <Form.Item
+                  name="audience"
+                  label={t('sharing.generalAccess')}
+                  extra={
+                    !anyoneAllowed && policy.data
+                      ? t('sharing.anyoneBlocked', { source: policy.data.externalSource, level: t(`externalSharing.${policy.data.external}`) })
+                      : t(`sharing.audienceHint.${audience}`)
+                  }
+                >
                   <Select
-                    options={(['existing', 'organization', 'specific', 'anyone'] as const).map((s) => ({ value: s, label: t(`sharing.audience.${s}`) }))}
+                    options={(['existing', 'organization', 'specific', 'anyone'] as const).map((s) => ({
+                      value: s,
+                      label: t(`sharing.audience.${s}`),
+                      disabled: s === 'anyone' && !anyoneAllowed && current.scope !== 'anyone',
+                    }))}
                   />
                 </Form.Item>
               </Col>
@@ -273,12 +288,16 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
               {audience !== 'existing' && (
                 <>
                   <Col xs={24} sm={8}>
-                    <Form.Item name="expiresAt" label={t('sharing.expiresAt')}>
+                    <Form.Item
+                      name="expiresAt"
+                      label={t('sharing.expiresAt')}
+                      extra={maxDays > 0 ? t('sharing.anyoneMaxDays', { days: maxDays }) : undefined}
+                    >
                       <DatePicker
                         style={{ width: '100%' }}
                         format="DD/MM/YYYY"
-                        placeholder={t('sharing.noExpiry')}
-                        disabledDate={(d) => d.isBefore(dayjs(), 'day')}
+                        placeholder={maxDays > 0 ? t('sharing.expiresDefault', { days: maxDays }) : t('sharing.noExpiry')}
+                        disabledDate={(d) => d.isBefore(dayjs(), 'day') || (maxDays > 0 && d.isAfter(dayjs().add(maxDays, 'day'), 'day'))}
                       />
                     </Form.Item>
                   </Col>

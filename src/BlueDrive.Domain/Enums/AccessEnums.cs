@@ -16,3 +16,9 @@ public enum AccessRequestStatus { Pending, Approved, Rejected, Expired }
 
 /// <summary>Who a sharing link works for (spec 5.3): people who already have access, anyone signed in, listed people, anyone.</summary>
 public enum ShareLinkScope { Existing, Organization, Specific, Anyone }
+
+/// <summary>How far sharing may go outside the organization (spec 5.4), from strictest to widest; the strictest tier wins.</summary>
+public enum ExternalSharing { Off, ExistingGuests, NewAndExistingGuests, Anyone }
+
+/// <summary>Who decides access requests in a Space: whoever manages the item's permissions, or only the Space's owners.</summary>
+public enum AccessRequestDeciders { ItemManagers, SpaceOwners }

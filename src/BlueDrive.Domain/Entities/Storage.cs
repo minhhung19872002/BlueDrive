@@ -37,6 +37,13 @@ public class Workspace : AuditableEntity
     public bool IsLocked { get; set; }
     public WorkspaceType Type { get; set; }
     public List<WorkspaceMember> Members { get; set; } = [];
+    /// <summary>Sharing outside the organization for this Space / drive (null = as the system allows; can only be stricter).</summary>
+    public ExternalSharing? ExternalSharing { get; set; }
+    /// <summary>Members may share with people who are not in the Space.</summary>
+    public bool MembersShareOutside { get; set; } = true;
+    /// <summary>Single files and folders may be shared (given their own permissions).</summary>
+    public bool AllowItemSharing { get; set; } = true;
+    public AccessRequestDeciders AccessRequestDeciders { get; set; }
 }
 
 public class WorkspaceMember
@@ -60,6 +67,8 @@ public class Folder : AuditableEntity, ISoftDeletable
     public string Path { get; set; } = "/";
     public bool RequiresApproval { get; set; }
     public bool BreakInheritance { get; set; }
+    /// <summary>Sharing outside the organization for this item and what is below it (null = as above; can only be stricter).</summary>
+    public ExternalSharing? ExternalSharing { get; set; }
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }
     public Guid? DeletedBy { get; set; }
@@ -100,6 +109,8 @@ public class StoredFile : AuditableEntity, ISoftDeletable
     public Guid? UploaderOrganizationId { get; set; }
     /// <summary>Unique permissions (like SharePoint "Stop inheriting permissions"): folder grants no longer reach this file.</summary>
     public bool BreakInheritance { get; set; }
+    /// <summary>Sharing outside the organization for this item and what is below it (null = as above; can only be stricter).</summary>
+    public ExternalSharing? ExternalSharing { get; set; }
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }
     public Guid? DeletedBy { get; set; }

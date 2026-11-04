@@ -36,14 +36,32 @@ public static class AccessRequestRules
 {
     public static readonly TimeSpan Lifetime = TimeSpan.FromDays(30);
 
-    /// <summary>Who decides: the owner (Drive của tôi) and whoever may manage the item's permissions (at most 50 people).</summary>
+    /// <summary>
+    /// Who decides: the owner (Drive của tôi) and whoever may manage the item's permissions — or, when the Space says so, only its owners
+    /// (at most 50 people).
+    /// </summary>
     public static async Task<List<Guid>> DecidersAsync(IAppDbContext db, Securable node, CancellationToken ct)
     {
-        var managing = (await db.PermissionLevels.AsNoTracking().ToListAsync(ct)).Where(l => l.Permissions.Has(AccessRight.ManagePermissions)).Select(l => l.Id).ToList();
-        var principals = db.AclEntries.Where(e => e.ScopeId == node.AclScopeId && managing.Contains(e.PermissionLevelId)).Select(e => e.PrincipalId);
+        var right = await RightAsync(db, node, ct);
+        var managing = (await db.PermissionLevels.AsNoTracking().ToListAsync(ct)).Where(l => l.Permissions.Has(right)).Select(l => l.Id).ToList();
+        var scope = right == AccessRight.ManageSpace ? node.SpaceId!.Value : node.AclScopeId;
+        var principals = db.AclEntries.Where(e => e.ScopeId == scope && managing.Contains(e.PermissionLevelId)).Select(e => e.PrincipalId);
         var users = await db.PrincipalMemberships.Where(m => principals.Contains(m.PrincipalId)).Select(m => m.UserId).Distinct().Take(50).ToListAsync(ct);
         if (node.OwnerUserId is { } owner && !users.Contains(owner)) users.Insert(0, owner);
         return users;
+    }
+
+    /// <summary>The right that decides requests on the item: managing its permissions, or managing the Space when only its owners decide.</summary>
+    public static async Task<AccessRight> RightAsync(IAppDbContext db, Securable node, CancellationToken ct) =>
+        node.SpaceId is { } space && await db.Workspaces.AnyAsync(w => w.Id == space && w.AccessRequestDeciders == AccessRequestDeciders.SpaceOwners, ct)
+            ? AccessRight.ManageSpace : AccessRight.ManagePermissions;
+
+    public static async Task<bool> CanDecideAsync(IAppDbContext db, IItemPermissionService engine, Guid uid, Guid itemId, CancellationToken ct)
+    {
+        var node = await db.Securables.AsNoTracking().FirstOrDefaultAsync(s => s.Id == itemId, ct);
+        if (node is null) return false;
+        var right = await RightAsync(db, node, ct);
+        return await engine.HasAsync(uid, right == AccessRight.ManageSpace ? node.SpaceId!.Value : itemId, right, ct);
     }
 }
 
@@ -94,7 +112,7 @@ public sealed class AccessRequestHandlers(IAppDbContext db, ICurrentUser me, IIt
         if (q.Mine) query = db.AccessRequests.AsNoTracking().Where(r => r.RequesterId == uid);
         else if (q.ItemId is { } item)
         {
-            await engine.DemandAsync(uid, item, AccessRight.ManagePermissions, ct);
+            if (!await AccessRequestRules.CanDecideAsync(db, engine, uid, item, ct)) throw new NotFoundException("Không tìm thấy tư liệu.");
             query = query.Where(r => r.SecurableId == item);
         }
         var rows = await query.OrderByDescending(r => r.CreatedAt).Take(500).ToListAsync(ct);
@@ -103,7 +121,7 @@ public sealed class AccessRequestHandlers(IAppDbContext db, ICurrentUser me, IIt
             // Every item I manage: checked one by one (the list is short and recent).
             var mine = new List<AccessRequest>();
             foreach (var r in rows)
-                if (await engine.HasAsync(uid, r.SecurableId, AccessRight.ManagePermissions, ct)) mine.Add(r);
+                if (await AccessRequestRules.CanDecideAsync(db, engine, uid, r.SecurableId, ct)) mine.Add(r);
             rows = mine;
         }
         var ids = rows.Select(r => r.SecurableId).Distinct().ToList();
@@ -122,7 +140,8 @@ public sealed class AccessRequestHandlers(IAppDbContext db, ICurrentUser me, IIt
     {
         var uid = me.RequireUserId();
         var request = await db.AccessRequests.FirstOrDefaultAsync(r => r.Id == cmd.Id, ct) ?? throw new NotFoundException("Không tìm thấy yêu cầu.");
-        await engine.DemandAsync(uid, request.SecurableId, AccessRight.ManagePermissions, ct);
+        if (!await AccessRequestRules.CanDecideAsync(db, engine, uid, request.SecurableId, ct))
+            throw new ForbiddenException("Bạn không phải người duyệt yêu cầu truy cập của mục này.");
         var now = clock.GetUtcNow().UtcDateTime;
         if (request.Status != AccessRequestStatus.Pending || request.ExpiresAt <= now) throw new ConflictException("Yêu cầu đã được xử lý hoặc đã hết hạn.");
         var node = await NodeAsync(request.SecurableId, ct);
