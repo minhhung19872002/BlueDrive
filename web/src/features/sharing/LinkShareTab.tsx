@@ -39,10 +39,13 @@ interface LinkShareTabProps {
   resourceId: string
   /** The current user may download the item (otherwise links cannot allow downloads). */
   canDownload: boolean
+  /** The current user may edit the item (otherwise links cannot allow editing). */
+  canEdit: boolean
 }
 
 interface LinkForm {
   allowDownload: boolean
+  allowEdit: boolean
   requireLogin: boolean
   password?: string
   clearPassword?: boolean
@@ -55,7 +58,7 @@ interface LinkForm {
  * (the newest active link, or a new one created on the spot). The settings below edit that link:
  * download, login requirement, password, expiry, access limit. QR, revoke, history of earlier links.
  */
-export default function LinkShareTab({ resourceType, resourceId, canDownload }: LinkShareTabProps) {
+export default function LinkShareTab({ resourceType, resourceId, canDownload, canEdit }: LinkShareTabProps) {
   const { t } = useTranslation()
   const can = useCan()
   const canShare = can('doc.share')
@@ -74,6 +77,7 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload }: 
     resourceType,
     resourceId,
     allowDownload: v.allowDownload,
+    allowEdit: !!v.allowEdit,
     requireLogin: v.requireLogin,
     password: v.password?.trim() || null,
     clearPassword: !!v.clearPassword,
@@ -103,6 +107,7 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload }: 
       resourceType,
       resourceId,
       allowDownload: canDownload,
+      allowEdit: false,
       requireLogin: true,
       password: null,
       clearPassword: false,
@@ -116,6 +121,7 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload }: 
     if (!current) return
     form.setFieldsValue({
       allowDownload: current.allowDownload,
+      allowEdit: current.allowEdit,
       requireLogin: current.requireLogin,
       password: undefined,
       clearPassword: false,
@@ -167,7 +173,7 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload }: 
           type="primary"
           icon={<LinkOutlined />}
           loading={create.isPending}
-          onClick={() => create.mutate(toRequest({ allowDownload: canDownload, requireLogin: true }))}
+          onClick={() => create.mutate(toRequest({ allowDownload: canDownload, allowEdit: false, requireLogin: true }))}
         >
           {t('sharing.newLink')}
         </Button>
@@ -195,6 +201,16 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload }: 
               <Col xs={24} sm={12}>
                 <Form.Item name="requireLogin" label={t('sharing.requireLogin')} valuePropName="checked">
                   <Switch />
+                </Form.Item>
+              </Col>
+              <Col xs={24}>
+                <Form.Item
+                  name="allowEdit"
+                  label={t('sharing.allowEdit')}
+                  valuePropName="checked"
+                  extra={canEdit ? t('sharing.allowEditHint') : t('sharing.allowEditDenied')}
+                >
+                  <Switch disabled={!canEdit && !current.allowEdit} />
                 </Form.Item>
               </Col>
               <Col xs={24} sm={12}>
@@ -289,6 +305,7 @@ function LinkTags({ link }: { link: ShareLink }) {
     <Space wrap size={[4, 4]} style={{ marginTop: 6 }}>
       <Tag color={LINK_STATUS_COLORS[link.status]}>{t(`sharing.linkStatus.${link.status}`)}</Tag>
       <Tag>{link.allowDownload ? t('sharing.tagDownload') : t('sharing.tagViewOnly')}</Tag>
+      {link.allowEdit && <Tag color="blue">{t('sharing.tagEdit')}</Tag>}
       {link.hasPassword && <Tag>{t('sharing.tagPassword')}</Tag>}
       {link.requireLogin && <Tag>{t('sharing.tagLogin')}</Tag>}
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>

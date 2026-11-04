@@ -128,6 +128,8 @@ export interface ShareLink {
   accessCount: number
   isRevoked: boolean
   requireLogin: boolean
+  /** Anyone with the link may edit Office documents (online editor, no sign-in). */
+  allowEdit: boolean
   createdAt: string
   status: ShareLinkStatus
 }
@@ -141,6 +143,7 @@ export interface SaveShareLinkRequest {
   expiresAt: string | null
   maxAccessCount: number | null
   requireLogin: boolean
+  allowEdit: boolean
 }
 
 export interface PublicShareInfo {
@@ -156,6 +159,7 @@ export interface PublicShareInfo {
   expiresAt: string | null
   sharedByName: string
   organizationName: string | null
+  allowEdit: boolean
 }
 
 export interface PublicAccessGrant {

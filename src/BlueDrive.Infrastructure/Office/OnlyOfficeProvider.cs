@@ -80,7 +80,7 @@ public sealed class OnlyOfficeProvider(IOptions<OnlyOfficeOptions> options, IHtt
                 ["mode"] = edit ? "edit" : "view",
                 ["lang"] = "vi",
                 ["region"] = "vi-VN",
-                ["user"] = new JsonObject { ["id"] = r.UserId?.ToString() ?? "anonymous", ["name"] = r.UserName },
+                ["user"] = new JsonObject { ["id"] = r.GuestId ?? r.UserId?.ToString() ?? "anonymous", ["name"] = r.UserName },
                 ["customization"] = new JsonObject { ["forcesave"] = true, ["autosave"] = true, ["compactHeader"] = r.Embedded, ["hideRightMenu"] = false, ["uiTheme"] = "theme-light" },
             },
         };

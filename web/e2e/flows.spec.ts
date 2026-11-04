@@ -147,6 +147,44 @@ test('chia sẻ qua liên kết công khai có mật khẩu', async ({ page, bro
   await anon.close()
 })
 
+test('liên kết cho phép chỉnh sửa: người không đăng nhập nhập tên rồi cùng soạn', async ({ page, browser }) => {
+  await openMyDrive(page)
+  const row = page.getByRole('row', { name: new RegExp(`${docName}\\.docx`) })
+  await openContextMenu(page, row.getByText(`${docName}.docx`))
+  await page.getByRole('menuitem', { name: /Chia sẻ$/ }).click()
+  await page.getByRole('tab', { name: /liên kết/i }).click()
+  const dialog = page.getByRole('dialog')
+  const linkBox = dialog.getByRole('textbox', { name: 'Liên kết của tài liệu' })
+  await expect(linkBox).toHaveValue(/\/s\//, { timeout: 15_000 })
+  const editSwitch = dialog.getByRole('switch', { name: /Cho phép chỉnh sửa/ })
+  if ((await editSwitch.getAttribute('aria-checked')) !== 'true') await editSwitch.click()
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes('/api/v1/share-links/') && r.request().method() === 'PUT' && r.ok()),
+    dialog.getByRole('button', { name: /Lưu cài đặt/ }).click(),
+  ])
+  await expect(dialog.getByText('Cho phép chỉnh sửa', { exact: true })).toBeVisible()
+  const path = new URL((await linkBox.inputValue()).trim(), 'http://x').pathname
+
+  const anon = await browser.newContext({ storageState: { cookies: [], origins: [] } })
+  const pub = await anon.newPage()
+  await pub.goto(path)
+  const password = pub.getByPlaceholder(/mật khẩu/i)
+  if (await password.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    await password.fill('1234')
+    await pub.getByRole('button', { name: /^Mở$/ }).click()
+  }
+  await pub.getByLabel('Họ và tên').fill('Khách kiểm thử E2E')
+  const [config] = await Promise.all([
+    pub.waitForResponse((r) => r.url().includes('/office/public-config/') && r.ok()),
+    pub.getByRole('button', { name: /Bắt đầu chỉnh sửa/ }).click(),
+  ])
+  const body = await config.json()
+  expect(body.mode).toBe('edit')
+  expect(body.config.editorConfig.user.name).toBe('Khách kiểm thử E2E (khách)')
+  await expect(pub.locator('iframe[name="frameEditor"], iframe[src*="/office/"]').first()).toBeAttached({ timeout: 45_000 })
+  await anon.close()
+})
+
 test('quản trị: thêm đơn vị và tìm không dấu', async ({ page }) => {
   await page.goto('/admin/organizations')
   await page.getByRole('tab', { name: /bảng/i }).click()

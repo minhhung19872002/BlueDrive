@@ -41,7 +41,7 @@ function FileView({ token, access, info }: { token: string; access: string; info
   if (needsOfficeViewer(info.extension))
     return (
       <div className="bd-public-stage">
-        <PublicOfficeViewer token={token} access={access} extra={download} />
+        <PublicOfficeViewer token={token} access={access} allowEdit={info.allowEdit} name={info.name} extra={download} />
       </div>
     )
   return (
@@ -141,7 +141,7 @@ export default function PublicSharePage() {
   else if (data && access)
     body =
       data.resourceType === 'folder' ? (
-        <PublicFolderView token={token} access={access} allowDownload={data.allowDownload} rootName={data.name} />
+        <PublicFolderView token={token} access={access} allowDownload={data.allowDownload} allowEdit={data.allowEdit} rootName={data.name} />
       ) : (
         <FileView token={token} access={access} info={data} />
       )

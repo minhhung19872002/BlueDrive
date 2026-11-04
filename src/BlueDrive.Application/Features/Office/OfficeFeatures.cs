@@ -3,6 +3,7 @@ using BlueDrive.Application.Common;
 using BlueDrive.Application.Features.Sharing;
 using BlueDrive.Application.Features.Storage;
 using BlueDrive.Application.Security;
+using BlueDrive.Application.Settings;
 using BlueDrive.Domain.Entities;
 using BlueDrive.Domain.Enums;
 using FluentValidation;
@@ -38,10 +39,15 @@ public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IR
     }
 }
 
-/// <summary>View-only editor config for a public link (#49: Office files viewable on /s/{token}).</summary>
-public sealed record GetPublicOfficeConfigQuery(string Token, string Access, Guid? FileId) : IRequest<OfficeEditorConfig>;
+/// <summary>
+/// Editor config for a public link (#49: Office files on /s/{token}). View only, unless the link allows editing ("Cho phép chỉnh sửa"):
+/// then anyone with the link edits in the same co-editing session as signed-in users, under the name they typed, as long as the person
+/// who made the link may still edit the document (and the administrator has not turned link editing off).
+/// </summary>
+public sealed record GetPublicOfficeConfigQuery(string Token, string Access, Guid? FileId, string? Guest = null) : IRequest<OfficeEditorConfig>;
 
-public sealed class GetPublicOfficeConfigHandler(IAppDbContext db, IPublicLinkTickets linkTickets, IOfficeEditorProvider office, TimeProvider clock)
+public sealed class GetPublicOfficeConfigHandler(IAppDbContext db, IPublicLinkTickets linkTickets, IOfficeEditorProvider office, IResourceAuthorizationService auth,
+    ISettingsService settings, ICurrentUser me, IAuditLogger audit, TimeProvider clock)
     : IRequestHandler<GetPublicOfficeConfigQuery, OfficeEditorConfig>
 {
     public async Task<OfficeEditorConfig> Handle(GetPublicOfficeConfigQuery q, CancellationToken ct)
@@ -51,8 +57,35 @@ public sealed class GetPublicOfficeConfigHandler(IAppDbContext db, IPublicLinkTi
         var f = await PublicLinks.FileInScopeAsync(db, link, q.FileId, ct);
         if (!office.CanView(f.Extension)) throw new AppException("Định dạng không hỗ trợ xem trực tuyến.");
         var url = $"{office.CallbackBaseUrl}/api/v1/public/s/{q.Token}/content?access={Uri.EscapeDataString(q.Access)}&fileId={f.Id}";
-        return office.BuildConfig(new OfficeEditorRequest(f.Id, f.CurrentVersionId!.Value, f.Name, f.Extension, url, null, false, link.AllowDownload, null, "Khách", true));
+        var edit = link.AllowEdit && office.CanEdit(f.Extension) && link.CreatedBy is { } owner
+                   && await settings.GetAsync(SettingKeys.ShareLinkAllowEdit, true, ct)
+                   && (await auth.GetAccessAsync(owner, ResourceType.File, f.Id, ct)).CanEdit;
+        if (!edit)
+            return office.BuildConfig(new OfficeEditorRequest(f.Id, f.CurrentVersionId!.Value, f.Name, f.Extension, url, null, false, link.AllowDownload, null, "Khách", true));
+        var name = GuestName(q.Guest);
+        var guestId = $"{LinkEditor.Prefix}{link.Id:N}:{Guid.NewGuid():N}";
+        var config = office.BuildConfig(new OfficeEditorRequest(f.Id, f.CurrentVersionId!.Value, f.Name, f.Extension, url,
+            $"{office.CallbackBaseUrl}/api/office/callback/{f.Id}", true, link.AllowDownload, null, name, true, GuestId: guestId));
+        await audit.LogAsync(new AuditEntry(AuditAction.View, ResourceType.File, f.Id, f.Name, f.WorkspaceId,
+            new { office = config.Mode, shareLink = link.Id, guest = name, signedIn = me.UserId }, me.UserId, null), ct);
+        return config;
     }
+
+    private static string GuestName(string? typed)
+    {
+        var name = string.Join(' ', (typed ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).Trim();
+        if (name.Length > 50) name = name[..50];
+        return name.Length == 0 ? "Khách" : $"{name} (khách)";
+    }
+}
+
+/// <summary>Editors who came through a share link: ONLYOFFICE user id "link:&lt;link id&gt;:&lt;session&gt;" (they have no account).</summary>
+public static class LinkEditor
+{
+    public const string Prefix = "link:";
+
+    public static Guid? LinkId(string? editor) =>
+        editor is not null && editor.StartsWith(Prefix, StringComparison.Ordinal) && Guid.TryParseExact(editor.AsSpan(Prefix.Length, 32), "N", out var id) ? id : null;
 }
 
 /// <summary>#21/#33/#41: "Mới" → blank Word/Excel/PowerPoint/text file created from a template, then opened in the editor.</summary>
@@ -105,7 +138,12 @@ public sealed class OfficeCallbackHandler(IAppDbContext db, IOfficeEditorProvide
         if (cb.Status is not (2 or 6) || string.IsNullOrEmpty(cb.DownloadUrl)) return 0;
         var file = await db.Files.FirstOrDefaultAsync(f => f.Id == cmd.FileId && !f.IsDeleted, ct);
         if (file is null) return 1;
-        Guid? userId = Guid.TryParse(cb.Users.FirstOrDefault(), out var u) ? u : file.UpdatedBy ?? file.CreatedBy;
+        var last = cb.Users.FirstOrDefault();
+        // Saved by someone who came through an editing link: the version is the link creator's (they let them edit), the audit says so.
+        var viaLink = LinkEditor.LinkId(last);
+        Guid? userId = Guid.TryParse(last, out var u) ? u
+            : viaLink is { } lid ? await db.ShareLinks.Where(l => l.Id == lid).Select(l => l.CreatedBy).FirstOrDefaultAsync(ct) ?? file.UpdatedBy ?? file.CreatedBy
+            : file.UpdatedBy ?? file.CreatedBy;
         var path = temp.NewTempPath();
         try
         {
@@ -138,7 +176,7 @@ public sealed class OfficeCallbackHandler(IAppDbContext db, IOfficeEditorProvide
             jobs.EnqueueFileProcessing(file.Id, version.Id);
             var username = userId is { } id ? await db.Users.Where(x => x.Id == id).Select(x => x.Username).FirstOrDefaultAsync(ct) : null;
             await audit.LogAsync(new AuditEntry(AuditAction.Edit, ResourceType.File, file.Id, file.Name, file.WorkspaceId,
-                new { online = true, version = next, editors = cb.Users }, userId, username), ct);
+                new { online = true, version = next, editors = cb.Users, shareLink = viaLink }, userId, username), ct);
             return 0;
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException)

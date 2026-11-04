@@ -9,10 +9,11 @@ export async function getOfficeConfig(fileId: string, view = false): Promise<Off
   return data
 }
 
-/** Read-only editor config for a public share link (anonymous). */
-export async function getPublicOfficeConfig(token: string, access: string, fileId?: string | null): Promise<OfficeEditorConfig> {
+/** Editor config for a public share link (anonymous): read-only, or editing under `guest` when the link allows it. */
+export async function getPublicOfficeConfig(token: string, access: string, fileId?: string | null, guest?: string | null): Promise<OfficeEditorConfig> {
   const params: Record<string, string> = { access }
   if (fileId) params.fileId = fileId
+  if (guest) params.guest = guest
   const { data } = await publicApi.get<OfficeEditorConfig>(`/office/public-config/${encodeURIComponent(token)}`, { params })
   return data
 }

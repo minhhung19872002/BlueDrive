@@ -12,6 +12,8 @@ export interface ShareTarget {
   name: string
   /** Whether the current user may download (links allowing download need it). Unknown = true (server validates). */
   canDownload?: boolean
+  /** Whether the current user may edit (links allowing editing need it). Unknown = true (server validates). */
+  canEdit?: boolean
   /** Workspace of the item (the "Quản lý quyền truy cập" dialog opened from the list needs it for folders). */
   workspaceId?: string
 }
@@ -50,7 +52,7 @@ export default function ShareDialog({ target, onClose }: { target: ShareTarget; 
                 <LinkOutlined /> {t('sharing.tabLink')}
               </span>
             ),
-            children: <LinkShareTab resourceType={target.type} resourceId={target.id} canDownload={target.canDownload ?? true} />,
+            children: <LinkShareTab resourceType={target.type} resourceId={target.id} canDownload={target.canDownload ?? true} canEdit={target.canEdit ?? true} />,
           },
         ]}
       />

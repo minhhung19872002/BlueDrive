@@ -230,7 +230,7 @@ export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate
         </Drawer>
       )}
       {sharing && f && (
-        <ShareDialog target={{ type: 'file', id: f.id, name: f.name, canDownload: f.access.canDownload, workspaceId: f.workspaceId }} onClose={() => setSharing(false)} />
+        <ShareDialog target={{ type: 'file', id: f.id, name: f.name, canDownload: f.access.canDownload, canEdit: f.access.canEdit, workspaceId: f.workspaceId }} onClose={() => setSharing(false)} />
       )}
       {accessTarget && <AccessDialog target={accessTarget} onClose={() => setAccessTarget(null)} />}
     </div>

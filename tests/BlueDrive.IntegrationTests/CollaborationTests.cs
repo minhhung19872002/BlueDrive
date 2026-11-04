@@ -101,6 +101,62 @@ public class CollaborationTests(ApiFactory factory)
         (await (await viewer.GetAsync($"/api/v1/office/config/{fileId}")).ReadJsonAsync()).GetProperty("mode").GetString().Should().Be("edit", "the edit share decides, whatever the role");
     }
 
+    [Fact]
+    public async Task Anyone_with_an_editing_link_co_edits_without_signing_in_and_the_version_is_the_link_owners()
+    {
+        var (owner, ownerId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var fileId = (await (await owner.PostAsJsonAsync("/api/v1/office/new", new { workspaceId = ws, kind = "docx", name = "Biên bản họp" })).ReadJsonAsync())
+            .GetProperty("fileId").GetGuid();
+        var ownerKey = (await (await owner.GetAsync($"/api/v1/office/config/{fileId}")).ReadJsonAsync()).GetProperty("config").GetProperty("document").GetProperty("key").GetString();
+        var link = await (await owner.PostAsJsonAsync("/api/v1/share-links", new { resourceType = "file", resourceId = fileId, allowDownload = true, allowEdit = true })).ReadJsonAsync();
+        link.GetProperty("allowEdit").GetBoolean().Should().BeTrue();
+        var token = link.GetProperty("token").GetString()!;
+
+        var anon = factory.CreateClient();
+        (await (await anon.GetAsync($"/api/v1/public/s/{token}")).ReadJsonAsync()).GetProperty("allowEdit").GetBoolean().Should().BeTrue();
+        var access = Uri.EscapeDataString((await (await anon.PostAsJsonAsync($"/api/v1/public/s/{token}/open", new { })).ReadJsonAsync()).GetProperty("accessToken").GetString()!);
+        async Task<System.Text.Json.JsonElement> PublicConfig() =>
+            await (await anon.GetAsync($"/api/v1/office/public-config/{token}?access={access}&guest={Uri.EscapeDataString("  Nguyễn   Lan ")}")).ReadJsonAsync();
+        var cfg = await PublicConfig();
+        cfg.GetProperty("mode").GetString().Should().Be("edit");
+        var editor = cfg.GetProperty("config").GetProperty("editorConfig");
+        editor.GetProperty("user").GetProperty("name").GetString().Should().Be("Nguyễn Lan (khách)");
+        var guestId = editor.GetProperty("user").GetProperty("id").GetString()!;
+        guestId.Should().StartWith($"link:{link.GetProperty("id").GetGuid():N}:");
+        editor.GetProperty("callbackUrl").GetString().Should().Be($"http://localhost/api/office/callback/{fileId}");
+        cfg.GetProperty("config").GetProperty("document").GetProperty("key").GetString().Should().Be(ownerKey, "same co-editing session as signed-in users");
+
+        // The guest saved last: a new version in the owner's name, the audit names the link.
+        var other = await StorageTests.UploadAsync(owner, ws, null, "ban-khach-sua.docx", EditedPackage());
+        var editedUrl = (await (await owner.GetAsync($"/api/v1/files/{other.GetProperty("fileId").GetGuid()}/download-url")).ReadJsonAsync()).GetProperty("url").GetString()!;
+        var saved = await (await anon.PostAsJsonAsync($"/api/office/callback/{fileId}",
+            new { token = SignForDocumentServer(new { key = ownerKey, status = 2, url = $"http://public.test/office{editedUrl}", users = new[] { guestId } }) })).ReadJsonAsync();
+        saved.GetProperty("error").GetInt32().Should().Be(0);
+        var versions = await (await owner.GetAsync($"/api/v1/files/{fileId}/versions")).ReadJsonAsync();
+        versions.GetArrayLength().Should().Be(2);
+        versions[0].GetProperty("createdBy").GetGuid().Should().Be(ownerId);
+
+        // Only someone who may edit can make an editing link.
+        var (friend, friendId, _) = await factory.CreateUserClientAsync("bien_tap");
+        await (await owner.PostAsJsonAsync("/api/v1/shares", new { resourceType = "file", resourceId = fileId, targets = new[] { new { type = "user", id = friendId } }, accessLevel = 1 })).ReadJsonAsync();
+        (await friend.PostAsJsonAsync("/api/v1/share-links", new { resourceType = "file", resourceId = fileId, allowEdit = true })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        // Turned off by the administrator: links open read-only, new editing links are refused.
+        var admin = await factory.AdminClientAsync();
+        await (await admin.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, object> { ["share.link_allow_edit"] = false })).ReadJsonAsync();
+        try
+        {
+            (await PublicConfig()).GetProperty("mode").GetString().Should().Be("view");
+            (await owner.PostAsJsonAsync("/api/v1/share-links", new { resourceType = "file", resourceId = fileId, allowEdit = true })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        }
+        finally { await (await admin.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, object> { ["share.link_allow_edit"] = true })).ReadJsonAsync(); }
+
+        // A link without editing stays read-only.
+        await (await owner.PutAsJsonAsync($"/api/v1/share-links/{link.GetProperty("id").GetGuid()}", new { resourceType = "file", resourceId = fileId, allowDownload = true, allowEdit = false })).ReadJsonAsync();
+        (await PublicConfig()).GetProperty("mode").GetString().Should().Be("view");
+    }
+
     /// <summary>Any different OOXML (zip) package stands in for the edited document.</summary>
     private static byte[] EditedPackage()
     {

@@ -796,6 +796,9 @@
     "allowDownload": "Cho phép tải xuống",
     "allowDownloadDenied": "Bạn không có quyền tải xuống tư liệu này.",
     "requireLogin": "Yêu cầu đăng nhập",
+    "allowEdit": "Cho phép chỉnh sửa (không cần đăng nhập)",
+    "allowEditHint": "Ai có liên kết đều sửa được tài liệu Word, Excel, PowerPoint trực tuyến và cùng soạn với mọi người. Nên đặt mật khẩu hoặc hạn dùng; mỗi lần lưu tạo phiên bản mới mang tên bạn.",
+    "allowEditDenied": "Bạn không có quyền chỉnh sửa tư liệu này nên không thể cho phép chỉnh sửa qua liên kết.",
     "linkPassword": "Mật khẩu",
     "linkPasswordPlaceholder": "Để trống nếu không cần mật khẩu",
     "linkPasswordMin": "Mật khẩu liên kết tối thiểu 4 ký tự.",
@@ -823,6 +826,7 @@
       "exhausted": "Hết lượt truy cập"
     },
     "tagDownload": "Cho phép tải xuống",
+    "tagEdit": "Cho phép chỉnh sửa",
     "tagViewOnly": "Chỉ xem",
     "tagPassword": "Có mật khẩu",
     "tagLogin": "Yêu cầu đăng nhập",
@@ -1017,7 +1021,11 @@
     "open": "Mở",
     "sharedBy": "Chia sẻ bởi {{name}}",
     "emptyFolder": "Thư mục trống.",
-    "noPreviewNoDownload": "Định dạng này chưa hỗ trợ xem trực tiếp và liên kết không cho phép tải xuống."
+    "noPreviewNoDownload": "Định dạng này chưa hỗ trợ xem trực tiếp và liên kết không cho phép tải xuống.",
+    "guestTitle": "Tên của bạn",
+    "guestHint": "Liên kết này cho phép chỉnh sửa \"{{name}}\". Nhập tên để người khác thấy ai đang sửa cùng.",
+    "guestName": "Họ và tên",
+    "guestContinue": "Bắt đầu chỉnh sửa"
   },
   "desktopApp": {
     "title": "Tải ứng dụng máy tính",

@@ -2,7 +2,7 @@ namespace BlueDrive.Application.Abstractions;
 
 public sealed record OfficeEditorRequest(
     Guid FileId, Guid VersionId, string FileName, string Extension, string DocumentUrl, string? CallbackUrl,
-    bool CanEdit, bool CanDownload, Guid? UserId, string UserName, bool Embedded, bool Mobile = false);
+    bool CanEdit, bool CanDownload, Guid? UserId, string UserName, bool Embedded, bool Mobile = false, string? GuestId = null);
 
 /// <summary>What the browser needs to start the editor: script URL + a signed config object.</summary>
 public sealed record OfficeEditorConfig(string Provider, string ApiScriptUrl, object Config, string Mode);

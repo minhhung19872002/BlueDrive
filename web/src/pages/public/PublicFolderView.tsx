@@ -17,11 +17,13 @@ interface PublicFolderViewProps {
   token: string
   access: string
   allowDownload: boolean
+  /** The link lets anyone edit Office documents in the folder. */
+  allowEdit?: boolean
   rootName: string
 }
 
 /** Browsable listing of a publicly shared folder with per-file preview / download. */
-export default function PublicFolderView({ token, access, allowDownload, rootName }: PublicFolderViewProps) {
+export default function PublicFolderView({ token, access, allowDownload, allowEdit, rootName }: PublicFolderViewProps) {
   const { t } = useTranslation()
   const [folderId, setFolderId] = useState<string | null>(null)
   const [preview, setPreview] = useState<DriveItem | null>(null)
@@ -120,7 +122,7 @@ export default function PublicFolderView({ token, access, allowDownload, rootNam
       >
         {preview && needsOfficeViewer(preview.extension) && (
           <div className="bd-public-preview">
-            <PublicOfficeViewer token={token} access={access} fileId={preview.id} />
+            <PublicOfficeViewer token={token} access={access} fileId={preview.id} allowEdit={allowEdit} name={preview.name} />
           </div>
         )}
         {preview && !needsOfficeViewer(preview.extension) && (

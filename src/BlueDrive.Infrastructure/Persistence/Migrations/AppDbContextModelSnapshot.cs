@@ -1412,6 +1412,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("allow_download");
 
+                    b.Property<bool>("AllowEdit")
+                        .HasColumnType("boolean")
+                        .HasColumnName("allow_edit");
+
                     b.Property<bool>("AllowView")
                         .HasColumnType("boolean")
                         .HasColumnName("allow_view");

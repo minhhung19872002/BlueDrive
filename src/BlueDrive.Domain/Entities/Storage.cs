@@ -186,6 +186,8 @@ public class ShareLink : AuditableEntity
     public int AccessCount { get; set; }
     public bool IsRevoked { get; set; }
     public bool RequireLogin { get; set; }
+    /// <summary>Anyone with the link may edit Office documents in the online editor (co-editing with signed-in users).</summary>
+    public bool AllowEdit { get; set; }
 }
 
 public class Comment : AuditableEntity
