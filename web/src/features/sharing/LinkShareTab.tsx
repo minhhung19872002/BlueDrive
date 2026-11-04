@@ -22,15 +22,17 @@ import { CopyOutlined, LinkOutlined, QrcodeOutlined, SaveOutlined, StopOutlined 
 import { useQuery } from '@tanstack/react-query'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useTranslation } from 'react-i18next'
+import { listPermissionLevels } from '@/api/permissions'
 import { qk } from '@/api/queryKeys'
 import { absoluteShareUrl, createShareLink, listShareLinks, revokeShareLink, updateShareLink } from '@/api/sharing'
 import { applyFieldErrors } from '@/api/formErrors'
 import { useApiMutation } from '@/hooks/useApiMutation'
 import { useCan } from '@/hooks/usePermissions'
-import type { ResourceType, SaveShareLinkRequest, ShareLink } from '@/types/sharing'
+import type { ResourceType, SaveShareLinkRequest, ShareLink, ShareLinkScope } from '@/types/sharing'
 import { copyText } from '@/utils/clipboard'
 import { formatDateTime } from '@/utils/format'
-import { LINK_STATUS_COLORS } from './levels'
+import { LINK_STATUS_COLORS, type PrincipalValue } from './levels'
+import PrincipalSelect from './PrincipalSelect'
 import ShareLinkQrModal from './ShareLinkQrModal'
 
 interface LinkShareTabProps {
@@ -42,14 +44,14 @@ interface LinkShareTabProps {
   canEdit: boolean
 }
 
-/** Google Drive style "general access": restricted (signed in and with access) or anyone with the link. */
-type Audience = 'restricted' | 'anyone'
-type LinkRole = 'viewer' | 'editor'
+/** Levels a link may give (spec 5.3). */
+const LINK_LEVELS = ['viewer', 'commenter', 'editor', 'view_only']
 
 interface LinkForm {
   allowDownload: boolean
-  audience: Audience
-  role: LinkRole
+  audience: ShareLinkScope
+  levelId?: string
+  people?: PrincipalValue[]
   expiresAt?: Dayjs | null
   maxAccessCount?: number | null
 }
@@ -66,7 +68,11 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
   const canShare = can('doc.share')
   const [form] = Form.useForm<LinkForm>()
   const [qrId, setQrId] = useState<string | null>(null)
-  const audience: Audience = Form.useWatch('audience', form) ?? 'restricted'
+  const audience: ShareLinkScope = Form.useWatch('audience', form) ?? 'existing'
+  const levels = useQuery({ queryKey: ['permission-levels'], queryFn: listPermissionLevels, staleTime: 5 * 60_000 })
+  const linkLevels = (levels.data ?? []).filter((l) => LINK_LEVELS.includes(l.code))
+  const editorId = linkLevels.find((l) => l.code === 'editor')?.id
+  const viewerId = linkLevels.find((l) => l.code === 'viewer')?.id
   const autoCreated = useRef(false)
   const links = useQuery({
     queryKey: qk.shareLinks(resourceType, resourceId),
@@ -81,10 +87,13 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
     resourceType,
     resourceId,
     allowDownload: v.allowDownload,
-    allowEdit: v.audience === 'anyone' && v.role === 'editor',
+    allowEdit: v.audience !== 'existing' && !!editorId && v.levelId === editorId,
     requireLogin: v.audience !== 'anyone',
-    expiresAt: v.expiresAt ? v.expiresAt.endOf('day').toISOString() : null,
-    maxAccessCount: v.maxAccessCount ?? null,
+    scope: v.audience,
+    levelId: v.audience === 'existing' ? null : (v.levelId ?? viewerId ?? null),
+    people: v.audience === 'specific' ? (v.people ?? []).map((p) => p.value.slice(p.value.indexOf(':') + 1)) : [],
+    expiresAt: v.audience !== 'existing' && v.expiresAt ? v.expiresAt.endOf('day').toISOString() : null,
+    maxAccessCount: v.audience !== 'existing' ? (v.maxAccessCount ?? null) : null,
   })
 
   const create = useApiMutation(createShareLink, { invalidate: [qk.shareLinks(resourceType, resourceId)] })
@@ -121,8 +130,9 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
     if (!current) return
     form.setFieldsValue({
       allowDownload: current.allowDownload,
-      audience: current.requireLogin ? 'restricted' : 'anyone',
-      role: current.allowEdit ? 'editor' : 'viewer',
+      audience: current.scope,
+      levelId: current.levelId ?? undefined,
+      people: current.people.map((p) => ({ value: `user:${p.id}`, label: p.name })),
       expiresAt: current.expiresAt ? dayjs(current.expiresAt) : null,
       maxAccessCount: current.maxAccessCount,
     })
@@ -137,6 +147,41 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
       </Typography.Title>
       {links.isLoading || (create.isPending && !current) ? (
         <Skeleton.Input active block />
+      ) : current && !current.url ? (
+        <Alert
+          type="info"
+          showIcon
+          message={t('sharing.legacyLink')}
+          description={t('sharing.legacyLinkHint')}
+          action={
+            canShare && (
+              <Button
+                size="small"
+                type="primary"
+                loading={create.isPending}
+                onClick={() =>
+                  create.mutate(
+                    {
+                      resourceType,
+                      resourceId,
+                      allowDownload: current.allowDownload,
+                      allowEdit: current.allowEdit,
+                      requireLogin: current.requireLogin,
+                      scope: current.scope,
+                      levelId: current.levelId,
+                      people: current.people.map((p) => p.id),
+                      expiresAt: current.expiresAt,
+                      maxAccessCount: current.maxAccessCount,
+                    },
+                    { onSuccess: () => revoke.mutate(current.id) },
+                  )
+                }
+              >
+                {t('sharing.legacyLinkRenew')}
+              </Button>
+            )
+          }
+        />
       ) : current ? (
         <>
           <Space.Compact style={{ width: '100%' }}>
@@ -171,7 +216,7 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
           type="primary"
           icon={<LinkOutlined />}
           loading={create.isPending}
-          onClick={() => create.mutate(toRequest({ allowDownload: canDownload, audience: 'restricted', role: 'viewer' }))}
+          onClick={() => create.mutate(toRequest({ allowDownload: canDownload, audience: 'existing' }))}
         >
           {t('sharing.newLink')}
         </Button>
@@ -186,29 +231,32 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
           </Divider>
           <Form<LinkForm> form={form} layout="vertical" onFinish={(v) => update.mutate({ id: current.id, body: toRequest(v) })}>
             <Row gutter={16}>
-              <Col xs={24} sm={audience === 'anyone' ? 14 : 24}>
-                <Form.Item
-                  name="audience"
-                  label={t('sharing.generalAccess')}
-                  extra={audience === 'anyone' ? t('sharing.audienceAnyoneHint') : t('sharing.audienceRestrictedHint')}
-                >
+              <Col xs={24} sm={audience === 'existing' ? 24 : 14}>
+                <Form.Item name="audience" label={t('sharing.generalAccess')} extra={t(`sharing.audienceHint.${audience}`)}>
                   <Select
-                    options={[
-                      { value: 'restricted', label: t('sharing.audienceRestricted') },
-                      { value: 'anyone', label: t('sharing.audienceAnyone') },
-                    ]}
+                    options={(['existing', 'organization', 'specific', 'anyone'] as const).map((s) => ({ value: s, label: t(`sharing.audience.${s}`) }))}
                   />
                 </Form.Item>
               </Col>
-              {audience === 'anyone' && (
+              {audience !== 'existing' && (
                 <Col xs={24} sm={10}>
-                  <Form.Item name="role" label={t('sharing.linkRole')} extra={!canEdit ? t('sharing.allowEditDenied') : undefined}>
+                  <Form.Item name="levelId" label={t('sharing.linkRole')} extra={!canEdit ? t('sharing.allowEditDenied') : undefined}>
                     <Select
-                      options={[
-                        { value: 'viewer', label: t('sharing.roleViewer') },
-                        { value: 'editor', label: t('sharing.roleEditor'), disabled: !canEdit && !current.allowEdit },
-                      ]}
+                      placeholder={t('sharing.roleViewer')}
+                      options={linkLevels.map((l) => ({
+                        value: l.id,
+                        label: l.name,
+                        title: l.description,
+                        disabled: l.code === 'editor' && !canEdit && !current.allowEdit,
+                      }))}
                     />
+                  </Form.Item>
+                </Col>
+              )}
+              {audience === 'specific' && (
+                <Col xs={24}>
+                  <Form.Item name="people" label={t('sharing.linkPeople')} rules={[{ required: true, message: t('sharing.linkPeopleRequired') }]}>
+                    <PrincipalSelect multiple types={['user']} placeholder={t('sharing.linkPeoplePlaceholder')} />
                   </Form.Item>
                 </Col>
               )}
@@ -222,7 +270,7 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
                   <Switch disabled={!canDownload} />
                 </Form.Item>
               </Col>
-              {audience === 'anyone' && (
+              {audience !== 'existing' && (
                 <>
                   <Col xs={24} sm={8}>
                     <Form.Item name="expiresAt" label={t('sharing.expiresAt')}>
@@ -284,7 +332,8 @@ function LinkTags({ link }: { link: ShareLink }) {
       <Tag color={LINK_STATUS_COLORS[link.status]}>{t(`sharing.linkStatus.${link.status}`)}</Tag>
       <Tag>{link.allowDownload ? t('sharing.tagDownload') : t('sharing.tagViewOnly')}</Tag>
       {link.allowEdit && <Tag color="blue">{t('sharing.tagEdit')}</Tag>}
-      <Tag>{link.requireLogin ? t('sharing.audienceRestricted') : t('sharing.audienceAnyone')}</Tag>
+      <Tag>{t(`sharing.audience.${link.scope}`)}</Tag>
+      {link.levelName && <Tag color="purple">{link.levelName}</Tag>}
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
         {t('sharing.accessCount', { count: link.accessCount, max: link.maxAccessCount ?? t('sharing.unlimitedShort') })}
         {' · '}

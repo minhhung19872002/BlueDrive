@@ -187,7 +187,11 @@ public class FileText
 
 public class ShareLink : AuditableEntity
 {
-    public string Token { get; set; } = "";
+    /// <summary>SHA-256 (hex) of the token; the token itself is never stored (new links: derived from the id with a server key).</summary>
+    public string TokenHash { get; set; } = "";
+    public ShareLinkScope Scope { get; set; }
+    /// <summary>Level the link gives (Organization / Specific: through the model, the link is a principal; Anyone: the visitor's rights).</summary>
+    public Guid? LevelId { get; set; }
     public ResourceType ResourceType { get; set; }
     public Guid ResourceId { get; set; }
     public bool AllowDownload { get; set; }
@@ -199,6 +203,14 @@ public class ShareLink : AuditableEntity
     public bool RequireLogin { get; set; }
     /// <summary>Anyone with the link may edit Office documents in the online editor (co-editing with signed-in users).</summary>
     public bool AllowEdit { get; set; }
+}
+
+/// <summary>A person a link works for: listed ("Người cụ thể") or who opened an organization link — member of the link principal.</summary>
+public class ShareLinkMember
+{
+    public Guid LinkId { get; set; }
+    public Guid UserId { get; set; }
+    public DateTime AddedAt { get; set; }
 }
 
 public class Comment : AuditableEntity

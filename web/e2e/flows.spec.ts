@@ -182,10 +182,10 @@ test('chia sẻ qua liên kết: mặc định Hạn chế, chuyển sang Bất 
   await anon.close()
 })
 
-test('liên kết Bất kỳ ai có liên kết, vai trò Người chỉnh sửa: người không đăng nhập mở là sửa được ngay', async ({ page, browser }) => {
+test('liên kết Bất kỳ ai có liên kết, cấp quyền Biên tập: người không đăng nhập mở là sửa được ngay', async ({ page, browser }) => {
   const { linkBox } = await openLinkTab(page)
   await choose(page, 'Quyền truy cập chung', 'Bất kỳ ai có liên kết')
-  await choose(page, 'Vai trò', 'Người chỉnh sửa')
+  await choose(page, 'Cấp quyền', 'Biên tập')
   await saveLink(page)
   await expect(page.getByRole('dialog').getByText('Cho phép chỉnh sửa', { exact: true })).toBeVisible()
   const path = new URL((await linkBox.inputValue()).trim(), 'http://x').pathname

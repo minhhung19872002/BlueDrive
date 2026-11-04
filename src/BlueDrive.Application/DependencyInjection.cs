@@ -29,6 +29,7 @@ public static class DependencyInjection
         services.AddScoped<Features.Access.AclEditor>();
         services.AddScoped<Features.Access.AccessFilter>();
         services.AddScoped<Features.Access.LegacyAclSync>();
+        services.AddScoped<Features.Sharing.LinkModel>();
         services.AddScoped<Abstractions.IResourceAccessChecker, Security.ResourceAccessChecker>();
         services.AddScoped<Features.Storage.QuotaService>();
         services.AddSingleton<Features.Office.OfficeEditingTracker>();

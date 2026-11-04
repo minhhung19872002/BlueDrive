@@ -34,6 +34,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ResourcePermission> ResourcePermissions => Set<ResourcePermission>();
     public DbSet<Share> Shares => Set<Share>();
     public DbSet<ShareLink> ShareLinks => Set<ShareLink>();
+    public DbSet<ShareLinkMember> ShareLinkMembers => Set<ShareLinkMember>();
     public DbSet<FileText> FileTexts => Set<FileText>();
     public DbSet<Space> Spaces => Set<Space>();
     public DbSet<PersonalDrive> PersonalDrives => Set<PersonalDrive>();
@@ -242,7 +243,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(x => new { x.SharedWithType, x.SharedWithId });
             e.HasIndex(x => new { x.ResourceType, x.ResourceId });
         });
-        b.Entity<ShareLink>(e => { e.HasIndex(x => x.Token).IsUnique(); e.HasIndex(x => new { x.ResourceType, x.ResourceId }); });
+        b.Entity<ShareLink>(e => { e.HasIndex(x => x.TokenHash).IsUnique(); e.Property(x => x.TokenHash).HasMaxLength(64); e.HasIndex(x => new { x.ResourceType, x.ResourceId }); });
+        b.Entity<ShareLinkMember>(e => { e.HasKey(x => new { x.LinkId, x.UserId }); e.HasIndex(x => x.UserId); });
         ConfigureAccessModel(b);
         b.Entity<FileText>(e =>
         {

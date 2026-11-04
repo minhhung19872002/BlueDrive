@@ -66,13 +66,14 @@ public sealed class GetItemPermissionsHandler(IAppDbContext db, ICurrentUser me,
                     "inherited" => inheritedHere ? $"Kế thừa từ \"{scope.Name}\"" : "Kế thừa (sao chép khi ngừng kế thừa)",
                     _ => x.e.PrincipalKind switch
                     {
+                        PrincipalKind.Link => "Qua liên kết chia sẻ",
                         PrincipalKind.Group => "Trực tiếp (qua nhóm)",
                         PrincipalKind.OrgUnit or PrincipalKind.OrgUnitTree => "Trực tiếp (qua đơn vị)",
                         _ => "Trực tiếp",
                     },
                 };
                 return new ItemPermissionDto(x.e.Id, x.e.PrincipalKind, x.e.PrincipalId, name, detail, x.e.PermissionLevelId, x.Name, x.e.ExpiresAt, origin, label,
-                    canManage && !inheritedHere && x.e.Source != AclSource.SpaceDefault, x.e.AppliesToChildren);
+                    canManage && !inheritedHere && x.e.Source is not (AclSource.SpaceDefault or AclSource.Link), x.e.AppliesToChildren);
             }).ToList();
         return new ItemPermissionsDto(node.Id, node.Name, node.Kind, node.HasUniqueAcl, scope.Id != node.Id ? scope.Name : null, scope.Id != node.Id ? scope.Id : null,
             canManage, rights.Has(AccessRight.ShareInternal) || canManage, everyone is null ? "restricted" : "organization", everyone?.e.PermissionLevelId,

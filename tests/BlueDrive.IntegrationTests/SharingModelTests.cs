@@ -4,6 +4,8 @@ using System.Text.Json;
 using BlueDrive.Domain.Permissions;
 using BlueDrive.IntegrationTests.Infrastructure;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BlueDrive.IntegrationTests;
 
@@ -162,5 +164,67 @@ public class SharingModelTests(ApiFactory factory)
         (await newModel.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
         var entries = (await (await owner.GetAsync($"/api/v1/items/{file}/permissions")).ReadJsonAsync()).GetProperty("entries").EnumerateArray().ToList();
         entries.Should().ContainSingle(e => e.GetProperty("principalId").GetGuid() == newModelId).Which.GetProperty("levelName").GetString().Should().Be("Người nhận xét");
+    }
+
+    [Fact]
+    public async Task Four_kinds_of_link_with_levels_hashed_tokens_and_revocation()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (listed, listedId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (colleague, colleagueId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var anon = factory.CreateClient();
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var file = (await StorageTests.UploadAsync(owner, ws, null, "lien-ket-bon-loai.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+        async Task<JsonElement> Save(object body, Guid? id = null) => id is { } x
+            ? await (await owner.PutAsJsonAsync($"/api/v1/share-links/{x}", body)).ReadJsonAsync()
+            : await (await owner.PostAsJsonAsync("/api/v1/share-links", body)).ReadJsonAsync();
+        string Token(JsonElement link) => link.GetProperty("token").GetString()!;
+
+        // "Người cụ thể": only the listed person, who gets "Người nhận xét" through the link (also in their own drive views).
+        var specific = await Save(new { resourceType = "file", resourceId = file, scope = "specific", levelId = levels["commenter"], allowDownload = true, people = new[] { listedId } });
+        specific.GetProperty("people").EnumerateArray().Single().GetProperty("id").GetGuid().Should().Be(listedId);
+        Token(specific).Should().NotBeNullOrEmpty();
+        (await listed.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK, "a listed person's access comes from the model");
+        (await (await listed.GetAsync($"/api/v1/items/{file}/effective-permissions")).ReadJsonAsync()).GetProperty("rights").EnumerateArray()
+            .Select(r => r.GetString()).Should().Contain("Comment").And.NotContain("EditItems");
+        (await colleague.PostAsJsonAsync($"/api/v1/public/s/{Token(specific)}/open", new { })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await anon.PostAsJsonAsync($"/api/v1/public/s/{Token(specific)}/open", new { })).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        (await listed.PostAsJsonAsync($"/api/v1/public/s/{Token(specific)}/open", new { })).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // "Mọi người trong tổ chức": whoever signed in opens it gets its level; not before.
+        var org = await Save(new { resourceType = "file", resourceId = file, scope = "organization", levelId = levels["viewer"], allowDownload = true });
+        (await colleague.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await colleague.PostAsJsonAsync($"/api/v1/public/s/{Token(org)}/open", new { })).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await colleague.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        var entries = (await (await owner.GetAsync($"/api/v1/items/{file}/permissions")).ReadJsonAsync()).GetProperty("entries").EnumerateArray().ToList();
+        entries.Where(e => e.GetProperty("principalKind").GetString() == "link").Should().HaveCount(2)
+            .And.OnlyContain(e => !e.GetProperty("editable").GetBoolean() && e.GetProperty("originLabel").GetString() == "Qua liên kết chia sẻ");
+
+        // "Người đã có quyền": just the address; "Bất kỳ ai": no sign-in, the link's level (Chỉ xem: no download).
+        var existing = await Save(new { resourceType = "file", resourceId = file, scope = "existing", allowDownload = true });
+        existing.GetProperty("levelId").ValueKind.Should().Be(JsonValueKind.Null);
+        var anyone = await Save(new { resourceType = "file", resourceId = file, scope = "anyone", levelId = levels["view_only"], allowDownload = true });
+        anyone.GetProperty("allowDownload").GetBoolean().Should().BeFalse("Chỉ xem never downloads");
+        (await anon.PostAsJsonAsync($"/api/v1/public/s/{Token(anyone)}/open", new { })).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await owner.PostAsJsonAsync("/api/v1/share-links", new { resourceType = "file", resourceId = file, scope = "anyone", levelId = levels["owner"] }))
+            .StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        // Only hashes are stored; the address is shown again from the server key.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BlueDrive.Application.Abstractions.IAppDbContext>();
+            var row = await db.ShareLinks.AsNoTracking().SingleAsync(l => l.Id == anyone.GetProperty("id").GetGuid());
+            row.TokenHash.Should().HaveLength(64).And.NotContain(Token(anyone));
+        }
+        var list = (await (await owner.GetAsync($"/api/v1/share-links?resourceType=file&resourceId={file}")).ReadJsonAsync()).EnumerateArray().ToList();
+        list.Should().HaveCount(4).And.OnlyContain(l => l.GetProperty("url").GetString()!.EndsWith("/s/" + l.GetProperty("token").GetString()));
+
+        // Revoked: the access it gave goes with it.
+        (await owner.DeleteAsync($"/api/v1/share-links/{org.GetProperty("id").GetGuid()}")).IsSuccessStatusCode.Should().BeTrue();
+        (await colleague.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        // Turning "Người cụ thể" into "Người đã có quyền" takes the listed person's access away too.
+        await Save(new { resourceType = "file", resourceId = file, scope = "existing", allowDownload = true }, specific.GetProperty("id").GetGuid());
+        (await listed.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 }

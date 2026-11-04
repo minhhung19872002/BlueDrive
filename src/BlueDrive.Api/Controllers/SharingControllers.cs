@@ -77,7 +77,7 @@ public class ShareLinksController : ApiControllerBase
         using var gen = new QRCoder.QRCodeGenerator();
         using var data = gen.CreateQrCode(dto.Url, QRCoder.QRCodeGenerator.ECCLevel.M);
         var png = new QRCoder.PngByteQRCode(data).GetGraphic(8);
-        return File(png, "image/png", $"qr-{link.Token[..8]}.png");
+        return File(png, "image/png", $"qr-{link.Id.ToString()[..8]}.png");
     }
 }
 

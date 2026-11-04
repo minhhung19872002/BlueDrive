@@ -13,3 +13,6 @@ public enum SpaceGroupKind { Owners, Members, Contributors, Approvers, Visitors,
 public enum AclSource { Direct, SpaceDefault, Link, Inherited }
 
 public enum AccessRequestStatus { Pending, Approved, Rejected, Expired }
+
+/// <summary>Who a sharing link works for (spec 5.3): people who already have access, anyone signed in, listed people, anyone.</summary>
+public enum ShareLinkScope { Existing, Organization, Specific, Anyone }

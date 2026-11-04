@@ -1,12 +1,14 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using BlueDrive.Application.Abstractions;
+using BlueDrive.Application.Features.Access;
 using BlueDrive.Application.Common;
 using BlueDrive.Application.Features.Storage;
 using BlueDrive.Application.Security;
 using BlueDrive.Application.Settings;
 using BlueDrive.Domain.Entities;
 using BlueDrive.Domain.Enums;
+using BlueDrive.Domain.Permissions;
 using FluentValidation;
 using MediatR;
 using Microsoft.AspNetCore.DataProtection;
@@ -15,20 +17,65 @@ using Microsoft.Extensions.Configuration;
 
 namespace BlueDrive.Application.Features.Sharing;
 
+public sealed record LinkPersonDto(Guid Id, string Name);
+
+/// <param name="Url">Empty for a link made before tokens were stored only as hashes (it still works, its address cannot be shown again).</param>
 public sealed record ShareLinkDto(Guid Id, string Token, string Url, ResourceType ResourceType, Guid ResourceId, bool AllowDownload, bool AllowView,
-    DateTime? ExpiresAt, int? MaxAccessCount, int AccessCount, bool IsRevoked, bool RequireLogin, DateTime CreatedAt, string Status, bool AllowEdit);
+    DateTime? ExpiresAt, int? MaxAccessCount, int AccessCount, bool IsRevoked, bool RequireLogin, DateTime CreatedAt, string Status, bool AllowEdit,
+    ShareLinkScope Scope, Guid? LevelId, string? LevelName, IReadOnlyList<LinkPersonDto> People, string? CreatedByName);
 
 public static class ShareLinkMapping
 {
+    public const string TokenPurpose = "share-link";
+
     public static string StatusOf(ShareLink l, DateTime now) => l.IsRevoked ? "revoked" : l.ExpiresAt < now ? "expired"
         : l.MaxAccessCount is { } m && l.AccessCount >= m ? "exhausted" : "active";
 
-    public static ShareLinkDto ToDto(ShareLink l, string baseUrl, DateTime now) => new(l.Id, l.Token, $"{baseUrl.TrimEnd('/')}/s/{l.Token}", l.ResourceType, l.ResourceId,
-        l.AllowDownload, l.AllowView, l.ExpiresAt, l.MaxAccessCount, l.AccessCount, l.IsRevoked, l.RequireLogin, l.CreatedAt, StatusOf(l, now), l.AllowEdit);
+    /// <summary>The link's token when it can be derived again (links made since tokens are stored hashed), otherwise empty.</summary>
+    public static string TokenOf(ShareLink l, ITokenService tokens)
+    {
+        var token = tokens.DeriveToken(TokenPurpose, l.Id);
+        return PublicLinks.Hash(token) == l.TokenHash ? token : "";
+    }
+
+    public static async Task<List<ShareLinkDto>> ToDtosAsync(IAppDbContext db, IReadOnlyList<ShareLink> links, ITokenService tokens, string baseUrl, DateTime now,
+        CancellationToken ct)
+    {
+        var ids = links.Select(l => l.Id).ToList();
+        var people = await db.ShareLinkMembers.AsNoTracking().Where(m => ids.Contains(m.LinkId))
+            .Join(db.Users, m => m.UserId, u => u.Id, (m, u) => new { m.LinkId, u.Id, u.FullName }).ToListAsync(ct);
+        var listed = links.Where(l => l.Scope == ShareLinkScope.Specific).Select(l => l.Id).ToHashSet();
+        var levels = await db.PermissionLevels.AsNoTracking().ToDictionaryAsync(l => l.Id, l => l.Name, ct);
+        var creators = links.Select(l => l.CreatedBy ?? Guid.Empty).Distinct().ToList();
+        var names = await db.Users.AsNoTracking().Where(u => creators.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName, ct);
+        return links.Select(l =>
+        {
+            var token = TokenOf(l, tokens);
+            return new ShareLinkDto(l.Id, token, token == "" ? "" : $"{baseUrl.TrimEnd('/')}/s/{token}", l.ResourceType, l.ResourceId,
+                l.AllowDownload, l.AllowView, l.ExpiresAt, l.MaxAccessCount, l.AccessCount, l.IsRevoked, l.RequireLogin, l.CreatedAt, StatusOf(l, now), l.AllowEdit,
+                l.Scope, l.LevelId, l.LevelId is { } lv ? levels.GetValueOrDefault(lv) : null,
+                listed.Contains(l.Id) ? people.Where(p => p.LinkId == l.Id).Select(p => new LinkPersonDto(p.Id, p.FullName)).ToList() : [],
+                l.CreatedBy is { } c ? names.GetValueOrDefault(c) : null);
+        }).ToList();
+    }
+
+    public static string ScopeLabel(ShareLinkScope s) => s switch
+    {
+        ShareLinkScope.Organization => "Liên kết: mọi người trong tổ chức",
+        ShareLinkScope.Specific => "Liên kết: người cụ thể",
+        ShareLinkScope.Anyone => "Liên kết: bất kỳ ai",
+        _ => "Liên kết: người đã có quyền",
+    };
 }
 
+/// <summary>
+/// Spec 5.3. <c>Scope</c> null = the earlier form (RequireLogin: people with access; otherwise anyone, AllowEdit as editor).
+/// <c>LevelId</c>: Người xem / Người nhận xét / Biên tập / Chỉ xem (không tải); <c>AllowDownload</c> false blocks downloads.
+/// <c>People</c>: who a "Người cụ thể" link works for.
+/// </summary>
 public sealed record SaveShareLinkCommand(Guid? Id, ResourceType ResourceType, Guid ResourceId, bool AllowDownload,
-    DateTime? ExpiresAt, int? MaxAccessCount, bool RequireLogin, bool AllowEdit = false) : IRequest<ShareLinkDto>;
+    DateTime? ExpiresAt, int? MaxAccessCount, bool RequireLogin, bool AllowEdit = false,
+    ShareLinkScope? Scope = null, Guid? LevelId = null, IReadOnlyList<Guid>? People = null) : IRequest<ShareLinkDto>;
 
 public sealed class SaveShareLinkValidator : AbstractValidator<SaveShareLinkCommand>
 {
@@ -37,57 +84,169 @@ public sealed class SaveShareLinkValidator : AbstractValidator<SaveShareLinkComm
         RuleFor(x => x.ResourceType).Must(t => t != ResourceType.Workspace).WithMessage("Chỉ tạo liên kết cho thư mục hoặc tệp.");
         RuleFor(x => x.ExpiresAt).Must(d => d is null || d > DateTime.UtcNow).WithMessage("Ngày hết hạn phải ở tương lai.");
         RuleFor(x => x.MaxAccessCount).InclusiveBetween(1, 1_000_000).When(x => x.MaxAccessCount.HasValue).WithMessage("Số lượt truy cập tối đa phải từ 1 trở lên.");
+        RuleFor(x => x.People).NotEmpty().When(x => x.Scope == ShareLinkScope.Specific).WithMessage("Vui lòng chọn người được dùng liên kết.");
+        RuleFor(x => x.People!.Count).LessThanOrEqualTo(500).When(x => x.People is not null).WithMessage("Tối đa 500 người cho một liên kết.");
     }
 }
 
-public sealed class SaveShareLinkHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms,
-    ITokenService tokens, IConfiguration config, IAuditLogger audit, TimeProvider clock, ISettingsService settings) : IRequestHandler<SaveShareLinkCommand, ShareLinkDto>
+public sealed class SaveShareLinkHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IItemPermissionService engine,
+    ITokenService tokens, IConfiguration config, IAuditLogger audit, TimeProvider clock, ISettingsService settings, LinkModel model, IUserNotifier notify)
+    : IRequestHandler<SaveShareLinkCommand, ShareLinkDto>
 {
+    /// <summary>Levels a link may give.</summary>
+    private static readonly Guid[] LinkLevels = [SystemLevels.Viewer, SystemLevels.Commenter, SystemLevels.Editor, SystemLevels.ViewOnly];
+
     public async Task<ShareLinkDto> Handle(SaveShareLinkCommand cmd, CancellationToken ct)
     {
         var uid = me.RequireUserId();
         if (!await perms.HasAsync(uid, Perm.DocShare, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền chia sẻ tư liệu.");
         ShareLink link;
+        var created = cmd.Id is null;
         if (cmd.Id is { } id)
         {
             link = await db.ShareLinks.FirstOrDefaultAsync(l => l.Id == id, ct) ?? throw new NotFoundException("Không tìm thấy liên kết chia sẻ.");
             if (link.CreatedBy != uid) await auth.EnsureAsync(uid, link.ResourceType, link.ResourceId, AccessLevel.Manage, ct);
-            // Same rule as on creation: a link cannot be switched to "download allowed" by someone who may not download.
-            if (cmd.AllowDownload && !link.AllowDownload
-                && !(await auth.EnsureAsync(uid, link.ResourceType, link.ResourceId, AccessLevel.View, ct)).CanDownload)
-                throw new ForbiddenException("Bạn không có quyền tải xuống nên không thể cho phép tải xuống qua liên kết.");
         }
         else
         {
-            var access = await auth.EnsureAsync(uid, cmd.ResourceType, cmd.ResourceId, AccessLevel.View, ct);
-            if (cmd.AllowDownload && !access.CanDownload) throw new ForbiddenException("Bạn không có quyền tải xuống nên không thể tạo liên kết cho phép tải xuống.");
-            link = new ShareLink { ResourceType = cmd.ResourceType, ResourceId = cmd.ResourceId, Token = tokens.GenerateOpaqueToken(32) };
+            await auth.EnsureAsync(uid, cmd.ResourceType, cmd.ResourceId, AccessLevel.View, ct);
+            link = new ShareLink { ResourceType = cmd.ResourceType, ResourceId = cmd.ResourceId };
+            link.TokenHash = PublicLinks.Hash(tokens.DeriveToken(ShareLinkMapping.TokenPurpose, link.Id));
             db.ShareLinks.Add(link);
         }
-        if (cmd.AllowEdit && !cmd.RequireLogin && !link.AllowEdit)
+        var scope = cmd.Scope ?? (cmd.RequireLogin ? ShareLinkScope.Existing : ShareLinkScope.Anyone);
+        Guid? levelId = scope == ShareLinkScope.Existing ? null
+            : cmd.LevelId ?? (cmd.AllowEdit ? SystemLevels.Editor : cmd.AllowDownload ? SystemLevels.Viewer : SystemLevels.ViewOnly);
+        if (levelId is { } lv && !LinkLevels.Contains(lv)) throw new AppException("Liên kết chỉ cấp được quyền Người xem, Người nhận xét, Biên tập hoặc Chỉ xem.");
+        var level = levelId is { } l2 ? SystemLevels.All.First(x => x.Id == l2) : null;
+        var allowDownload = cmd.AllowDownload && (level is null || level.Permissions.Has(AccessRight.Download));
+        var allowEdit = level?.Id == SystemLevels.Editor;
+
+        // You can give through a link at most what you have (like sharing with people); downloads and editing need your own right.
+        var (rights, locked) = await engine.GetWithLockAsync(uid, link.ResourceId, ct);
+        if (level is not null && !rights.Has(AccessRight.ManagePermissions) && !rights.Has(level.Permissions & ~AccessRight.Download))
+            throw new ForbiddenException("Bạn không thể tạo liên kết với quyền cao hơn quyền bạn đang có.");
+        if (allowDownload && !link.AllowDownload && !rights.Has(AccessRight.Download))
+            throw new ForbiddenException("Bạn không có quyền tải xuống nên không thể cho phép tải xuống qua liên kết.");
+        if (allowEdit && !link.AllowEdit)
         {
-            // Same rule as download: only someone who may edit can let others edit through the link.
-            if (!await settings.GetAsync(SettingKeys.ShareLinkAllowEdit, true, ct))
+            if (scope == ShareLinkScope.Anyone && !await settings.GetAsync(SettingKeys.ShareLinkAllowEdit, true, ct))
                 throw new ForbiddenException("Quản trị hệ thống đã tắt chỉnh sửa qua liên kết chia sẻ.");
-            if (!(await auth.EnsureAsync(uid, link.ResourceType, link.ResourceId, AccessLevel.View, ct)).CanEdit)
+            if (!rights.Has(AccessRight.EditItems))
                 throw new ForbiddenException("Bạn không có quyền chỉnh sửa nên không thể cho phép chỉnh sửa qua liên kết.");
         }
-        link.AllowDownload = cmd.AllowDownload;
-        link.AllowEdit = cmd.AllowEdit && !cmd.RequireLogin; // restricted: each person's own rights decide
+        if (locked && allowEdit) throw new AppException("Không gian đang bị khóa, liên kết chỉ có thể cấp quyền xem.", 423);
+
+        var people = scope == ShareLinkScope.Specific ? (cmd.People ?? []).Distinct().ToList() : [];
+        if (people.Count > 0 && await db.Users.CountAsync(u => people.Contains(u.Id) && u.IsActive, ct) != people.Count)
+            throw new AppException("Có người được chọn không tồn tại hoặc đã bị khóa.");
+
+        link.Scope = scope;
+        link.LevelId = levelId;
+        link.AllowDownload = allowDownload;
+        link.AllowEdit = allowEdit;
         link.AllowView = true;
         link.ExpiresAt = cmd.ExpiresAt;
         link.MaxAccessCount = cmd.MaxAccessCount;
-        link.RequireLogin = cmd.RequireLogin;
+        link.RequireLogin = scope != ShareLinkScope.Anyone;
         await db.SaveChangesAsync(ct);
-        await audit.LogAsync(new AuditEntry(AuditAction.Share, link.ResourceType, link.ResourceId, null, null,
-            new { shareLink = link.Id, link.AllowDownload, link.AllowEdit, link.ExpiresAt, link.MaxAccessCount, link.RequireLogin, created = cmd.Id is null }), ct);
-        return ShareLinkMapping.ToDto(link, config["App:PublicBaseUrl"] ?? "", clock.GetUtcNow().UtcDateTime);
+        var added = await model.ApplyAsync(link, people, uid, ct);
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        var dto = (await ShareLinkMapping.ToDtosAsync(db, [link], tokens, config["App:PublicBaseUrl"] ?? "", now, ct))[0];
+        if (added.Count > 0)
+        {
+            var sharer = await db.Users.Where(u => u.Id == uid).Select(u => u.FullName).FirstAsync(ct);
+            var name = await db.Securables.Where(s => s.Id == link.ResourceId).Select(s => s.Name).FirstOrDefaultAsync(ct) ?? "";
+            foreach (var p in added.Where(p => p != uid))
+                await notify.NotifyUserAsync(p, "share", $"{sharer} đã gửi bạn liên kết tới \"{name}\"", null, dto.Url == "" ? null : $"/s/{dto.Token}", ct);
+        }
+        await audit.LogAsync(new AuditEntry(created ? AuditAction.LinkCreated : AuditAction.Share, link.ResourceType, link.ResourceId, null, null,
+            new { shareLink = link.Id, scope = link.Scope, level = level?.Code, link.AllowDownload, link.ExpiresAt, link.MaxAccessCount, people = people.Count }), ct);
+        return dto;
+    }
+}
+
+/// <summary>
+/// A link of the kinds "Mọi người trong tổ chức" and "Người cụ thể" is a principal of the permission model (spec 5.3): it has an entry with its
+/// level on the shared item (until the link's end date), and the people it works for are its members — listed people at once, anyone
+/// signed in once they open it. Revoking or changing the kind takes that away again.
+/// </summary>
+public sealed class LinkModel(IAppDbContext db, AclEditor editor, TimeProvider clock)
+{
+    /// <summary>Brings the model in line with the link; returns the people newly listed (to be told).</summary>
+    public async Task<List<Guid>> ApplyAsync(ShareLink link, IReadOnlyList<Guid> people, Guid? by, CancellationToken ct)
+    {
+        var grants = !link.IsRevoked && link.Scope is ShareLinkScope.Organization or ShareLinkScope.Specific && link.LevelId is not null;
+        await RemoveEntriesAsync(link.Id, ct);
+        var principal = await db.Principals.FirstOrDefaultAsync(p => p.Id == link.Id, ct);
+        if (principal is null) db.Principals.Add(principal = new Principal { Id = link.Id, Kind = PrincipalKind.Link });
+        principal.RefId = link.ResourceId;
+        principal.DisplayName = ShareLinkMapping.ScopeLabel(link.Scope);
+        await db.SaveChangesAsync(ct);
+        if (grants && await db.Securables.AnyAsync(s => s.Id == link.ResourceId, ct))
+            await editor.GrantAsync(link.ResourceId, PrincipalKind.Link, link.Id, link.LevelId!.Value, link.ExpiresAt, by, ct, source: AclSource.Link);
+
+        var current = await db.ShareLinkMembers.Where(m => m.LinkId == link.Id).Select(m => m.UserId).ToListAsync(ct);
+        // Listed people are exactly the list; an organization link keeps who already opened it; other kinds have no members.
+        var keep = !grants ? [] : link.Scope == ShareLinkScope.Specific ? people.ToList() : current;
+        var gone = current.Except(keep).ToList();
+        var added = keep.Except(current).ToList();
+        await db.ShareLinkMembers.Where(m => m.LinkId == link.Id && gone.Contains(m.UserId)).ExecuteDeleteAsync(ct);
+        await db.PrincipalMemberships.Where(m => m.PrincipalId == link.Id && gone.Contains(m.UserId)).ExecuteDeleteAsync(ct);
+        foreach (var u in added) await AddMemberAsync(link.Id, u, ct);
+        await BumpAsync(gone.Concat(added), ct);
+        return added;
+    }
+
+    /// <summary>Someone signed in opened an organization link: they become a member of it (their access then comes from the model).</summary>
+    public async Task RedeemAsync(ShareLink link, Guid userId, CancellationToken ct)
+    {
+        if (await db.ShareLinkMembers.AnyAsync(m => m.LinkId == link.Id && m.UserId == userId, ct)) return;
+        await AddMemberAsync(link.Id, userId, ct);
+        await BumpAsync([userId], ct);
+    }
+
+    public async Task RevokeAsync(ShareLink link, CancellationToken ct)
+    {
+        await RemoveEntriesAsync(link.Id, ct);
+        var members = await db.ShareLinkMembers.Where(m => m.LinkId == link.Id).Select(m => m.UserId).ToListAsync(ct);
+        await db.ShareLinkMembers.Where(m => m.LinkId == link.Id).ExecuteDeleteAsync(ct);
+        await db.PrincipalMemberships.Where(m => m.PrincipalId == link.Id).ExecuteDeleteAsync(ct);
+        await BumpAsync(members, ct);
+    }
+
+    private async Task RemoveEntriesAsync(Guid linkId, CancellationToken ct)
+    {
+        var scopes = await db.AclEntries.Where(e => e.PrincipalId == linkId).Select(e => e.ScopeId).Distinct().ToListAsync(ct);
+        if (scopes.Count == 0) return;
+        await db.AclEntries.Where(e => e.PrincipalId == linkId).ExecuteDeleteAsync(ct);
+        foreach (var s in scopes) await editor.TouchAsync(s, ct);
+    }
+
+    private async Task AddMemberAsync(Guid linkId, Guid userId, CancellationToken ct)
+    {
+        db.ShareLinkMembers.Add(new ShareLinkMember { LinkId = linkId, UserId = userId, AddedAt = clock.GetUtcNow().UtcDateTime });
+        if (!await db.PrincipalMemberships.AnyAsync(m => m.PrincipalId == linkId && m.UserId == userId, ct))
+            db.PrincipalMemberships.Add(new PrincipalMembership { PrincipalId = linkId, UserId = userId });
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Their memberships changed: cached permissions keyed on the membership version go stale.</summary>
+    private async Task BumpAsync(IEnumerable<Guid> userIds, CancellationToken ct)
+    {
+        foreach (var u in userIds.Distinct())
+            if (await db.MembershipVersions.Where(v => v.UserId == u).ExecuteUpdateAsync(x => x.SetProperty(v => v.Version, v => v.Version + 1), ct) == 0)
+            {
+                db.MembershipVersions.Add(new MembershipVersion { UserId = u, Version = 1 });
+                await db.SaveChangesAsync(ct);
+            }
     }
 }
 
 public sealed record ListShareLinksQuery(ResourceType ResourceType, Guid ResourceId) : IRequest<IReadOnlyList<ShareLinkDto>>;
 
-public sealed class ListShareLinksHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IConfiguration config, TimeProvider clock)
+public sealed class ListShareLinksHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IConfiguration config, TimeProvider clock, ITokenService tokens)
     : IRequestHandler<ListShareLinksQuery, IReadOnlyList<ShareLinkDto>>
 {
     public async Task<IReadOnlyList<ShareLinkDto>> Handle(ListShareLinksQuery q, CancellationToken ct)
@@ -96,14 +255,14 @@ public sealed class ListShareLinksHandler(IAppDbContext db, ICurrentUser me, IRe
         var a = await auth.EnsureAsync(uid, q.ResourceType, q.ResourceId, AccessLevel.View, ct);
         var links = await db.ShareLinks.AsNoTracking().Where(l => l.ResourceType == q.ResourceType && l.ResourceId == q.ResourceId && (a.CanManage || l.CreatedBy == uid))
             .OrderByDescending(l => l.CreatedAt).ToListAsync(ct);
-        var now = clock.GetUtcNow().UtcDateTime;
-        return links.Select(l => ShareLinkMapping.ToDto(l, config["App:PublicBaseUrl"] ?? "", now)).ToList();
+        return await ShareLinkMapping.ToDtosAsync(db, links, tokens, config["App:PublicBaseUrl"] ?? "", clock.GetUtcNow().UtcDateTime, ct);
     }
 }
 
 public sealed record RevokeShareLinkCommand(Guid Id) : IRequest<Unit>;
 
-public sealed class RevokeShareLinkHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IAuditLogger audit) : IRequestHandler<RevokeShareLinkCommand, Unit>
+public sealed class RevokeShareLinkHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IAuditLogger audit, LinkModel model)
+    : IRequestHandler<RevokeShareLinkCommand, Unit>
 {
     public async Task<Unit> Handle(RevokeShareLinkCommand cmd, CancellationToken ct)
     {
@@ -112,7 +271,8 @@ public sealed class RevokeShareLinkHandler(IAppDbContext db, ICurrentUser me, IR
         if (link.CreatedBy != uid) await auth.EnsureAsync(uid, link.ResourceType, link.ResourceId, AccessLevel.Manage, ct);
         link.IsRevoked = true;
         await db.SaveChangesAsync(ct);
-        await audit.LogAsync(new AuditEntry(AuditAction.Unshare, link.ResourceType, link.ResourceId, null, null, new { shareLink = link.Id }), ct);
+        await model.RevokeAsync(link, ct);
+        await audit.LogAsync(new AuditEntry(AuditAction.LinkRevoked, link.ResourceType, link.ResourceId, null, null, new { shareLink = link.Id }), ct);
         return Unit.Value;
     }
 }
@@ -144,9 +304,13 @@ public sealed class PublicLinkTickets(IDataProtectionProvider provider) : IPubli
 
 public static class PublicLinks
 {
+    /// <summary>SHA-256 (lower-case hex) of a link token: what the database keeps.</summary>
+    public static string Hash(string token) => Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
+
     public static async Task<ShareLink> LoadActiveAsync(IAppDbContext db, string token, DateTime now, CancellationToken ct)
     {
-        var link = await db.ShareLinks.FirstOrDefaultAsync(l => l.Token == token, ct) ?? throw new NotFoundException("Liên kết chia sẻ không tồn tại.");
+        var hash = Hash(token);
+        var link = await db.ShareLinks.FirstOrDefaultAsync(l => l.TokenHash == hash, ct) ?? throw new NotFoundException("Liên kết chia sẻ không tồn tại.");
         switch (ShareLinkMapping.StatusOf(link, now))
         {
             case "revoked": throw new AppException("Liên kết chia sẻ đã bị thu hồi.", 410);
@@ -206,7 +370,7 @@ public sealed class GetPublicShareHandler(IAppDbContext db, TimeProvider clock) 
 public sealed record OpenPublicShareCommand(string Token) : IRequest<PublicAccessGrant>;
 
 public sealed class OpenPublicShareHandler(IAppDbContext db, ICurrentUser me, IPublicLinkTickets tickets, IAuditLogger audit, TimeProvider clock,
-    IResourceAuthorizationService auth)
+    IResourceAuthorizationService auth, LinkModel links)
     : IRequestHandler<OpenPublicShareCommand, PublicAccessGrant>
 {
     public async Task<PublicAccessGrant> Handle(OpenPublicShareCommand cmd, CancellationToken ct)
@@ -214,6 +378,10 @@ public sealed class OpenPublicShareHandler(IAppDbContext db, ICurrentUser me, IP
         var now = clock.GetUtcNow().UtcDateTime;
         var link = await PublicLinks.LoadActiveAsync(db, cmd.Token, now, ct);
         if (link.RequireLogin && !me.IsAuthenticated) throw new AppException("Liên kết này yêu cầu đăng nhập hệ thống trước khi xem.", 401);
+        if (link.Scope == ShareLinkScope.Specific && !await db.ShareLinkMembers.AnyAsync(m => m.LinkId == link.Id && m.UserId == me.UserId, ct)
+            && !await auth.CanAsync(me.RequireUserId(), link.ResourceType, link.ResourceId, AccessLevel.View, ct))
+            throw new AppException("Liên kết này chỉ dành cho những người được người chia sẻ chỉ định.", 403);
+        if (link.Scope == ShareLinkScope.Organization) await links.RedeemAsync(link, me.RequireUserId(), ct);
         // "Hạn chế" (like Google Drive's Restricted): only people who have access to the item open it; the link is just its address.
         if (link.RequireLogin && !await auth.CanAsync(me.RequireUserId(), link.ResourceType, link.ResourceId, AccessLevel.View, ct))
             throw new AppException("Bạn chưa có quyền truy cập tư liệu này. Hãy đề nghị người chia sẻ cấp quyền cho bạn.", 403);
@@ -221,7 +389,7 @@ public sealed class OpenPublicShareHandler(IAppDbContext db, ICurrentUser me, IP
         var updated = await db.ShareLinks.Where(l => l.Id == link.Id && !l.IsRevoked && (l.MaxAccessCount == null || l.AccessCount < l.MaxAccessCount))
             .ExecuteUpdateAsync(s => s.SetProperty(l => l.AccessCount, l => l.AccessCount + 1), ct);
         if (updated == 0) throw new AppException("Liên kết chia sẻ đã hết số lượt truy cập cho phép.", 410);
-        await audit.LogAsync(new AuditEntry(AuditAction.ShareLinkAccess, link.ResourceType, link.ResourceId, null, null, new { shareLink = link.Id, success = true, count = link.AccessCount + 1 }), ct);
+        await audit.LogAsync(new AuditEntry(AuditAction.LinkUsed, link.ResourceType, link.ResourceId, null, null, new { shareLink = link.Id, success = true, count = link.AccessCount + 1 }), ct);
         return new PublicAccessGrant(tickets.Issue(new PublicLinkTicket(link.Id, me.UserId)), now.AddHours(4));
     }
 }

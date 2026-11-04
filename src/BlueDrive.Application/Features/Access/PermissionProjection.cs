@@ -106,6 +106,8 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock, A
         var roles = await db.Roles.AsNoTracking().Select(r => new { r.Id, r.Name }).ToListAsync(ct);
         var userRoles = await db.UserRoles.AsNoTracking().Select(r => new { r.UserId, r.RoleId }).ToListAsync(ct);
         var orgPath = orgs.ToDictionary(o => o.Id, o => o.Path);
+        // Sharing links are principals of their own (Sharing.LinkModel keeps them and their members); a rebuild leaves them as they are.
+        var linkIds = db.Principals.Where(p => p.Kind == PrincipalKind.Link).Select(p => p.Id);
 
         // ---- principals
         var principals = new List<Principal>
@@ -326,8 +328,8 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock, A
             await db.Libraries.ExecuteDeleteAsync(ct);
             await db.Spaces.ExecuteDeleteAsync(ct);
             await db.PersonalDrives.ExecuteDeleteAsync(ct);
-            await db.PrincipalMemberships.ExecuteDeleteAsync(ct);
-            await db.Principals.ExecuteDeleteAsync(ct);
+            await db.PrincipalMemberships.Where(m => !linkIds.Contains(m.PrincipalId)).ExecuteDeleteAsync(ct);
+            await db.Principals.Where(x => x.Kind != PrincipalKind.Link).ExecuteDeleteAsync(ct);
         }
         else
         {
@@ -336,9 +338,9 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock, A
             await db.Libraries.Where(l => wsIds.Contains(l.SpaceId ?? l.PersonalDriveId ?? Guid.Empty)).ExecuteDeleteAsync(ct);
             await db.Spaces.Where(x => wsIds.Contains(x.Id)).ExecuteDeleteAsync(ct);
             await db.PersonalDrives.Where(x => wsIds.Contains(x.Id)).ExecuteDeleteAsync(ct);
-            await db.PrincipalMemberships.Where(m => affected.Contains(m.UserId)).ExecuteDeleteAsync(ct);
+            await db.PrincipalMemberships.Where(m => affected.Contains(m.UserId) && !linkIds.Contains(m.PrincipalId)).ExecuteDeleteAsync(ct);
             // Users, groups, roles and units: few rows, always refreshed; Space group principals only for these workspaces.
-            await db.Principals.Where(x => x.Kind != PrincipalKind.SpaceGroup || wsIds.Contains(x.RefId ?? Guid.Empty)).ExecuteDeleteAsync(ct);
+            await db.Principals.Where(x => x.Kind != PrincipalKind.Link && (x.Kind != PrincipalKind.SpaceGroup || wsIds.Contains(x.RefId ?? Guid.Empty))).ExecuteDeleteAsync(ct);
         }
         db.Principals.AddRange(principals.DistinctBy(p => p.Id));
         db.Spaces.AddRange(spaces);

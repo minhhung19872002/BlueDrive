@@ -48,6 +48,7 @@ public interface IAppDbContext
     DbSet<ResourcePermission> ResourcePermissions { get; }
     DbSet<Share> Shares { get; }
     DbSet<ShareLink> ShareLinks { get; }
+    DbSet<ShareLinkMember> ShareLinkMembers { get; }
     DbSet<Comment> Comments { get; }
     DbSet<Notification> Notifications { get; }
     DbSet<SavedSearch> SavedSearches { get; }

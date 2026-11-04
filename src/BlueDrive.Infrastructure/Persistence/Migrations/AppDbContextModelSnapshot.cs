@@ -2084,6 +2084,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_revoked");
 
+                    b.Property<Guid?>("LevelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("level_id");
+
                     b.Property<int?>("MaxAccessCount")
                         .HasColumnType("integer")
                         .HasColumnName("max_access_count");
@@ -2102,10 +2106,17 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(40)")
                         .HasColumnName("resource_type");
 
-                    b.Property<string>("Token")
+                    b.Property<string>("Scope")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("token");
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("scope");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("token_hash");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -2118,14 +2129,37 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.HasKey("Id")
                         .HasName("pk_share_links");
 
-                    b.HasIndex("Token")
+                    b.HasIndex("TokenHash")
                         .IsUnique()
-                        .HasDatabaseName("ix_share_links_token");
+                        .HasDatabaseName("ix_share_links_token_hash");
 
                     b.HasIndex("ResourceType", "ResourceId")
                         .HasDatabaseName("ix_share_links_resource_type_resource_id");
 
                     b.ToTable("share_links", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.ShareLinkMember", b =>
+                {
+                    b.Property<Guid>("LinkId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("link_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("added_at");
+
+                    b.HasKey("LinkId", "UserId")
+                        .HasName("pk_share_link_members");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_share_link_members_user_id");
+
+                    b.ToTable("share_link_members", (string)null);
                 });
 
             modelBuilder.Entity("BlueDrive.Domain.Entities.Space", b =>
