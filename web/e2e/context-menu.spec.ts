@@ -31,7 +31,8 @@ test.beforeAll(async ({ playwright, baseURL }) => {
 
 test.afterAll(async () => {
   await api.post('/api/v1/items/delete', { headers: auth, data: { items: [{ type: 'folder', id: folderId }] } })
-  await api.post('/api/v1/trash/purge', { headers: auth, data: [{ type: 'folder', id: folderId }] })
+  // Out of the trash, then out of the second stage (spec 8.1).
+  for (let i = 0; i < 2; i++) await api.post('/api/v1/trash/purge', { headers: auth, data: [{ type: 'folder', id: folderId }] })
   await api.dispose()
 })
 

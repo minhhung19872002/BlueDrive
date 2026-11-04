@@ -51,7 +51,7 @@ Loại danh mục (loại sản phẩm truyền thông, chủ đề, chiến d�
 ## 7. Nhóm tài nguyên và dung lượng (#57–60)
 - *Quản trị > Nhóm tài nguyên*: danh sách tất cả nhóm, mức sử dụng; đặt hạn mức nhóm; khóa/mở khóa (khóa = chỉ xem, không ghi).
 - *Cấu hình dung lượng cá nhân*: đặt dung lượng cho người dùng cụ thể hoặc cả đơn vị (có/không gồm đơn vị con). Mặc định cho tài khoản/nhóm mới đặt ở *Cấu hình hệ thống*.
-- Dung lượng chỉ được trả lại khi tệp bị **xóa vĩnh viễn** khỏi thùng rác. Thùng rác tự xóa vĩnh viễn sau 30 ngày (cấu hình được).
+- Dung lượng chỉ được trả lại khi tệp bị **xóa vĩnh viễn** (cả hai tầng thùng rác tính vào dung lượng của Drive/Space). Thùng rác 2 tầng tự xóa vĩnh viễn sau 93 ngày kể từ lúc xóa (cấu hình được; Space có thể đặt riêng), trừ mục đang lưu giữ hoặc giữ pháp lý. Quản trị (quyền *Quản trị nhóm tài nguyên*) xem và khôi phục được thùng rác tầng 2 của mọi Space.
 
 ## 8. Cấu hình hệ thống
 Chính sách mật khẩu, ngưỡng khóa tài khoản, thời gian tự đăng xuất, dung lượng mặc định, ngưỡng cảnh báo dung lượng, thời gian giữ thùng rác, kích thước tải lên tối đa, định dạng cho phép, ngưỡng tải xuống bất thường, tên đơn vị/phần mềm/logo, dòng cơ quan chủ quản và Quốc hiệu trên bản in. Mọi thay đổi được ghi *Nhật ký thay đổi hệ thống* và nhật ký *Đổi cấu hình*.

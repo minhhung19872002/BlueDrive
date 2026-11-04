@@ -103,7 +103,7 @@ test.afterAll(async () => {
     const refs = items.map((i: { type: string; id: string }) => ({ type: i.type, id: i.id }))
     if (refs.length) {
       await api.post('/api/v1/items/delete', { headers: bearer(u), data: { items: refs } })
-      await api.post('/api/v1/trash/purge', { headers: bearer(u), data: refs })
+      for (let i = 0; i < 2; i++) await api.post('/api/v1/trash/purge', { headers: bearer(u), data: refs })
     }
     await api.delete(`/api/v1/users/${u.id}`, { headers: admin })
   }

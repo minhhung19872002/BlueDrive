@@ -946,6 +946,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("original_parent_id");
 
+                    b.Property<string>("OriginalPath")
+                        .HasColumnType("text")
+                        .HasColumnName("original_path");
+
                     b.Property<Guid?>("ParentId")
                         .HasColumnType("uuid")
                         .HasColumnName("parent_id");
@@ -966,6 +970,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.Property<long>("Revision")
                         .HasColumnType("bigint")
                         .HasColumnName("revision");
+
+                    b.Property<DateTime?>("SecondStageAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("second_stage_at");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -3125,6 +3133,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("original_folder_id");
 
+                    b.Property<string>("OriginalPath")
+                        .HasColumnType("text")
+                        .HasColumnName("original_path");
+
                     b.Property<DateTime?>("PreservedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("preserved_at");
@@ -3154,6 +3166,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.Property<NpgsqlTsVector>("SearchVector")
                         .HasColumnType("tsvector")
                         .HasColumnName("search_vector");
+
+                    b.Property<DateTime?>("SecondStageAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("second_stage_at");
 
                     b.Property<long>("SizeBytes")
                         .HasColumnType("bigint")

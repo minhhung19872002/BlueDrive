@@ -19,6 +19,8 @@ public static class SettingKeys
     public const string QuotaGroupDefaultGb = "quota.group_default_gb";
     public const string QuotaWarningPercent = "quota.warning_percent";
     public const string TrashRetentionDays = "trash.retention_days";
+    /// <summary>Spec 8.1: 93 days from the first deletion, both trash stages together.</summary>
+    public const int DefaultTrashDays = 93;
     public const string UploadMaxSizeMb = "upload.max_size_mb";
     public const string UploadAllowedExtensions = "upload.allowed_extensions";
     public const string DownloadUnusualPerHour = "download.unusual_per_hour";
@@ -79,7 +81,7 @@ public static class SettingKeys
         new(QuotaPersonalDefaultGb, 10, "Dung lượng", "Dung lượng mặc định cá nhân (GB)", "number"),
         new(QuotaGroupDefaultGb, 50, "Dung lượng", "Dung lượng mặc định nhóm (GB)", "number"),
         new(QuotaWarningPercent, 90, "Dung lượng", "Ngưỡng cảnh báo dung lượng (%)", "number"),
-        new(TrashRetentionDays, 30, "Lưu trữ", "Số ngày giữ trong thùng rác", "number"),
+        new(TrashRetentionDays, DefaultTrashDays, "Lưu trữ", "Số ngày giữ trong thùng rác (cả 2 tầng, tính từ lúc xóa)", "number"),
         new(UploadMaxSizeMb, 5120, "Lưu trữ", "Kích thước tải lên tối đa (MB)", "number"),
         new(UploadAllowedExtensions, DefaultAllowedExtensions, "Lưu trữ", "Định dạng tệp cho phép", "tags"),
         new(ShareExternal, "anyone", "Chia sẻ", "Chia sẻ ra ngoài (tầng hệ thống; Space, thư mục, tệp chỉ đặt chặt hơn)", "external"),

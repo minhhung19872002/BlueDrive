@@ -457,8 +457,9 @@ public sealed class DeleteItemsHandler(IAppDbContext db, ICurrentUser me, IResou
             {
                 await auth.EnsureAsync(uid, ResourceType.File, item.Id, AccessLevel.Edit, ct);
                 await EnsureMayDeleteAsync(uid, item.Id, ct);
-                var f = await db.Files.FirstAsync(x => x.Id == item.Id, ct);
+                var f = await db.Files.Include(x => x.Folder).FirstAsync(x => x.Id == item.Id, ct);
                 f.IsDeleted = true; f.IsTrashRoot = true; f.DeletedAt = now; f.DeletedBy = uid; f.OriginalFolderId = f.FolderId;
+                f.OriginalPath = await TrashAccess.OriginalPathAsync(db, f.Folder?.Path, ct);
                 await db.SaveChangesAsync(ct);
                 await audit.LogAsync(new AuditEntry(AuditAction.Delete, ResourceType.File, f.Id, f.Name, f.WorkspaceId), ct);
             }
@@ -468,6 +469,7 @@ public sealed class DeleteItemsHandler(IAppDbContext db, ICurrentUser me, IResou
                 await EnsureMayDeleteAsync(uid, item.Id, ct);
                 var folder = await db.Folders.FirstAsync(x => x.Id == item.Id, ct);
                 folder.IsDeleted = true; folder.IsTrashRoot = true; folder.DeletedAt = now; folder.DeletedBy = uid; folder.OriginalParentId = folder.ParentId;
+                folder.OriginalPath = await TrashAccess.OriginalPathAsync(db, folder.Path[..^(folder.Id.ToString().Length + 1)], ct);
                 await db.SaveChangesAsync(ct);
                 var path = folder.Path;
                 await db.Folders.Where(x => x.Path.StartsWith(path) && x.Id != folder.Id && !x.IsDeleted)

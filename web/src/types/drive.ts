@@ -218,6 +218,8 @@ export interface TrashItem {
   originalLocation: string
   originalLocationExists: boolean
   purgeAt: string
+  /** Spec 8.1: 1 = the trash, 2 = the managers' second stage. */
+  stage: 1 | 2
 }
 
 /** Metadata posted to /uploads/{tusId}/complete (same shape as the tus Upload-Metadata). */

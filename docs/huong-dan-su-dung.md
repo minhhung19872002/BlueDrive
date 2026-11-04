@@ -58,7 +58,7 @@ BlueDrive là hệ thống lưu trữ, tìm kiếm, khai thác và chia sẻ s�
 
 - **Gần đây**: tài liệu bạn vừa mở, sửa, tải lên.
 - **Quan trọng**: tài liệu/thư mục đã đánh dấu sao.
-- **Thùng rác**: chọn không gian (cá nhân hoặc nhóm), xem người xóa, thời điểm, vị trí gốc, ngày tự xóa. **Khôi phục** về vị trí cũ (nếu thư mục cũ không còn, khôi phục về thư mục gốc), **Xóa vĩnh viễn**, **Dọn sạch thùng rác**. Dung lượng chỉ được trả lại khi xóa vĩnh viễn; tệp tự xóa vĩnh viễn sau 30 ngày.
+- **Thùng rác**: chọn không gian (cá nhân hoặc nhóm), xem người xóa, thời điểm, vị trí gốc, ngày tự xóa. **Khôi phục** về vị trí cũ, giữ nguyên quyền chia sẻ riêng của mục (nếu thư mục cũ không còn, các thư mục cha được tạo lại cùng tên), **Xóa vĩnh viễn**, **Dọn sạch thùng rác**. Thùng rác có **2 tầng**: mục bạn xóa khỏi thùng rác chuyển xuống *Tầng 2 (quản trị)* — chỉ Quản lý Space (với Drive của tôi: chính bạn) và quản trị thấy, khôi phục hoặc xóa hẳn được. Dung lượng chỉ được trả lại khi xóa hẳn; mọi mục tự xóa vĩnh viễn sau 93 ngày kể từ lúc xóa (trừ mục đang lưu giữ / giữ pháp lý).
 
 ![Thùng rác](images/thung-rac.png)
 

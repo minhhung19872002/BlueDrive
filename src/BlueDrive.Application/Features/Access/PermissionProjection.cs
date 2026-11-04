@@ -101,6 +101,13 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock, A
         // Kept as they are (not imported): which nodes have their own ACL.
         var unique = import ? [] : (await db.Securables.AsNoTracking()
             .Where(n => n.HasUniqueAcl && (full || wsIds.Contains(n.SpaceId ?? n.PersonalDriveId ?? Guid.Empty))).Select(n => n.Id).ToListAsync(ct)).ToHashSet();
+        // Spec 8.1: a deleted item keeps its own ACL (scope and entries) while in the trash; restored, it has it again.
+        var deletedIds = import ? [] : await db.Folders.AsNoTracking().Where(f => f.IsDeleted && (full || wsIds.Contains(f.WorkspaceId))).Select(f => f.Id)
+            .Concat(db.Files.AsNoTracking().Where(f => f.IsDeleted && (full || wsIds.Contains(f.WorkspaceId))).Select(f => f.Id)).ToListAsync(ct);
+        var liveIds = folders.Select(f => f.Id).Concat(files.Select(f => f.Id)).ToList();
+        var keptDeleted = import ? [] : (await db.AclScopes.AsNoTracking().Where(a => deletedIds.Contains(a.ScopeId)).Select(a => a.ScopeId).ToListAsync(ct)).ToHashSet();
+        if (!import)
+            unique.UnionWith(await db.AclScopes.AsNoTracking().Where(a => liveIds.Contains(a.ScopeId)).Select(a => a.ScopeId).ToListAsync(ct));
         var users = await db.Users.AsNoTracking().Select(u => new { u.Id, u.FullName, u.OrganizationId, u.IsGuest }).ToListAsync(ct);
         var orgs = await db.Organizations.AsNoTracking().Select(o => new { o.Id, o.Name, o.Path }).ToListAsync(ct);
         var groups = await db.UserGroups.AsNoTracking().Select(g => new { g.Id, g.Name }).ToListAsync(ct);
@@ -326,6 +333,7 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock, A
             // The ACLs belong to the new model: only the Space groups' entries on the roots are the projection's. Scopes of nodes that
             // are gone (deleted, purged) go with their entries; every other ACL is kept as it is.
             var kept = securables.Where(n => n.HasUniqueAcl).Select(n => n.Id).ToHashSet();
+            kept.UnionWith(keptDeleted);
             var gone = (await Nodes().Select(n => n.Id).ToListAsync(ct)).Where(id => !kept.Contains(id)).ToList();
             await db.ScopeGrants.Where(g => gone.Contains(g.ScopeId)).ExecuteDeleteAsync(ct);
             await db.AclEntries.Where(e => gone.Contains(e.ScopeId) || (rootIds.Contains(e.ScopeId) && e.Source == AclSource.SpaceDefault)).ExecuteDeleteAsync(ct);

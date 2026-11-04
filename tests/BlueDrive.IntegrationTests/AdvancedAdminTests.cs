@@ -124,11 +124,14 @@ public class AdvancedAdminTests(ApiFactory factory)
 
         (await owner.PostAsJsonAsync("/api/v1/items/delete", new { items = new object[] { new { type = "folder", id = folder }, new { type = "file", id = kept }, new { type = "file", id = free } } }))
             .IsSuccessStatusCode.Should().BeTrue();
+        // Out of the trash first (to the second stage), then for good from there.
+        (await owner.PostAsJsonAsync("/api/v1/trash/purge", new object[] { new { type = "folder", id = folder }, new { type = "file", id = kept }, new { type = "file", id = free } }))
+            .IsSuccessStatusCode.Should().BeTrue();
         // Held: refused, whoever asks.
         (await owner.PostAsJsonAsync("/api/v1/trash/purge", new[] { new { type = "folder", id = folder } })).StatusCode.Should().Be(HttpStatusCode.Conflict);
-        // Retained: the user's purge works for them, the file goes to the preservation store; the other is purged for real.
+        // Retained: the purge works for the user, the file goes to the preservation store; the other is purged for real.
         (await owner.PostAsJsonAsync("/api/v1/trash/purge", new[] { new { type = "file", id = kept }, new { type = "file", id = free } })).IsSuccessStatusCode.Should().BeTrue();
-        var trash = await (await owner.GetAsync($"/api/v1/workspaces/{ws}/trash")).ReadJsonAsync();
+        var trash = await (await owner.GetAsync($"/api/v1/workspaces/{ws}/trash?stage=2")).ReadJsonAsync();
         trash.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()).Should().BeEquivalentTo([folder]);
         var preserved = await (await admin.GetAsync("/api/v1/admin/retention/preserved?pageSize=100")).ReadJsonAsync();
         var row = preserved.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("id").GetGuid() == kept);
@@ -149,5 +152,44 @@ public class AdvancedAdminTests(ApiFactory factory)
 
         var audit = await (await admin.PostAsJsonAsync("/api/v1/audit-logs/search?pageSize=50", new { actions = new[] { "hold_applied", "hold_removed" } })).ReadJsonAsync();
         audit.GetProperty("items").EnumerateArray().Select(a => a.GetProperty("action").GetString()).Should().Contain(["hold_applied", "hold_removed"]);
+    }
+
+    [Fact]
+    public async Task The_second_stage_trash_is_for_managers_and_a_restore_brings_back_own_permissions_and_parents()
+    {
+        var admin = await factory.AdminClientAsync();
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (member, memberId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (reader, readerId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = (await (await owner.PostAsJsonAsync("/api/v1/workspaces", new { name = "Space thùng rác", type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        await (await owner.PostAsJsonAsync($"/api/v1/workspaces/{ws}/members", new { userIds = new[] { memberId }, role = "editor" })).ReadJsonAsync();
+        var folder = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Báo cáo" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var file = (await StorageTests.UploadAsync(member, ws, folder, "quy-1.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+        await (await owner.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { new { kind = "user", id = readerId } }, levelId = levels["viewer"], notify = false })).ReadJsonAsync();
+        (await reader.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // The member deletes the file then the folder; "xóa vĩnh viễn" of the file sends it to the second stage, out of their sight.
+        (await member.PostAsJsonAsync("/api/v1/items/delete", new { items = new[] { new { type = "file", id = file } } })).IsSuccessStatusCode.Should().BeTrue();
+        (await owner.PostAsJsonAsync("/api/v1/items/delete", new { items = new[] { new { type = "folder", id = folder } } })).IsSuccessStatusCode.Should().BeTrue();
+        (await member.PostAsJsonAsync("/api/v1/trash/purge", new[] { new { type = "file", id = file } })).IsSuccessStatusCode.Should().BeTrue();
+        (await (await member.GetAsync($"/api/v1/workspaces/{ws}/trash")).ReadJsonAsync()).GetProperty("items").EnumerateArray()
+            .Should().NotContain(i => i.GetProperty("id").GetGuid() == file);
+        (await member.GetAsync($"/api/v1/workspaces/{ws}/trash?stage=2")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await member.PostAsJsonAsync("/api/v1/trash/restore", new { items = new[] { new { type = "file", id = file } } })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var second = await (await owner.GetAsync($"/api/v1/workspaces/{ws}/trash?stage=2")).ReadJsonAsync();
+        var row = second.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("id").GetGuid() == file);
+        row.GetProperty("stage").GetInt32().Should().Be(2);
+        row.GetProperty("purgeAt").GetDateTime().Should().BeCloseTo(DateTime.UtcNow.AddDays(93), TimeSpan.FromHours(1));
+
+        // The model is rebuilt meanwhile: the file's own permissions stay with it.
+        (await admin.PostAsync("/api/v1/admin/permission-model/rebuild", null)).IsSuccessStatusCode.Should().BeTrue();
+        (await owner.PostAsJsonAsync("/api/v1/trash/restore", new { items = new[] { new { type = "file", id = file } } })).IsSuccessStatusCode.Should().BeTrue();
+        var restored = await (await owner.GetAsync($"/api/v1/files/{file}")).ReadJsonAsync();
+        var parent = restored.GetProperty("folderId").GetGuid();
+        parent.Should().NotBe(folder, "the deleted folder stays in the trash; one of the same name is made");
+        (await (await owner.GetAsync($"/api/v1/workspaces/{ws}/folder-info?folderId={parent}")).ReadJsonAsync()).GetProperty("name").GetString().Should().Be("Báo cáo");
+        (await reader.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK, "the grant came back with the file");
+        (await reader.GetAsync($"/api/v1/files/{file}/download-url")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { App, Button, Card, Empty, Input, Result, Select, Space, Table, Tag, Tooltip, Typography } from 'antd'
+import { App, Button, Card, Empty, Input, Result, Segmented, Select, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import { ClearOutlined, DeleteOutlined, UndoOutlined } from '@ant-design/icons'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -17,6 +17,8 @@ import type { TrashItem } from '@/types/drive'
 import { extensionOf, formatBytes, formatDateTime } from '@/utils/format'
 
 const MANAGING_ROLES = ['owner', 'manager', 'editor']
+/** Spec 8.1: who sees the second stage of a Space's trash (and the owner of a Drive). */
+const SECOND_STAGE_ROLES = ['owner', 'manager']
 
 /** Thùng rác (#61–62): per workspace, who deleted / when / original location; restore, purge, empty. */
 export default function TrashPage() {
@@ -27,6 +29,7 @@ export default function TrashPage() {
   const workspaces = useMyWorkspaces()
   const [workspaceId, setWorkspaceId] = useState<string | null>(personalId)
   const [selected, setSelected] = useState<string[]>([])
+  const [stage, setStage] = useState<1 | 2>(1)
   const table = useServerTable<{ q?: string }>({})
 
   const options = useMemo(
@@ -37,9 +40,14 @@ export default function TrashPage() {
     [workspaces.data, t],
   )
 
+  const current = workspaces.data?.find((w) => w.id === workspaceId)
+  const secondStage =
+    can('workspace.admin') || current?.type === 'personal' || (!!current?.myRole && SECOND_STAGE_ROLES.includes(current.myRole))
+  const shownStage = secondStage ? stage : 1
+
   const trash = useQuery({
-    queryKey: [...qk.trash(workspaceId ?? ''), table.params],
-    queryFn: () => listTrash(workspaceId!, table.params),
+    queryKey: [...qk.trash(workspaceId ?? ''), table.params, shownStage],
+    queryFn: () => listTrash(workspaceId!, table.params, shownStage),
     enabled: !!workspaceId && can('trash.view'),
     placeholderData: keepPreviousData,
   })
@@ -53,7 +61,7 @@ export default function TrashPage() {
     ...after,
     successMessage: (r) => t('trash.purged', { count: r.purged }),
   })
-  const empty = useApiMutation(() => emptyTrash(workspaceId!), {
+  const empty = useApiMutation(() => emptyTrash(workspaceId!, shownStage), {
     ...after,
     successMessage: (r) => t('trash.emptied', { count: r.purged }),
   })
@@ -65,7 +73,7 @@ export default function TrashPage() {
   const confirmPurge = () =>
     modal.confirm({
       title: t('trash.purgeTitle'),
-      content: t('trash.purgeConfirm', { count: selected.length }),
+      content: t(shownStage === 2 ? 'trash.purgeConfirm2' : 'trash.purgeConfirm', { count: selected.length }),
       okText: t('trash.purge'),
       okButtonProps: { danger: true },
       cancelText: t('common.cancel'),
@@ -74,7 +82,7 @@ export default function TrashPage() {
   const confirmEmpty = () =>
     modal.confirm({
       title: t('trash.emptyTitle'),
-      content: t('trash.emptyConfirm'),
+      content: t(shownStage === 2 ? 'trash.emptyConfirm2' : 'trash.emptyConfirm'),
       okText: t('trash.empty'),
       okButtonProps: { danger: true },
       cancelText: t('common.cancel'),
@@ -103,6 +111,7 @@ export default function TrashPage() {
             onChange={(v: string) => {
               setWorkspaceId(v)
               setSelected([])
+              setStage(1)
               table.resetFilter()
             }}
             options={options}
@@ -110,6 +119,20 @@ export default function TrashPage() {
             style={{ minWidth: 220 }}
             aria-label={t('trash.workspace')}
           />
+          {secondStage && (
+            <Segmented
+              value={shownStage}
+              onChange={(v) => {
+                setStage(v as 1 | 2)
+                setSelected([])
+              }}
+              options={[
+                { value: 1, label: t('trash.stage1') },
+                { value: 2, label: t('trash.stage2') },
+              ]}
+              aria-label={t('trash.stageLabel')}
+            />
+          )}
           <Input.Search
             allowClear
             placeholder={t('trash.search')}

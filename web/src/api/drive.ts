@@ -89,8 +89,8 @@ export async function deleteItems(items: ItemRef[]): Promise<{ deleted: number }
 }
 
 // ---------- Trash ----------
-export async function listTrash(workspaceId: string, params: PageParams): Promise<Paged<TrashItem>> {
-  const { data } = await api.get<Paged<TrashItem>>(`/workspaces/${workspaceId}/trash`, { params: cleanParams(params) })
+export async function listTrash(workspaceId: string, params: PageParams, stage: 1 | 2 = 1): Promise<Paged<TrashItem>> {
+  const { data } = await api.get<Paged<TrashItem>>(`/workspaces/${workspaceId}/trash`, { params: cleanParams({ ...params, stage }) })
   return data
 }
 
@@ -104,8 +104,8 @@ export async function purgeItems(items: ItemRef[]): Promise<{ purged: number }> 
   return data
 }
 
-export async function emptyTrash(workspaceId: string): Promise<{ purged: number }> {
-  const { data } = await api.post<{ purged: number }>(`/workspaces/${workspaceId}/trash/empty`)
+export async function emptyTrash(workspaceId: string, stage: 1 | 2 = 1): Promise<{ purged: number }> {
+  const { data } = await api.post<{ purged: number }>(`/workspaces/${workspaceId}/trash/empty`, null, { params: { stage } })
   return data
 }
 

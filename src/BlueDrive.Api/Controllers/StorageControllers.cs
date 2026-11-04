@@ -311,7 +311,7 @@ public class WorkspacesController : ApiControllerBase
 
     /// <summary>Dọn sạch thùng rác.</summary>
     [HttpPost("{id:guid}/trash/empty"), HasPermission(Perm.TrashPurge)]
-    public async Task<IActionResult> EmptyTrash(Guid id) => Ok(new { purged = await Mediator.Send(new PurgeItemsCommand(null, id)) });
+    public async Task<IActionResult> EmptyTrash(Guid id, [FromQuery] int stage = 1) => Ok(new { purged = await Mediator.Send(new PurgeItemsCommand(null, id, stage)) });
 
     public sealed record QuotaBody(double QuotaGb);
 }

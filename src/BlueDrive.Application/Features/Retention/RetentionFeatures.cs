@@ -192,7 +192,7 @@ public sealed record PreservedItemDto(Guid Id, string Type, string Name, Guid Wo
 
 public sealed record ListPreservedQuery : PageQuery, IRequest<PagedResult<PreservedItemDto>>;
 
-/// <summary>"Trả về thùng rác": the item goes back to its trash (and from there can be restored).</summary>
+/// <summary>"Trả về thùng rác": the item goes back to the (first stage) trash, from where it can be restored.</summary>
 public sealed record ReleasePreservedCommand(IReadOnlyList<ItemRef> Items) : IRequest<int>;
 
 /// <summary>"Xóa vĩnh viễn" from the store: only once the retention has passed and no hold applies.</summary>
@@ -404,6 +404,7 @@ public sealed class RetentionHandlers(IAppDbContext db, ICurrentUser me, IPermis
             {
                 var f = await db.Files.FirstOrDefaultAsync(x => x.Id == item.Id && x.PreservedAt != null, ct) ?? throw new NotFoundException("Không tìm thấy mục trong kho lưu giữ.");
                 f.PreservedAt = null;
+                f.SecondStageAt = null;
                 // Back to the trash as an item of its own (its folder may be gone).
                 if (!f.IsTrashRoot) { f.IsTrashRoot = true; f.OriginalFolderId = f.FolderId; }
                 await db.SaveChangesAsync(ct);
@@ -413,6 +414,7 @@ public sealed class RetentionHandlers(IAppDbContext db, ICurrentUser me, IPermis
             {
                 var folder = await db.Folders.FirstOrDefaultAsync(x => x.Id == item.Id && x.PreservedAt != null, ct) ?? throw new NotFoundException("Không tìm thấy mục trong kho lưu giữ.");
                 folder.PreservedAt = null;
+                folder.SecondStageAt = null;
                 await db.SaveChangesAsync(ct);
                 var path = folder.Path;
                 await db.Files.Where(x => x.Folder != null && x.Folder.Path.StartsWith(path) && x.PreservedAt != null)
@@ -484,10 +486,11 @@ public sealed class RetentionHandlers(IAppDbContext db, ICurrentUser me, IPermis
     {
         if (ids.Count == 0) return 0;
         var now = clock.GetUtcNow().UtcDateTime;
-        var files = await db.Files.Where(f => ids.Contains(f.Id) && !f.IsDeleted).ToListAsync(ct);
+        var files = await db.Files.Include(f => f.Folder).Where(f => ids.Contains(f.Id) && !f.IsDeleted).ToListAsync(ct);
         foreach (var f in files)
         {
             f.IsDeleted = true; f.IsTrashRoot = true; f.DeletedAt = now; f.DeletedBy = by; f.OriginalFolderId = f.FolderId;
+            f.OriginalPath = await TrashAccess.OriginalPathAsync(db, f.Folder?.Path, ct);
         }
         await db.SaveChangesAsync(ct);
         foreach (var f in files)

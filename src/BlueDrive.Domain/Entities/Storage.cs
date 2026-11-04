@@ -108,6 +108,10 @@ public class Folder : AuditableEntity, ISoftDeletable
     public Guid? OriginalParentId { get; set; }
     /// <summary>True when the folder itself was deleted (not as a descendant of a deleted folder).</summary>
     public bool IsTrashRoot { get; set; }
+    /// <summary>Spec 8.1: removed from the trash by the user — in the second stage (managers and administrators), until the trash time ends.</summary>
+    public DateTime? SecondStageAt { get; set; }
+    /// <summary>Names of the folders above a trash root ("Hồ sơ/2025"): restoring makes missing ones again.</summary>
+    public string? OriginalPath { get; set; }
     /// <summary>Purged while kept by a retention policy: in the preservation store (spec 7.2), hidden from the trash.</summary>
     public DateTime? PreservedAt { get; set; }
     /// <summary>Incremented on every change recorded in the change journal; the sync ETag.</summary>
@@ -158,6 +162,10 @@ public class StoredFile : AuditableEntity, ISoftDeletable
     public Guid? DeletedBy { get; set; }
     public Guid? OriginalFolderId { get; set; }
     public bool IsTrashRoot { get; set; }
+    /// <summary>Spec 8.1: removed from the trash by the user — in the second stage (managers and administrators), until the trash time ends.</summary>
+    public DateTime? SecondStageAt { get; set; }
+    /// <summary>Names of the folders above a trash root ("Hồ sơ/2025"): restoring makes missing ones again.</summary>
+    public string? OriginalPath { get; set; }
     /// <summary>Purged while kept by a retention policy: in the preservation store (spec 7.2), hidden from the trash.</summary>
     public DateTime? PreservedAt { get; set; }
     /// <summary>Incremented on every change recorded in the change journal; the sync ETag.</summary>
