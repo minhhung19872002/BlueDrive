@@ -31,6 +31,7 @@ public static class DependencyInjection
         services.AddScoped<Features.Access.LegacyAclSync>();
         services.AddScoped<Features.Sharing.LinkModel>();
         services.AddScoped<Features.Access.SharingPolicy>();
+        services.AddScoped<Features.Access.ExpiryReminders>();
         services.AddScoped<Abstractions.IResourceAccessChecker, Security.ResourceAccessChecker>();
         services.AddScoped<Features.Storage.QuotaService>();
         services.AddSingleton<Features.Office.OfficeEditingTracker>();

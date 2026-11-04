@@ -806,6 +806,24 @@
     "decidersSpaceOwners": "Chỉ Quản lý Space",
     "saved": "Đã lưu chính sách chia sẻ."
   },
+  "renew": {
+    "title": "Gia hạn quyền truy cập",
+    "item": "Tư liệu",
+    "who": "Người được cấp quyền",
+    "link": "Liên kết",
+    "level": "Cấp quyền",
+    "expiresAt": "Hết hạn",
+    "noExpiry": "Không hết hạn",
+    "expired": "Đã hết hạn",
+    "extendBy": "Gia hạn thêm",
+    "days": "ngày",
+    "extend": "Gia hạn",
+    "extended": "Đã gia hạn.",
+    "ask": "Đề nghị gia hạn",
+    "askHint": "Người đã chia sẻ hoặc người quản lý mục sẽ nhận đề nghị và gia hạn cho bạn.",
+    "requested": "Đã gửi đề nghị gia hạn",
+    "notFound": "Không tìm thấy quyền hoặc liên kết cần gia hạn"
+  },
   "requestAccess": {
     "title": "Bạn cần quyền truy cập",
     "subtitle": "Bạn chưa có quyền mở mục này. Gửi yêu cầu để người quản lý cấp quyền.",

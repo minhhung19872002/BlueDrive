@@ -107,7 +107,8 @@ public sealed class PermissionProjectionJob(Application.Features.Access.Permissi
 /// Grants that ran out leave scope_grants (the SQL trimming of lists and search) with rights nobody holds any more: every 5 minutes the
 /// scopes with an entry expired in the last 15 minutes get their grants rewritten (the engine itself checks expiry on every call).
 /// </summary>
-public sealed class AclExpiryJob(IAppDbContext db, Application.Features.Access.AclEditor editor, TimeProvider clock, ILogger<AclExpiryJob> logger)
+public sealed class AclExpiryJob(IAppDbContext db, Application.Features.Access.AclEditor editor, Application.Features.Access.ExpiryReminders reminders,
+    TimeProvider clock, ILogger<AclExpiryJob> logger)
 {
     [AutomaticRetry(Attempts = 1)]
     [DisableConcurrentExecution(300)]
@@ -122,6 +123,9 @@ public sealed class AclExpiryJob(IAppDbContext db, Application.Features.Access.A
         // Access requests not answered within 30 days end (spec 5.2).
         await db.AccessRequests.Where(r => r.Status == Domain.Enums.AccessRequestStatus.Pending && r.ExpiresAt <= now)
             .ExecuteUpdateAsync(u => u.SetProperty(r => r.Status, Domain.Enums.AccessRequestStatus.Expired), ct);
+        // "Sắp hết hạn" 3 days ahead and "đã hết hạn" (spec 5.5).
+        var notices = await reminders.RunAsync(ct);
+        if (notices > 0) logger.LogInformation("Đã gửi {Count} thông báo hạn quyền / liên kết", notices);
         return scopes.Count;
     }
 }

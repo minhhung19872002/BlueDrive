@@ -203,6 +203,8 @@ public class ShareLink : AuditableEntity
     public ShareLinkScope Scope { get; set; }
     /// <summary>Level the link gives (Organization / Specific: through the model, the link is a principal; Anyone: the visitor's rights).</summary>
     public Guid? LevelId { get; set; }
+    /// <summary>When "sắp hết hạn" was announced to who made it (spec 5.5); cleared when it is extended.</summary>
+    public DateTime? ReminderSentAt { get; set; }
     public ResourceType ResourceType { get; set; }
     public Guid ResourceId { get; set; }
     public bool AllowDownload { get; set; }

@@ -182,3 +182,32 @@ export async function setSpaceSharingPolicy(
 ): Promise<void> {
   await api.put(`/workspaces/${workspaceId}/sharing-policy`, body)
 }
+
+export interface RenewalInfo {
+  kind: 'permission' | 'link'
+  id: string
+  itemId: string
+  itemName: string
+  itemKind: string
+  who: string
+  levelName: string | null
+  expiresAt: string | null
+  expired: boolean
+  canExtend: boolean
+  canRequest: boolean
+  maxDays: number | null
+}
+
+export async function getRenewal(kind: 'permission' | 'link', id: string): Promise<RenewalInfo> {
+  const { data } = await api.get<RenewalInfo>(`/renewals/${kind}/${id}`)
+  return data
+}
+
+export async function extendRenewal(kind: 'permission' | 'link', id: string, days: number): Promise<RenewalInfo> {
+  const { data } = await api.post<RenewalInfo>(`/renewals/${kind}/${id}/extend`, { days })
+  return data
+}
+
+export async function requestRenewal(entryId: string): Promise<void> {
+  await api.post(`/renewals/permission/${entryId}/request`)
+}

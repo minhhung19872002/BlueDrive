@@ -286,4 +286,58 @@ public class SharingModelTests(ApiFactory factory)
         (await (await owner.GetAsync("/api/v1/access-requests")).ReadJsonAsync()).EnumerateArray().Should().Contain(r => r.GetProperty("itemId").GetGuid() == other);
         (await (await member.GetAsync("/api/v1/access-requests")).ReadJsonAsync()).EnumerateArray().Should().NotContain(r => r.GetProperty("itemId").GetGuid() == other);
     }
+
+    [Fact]
+    public async Task Expiry_is_announced_three_days_ahead_and_can_be_extended()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (guest, guestId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var file = (await StorageTests.UploadAsync(owner, ws, null, "sap-het-han.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+        await (await owner.PostAsJsonAsync($"/api/v1/items/{file}/permissions",
+            new { targets = new[] { User(guestId) }, levelId = levels["viewer"], expiresAt = DateTime.UtcNow.AddDays(2), notify = false })).ReadJsonAsync();
+        var link = await (await owner.PostAsJsonAsync("/api/v1/share-links",
+            new { resourceType = "file", resourceId = file, scope = "anyone", levelId = levels["viewer"], allowDownload = true, expiresAt = DateTime.UtcNow.AddDays(1) })).ReadJsonAsync();
+        var entry = (await (await owner.GetAsync($"/api/v1/items/{file}/permissions")).ReadJsonAsync()).GetProperty("entries").EnumerateArray()
+            .Single(e => e.GetProperty("principalId").GetGuid() == guestId).GetProperty("id").GetGuid();
+
+        async Task Run()
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<BlueDrive.Application.Features.Access.ExpiryReminders>().RunAsync(CancellationToken.None);
+        }
+        async Task<List<JsonElement>> Notes(HttpClient c) => (await (await c.GetAsync("/api/v1/notifications?pageSize=50")).ReadJsonAsync()).GetProperty("items").EnumerateArray()
+            .Where(n => n.GetProperty("type").GetString() == "permission_expiry").ToList();
+
+        await Run();
+        await Run(); // once only
+        var toGuest = (await Notes(guest)).Where(n => n.GetProperty("title").GetString()!.Contains("sẽ hết hạn")).ToList();
+        toGuest.Should().ContainSingle().Which.GetProperty("link").GetString().Should().Be($"/renew/permission/{entry}");
+        var toOwner = await Notes(owner);
+        toOwner.Should().Contain(n => n.GetProperty("title").GetString()!.Contains("Quyền của") && n.GetProperty("link").GetString() == $"/renew/permission/{entry}");
+        toOwner.Should().Contain(n => n.GetProperty("link").GetString() == $"/renew/link/{link.GetProperty("id").GetGuid()}");
+
+        // The guest may only ask; the owner extends (from the old end date), and the guest is told.
+        var seen = await (await guest.GetAsync($"/api/v1/renewals/permission/{entry}")).ReadJsonAsync();
+        seen.GetProperty("canExtend").GetBoolean().Should().BeFalse();
+        seen.GetProperty("canRequest").GetBoolean().Should().BeTrue();
+        (await guest.PostAsJsonAsync($"/api/v1/renewals/permission/{entry}/extend", new { days = 30 })).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await guest.PostAsync($"/api/v1/renewals/permission/{entry}/request", null)).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await (await owner.GetAsync("/api/v1/access-requests")).ReadJsonAsync()).EnumerateArray().Should().Contain(r => r.GetProperty("itemId").GetGuid() == file);
+        var extended = await (await owner.PostAsJsonAsync($"/api/v1/renewals/permission/{entry}/extend", new { days = 30 })).ReadJsonAsync();
+        extended.GetProperty("expiresAt").GetDateTime().Should().BeCloseTo(DateTime.UtcNow.AddDays(32), TimeSpan.FromMinutes(5));
+        (await Notes(guest)).Should().Contain(n => n.GetProperty("title").GetString()!.Contains("đã được gia hạn"));
+        (await (await owner.PostAsJsonAsync($"/api/v1/renewals/link/{link.GetProperty("id").GetGuid()}/extend", new { days = 90 })).ReadJsonAsync())
+            .GetProperty("expiresAt").GetDateTime().Should().BeCloseTo(DateTime.UtcNow.AddDays(30), TimeSpan.FromMinutes(5), "an anyone link never lives longer than the policy allows");
+
+        // Once it has ended: told again.
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<BlueDrive.Application.Abstractions.IAppDbContext>();
+            await db.AclEntries.Where(e => e.Id == entry).ExecuteUpdateAsync(u => u.SetProperty(e => e.ExpiresAt, DateTime.UtcNow.AddHours(-1)));
+        }
+        await Run();
+        (await Notes(guest)).Should().Contain(n => n.GetProperty("title").GetString()!.Contains("đã hết hạn"));
+    }
 }

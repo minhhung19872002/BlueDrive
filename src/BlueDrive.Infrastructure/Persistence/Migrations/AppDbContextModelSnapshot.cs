@@ -111,6 +111,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasDefaultValue(true)
                         .HasColumnName("applies_to_children");
 
+                    b.Property<DateTime?>("ExpiredNoticeAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expired_notice_at");
+
                     b.Property<DateTime?>("ExpiresAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
@@ -145,6 +149,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)")
                         .HasColumnName("principal_kind");
+
+                    b.Property<DateTime?>("ReminderSentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reminder_sent_at");
 
                     b.Property<Guid>("ScopeId")
                         .HasColumnType("uuid")
@@ -2096,6 +2104,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.Property<int?>("MaxAccessCount")
                         .HasColumnType("integer")
                         .HasColumnName("max_access_count");
+
+                    b.Property<DateTime?>("ReminderSentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reminder_sent_at");
 
                     b.Property<bool>("RequireLogin")
                         .HasColumnType("boolean")

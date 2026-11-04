@@ -342,6 +342,25 @@ public class ItemAccessController : ApiControllerBase
     }
 }
 
+/// <summary>Gia hạn quyền / liên kết sắp hết hạn (kind = permission | link).</summary>
+[Route("api/v1/renewals/{kind:regex(^(permission|link)$)}/{id:guid}")]
+public class RenewalsController : ApiControllerBase
+{
+    [HttpGet]
+    public Task<Application.Features.Access.RenewalInfoDto> Get(string kind, Guid id) => Mediator.Send(new Application.Features.Access.GetRenewalQuery(kind, id));
+
+    [HttpPost("extend")]
+    public Task<Application.Features.Access.RenewalInfoDto> Extend(string kind, Guid id, Application.Features.Access.ExtendCommand cmd) =>
+        Mediator.Send(cmd with { Kind = kind, Id = id });
+
+    [HttpPost("request")]
+    public async Task<IActionResult> Request(string kind, Guid id)
+    {
+        if (kind != "permission") return NotFound();
+        return Ok(new { id = await Mediator.Send(new Application.Features.Access.RequestRenewalCommand(id)) });
+    }
+}
+
 /// <summary>Chính sách chia sẻ của Space.</summary>
 [Route("api/v1/workspaces/{id:guid}/sharing-policy")]
 public class SpaceSharingPolicyController : ApiControllerBase

@@ -158,6 +158,9 @@ public class AclEntry
     public bool AppliesToChildren { get; set; } = true;
     /// <summary>Note sent with the grant ("Gửi thông báo kèm lời nhắn"), shown in "Được chia sẻ với tôi".</summary>
     public string? Message { get; set; }
+    /// <summary>When "sắp hết hạn" was announced (spec 5.5); cleared when the access is extended.</summary>
+    public DateTime? ReminderSentAt { get; set; }
+    public DateTime? ExpiredNoticeAt { get; set; }
 }
 
 /// <summary>"Yêu cầu quyền truy cập" (spec 5.2): someone asks for a level on an item; who manages it approves (maybe another level) or refuses.</summary>
