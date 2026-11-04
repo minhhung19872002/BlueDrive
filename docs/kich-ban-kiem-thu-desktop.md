@@ -44,6 +44,7 @@ BlueDrive Desktop 1.0.3 → 1.0.6 (các bản sửa bên dưới). Thời gian l
 
 | Tiêu chí | Kết quả | Đo được |
 |---|---|---|
+| Cài trên Windows 11 sạch (máy B mới cài 24H2), đăng nhập bằng trình duyệt | Đạt | Thư mục "BlueDrive - <đơn vị>" có ở khung trái Explorer, cây Tài liệu của tôi / Nhóm / Được chia sẻ với tôi, mọi tệp ở dạng chỉ có trên mạng (☁); mở tệp thì tự tải, "Luôn giữ" / "Giải phóng dung lượng" đổi biểu tượng đúng |
 | Tạo / sửa Word, Excel, PowerPoint trên A → B và B → A | Đạt | A → B 7–8 s (tạo 11:32:43,6 → B có tệp 11:32:50,7); B → A 7–10 s; nội dung Word/Excel/PowerPoint sửa trên B có đủ trên A |
 | Sửa đồng thời cùng tệp Word trên A và B (cách nhau 0,7 s) | Đạt | B lên trước; A giữ bản của mình thành `Báo cáo (Bản xung đột - Nguyễn Văn Biên Tập 1 - LAPTOP-KGTEG72G - 2026-11-04 1135).docx`, có thông báo; bản xung đột cũng về B; không mất nội dung |
 | 3 người cùng sửa 1 tệp: web + ONLYOFFICE Desktop trên A và trên B (mục 15) | Đạt | Cả ba thấy chữ và con trỏ của nhau tức thời (biểu tượng cộng tác: 3); đóng → đúng 1 phiên bản mới (3 → 4); `Báo cáo.docx` trên A và B tự cập nhật đủ dòng của cả ba. Excel (ô sửa trên B về A sau 8 s) và PowerPoint (slide sửa trên B về A sau 8 s) cũng mở cùng soạn được |
@@ -78,6 +79,11 @@ BlueDrive Desktop 1.0.3 → 1.0.6 (các bản sửa bên dưới). Thời gian l
    IT `SyncAgentTests.A_folder_dragged_to_another_group_is_moved_there_on_the_server`.
 8. Được thêm vào nhóm mới / được chia sẻ mục mới: máy chỉ thấy ở lượt định kỳ (tới 15 phút). Nay máy chủ báo ngay cho người được cấp quyền
    — IT `SyncTests.A_device_hears_at_once_when_its_user_is_added_to_a_workspace`.
+9. Web: thùng rác và "Gần đây" hiện biểu tượng Word cho tệp `.txt` (mọi tệp văn bản) — E2E "thùng rác hiện đúng loại tệp".
+10. Kéo thư mục 4 tệp vào BlueDrive, chỉ 3 tệp lên web: tệp `.xlsm` bị máy chủ từ chối (định dạng chưa được phép) nhưng Explorer vẫn hiện
+    "đang đồng bộ". Nay Explorer hiện trạng thái "Lỗi đồng bộ — <lý do>" trên tệp (lý do cũng có ở Cài đặt → Vấn đề) —
+    `DesktopTests.Problems_about_a_file_name_the_file_shown_as_sync_error_in_explorer`. `.xlsm`/`.docm`/`.pptm` (có macro) giữ mặc định
+    không cho tải lên; quản trị viên bật trong "Định dạng tệp cho phép" nếu cần.
 
 ## Kết quả nghiệm thu tự động — mục 15, hai thiết bị
 

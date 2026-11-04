@@ -37,7 +37,9 @@ Tải bộ cài trên web: menu tài khoản → **Tải ứng dụng máy tính
 - Tệp bạn chỉ được **xem** (không có quyền tải xuống) và tệp có định dạng đơn vị không cho tải về máy hiện thành lối tắt
   `<tên tệp> - Mở trên web`: nhấp đúp để xem trên BlueDrive bằng trình duyệt. Khi được cấp quyền tải xuống, tệp tự về máy và lối tắt biến mất.
 - Tệp có định dạng hoặc kích thước đơn vị không cho tải lên (ví dụ `.exe`, tệp quá lớn) vẫn nằm trên máy, không được gửi đi, và hiện trong
-  **Cài đặt → Vấn đề** kèm lý do.
+  **Cài đặt → Vấn đề** kèm lý do. Trong Explorer, cột **Trạng thái của BlueDrive** của tệp đó hiện **"Lỗi đồng bộ — <lý do>"**.
+  Tệp Office có macro (`.xlsm`, `.docm`, `.pptm`) mặc định chưa được phép tải lên; quản trị viên thêm các đuôi này ở
+  **Quản trị → Cài đặt hệ thống → Lưu trữ → Định dạng tệp cho phép** nếu đơn vị cho dùng, sau đó tệp tự lên máy chủ ở lượt đồng bộ sau.
 - **Nút trạng thái BlueDrive** ở đầu thanh địa chỉ (Windows 11 22H2 trở lên): bấm vào để xem trạng thái đồng bộ, dung lượng đã dùng,
   **Mở BlueDrive** và **Xem trên web**.
 
