@@ -29,31 +29,39 @@ public interface IItemPermissionService
     /// <summary>404 when the user may not even see the item (its existence stays hidden), 403 when a right is missing.</summary>
     Task<AccessRight> DemandAsync(Guid userId, Guid itemId, AccessRight wanted, CancellationToken ct = default);
     Task<PermissionExplanation> ExplainAsync(Guid userId, Guid itemId, CancellationToken ct = default);
+    /// <summary>Rights before the "locked Space" restriction, and whether the Space is locked (writes answer 423, not 403).</summary>
+    Task<(AccessRight Rights, bool Locked)> GetWithLockAsync(Guid userId, Guid itemId, CancellationToken ct = default);
 }
 
 public sealed class ItemPermissionService(IAppDbContext db, IPermissionService rbac, IMemoryCache cache, TimeProvider clock) : IItemPermissionService
 {
     private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(5);
-    private readonly Dictionary<(Guid, Guid), AccessRight> _request = [];
+    private readonly Dictionary<(Guid, Guid), (AccessRight, bool)> _request = [];
 
     public async Task<AccessRight> GetEffectiveAsync(Guid userId, Guid itemId, CancellationToken ct = default)
+    {
+        var (rights, locked) = await GetWithLockAsync(userId, itemId, ct);
+        return locked ? rights & ~AccessRights.Writes : rights;
+    }
+
+    public async Task<(AccessRight Rights, bool Locked)> GetWithLockAsync(Guid userId, Guid itemId, CancellationToken ct = default)
     {
         if (_request.TryGetValue((userId, itemId), out var known)) return known;
         var node = await db.Securables.AsNoTracking().Where(s => s.Id == itemId && !s.IsDeleted)
             .Select(s => new { s.Id, s.Kind, s.AclScopeId, s.OwnerUserId, Root = s.SpaceId ?? s.PersonalDriveId }).FirstOrDefaultAsync(ct);
-        var rights = AccessRight.None;
-        if (node is not null)
+        var result = (AccessRight.None, false);
+        if (node is not null && await StillThereAsync(node.Kind, node.Id, ct))
         {
             var user = await UserAsync(userId, ct);
             if (user.CanViewDocs)
             {
                 var (direct, membership) = await ScopeRightsAsync(user, node.AclScopeId, ct);
-                rights = Restrictions.Apply(user, node.OwnerUserId == userId, direct, membership, await FileFactsAsync(node.Kind, node.Id, ct),
+                result = (Restrictions.Apply(user, node.OwnerUserId == userId, direct, membership, await FileFactsAsync(node.Kind, node.Id, ct), locked: false),
                     await LockedAsync(node.Root, ct));
             }
         }
-        _request[(userId, itemId)] = rights;
-        return rights;
+        _request[(userId, itemId)] = result;
+        return result;
     }
 
     public async Task<bool> HasAsync(Guid userId, Guid itemId, AccessRight wanted, CancellationToken ct = default) =>
@@ -143,6 +151,18 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
         cache.Set(key, (result.Item1, result.Item2, until), new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = CacheFor });
         return result;
     }
+
+    /// <summary>
+    /// The folder or file itself must exist and not be in the trash: bulk deletes and restores of a backup do not go through the change
+    /// tracker, so the node alone is not trusted for that.
+    /// </summary>
+    private async Task<bool> StillThereAsync(SecurableKind kind, Guid id, CancellationToken ct) => kind switch
+    {
+        SecurableKind.File => await db.Files.AnyAsync(f => f.Id == id && !f.IsDeleted, ct),
+        SecurableKind.Folder => await db.Folders.AnyAsync(f => f.Id == id && !f.IsDeleted, ct),
+        SecurableKind.Space or SecurableKind.Drive => await db.Workspaces.AnyAsync(w => w.Id == id, ct),
+        _ => true,
+    };
 
     private async Task<Restrictions.FileFacts?> FileFactsAsync(SecurableKind kind, Guid id, CancellationToken ct) =>
         kind != SecurableKind.File ? null

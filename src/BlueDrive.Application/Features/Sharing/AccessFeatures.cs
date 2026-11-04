@@ -85,11 +85,11 @@ public sealed class GetResourceAccessHandler(IAppDbContext db, ICurrentUser me, 
         {
             case ResourceType.File:
                 var f = await db.Files.AsNoTracking().Include(x => x.Folder).FirstAsync(x => x.Id == q.Id, ct);
-                wsId = f.WorkspaceId; name = f.Name; chain = ResourceAuthorizationService.PathIds(f.Folder?.Path); breakInheritance = f.BreakInheritance;
+                wsId = f.WorkspaceId; name = f.Name; chain = LegacyResourceAuthorizationService.PathIds(f.Folder?.Path); breakInheritance = f.BreakInheritance;
                 break;
             case ResourceType.Folder:
                 var fo = await db.Folders.AsNoTracking().FirstAsync(x => x.Id == q.Id, ct);
-                wsId = fo.WorkspaceId; name = fo.Name; chain = ResourceAuthorizationService.PathIds(fo.Path).Skip(1).ToList(); breakInheritance = fo.BreakInheritance;
+                wsId = fo.WorkspaceId; name = fo.Name; chain = LegacyResourceAuthorizationService.PathIds(fo.Path).Skip(1).ToList(); breakInheritance = fo.BreakInheritance;
                 break;
             default:
                 var w = await db.Workspaces.AsNoTracking().FirstAsync(x => x.Id == q.Id, ct);
@@ -124,7 +124,7 @@ public sealed class GetResourceAccessHandler(IAppDbContext db, ICurrentUser me, 
 
         entries.Add(new AccessEntryDto(null, PrincipalType.User, ws.OwnerId, N(PrincipalType.User, ws.OwnerId), AccessLevel.Manage, true, null, "owner", ws.Type == WorkspaceType.Personal ? "Chủ sở hữu" : "Trưởng nhóm", false, false));
         foreach (var m in members.Where(m => m.UserId != ws.OwnerId))
-            entries.Add(new AccessEntryDto(null, PrincipalType.User, m.UserId, N(PrincipalType.User, m.UserId), ResourceAuthorizationService.LevelOf(m.MemberRole), true, null, "member", $"Thành viên nhóm ({MemberRoleNames.Of(m.MemberRole)})", false, true));
+            entries.Add(new AccessEntryDto(null, PrincipalType.User, m.UserId, N(PrincipalType.User, m.UserId), LegacyResourceAuthorizationService.LevelOf(m.MemberRole), true, null, "member", $"Thành viên nhóm ({MemberRoleNames.Of(m.MemberRole)})", false, true));
         foreach (var a in inherited)
             entries.Add(new AccessEntryDto(a.Id, a.PrincipalType, a.PrincipalId, N(a.PrincipalType, a.PrincipalId), a.AccessLevel, true, a.ExpiresAt, "inherited",
                 a.ResourceType == ResourceType.Workspace ? $"Kế thừa từ nhóm \"{ws.Name}\"" : $"Kế thừa từ thư mục \"{folderNames.GetValueOrDefault(a.ResourceId)?.Name}\"", false, true));

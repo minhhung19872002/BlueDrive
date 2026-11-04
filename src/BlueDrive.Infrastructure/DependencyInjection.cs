@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.AddScoped<AuditableInterceptor>();
         services.AddScoped<ChangeJournalInterceptor>();
         services.AddScoped<AccessModelInterceptor>();
+        services.AddScoped<Application.Features.Access.IAccessModelSync>(sp => sp.GetRequiredService<AccessModelInterceptor>());
         services.AddDbContext<AppDbContext>((sp, o) => o
             .UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>(), npg => npg.MigrationsHistoryTable("__ef_migrations_history"))
             .UseSnakeCaseNamingConvention()

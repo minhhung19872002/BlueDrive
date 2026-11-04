@@ -16,8 +16,10 @@ namespace BlueDrive.Infrastructure.Persistence;
 /// (<see cref="PermissionProjection.ProjectAsync"/>, same transaction when there is one); group, role and unit changes recompute the
 /// memberships of the users concerned.
 /// </summary>
-public sealed class AccessModelInterceptor(IServiceProvider services) : SaveChangesInterceptor
+public sealed class AccessModelInterceptor(IServiceProvider services) : SaveChangesInterceptor, IAccessModelSync
 {
+    /// <summary>Workspaces projected in this unit of work: projected once more when the request ends (bulk updates after the save).</summary>
+    private readonly HashSet<Guid> _touched = [];
     private readonly HashSet<Guid> _workspaces = [];
     private readonly HashSet<Guid> _users = [];
     private bool _principals;
@@ -59,12 +61,23 @@ public sealed class AccessModelInterceptor(IServiceProvider services) : SaveChan
     {
         if (_running || (_workspaces.Count == 0 && _users.Count == 0 && !_principals)) return;
         var workspaces = _workspaces.ToList();
+        _touched.UnionWith(workspaces);
         var users = _users.ToList();
         _workspaces.Clear();
         _users.Clear();
         _principals = false;
         _running = true;
         try { await services.GetRequiredService<PermissionProjection>().ProjectAsync(workspaces, users, ct); }
+        finally { _running = false; }
+    }
+
+    public async Task FlushTouchedAsync(CancellationToken ct)
+    {
+        if (_running || _touched.Count == 0) return;
+        var workspaces = _touched.ToList();
+        _touched.Clear();
+        _running = true;
+        try { await services.GetRequiredService<PermissionProjection>().ProjectAsync(workspaces, [], ct); }
         finally { _running = false; }
     }
 

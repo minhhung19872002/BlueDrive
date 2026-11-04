@@ -18,7 +18,7 @@ public class ResourceAuthorizationMatrixTests
     private sealed class World
     {
         public required AppDbContext Db;
-        public required ResourceAuthorizationService Auth;
+        public required LegacyResourceAuthorizationService Auth;
         public Guid Owner, Admin, Editor, Viewer, Uploader, Approver, GroupMember, OrgMember, Outsider, NoRole, ReadOnlyEditor;
         public Guid Workspace, F1, F2, F3, File1, File2, File3, FileRoot;
     }
@@ -86,7 +86,7 @@ public class ResourceAuthorizationMatrixTests
         });
         return new World
         {
-            Db = db, Auth = new ResourceAuthorizationService(db, perms, TimeProvider.System),
+            Db = db, Auth = new LegacyResourceAuthorizationService(db, perms, TimeProvider.System),
             Owner = owner.Id, Admin = admin.Id, Editor = editor.Id, Viewer = viewer.Id, Uploader = uploader.Id, Approver = approver.Id,
             GroupMember = gm.Id, OrgMember = om.Id, Outsider = outsider.Id, NoRole = noRole.Id, ReadOnlyEditor = readOnlyEditor.Id,
             Workspace = ws.Id, F1 = f1.Id, F2 = f2.Id, F3 = f3.Id, File1 = file1.Id, File2 = file2.Id, File3 = file3.Id, FileRoot = fileRoot.Id,

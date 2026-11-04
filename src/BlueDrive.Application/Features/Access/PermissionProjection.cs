@@ -8,6 +8,15 @@ using Microsoft.EntityFrameworkCore;
 namespace BlueDrive.Application.Features.Access;
 
 /// <summary>
+/// Keeps the new permission model in step with the current one (implemented by the persistence layer). <see cref="FlushTouchedAsync"/>
+/// runs when a request ends: bulk updates (<c>ExecuteUpdate</c>) made after the last save of the request are then taken into account.
+/// </summary>
+public interface IAccessModelSync
+{
+    Task FlushTouchedAsync(CancellationToken ct);
+}
+
+/// <summary>
 /// Perm-Phase 1: builds the new storage and permission model (Spaces, drives, libraries, securables, principals, flattened memberships,
 /// Space groups, permission levels, ACL scopes, entries and scope_grants) from the current model (workspaces, members, folders, files,
 /// resource_permissions, shares, groups, units, roles). The current model stays the source of writes until Perm-Phase 2, so this runs on a

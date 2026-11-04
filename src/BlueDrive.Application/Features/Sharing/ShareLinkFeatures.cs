@@ -241,7 +241,7 @@ public sealed class ListPublicShareItemsHandler(IAppDbContext db, IPublicLinkTic
         var current = q.FolderId is { } fid
             ? await db.Folders.AsNoTracking().FirstOrDefaultAsync(f => f.Id == fid && !f.IsDeleted && f.Path.StartsWith(root.Path), ct) ?? throw new NotFoundException("Không tìm thấy thư mục.")
             : root;
-        var ids = ResourceAuthorizationService.PathIds(current.Path).TakeWhile(id => id != root.Id).Append(root.Id).Reverse().ToList();
+        var ids = LegacyResourceAuthorizationService.PathIds(current.Path).TakeWhile(id => id != root.Id).Append(root.Id).Reverse().ToList();
         var names = await db.Folders.AsNoTracking().Where(f => ids.Contains(f.Id)).ToDictionaryAsync(f => f.Id, f => f.Name, ct);
         var crumbs = ids.Select(id => new BreadcrumbItem(id, names[id])).ToList();
         var anon = Guid.Empty;

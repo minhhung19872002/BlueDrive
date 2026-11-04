@@ -8,7 +8,7 @@ namespace BlueDrive.Application.Features.Sync;
 
 /// <summary>
 /// Effective access of one user to every folder / file of a workspace, computed in memory from the ACL, shares, membership
-/// and break-inheritance flags with the same rules as <see cref="ResourceAuthorizationService"/>. Used by the sync snapshot
+/// and break-inheritance flags with the same rules as <see cref="LegacyResourceAuthorizationService"/>. Used by the sync snapshot
 /// and change feed so a 100,000-item tree is evaluated with a handful of queries instead of one per item.
 /// </summary>
 public sealed class WorkspaceAccessMap
@@ -68,7 +68,7 @@ public sealed class WorkspaceAccessMap
         // Owner / member levels are capped by the role's doc.edit (PrincipalSet.CapByRole); ACL and shares are not.
         var ownerLevel = owner || (p.IsDocAdmin && isRoot) ? p.CapByRole(AccessLevel.Manage) : AccessLevel.None;
         var full = ownerLevel == AccessLevel.Manage;
-        var memberLevel = member is { } r ? p.CapByRole(ResourceAuthorizationService.LevelOf(r)) : AccessLevel.None;
+        var memberLevel = member is { } r ? p.CapByRole(LegacyResourceAuthorizationService.LevelOf(r)) : AccessLevel.None;
         var managerial = member is WorkspaceMemberRole.Manager or WorkspaceMemberRole.Owner;
         var brokenLevel = Max(ownerLevel, managerial ? memberLevel : AccessLevel.None);
         map._rootLevel = full ? AccessLevel.Manage : Max(ownerLevel, Max(memberLevel, wsAcl));

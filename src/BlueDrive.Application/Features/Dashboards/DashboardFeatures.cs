@@ -55,7 +55,7 @@ public sealed class GetPersonalDashboardHandler(IAppDbContext db, ICurrentUser m
             var top = folders.Select(f =>
             {
                 var inside = perFolder.Where(p => pathOf.TryGetValue(p.Key, out var path) && path.StartsWith(f.Path)).ToList();
-                var display = string.Join(" / ", ResourceAuthorizationService.PathIds(f.Path).AsEnumerable().Reverse().Select(id => names.GetValueOrDefault(id, "")));
+                var display = string.Join(" / ", LegacyResourceAuthorizationService.PathIds(f.Path).AsEnumerable().Reverse().Select(id => names.GetValueOrDefault(id, "")));
                 return new FolderUsage(f.Id, f.Name, display, inside.Sum(i => i.Bytes), inside.Sum(i => i.Count));
             }).Where(f => f.Bytes > 0).OrderByDescending(f => f.Bytes).Take(10).ToList();
 

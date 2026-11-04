@@ -112,6 +112,8 @@ public class PermissionEngineProperties
                     node.Path = $"{parent.Path}.{node.Id:N}";
                     node.AclScopeId = unique ? node.Id : parent.AclScopeId;
                     Add(node);
+                    if (!file)
+                        _db.Folders.Add(new Folder { Id = node.Id, WorkspaceId = ws.Id, ParentId = parent.Kind == SecurableKind.Folder ? parent.Id : null, Name = node.Name, Path = "/" });
                     if (file)
                         _db.Files.Add(new StoredFile
                         {

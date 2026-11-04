@@ -27,6 +27,14 @@ public sealed class ReferencePermissionEvaluator(IAppDbContext db, IPermissionSe
     {
         var node = await db.Securables.AsNoTracking().FirstOrDefaultAsync(s => s.Id == securableId && !s.IsDeleted, ct);
         if (node is null) return AccessRight.None;
+        var there = node.Kind switch
+        {
+            SecurableKind.File => await db.Files.AnyAsync(f => f.Id == node.Id && !f.IsDeleted, ct),
+            SecurableKind.Folder => await db.Folders.AnyAsync(f => f.Id == node.Id && !f.IsDeleted, ct),
+            SecurableKind.Space or SecurableKind.Drive => await db.Workspaces.AnyAsync(w => w.Id == node.Id, ct),
+            _ => true,
+        };
+        if (!there) return AccessRight.None;
         var who = Restrictions.User.From(user.UserId, user.Codes, user.Principals);
 
         // Nearest node with its own ACL, found by walking up (never through AclScopeId).

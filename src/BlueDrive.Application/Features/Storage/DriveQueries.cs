@@ -159,7 +159,7 @@ public sealed class GetFolderInfoHandler(IAppDbContext db, ICurrentUser me, IRes
         }
         var folder = await db.Folders.AsNoTracking().FirstOrDefaultAsync(f => f.Id == fid && f.WorkspaceId == ws.Id && !f.IsDeleted, ct) ?? throw new NotFoundException("Không tìm thấy thư mục.");
         var access = await auth.GetAccessAsync(uid, ResourceType.Folder, fid, ct);
-        var ids = ResourceAuthorizationService.PathIds(folder.Path);
+        var ids = LegacyResourceAuthorizationService.PathIds(folder.Path);
         var names = await db.Folders.AsNoTracking().Where(f => ids.Contains(f.Id)).ToDictionaryAsync(f => f.Id, f => f.Name, ct);
         var crumbs = new List<BreadcrumbItem> { new(null, wsName) };
         crumbs.AddRange(ids.AsEnumerable().Reverse().Where(names.ContainsKey).Select(id => new BreadcrumbItem(id, names[id])));
@@ -237,7 +237,7 @@ public static class FileLocation
         var wsName = ws.Type == WorkspaceType.Personal ? (ws.OwnerId == userId ? "Tài liệu của tôi" : ws.Name) : ws.Name;
         var list = new List<BreadcrumbItem> { new(null, wsName) };
         if (folder is null) return list;
-        var ids = ResourceAuthorizationService.PathIds(folder.Path);
+        var ids = LegacyResourceAuthorizationService.PathIds(folder.Path);
         var names = await db.Folders.AsNoTracking().Where(f => ids.Contains(f.Id)).ToDictionaryAsync(f => f.Id, f => f.Name, ct);
         list.AddRange(ids.AsEnumerable().Reverse().Where(names.ContainsKey).Select(id => new BreadcrumbItem(id, names[id])));
         return list;

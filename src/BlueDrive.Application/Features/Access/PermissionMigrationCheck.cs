@@ -17,7 +17,7 @@ public sealed record PermissionDifference(Guid UserId, string User, ResourceType
 
 public sealed record PermissionMigrationReport(int Pairs, int Same, int Wider, int AdminOnly, IReadOnlyList<PermissionDifference> Narrower, IReadOnlyList<PermissionDifference> WiderSample);
 
-public sealed class VerifyPermissionMigrationHandler(IAppDbContext db, IResourceAuthorizationService old, ReferencePermissionEvaluator reference)
+public sealed class VerifyPermissionMigrationHandler(IAppDbContext db, LegacyResourceAuthorizationService old, ReferencePermissionEvaluator reference)
     : IRequestHandler<VerifyPermissionMigrationQuery, PermissionMigrationReport>
 {
     public async Task<PermissionMigrationReport> Handle(VerifyPermissionMigrationQuery q, CancellationToken ct)
