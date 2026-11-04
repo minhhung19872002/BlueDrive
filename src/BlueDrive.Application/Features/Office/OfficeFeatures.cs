@@ -24,6 +24,7 @@ public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IR
         var access = await auth.EnsureAsync(uid, ResourceType.File, q.FileId, AccessLevel.View, ct);
         var f = await db.Files.AsNoTracking().FirstAsync(x => x.Id == q.FileId, ct);
         if (!office.CanView(f.Extension)) throw new AppException($"Định dạng .{f.Extension} không hỗ trợ mở bằng trình soạn thảo trực tuyến.");
+        await ScanGate.EnsureAsync(db, f, f.CurrentVersionId, uid, ct);
         // The item's own rights decide (like rename / new version): a "Chỉ xem" role shared "Chỉnh sửa" edits that document.
         var canEdit = !q.ForceView && access.CanEdit && office.CanEdit(f.Extension);
         var name = await db.Users.Where(u => u.Id == uid).Select(u => u.FullName).FirstAsync(ct);

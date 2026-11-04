@@ -27,7 +27,7 @@ $envFile = Join-Path $deploy '.env'
 function Random-Secret([int]$length) {
     $chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'.ToCharArray()
     $bytes = [byte[]]::new($length)
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
     -join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })
 }
 
@@ -38,7 +38,7 @@ docker compose version | Out-Null
 
 if (-not (Test-Path $envFile)) {
     Write-Host '==> Tạo deploy/.env với khóa bí mật ngẫu nhiên' -ForegroundColor Cyan
-    $masterKey = [byte[]]::new(32); [System.Security.Cryptography.RandomNumberGenerator]::Fill($masterKey)
+    $masterKey = [byte[]]::new(32); [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($masterKey)
     if (-not $AdminPassword) { $AdminPassword = 'Bd@' + (Random-Secret 12) }
     $gitSha = git -C $root rev-parse --short HEAD 2>$null
     if (-not $gitSha) { $gitSha = 'dev' }
@@ -55,6 +55,8 @@ if (-not (Test-Path $envFile)) {
         '(?m)^ONLYOFFICE_JWT_SECRET=.*$' = "ONLYOFFICE_JWT_SECRET=$(Random-Secret 40)"
         '(?m)^STORAGE_MASTER_KEY=.*$'    = "STORAGE_MASTER_KEY=$([Convert]::ToBase64String($masterKey))"
         '(?m)^ADMIN_PASSWORD=.*$'        = "ADMIN_PASSWORD=$AdminPassword"
+        # Upper, lower, digit and symbol guaranteed so the default password policy accepts it.
+        '(?m)^DEMO_PASSWORD=.*$'         = "DEMO_PASSWORD=Dm@$(Random-Secret 10)7"
         '(?m)^SEED_DEMO=.*$'             = "SEED_DEMO=$(if ($Demo) { 'true' } else { 'false' })"
         '(?m)^CLAMAV_ENABLED=.*$'        = "CLAMAV_ENABLED=$(if ($EnableClamAv) { 'true' } else { 'false' })"
         '(?m)^GIT_SHA=.*$'               = "GIT_SHA=$gitSha"
@@ -88,5 +90,6 @@ try {
     Write-Host ''
     Write-Host "BlueDrive đã sẵn sàng tại $publicUrl" -ForegroundColor Green
     Write-Host 'Đăng nhập: admin / ADMIN_PASSWORD trong deploy/.env (bắt buộc đổi mật khẩu lần đầu).' -ForegroundColor Green
+    if ($Demo) { Write-Host 'Người dùng mẫu: canbo1..canbo5 / DEMO_PASSWORD trong deploy/.env (sinh ngẫu nhiên, bắt buộc đổi khi đăng nhập lần đầu).' -ForegroundColor Green }
 }
 finally { Pop-Location }

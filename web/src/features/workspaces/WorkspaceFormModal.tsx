@@ -128,7 +128,7 @@ export default function WorkspaceFormModal({
         </Form.Item>
         {isAdmin && (
           <Form.Item name="quotaGb" label={t('workspace.quotaGb')} extra={t('workspace.quotaHint')}>
-            <InputNumber min={0} max={100000} step={1} style={{ width: '100%' }} addonAfter="GB" />
+            <InputNumber min={0} max={100000} step={1} style={{ width: '100%' }} suffix="GB" />
           </Form.Item>
         )}
         {!workspace && (

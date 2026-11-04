@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { Alert, Button, Drawer, Empty, Grid, Input, Modal, Pagination, Result, type MenuProps } from 'antd'
-import { EditOutlined, LockOutlined, SearchOutlined } from '@ant-design/icons'
+import {
+  CopyOutlined,
+  EditOutlined,
+  FolderAddOutlined,
+  LockOutlined,
+  ScissorOutlined,
+  SearchOutlined,
+  SnippetsOutlined,
+  UploadOutlined,
+} from '@ant-design/icons'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { copyItems, listItems, moveItems } from '@/api/drive'
@@ -77,6 +86,8 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [anchor, setAnchor] = useState<string | null>(null)
   const [menuPos, setMenuPos] = useState<MenuPosition | null>(null)
+  /** Right-click on the empty part of the listing: paste / new folder / upload here. */
+  const [bgMenuPos, setBgMenuPos] = useState<MenuPosition | null>(null)
   const [dropTarget, setDropTarget] = useState<string | null>(null)
   const [osDragging, setOsDragging] = useState(false)
   const [bulkEdit, setBulkEdit] = useState<string[] | null>(null)
@@ -103,8 +114,11 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
   const folderInfo = useFolderInfo(workspaceId, folderId)
   const access = folderInfo.data?.access
   const locked = access?.workspaceLocked ?? false
-  const canUpload = !!access?.canUpload && !locked
+  // Copy, move and paste put items somewhere: the role needs doc.upload besides the folder rights.
+  const canTransfer = can('doc.upload')
+  const canUpload = !!access?.canUpload && !locked && canTransfer
   const canEdit = !!access?.canEdit && !locked
+  const canMove = canEdit && canTransfer
   const canDownload = access?.canDownload ?? true
   const canManage = !!access?.canManage
   const canDelete = canEdit && can('doc.delete')
@@ -161,11 +175,53 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
     },
   )
 
-  const paste = () => {
-    if (!clipboard || !canUpload) return
-    const refs = clipboard.items.filter((i) => !(i.type === 'folder' && i.id === folderId))
+  /** Pastes into the current folder, or into a sub-folder chosen with "Dán vào" in its context menu. */
+  const paste = (target: string | null = folderId) => {
+    if (!clipboard) return
+    if (!canUpload) {
+      void getMessage().warning(t('upload.noPermissionHere'))
+      return
+    }
+    const refs = clipboard.items.filter((i) => !(i.type === 'folder' && i.id === target))
     if (refs.length === 0) return
-    transfer.mutate({ mode: clipboard.mode === 'cut' ? 'move' : 'copy', refs, target: folderId })
+    transfer.mutate({ mode: clipboard.mode === 'cut' ? 'move' : 'copy', refs, target })
+  }
+
+  const copyToClipboard = (targets: DriveItem[]) => {
+    if (targets.length === 0) return
+    setClipboard({ mode: 'copy', items: targets.map(toRef) })
+    void getMessage().info(t('drive.copiedToClipboard', { count: targets.length }))
+  }
+
+  const cutToClipboard = (targets: DriveItem[]) => {
+    if (targets.length === 0) return
+    if (!canMove) {
+      void getMessage().warning(t('drive.noEditRights'))
+      return
+    }
+    setClipboard({ mode: 'cut', items: targets.map(toRef) })
+    void getMessage().info(t('drive.cutToClipboard', { count: targets.length }))
+  }
+
+  /** "Cắt" / "Sao chép" / "Dán vào" appended to an item's context menu (same rules as Ctrl+X / Ctrl+C / Ctrl+V). */
+  const clipboardMenuItems = (targets: DriveItem[]): NonNullable<MenuProps['items']> => {
+    if (targets.length === 0) return []
+    const folder = targets.length === 1 && targets[0].type === 'folder' ? targets[0] : null
+    return [
+      { type: 'divider' },
+      ...(canMove ? [{ key: 'clip:cut', icon: <ScissorOutlined />, label: t('drive.cmd.cut'), extra: 'Ctrl+X' }] : []),
+      { key: 'clip:copy', icon: <CopyOutlined />, label: t('drive.cmd.copy'), extra: 'Ctrl+C' },
+      ...(folder && clipboard && canUpload
+        ? [{ key: 'clip:paste', icon: <SnippetsOutlined />, label: t('drive.cmd.pasteInto', { name: folder.name, count: clipboard.items.length }) }]
+        : []),
+    ]
+  }
+
+  const runMenu = (key: string, targets: DriveItem[]) => {
+    if (key === 'clip:cut') cutToClipboard(targets)
+    else if (key === 'clip:copy') copyToClipboard(targets)
+    else if (key === 'clip:paste') paste(targets[0]?.id ?? folderId)
+    else actions.run(key, targets)
   }
 
   // ---------- Selection ----------
@@ -210,6 +266,26 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
 
   const menuTargets = (item?: DriveItem) => (item && !selected.has(itemKey(item)) ? [item] : selectedItems)
 
+  const backgroundMenuItems: NonNullable<MenuProps['items']> = [
+    ...(clipboard && canUpload
+      ? [{ key: 'bg:paste', icon: <SnippetsOutlined />, label: t('drive.cmd.paste', { count: clipboard.items.length }), extra: 'Ctrl+V' }]
+      : []),
+    ...(canUpload && here
+      ? [
+          { key: 'bg:newFolder', icon: <FolderAddOutlined />, label: t('drive.cmd.newFolder') },
+          { key: 'bg:upload', icon: <UploadOutlined />, label: t('drive.uploadFiles') },
+        ]
+      : []),
+  ]
+
+  // An item's own handler has already prevented the default (its menu opens instead).
+  const onBackgroundContextMenu = (e: MouseEvent) => {
+    if (e.defaultPrevented || backgroundMenuItems.length === 0 || isMobile) return
+    e.preventDefault()
+    clearSelection()
+    setBgMenuPos({ x: e.clientX, y: e.clientY })
+  }
+
   // ---------- Drag & drop ----------
   const moveInto = (refs: ItemRef[], target: string | null) => {
     const filtered = refs.filter((r) => !(r.type === 'folder' && r.id === target))
@@ -230,7 +306,7 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
     const key = itemKey(item)
     const isFolder = item.type === 'folder'
     return {
-      draggable: canEdit && !isMobile,
+      draggable: canMove && !isMobile,
       onDragStart: (e) => {
         const dragged = selected.has(key) ? selectedItems : [item]
         if (!selected.has(key)) setSelected(new Set([key]))
@@ -302,22 +378,12 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
       setSelected(new Set(items.map(itemKey)))
     } else if (mod && e.key.toLowerCase() === 'c' && selectedItems.length) {
       e.preventDefault()
-      setClipboard({ mode: 'copy', items: selectedItems.map(toRef) })
-      void getMessage().info(t('drive.copiedToClipboard', { count: selectedItems.length }))
+      copyToClipboard(selectedItems)
     } else if (mod && e.key.toLowerCase() === 'x' && selectedItems.length) {
       e.preventDefault()
-      if (!canEdit) {
-        void getMessage().warning(t('drive.noEditRights'))
-        return
-      }
-      setClipboard({ mode: 'cut', items: selectedItems.map(toRef) })
-      void getMessage().info(t('drive.cutToClipboard', { count: selectedItems.length }))
+      cutToClipboard(selectedItems)
     } else if (mod && e.key.toLowerCase() === 'v' && clipboard) {
       e.preventDefault()
-      if (!canUpload) {
-        void getMessage().warning(t('upload.noPermissionHere'))
-        return
-      }
       paste()
     }
   }
@@ -379,10 +445,10 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
     onContextMenu,
     onSelectionChange: (keys) => setSelected(new Set(keys)),
     rowMenu: (item) => ({
-      items: actions.menuItems(menuTargets(item), flags),
+      items: [...actions.menuItems(menuTargets(item), flags), ...clipboardMenuItems(menuTargets(item))],
       onClick: ({ key, domEvent }) => {
         domEvent.stopPropagation()
-        actions.run(key, menuTargets(item))
+        runMenu(key, menuTargets(item))
       },
     }),
     runAction: (action, item) => actions.run(action, [item]),
@@ -441,6 +507,7 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
         isMobile={isMobile}
         canUpload={canUpload}
         canEdit={canEdit}
+        canTransfer={canTransfer}
         canDownload={canDownload}
         canDelete={canDelete}
         selectedCount={selectedItems.length}
@@ -487,12 +554,12 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
           ],
           onClick: ({ key }) => (key === 'bulkEdit' ? setBulkEdit(selectedFiles.map((i) => i.id)) : actions.run(key, selectedItems)),
         }}
-        onPaste={paste}
+        onPaste={() => paste()}
         onClearSelection={clearSelection}
       />
 
       <div className="bd-explorer-body">
-        <div className={osDragging ? 'bd-explorer-main bd-explorer-dropping' : 'bd-explorer-main'}>
+        <div className={osDragging ? 'bd-explorer-main bd-explorer-dropping' : 'bd-explorer-main'} onContextMenu={onBackgroundContextMenu}>
           {view === 'list' ? (
             <ItemListView
               {...viewProps}
@@ -542,8 +609,21 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
         position={menuPos}
         onClose={() => setMenuPos(null)}
         menu={{
-          items: actions.menuItems(selectedItems, flags),
-          onClick: ({ key }) => actions.run(key, selectedItems),
+          items: [...actions.menuItems(selectedItems, flags), ...clipboardMenuItems(selectedItems)],
+          onClick: ({ key }) => runMenu(key, selectedItems),
+        }}
+      />
+      <PositionedMenu
+        key={bgMenuPos ? `bg:${bgMenuPos.x},${bgMenuPos.y}` : 'bg:none'}
+        position={bgMenuPos}
+        onClose={() => setBgMenuPos(null)}
+        menu={{
+          items: backgroundMenuItems,
+          onClick: ({ key }) => {
+            if (key === 'bg:paste') paste()
+            else if (key === 'bg:newFolder' && here) createFolder(here)
+            else if (key === 'bg:upload' && here) void pickAndUpload(false, here)
+          },
         }}
       />
       {bulkEdit && (

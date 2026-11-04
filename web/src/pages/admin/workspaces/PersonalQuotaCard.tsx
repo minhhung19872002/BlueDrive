@@ -77,7 +77,7 @@ export default function PersonalQuotaCard() {
           </>
         )}
         <Form.Item name="quotaGb" label={t('adminWs.personalQuota')} rules={[{ required: true, message: t('adminWs.quotaRequired') }]}>
-          <InputNumber min={0} max={100000} step={1} style={{ width: '100%' }} addonAfter="GB" />
+          <InputNumber min={0} max={100000} step={1} style={{ width: '100%' }} suffix="GB" />
         </Form.Item>
         <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={save.isPending}>
           {t('adminWs.applyQuota')}

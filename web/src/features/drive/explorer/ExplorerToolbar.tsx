@@ -30,6 +30,8 @@ interface ExplorerToolbarProps {
   isMobile: boolean
   canUpload: boolean
   canEdit: boolean
+  /** The role has doc.upload: "Sao chép tới" / "Di chuyển tới" are offered. */
+  canTransfer: boolean
   canDownload: boolean
   canDelete: boolean
   selectedCount: number
@@ -228,8 +230,8 @@ function SelectionCommands(p: ExplorerToolbarProps) {
           () => p.onStar(!p.allStarred),
           { tip: p.allStarred ? t('actions.unstar') : t('actions.star') },
         )}
-        {cmd('copyTo', t('drive.cmd.copyTo'), <CopyOutlined />, p.onCopyTo)}
-        {p.canEdit && cmd('moveTo', t('drive.cmd.moveTo'), <ScissorOutlined />, p.onMoveTo)}
+        {p.canTransfer && cmd('copyTo', t('drive.cmd.copyTo'), <CopyOutlined />, p.onCopyTo)}
+        {p.canEdit && p.canTransfer && cmd('moveTo', t('drive.cmd.moveTo'), <ScissorOutlined />, p.onMoveTo)}
         {moreItems.length > 0 && (
           <FitDropdown menu={p.moreMenu} align="right">
             <Tooltip title={t('actions.more')}>

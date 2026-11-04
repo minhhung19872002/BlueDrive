@@ -19,7 +19,7 @@ public class OrganizationsController : ApiControllerBase
     [HttpGet, HasPermission(Perm.OrgView)]
     public Task<PagedResult<OrganizationDto>> List([FromQuery] ListOrganizationsQuery query) => Mediator.Send(query);
 
-    /// <summary>Danh sách dạng cây.</summary>
+    /// <summary>Danh sách dạng cây. Mở cho mọi người dùng đã đăng nhập: là nguồn chọn đơn vị (chia sẻ, nhóm tài nguyên, bộ lọc tìm kiếm).</summary>
     [HttpGet("tree")]
     public Task<IReadOnlyList<OrganizationTreeNode>> Tree([FromQuery] bool includeInactive = true) => Mediator.Send(new GetOrganizationTreeQuery(includeInactive));
 
@@ -124,6 +124,7 @@ public class UsersController : ApiControllerBase
 [Route("api/v1/user-groups")]
 public class UserGroupsController : ApiControllerBase
 {
+    /// <summary>Tra cứu nhóm người dùng. Mở cho mọi người dùng đã đăng nhập vì hộp chọn đối tượng chia sẻ dùng danh sách này.</summary>
     [HttpGet]
     public Task<PagedResult<UserGroupDto>> List([FromQuery] ListUserGroupsQuery query) => Mediator.Send(query);
 
@@ -148,6 +149,7 @@ public class UserGroupsController : ApiControllerBase
 [Route("api/v1/roles")]
 public class RolesController : ApiControllerBase
 {
+    /// <summary>Tra cứu vai trò. Mở cho mọi người dùng đã đăng nhập vì hộp chọn đối tượng chia sẻ dùng danh sách này.</summary>
     [HttpGet]
     public Task<IReadOnlyList<RoleDto>> List([FromQuery] string? q) => Mediator.Send(new ListRolesQuery(q));
 
@@ -197,7 +199,7 @@ public class PermissionsController : ApiControllerBase
 [Route("api/v1/catalogs")]
 public class CatalogsController : ApiControllerBase
 {
-    [HttpGet]
+    [HttpGet, HasPermission(Perm.CatalogView)]
     public Task<IReadOnlyList<CatalogDto>> List([FromQuery] string? q) => Mediator.Send(new ListCatalogsQuery(q));
 
     /// <summary>Toàn bộ danh mục đang dùng kèm các mục (cho bộ lọc/nhập metadata).</summary>
@@ -217,7 +219,7 @@ public class CatalogsController : ApiControllerBase
         return NoContent();
     }
 
-    [HttpGet("{id:guid}/items")]
+    [HttpGet("{id:guid}/items"), HasPermission(Perm.CatalogView)]
     public Task<IReadOnlyList<CatalogItemDto>> Items(Guid id, [FromQuery] string? q, [FromQuery] bool? isActive) => Mediator.Send(new ListCatalogItemsQuery(id, q, isActive));
 
     [HttpPost("{id:guid}/items"), HasPermission(Perm.CatalogCreate)]

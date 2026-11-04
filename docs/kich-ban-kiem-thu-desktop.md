@@ -42,20 +42,20 @@ máy thứ hai tải tệp lớn mà máy thứ nhất đã có — nhật ký m
 Chạy ngày 03/11/2026 bằng `bluedrive-perf acceptance` (`desktop/tools/BlueDrive.Sync.Perf`): hai BlueDrive Desktop độc lập ("MAY-A", "MAY-B": hai
 lần đăng nhập thiết bị PKCE, hai thư mục đồng bộ trên đĩa thật, tác tử đầy đủ có SignalR) với máy chủ BlueDrive thật (stack Docker trên
 cùng máy). Chạy lại: `dotnet desktop/tools/BlueDrive.Sync.Perf/bin/Release/net10.0-windows10.0.22621.0/bluedrive-perf.dll acceptance --server <máy chủ> --user <quản trị> --password <mật khẩu>`.
-Hai lần chạy liên tiếp đều đạt; số liệu lần 2:
+Hai lần chạy liên tiếp đều đạt; số liệu dưới đây là của lần chạy lưu trong [`desktop/docs/perf/ket-qua.json`](../desktop/docs/perf/ket-qua.json) (mục `acceptance`):
 
 | Tiêu chí (mục 15) | Kết quả | Đo được |
 |---|---|---|
-| Sửa/thêm/đổi tên/di chuyển/xóa trên máy → web < 10 giây | Đạt | thêm 3,2 s; sửa 3,1 s; đổi tên 0,1 s; di chuyển 3,1 s; xóa 3,2 s (gồm 3 s chờ thư mục yên) |
-| Web → máy < 5 giây | Đạt | 0,32 s |
-| Sửa đồng thời 2 nơi → bản xung đột đúng tên, không mất nội dung | Đạt | `biên bản (Bản xung đột - <Họ tên> - MAY-B - 2026-11-03 2007).txt`, cả hai nội dung còn |
+| Sửa/thêm/đổi tên/di chuyển/xóa trên máy → web < 10 giây | Đạt | thêm 3,2 s; sửa 0,1 s; đổi tên 3,2 s; di chuyển 0,0 s; xóa 3,1 s (các số ~3 s gồm 3 s chờ thư mục yên; số ~0 s là thay đổi đã lên trong lượt trước đó) |
+| Web → máy < 5 giây | Đạt | 0,34 s (đo riêng 10 lượt bằng `bluedrive-perf latency`: trung vị 0,73 s, p95 0,85 s) |
+| Sửa đồng thời 2 nơi → bản xung đột đúng tên, không mất nội dung | Đạt | `biên bản (Bản xung đột - <Họ tên> - MAY-B - 2026-11-03 2039).txt`, cả hai nội dung còn |
 | Mất mạng, sửa 50 tệp, có mạng lại → lên máy chủ đủ | Đạt | 0 tệp lên khi ngoại tuyến; đủ 50 sau 2,6 s |
 | Xóa hơn 100 tệp → hỏi xác nhận | Đạt | "Bạn vừa xóa 120 tệp. Xóa cả trên BlueDrive?", máy chủ còn đủ 120 |
 | "Chia sẻ…" tạo liên kết có mật khẩu | Đạt | liên kết `/s/…` có mật khẩu |
 | Tệp chỉ quyền Xem không tải xuống máy | Đạt | tệp "Xem + Tải xuống" có trên máy, tệp "Chỉ xem" không |
 | Thu hồi thiết bị; nhật ký có device_id | Đạt | máy B dừng sau 3,1 s ("Cần đăng nhập lại"); nhật ký có device_id của máy A |
 | Tệp theo yêu cầu: mở tự tải, "Luôn giữ", "Giải phóng dung lượng" | Đạt | `FilesOnDemandTests` (Cloud Files thật, Windows 11) |
-| Simulation 10 000 chuỗi; kill-test không mất dữ liệu | Đạt | `SimulationTests`, IT `SyncAgentTests.Killing_the_agent_in_the_middle_loses_nothing_and_duplicates_nothing` |
+| Simulation 10 000 chuỗi; kill-test không mất dữ liệu | Đạt | `SimulationTests` (CI chạy 300 chuỗi; workflow phát hành `desktop-release.yml` chạy 10 000 chuỗi với `SYNC_SIM_RUNS=10000`, kèm tệp 1,5 GB `SYNC_LARGE_FILE_MB=1536`), IT `SyncAgentTests.Killing_the_agent_in_the_middle_loses_nothing_and_duplicates_nothing` |
 | UI, thông báo, tài liệu tiếng Việt; không TODO/stub | Đạt | |
 
 **Lỗi tìm ra khi nghiệm thu và đã sửa:** người dùng xóa nhiều tệp lần lượt (như Explorer) trong lúc máy chủ đẩy một thay đổi xuống → lượt

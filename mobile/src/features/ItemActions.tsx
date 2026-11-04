@@ -10,6 +10,7 @@ import { PromptDialog } from '@/components/PromptDialog';
 import { ShareLinkDialog } from '@/components/ShareLinkDialog';
 import { Sheet, SheetItem } from '@/components/Sheet';
 import { t } from '@/i18n';
+import { useAuth } from '@/store/auth';
 import { invalidateData } from '@/store/query';
 import { toast } from '@/store/toast';
 import { openFileDetail, openItem } from '@/utils/navigation';
@@ -35,6 +36,8 @@ type Mode = 'copy' | 'move';
 /** #76–#81, #53, #83, #84: action sheet shared by every list (long-press / ⋯). */
 export function ItemActionsProvider({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
+  // Copy / move put items somewhere: the API requires doc.upload for both.
+  const canTransfer = useAuth((s) => s.user?.permissions.includes('doc.upload') ?? false);
   const [item, setItem] = useState<DriveItem | null>(null);
   const [opts, setOpts] = useState<ActionOptions>({});
   const [sheet, setSheet] = useState(false);
@@ -108,8 +111,12 @@ export function ItemActionsProvider({ children }: { children: ReactNode }) {
               onPress={() => run(() => toggleStar(it))}
             />
             <SheetItem icon="pencil-outline" label={t('actions.rename')} onPress={() => run(() => setRenameItem(it))} />
-            <SheetItem icon="content-copy" label={t('actions.copy')} onPress={() => run(() => setPicker({ item: it, mode: 'copy' }))} />
-            <SheetItem icon="folder-move-outline" label={t('actions.move')} onPress={() => run(() => setPicker({ item: it, mode: 'move' }))} />
+            {canTransfer ? (
+              <>
+                <SheetItem icon="content-copy" label={t('actions.copy')} onPress={() => run(() => setPicker({ item: it, mode: 'copy' }))} />
+                <SheetItem icon="folder-move-outline" label={t('actions.move')} onPress={() => run(() => setPicker({ item: it, mode: 'move' }))} />
+              </>
+            ) : null}
             <SheetItem icon="delete-outline" label={t('actions.delete')} danger onPress={() => run(() => confirmDelete(it))} />
           </>
         ) : null}

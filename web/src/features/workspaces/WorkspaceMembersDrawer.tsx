@@ -23,7 +23,9 @@ export default function WorkspaceMembersDrawer({ workspace, open, onClose }: { w
   const screens = Grid.useBreakpoint()
   const me = useAuthStore((s) => s.user?.id)
   const isAdmin = can('workspace.admin')
-  const canManage = isAdmin || workspace.myRole === 'owner' || workspace.myRole === 'manager'
+  // Same rule as the API: owner or admin, or a manager whose role has workspace.edit.
+  const canManage =
+    isAdmin || workspace.ownerId === me || ((workspace.myRole === 'owner' || workspace.myRole === 'manager') && can('workspace.edit'))
   const canTransfer = isAdmin || workspace.ownerId === me
   const [newUsers, setNewUsers] = useState<string[]>([])
   const [newRole, setNewRole] = useState<WorkspaceMemberRole>('editor')

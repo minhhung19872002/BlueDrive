@@ -48,6 +48,10 @@ jobs:
           "channel=$ch" >> $env:GITHUB_OUTPUT
       - name: Desktop tests
         shell: pwsh
+        env:
+          # Release check (spec 12.3 / 15): 10,000 random sequences with crashes and lost responses, and a 1.5 GB file both ways.
+          SYNC_SIM_RUNS: '10000'
+          SYNC_LARGE_FILE_MB: '1536'
         run: |
           dotnet test desktop/tests/BlueDrive.Sync.Tests --nologo -v q
           dotnet test desktop/tests/BlueDrive.Sync.Windows.Tests --nologo -v q

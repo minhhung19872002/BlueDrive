@@ -12,6 +12,8 @@ public static class SettingKeys
     public const string PasswordHistory = "password.history_count";
     public const string LockoutThreshold = "lockout.threshold";
     public const string LockoutMinutes = "lockout.minutes";
+    public const string LoginIpMaxFailures = "login.ip_max_failures";
+    public const string LoginIpBlockMinutes = "login.ip_block_minutes";
     public const string SessionIdleMinutes = "session.idle_timeout_minutes";
     public const string QuotaPersonalDefaultGb = "quota.personal_default_gb";
     public const string QuotaGroupDefaultGb = "quota.group_default_gb";
@@ -64,6 +66,8 @@ public static class SettingKeys
         new(PasswordHistory, 5, "Chính sách mật khẩu", "Không trùng N mật khẩu gần nhất", "number"),
         new(LockoutThreshold, 5, "Đăng nhập & phiên", "Số lần đăng nhập sai trước khi khóa tạm", "number"),
         new(LockoutMinutes, 15, "Đăng nhập & phiên", "Thời gian khóa tạm (phút)", "number"),
+        new(LoginIpMaxFailures, 30, "Đăng nhập & phiên", "Số lần đăng nhập sai tối đa từ một địa chỉ IP (mọi tài khoản cộng lại, 0 = không giới hạn)", "number"),
+        new(LoginIpBlockMinutes, 15, "Đăng nhập & phiên", "Khoảng thời gian đếm và thời gian chặn địa chỉ IP đăng nhập sai nhiều (phút)", "number"),
         new(SessionIdleMinutes, 30, "Đăng nhập & phiên", "Tự đăng xuất khi không hoạt động (phút)", "number"),
         new(QuotaPersonalDefaultGb, 10, "Dung lượng", "Dung lượng mặc định cá nhân (GB)", "number"),
         new(QuotaGroupDefaultGb, 50, "Dung lượng", "Dung lượng mặc định nhóm (GB)", "number"),

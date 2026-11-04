@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using BlueDrive.Desktop.Services;
 using BlueDrive.Sync.Agent;
+using BlueDrive.Sync.Client;
 using BlueDrive.Sync.Core;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -36,7 +37,7 @@ public partial class RootToggle(SettingsViewModel owner, string id, string name,
 }
 
 /// <summary>A row of "Vấn đề": a conflict or an item that could not be synced.</summary>
-public sealed record ProblemItem(AccountSession Session, string Title, string Detail, string Path, ConflictEntry? Conflict)
+public sealed record ProblemItem(AccountSession Session, string Title, string Detail, string Path, ConflictEntry? Conflict, string? Raw = null)
 {
     public bool IsConflict => Conflict is not null;
     public bool IsError => Conflict is null;
@@ -249,7 +250,7 @@ public partial class SettingsViewModel : ObservableObject
             {
                 var sep = p.IndexOf(": ", StringComparison.Ordinal);
                 var path = sep > 0 ? p[..sep] : "";
-                Problems.Add(new ProblemItem(s, sep > 0 ? NameMapper.NameOf(path) : p, sep > 0 ? p[(sep + 2)..] : "", s.Locate("", path), null));
+                Problems.Add(new ProblemItem(s, sep > 0 ? NameMapper.NameOf(path) : p, sep > 0 ? p[(sep + 2)..] : "", s.Locate("", path), null, p));
             }
         }
     }
@@ -321,6 +322,7 @@ public partial class SettingsViewModel : ObservableObject
     private async Task IgnoreAsync(ProblemItem? p)
     {
         if (p?.Conflict is { } c) await p.Session.Agent.ResolveConflictAsync(c, SyncAgent.ConflictChoice.KeepBoth);
+        else if (p?.Raw is { } raw) await p.Session.Agent.IgnoreProblemAsync(raw);
         LoadProblems();
     }
 
@@ -482,6 +484,45 @@ public partial class SettingsViewModel : ObservableObject
             Busy = false;
             RefreshOnlyOffice();
         }
+    }
+
+    [ObservableProperty] private string _supportTitle = "";
+    [ObservableProperty] private string _supportContent = "";
+    [ObservableProperty] private bool _supportUrgent;
+    [ObservableProperty] private string? _supportMessage;
+
+    /// <summary>"Gửi yêu cầu hỗ trợ" (#76): creates the ticket from the app; the version, computer and current problems are added to it.</summary>
+    [RelayCommand]
+    private async Task SendSupportAsync()
+    {
+        if (string.IsNullOrWhiteSpace(SupportTitle) || string.IsNullOrWhiteSpace(SupportContent))
+        {
+            SupportMessage = "Vui lòng nhập tiêu đề và mô tả vấn đề.";
+            return;
+        }
+        var session = SelectedAccount?.Session ?? _host.Sessions.FirstOrDefault();
+        if (session is null)
+        {
+            SupportMessage = "Chưa có tài khoản BlueDrive nào trên máy này.";
+            return;
+        }
+        var problems = session.Agent.Status.Problems;
+        var content = $"{SupportContent.Trim()}\n\n---\nBlueDrive Desktop {_host.AppVersion} trên máy {Environment.MachineName} ({Environment.OSVersion.VersionString})."
+                      + (problems.Count == 0 ? "" : $"\nVấn đề đang có ({problems.Count}):\n" + string.Join("\n", problems.Take(20)));
+        Busy = true;
+        try
+        {
+            var ticket = await session.Agent.Api.CreateTicketAsync(SupportTitle.Trim(), content, SupportUrgent);
+            SupportMessage = $"Đã gửi yêu cầu hỗ trợ {ticket.Code}. Bạn theo dõi kết quả xử lý trên web (Hỗ trợ).";
+            SupportTitle = "";
+            SupportContent = "";
+            SupportUrgent = false;
+        }
+        catch (Exception ex) when (ex is RemotePermanentException or RemoteTransientException or SignInRequiredException or HttpRequestException)
+        {
+            SupportMessage = $"Chưa gửi được: {ex.Message} Bạn có thể gửi trên web bằng nút \"Mở trang hỗ trợ trên web\".";
+        }
+        finally { Busy = false; }
     }
 
     [RelayCommand]

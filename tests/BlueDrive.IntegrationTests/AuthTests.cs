@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using BlueDrive.Infrastructure.Persistence;
 using BlueDrive.IntegrationTests.Infrastructure;
 using FluentAssertions;
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -23,7 +24,7 @@ public class AuthTests(ApiFactory factory)
         var client = factory.CreateClient();
         var tokens = await TestHelpers.LoginAsync(client, username, "Init@Pass123");
         client.WithToken(tokens.AccessToken);
-        (await client.GetAsync("/api/v1/catalogs")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await client.GetAsync("/api/v1/catalogs/options")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         var me = await (await client.GetAsync("/api/v1/auth/me")).ReadJsonAsync();
         me.GetProperty("mustChangePassword").GetBoolean().Should().BeTrue();
 
@@ -33,7 +34,7 @@ public class AuthTests(ApiFactory factory)
 
         var ok = await (await client.PostAsJsonAsync("/api/v1/auth/change-password", new { currentPassword = "Init@Pass123", newPassword = "New@Pass12345" })).ReadJsonAsync();
         var fresh = factory.CreateClient().WithToken(ok.GetProperty("accessToken").GetString()!);
-        (await fresh.GetAsync("/api/v1/catalogs")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await fresh.GetAsync("/api/v1/catalogs/options")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
@@ -119,5 +120,81 @@ public class AuthTests(ApiFactory factory)
         res.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         res.Content.Headers.ContentType!.MediaType.Should().Be("application/problem+json");
         (await res.Content.ReadAsStringAsync()).Should().Contain("không đúng");
+    }
+
+    /// <summary>
+    /// G7: one address guessing passwords across many accounts is blocked (429) and the admins are alerted; other addresses
+    /// (other offices) keep logging in.
+    /// </summary>
+    [Fact]
+    public async Task Many_failed_logins_from_one_address_block_that_address_only()
+    {
+        var admin = await factory.AdminClientAsync();
+        await (await admin.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, object> { ["login.ip_max_failures"] = 3 })).ReadJsonAsync();
+        try
+        {
+            var (_, _, victim) = await factory.CreateUserClientAsync("chi_xem");
+            const string attacker = "192.0.2.77";
+            async Task<HttpContext> LoginFrom(string ip, string username, string password) => await factory.Server.SendAsync(c =>
+            {
+                c.Connection.RemoteIpAddress = IPAddress.Parse(ip);
+                c.Request.Method = "POST";
+                c.Request.Path = "/api/v1/auth/login";
+                c.Request.ContentType = "application/json";
+                c.Request.Body = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(
+                    System.Text.Json.JsonSerializer.Serialize(new { username, password })));
+            });
+
+            // Spraying: one wrong guess per account, so no account reaches its own lockout.
+            (await LoginFrom(attacker, "khong_ton_tai_1", "Doan@Mo2026")).Response.StatusCode.Should().Be(401);
+            (await LoginFrom(attacker, "khong_ton_tai_2", "Doan@Mo2026")).Response.StatusCode.Should().Be(401);
+            (await LoginFrom(attacker, victim, "Doan@Mo2026")).Response.StatusCode.Should().Be(401);
+
+            var blocked = await LoginFrom(attacker, victim, "User@Pass2026");
+            blocked.Response.StatusCode.Should().Be(429);
+            using (var reader = new StreamReader(blocked.Response.Body))
+                (await reader.ReadToEndAsync()).Should().Contain("địa chỉ mạng");
+
+            (await LoginFrom("192.0.2.78", victim, "User@Pass2026")).Response.StatusCode.Should().Be(200);
+
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            (await db.Alerts.AnyAsync(a => a.Type == Domain.Enums.AlertType.BruteForce && a.Message.Contains(attacker))).Should().BeTrue();
+        }
+        finally
+        {
+            await (await admin.PutAsJsonAsync("/api/v1/settings", new Dictionary<string, object> { ["login.ip_max_failures"] = 30 })).ReadJsonAsync();
+        }
+    }
+
+    /// <summary>
+    /// G3: behind Caddy → nginx the session / audit IP is the real client, not Caddy's container address,
+    /// and a client cannot forge its address with its own X-Forwarded-For.
+    /// </summary>
+    [Theory]
+    [InlineData("172.18.0.7", "203.0.113.9, 172.18.0.3", "203.0.113.9")]               // client → Caddy → nginx → api
+    [InlineData("172.18.0.7", "203.0.113.9, 10.0.0.2, 172.18.0.3", "203.0.113.9")]     // plus an outer proxy on the LAN
+    [InlineData("172.18.0.7", "10.20.30.40, 172.18.0.3", "10.20.30.40")]               // client inside the organisation network
+    [InlineData("198.51.100.4", "203.0.113.9", "198.51.100.4")]                         // direct hit with a forged header: ignored
+    public async Task Session_ip_is_the_real_client_behind_the_proxy_chain(string connectionIp, string forwardedFor, string expectedIp)
+    {
+        var (_, _, username) = await factory.CreateUserClientAsync("chi_xem");
+        var ctx = await factory.Server.SendAsync(c =>
+        {
+            c.Connection.RemoteIpAddress = System.Net.IPAddress.Parse(connectionIp);
+            c.Request.Method = "POST";
+            c.Request.Path = "/api/v1/auth/login";
+            c.Request.Headers["X-Forwarded-For"] = forwardedFor;
+            c.Request.Headers["X-Forwarded-Proto"] = "https";
+            c.Request.ContentType = "application/json";
+            c.Request.Body = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(
+                System.Text.Json.JsonSerializer.Serialize(new { username, password = "User@Pass2026" })));
+        });
+        ctx.Response.StatusCode.Should().Be(200);
+        using var reader = new StreamReader(ctx.Response.Body);
+        var token = System.Text.Json.JsonDocument.Parse(await reader.ReadToEndAsync()).RootElement.GetProperty("accessToken").GetString()!;
+
+        var sessions = await (await factory.CreateClient().WithToken(token).GetAsync("/api/v1/sessions/mine")).ReadJsonAsync();
+        sessions.EnumerateArray().Single(s => s.GetProperty("isCurrent").GetBoolean()).GetProperty("ip").GetString().Should().Be(expectedIp);
     }
 }

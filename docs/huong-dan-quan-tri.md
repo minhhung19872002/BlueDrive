@@ -30,7 +30,7 @@ Loại danh mục (loại sản phẩm truyền thông, chủ đề, chiến d�
 ## 5. Giám sát (#11–15)
 - **Nhật ký hoạt động**: mọi thao tác đăng nhập/đăng xuất/đăng nhập sai, tải lên/xuống, xem, sửa, chia sẻ, hủy chia sẻ, đổi tên, di chuyển, sao chép, xóa, khôi phục, xóa vĩnh viễn, đổi quyền, đổi cấu hình. Lọc theo người dùng, đơn vị, thời gian, hành động, loại tài nguyên, tên tư liệu, IP; xem chi tiết JSON. Nút *Kiểm tra toàn vẹn nhật ký* xác minh chuỗi băm (phát hiện sửa đổi trái phép). Nhật ký không thể sửa/xóa.
 - **Thống kê dung lượng**: theo tài khoản, đơn vị (cộng dồn đơn vị con), nhóm tài nguyên; tô màu khi ≥ 80% (cam) và ≥ 100% (đỏ).
-- **Cảnh báo**: đăng nhập sai nhiều lần, dung lượng vượt ngưỡng/hạn mức, tải xuống bất thường (ngưỡng tệp/giờ cấu hình được), sao lưu thất bại, phát hiện mã độc. Cảnh báo hiển thị ở chuông thông báo (thời gian thực), gửi email cho quản trị (nếu cấu hình SMTP). Chọn và bấm *Xác nhận đã xử lý*.
+- **Cảnh báo**: đăng nhập sai nhiều lần (một tài khoản sai liên tiếp → khóa tạm tài khoản; một địa chỉ IP sai nhiều lần trên nhiều tài khoản → chặn tạm địa chỉ đó, ngưỡng và thời gian đặt ở *Cấu hình → Đăng nhập & phiên*), dung lượng vượt ngưỡng/hạn mức, tải xuống bất thường (ngưỡng tệp/giờ cấu hình được), sao lưu thất bại, phát hiện mã độc. Cảnh báo hiển thị ở chuông thông báo (thời gian thực), gửi email cho quản trị (nếu cấu hình SMTP). Chọn và bấm *Xác nhận đã xử lý*.
 - **Báo cáo**: các nút Xuất Excel/PDF chạy nền; hệ thống báo "Đang xử lý báo cáo..." và gửi thông báo khi xong; tải tại *Báo cáo của tôi*.
 
 ## 6. Phiên đăng nhập (#16–17)
@@ -53,17 +53,24 @@ Loại danh mục (loại sản phẩm truyền thông, chủ đề, chiến d�
 ## 8. Cấu hình hệ thống
 Chính sách mật khẩu, ngưỡng khóa tài khoản, thời gian tự đăng xuất, dung lượng mặc định, ngưỡng cảnh báo dung lượng, thời gian giữ thùng rác, kích thước tải lên tối đa, định dạng cho phép, ngưỡng tải xuống bất thường, tên đơn vị/phần mềm/logo, dòng cơ quan chủ quản và Quốc hiệu trên bản in. Mọi thay đổi được ghi *Nhật ký thay đổi hệ thống* và nhật ký *Đổi cấu hình*.
 
+### 8a. Giới hạn của các thành phần nguồn mở đi kèm
+- **ONLYOFFICE Document Server bản Community** (image `onlyoffice/documentserver`) cho phép tối đa **20 kết nối soạn thảo/xem đồng thời** trên toàn hệ thống (mỗi cửa sổ tài liệu đang mở là một kết nối, kể cả xem trên app mobile và liên kết công khai). Vượt giới hạn, trình soạn thảo hiện cảnh báo của ONLYOFFICE (theo bản dịch có sẵn của ONLYOFFICE) và mở tài liệu ở chế độ chỉ xem hoặc từ chối mở; giao diện BlueDrive hiện thêm thông báo "Trình soạn thảo báo lỗi" kèm hướng dẫn. Các chức năng khác (duyệt, tải lên/xuống, xem ảnh/video/PDF qua trình xem riêng) không bị ảnh hưởng.
+  - Ước lượng: với khoảng 100 người dùng đồng thời, thường chỉ một phần nhỏ mở Office cùng lúc; nếu thường xuyên có trên 20 người soạn thảo, cần mua giấy phép ONLYOFFICE Docs Enterprise (theo số kết nối) hoặc chuyển sang bản Developer, rồi thay image trong `deploy/docker-compose.yml` — không phải sửa mã BlueDrive.
+  - Theo dõi: `docker compose logs onlyoffice | grep -i "connection"`; người dùng nên đóng tab tài liệu không còn dùng.
+- **ClamAV**: tệp lớn hơn `CLAMAV_MAX_SCAN_MB` (mặc định 200 MB) không được quét, hiển thị "Bỏ qua quét (tệp quá lớn)" và tải được kèm cảnh báo. Tăng giới hạn thì clamd cần thêm RAM (khoảng 2–3 lần kích thước tệp). Khi ClamAV lỗi liên tục, tệp chuyển sang "Không quét được" sau 3 lần thử và hệ thống tạo cảnh báo *Không quét được mã độc*.
+
 ## 9. Sao lưu và phục hồi
 *Quản trị > Sao lưu*.
 - **Lịch tự động**: hằng ngày theo giờ, hằng tuần, hoặc cron tùy chỉnh; số bản giữ lại; ngày sao lưu đầy đủ trong tuần (các ngày khác sao lưu tăng dần); tùy chọn sao chép lên S3.
 - **Sao lưu ngay**: tạo bản sao lưu đột xuất (tùy chọn đầy đủ).
-- Mỗi bản gồm: `db.dump` (toàn bộ dữ liệu thuộc tính, pg_dump), `files.tar` (tệp số hóa đã mã hóa), `manifest.json` (checksum SHA-256). Tải xuống từng phần trên màn hình.
+- Mỗi bản gồm: `db.dump` (toàn bộ dữ liệu thuộc tính, pg_dump), `files.tar` (tệp số hóa đã mã hóa, lấy từ ổ đĩa máy chủ hoặc từ bucket S3 nếu `STORAGE_PROVIDER=s3`), `manifest.json` (checksum SHA-256). Tải xuống từng phần trên màn hình.
+- **Sao chép lên S3** (bật trên màn hình hoặc `BACKUP_S3_ENABLED=true` trong `deploy/.env`): mỗi bản sao lưu được chép vào `backups/<thư mục bản sao lưu>/` trong bucket cấu hình ở `S3_*`, nên vẫn phục hồi được khi mất cả máy chủ. Chính sách giữ N bản áp dụng cho cả bản trên máy chủ và bản trên S3.
 - Sao lưu thất bại → cảnh báo và email.
 - **Phục hồi** (trên máy chủ):
   ```powershell
   pwsh -File scripts/restore.ps1 <mã-bản-sao-lưu>     # hoặc ./scripts/restore.sh <mã>
   ```
-  Script kiểm tra checksum cả chuỗi (bản đầy đủ + tăng dần), dừng API/Worker, phục hồi CSDL và tệp rồi khởi động lại. Lưu ý: cần cùng `STORAGE_MASTER_KEY` với lúc sao lưu.
+  Script kiểm tra checksum cả chuỗi (bản đầy đủ + tăng dần), dừng API/Worker, phục hồi CSDL và tệp (vào ổ đĩa hoặc ghi lại vào bucket S3) rồi khởi động lại. Bản nào trong chuỗi không còn trên máy chủ sẽ tự tải về từ bản sao trên S3 (máy chủ mới: cài đặt, khai báo cùng `S3_*` rồi chạy lệnh trên với mã bản sao lưu). Lưu ý: cần cùng `STORAGE_MASTER_KEY` với lúc sao lưu.
 - Sao lưu từ dòng lệnh: `pwsh -File scripts/backup-now.ps1 [-Full]`.
 
 ## 10. Hỗ trợ người dùng, sự cố (SLA)
@@ -76,12 +83,17 @@ Chính sách mật khẩu, ngưỡng khóa tài khoản, thời gian tự đăng
 
 ## 12. Bàn giao và xóa dữ liệu
 - *Xuất toàn bộ dữ liệu*: gói ZIP gồm tệp gốc đã giải mã theo cây thư mục, `metadata.json`, `metadata.csv`, `audit-logs.csv`, `README.md` (xem `docs/data-export-format.md`).
-- Kết thúc hợp đồng: `pwsh -File scripts/secure-wipe.ps1` → biên bản xóa dữ liệu có mã băm.
+- Kết thúc hợp đồng: `pwsh -File scripts/secure-wipe.ps1` (hoặc `./scripts/secure-wipe.sh`) → biên bản xóa dữ liệu có mã băm.
+  - Nếu dùng S3 (`S3_BUCKET` trong `deploy/.env`), script xóa mọi đối tượng trong bucket (tệp số hóa và bản sao lưu `backups/`) trước khi dừng dịch vụ; biên bản ghi số đối tượng, dung lượng đã xóa và số còn lại (khác 0 → kết quả *CHƯA HOÀN TẤT*).
+  - Bucket bật versioning hoặc object lock: các phiên bản cũ không bị xóa qua API thường, phải xóa thêm (hoặc xóa cả bucket) trên giao diện nhà cung cấp S3 và ghi vào biên bản.
+  - Bản sao lưu đã tải xuống máy khác (từ màn hình Sao lưu) phải được hủy riêng; khóa chủ trong `deploy/.env` bị hủy nên các bản đó cũng không còn giải mã được tệp.
 
 ## 13. Xử lý sự cố thường gặp
 | Hiện tượng | Kiểm tra |
 |---|---|
 | Không mở được tài liệu Office | *Trạng thái hệ thống* → ONLYOFFICE; `docker compose logs onlyoffice`; `ONLYOFFICE_JWT_SECRET` ≥ 32 ký tự và giống nhau ở api/onlyoffice |
+| Office báo vượt số kết nối / chỉ mở được chế độ xem | Bản Community giới hạn 20 kết nối đồng thời (mục 8a); đóng bớt tài liệu hoặc nâng cấp giấy phép ONLYOFFICE |
+| Tệp "Đang chờ quét" lâu | `docker compose ps clamav worker`; xem *Cảnh báo* → *Không quét được mã độc* |
 | Không có ảnh thu nhỏ | Worker đang chạy (`docker compose ps worker`), xem `docker compose logs worker` |
 | Không gửi được email | Biến `SMTP_*` trong `.env`; log API có dòng "Chưa cấu hình SMTP" |
 | Hết dung lượng đĩa | *Trạng thái hệ thống*; giảm số bản sao lưu giữ lại, dọn thùng rác |

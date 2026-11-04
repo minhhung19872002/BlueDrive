@@ -11,6 +11,7 @@ let api: APIRequestContext
 let auth: Record<string, string>
 let folderId = ''
 let targetId = ''
+let ws = ''
 
 test.beforeAll(async ({ playwright, baseURL }) => {
   api = await playwright.request.newContext({ baseURL })
@@ -18,7 +19,7 @@ test.beforeAll(async ({ playwright, baseURL }) => {
     data: { username: process.env.E2E_USERNAME ?? 'admin', password: process.env.E2E_PASSWORD ?? 'Admin@Smoke2026' },
   })).json()
   auth = { Authorization: `Bearer ${login.accessToken}` }
-  const ws = (await (await api.get('/api/v1/auth/me', { headers: auth })).json()).personalWorkspaceId
+  ws = (await (await api.get('/api/v1/auth/me', { headers: auth })).json()).personalWorkspaceId
   folderId = (await (await api.post('/api/v1/folders', { headers: auth, data: { workspaceId: ws, name: `E2E Menu ${stamp}` } })).json()).id
   targetId = (await (await api.post('/api/v1/folders', { headers: auth, data: { workspaceId: ws, parentId: folderId, name: 'Đích' } })).json()).id
   const up = await api.post('/api/v1/files/upload', {
@@ -143,6 +144,86 @@ test('menu ngữ cảnh: mọi thao tác trên tệp', async ({ page }) => {
   await page.getByRole('button', { name: /Xóa|Đồng ý|OK/ }).last().click()
   await expect(page.getByRole('row', { name: new RegExp(renamed) })).toHaveCount(1)
 
+  expect(errors).toEqual([])
+})
+
+test('menu ngữ cảnh: Cắt / Sao chép / Dán (cả vùng trống của danh sách)', async ({ page }) => {
+  const errors = watchErrors(page)
+  const clipName = `cat-dan-${stamp}.txt`
+  const parentName = `Cắt dán ${stamp}`
+  const parent = (await (await api.post('/api/v1/folders', { headers: auth, data: { workspaceId: ws, parentId: folderId, name: parentName } })).json()).id
+  const box = (await (await api.post('/api/v1/folders', { headers: auth, data: { workspaceId: ws, parentId: parent, name: 'Hộp' } })).json()).id
+  const up = await api.post('/api/v1/files/upload', {
+    headers: auth,
+    multipart: { file: { name: clipName, mimeType: 'text/plain', buffer: Buffer.from('Cắt dán') }, workspaceId: ws, folderId: parent },
+  })
+  expect(up.ok()).toBeTruthy()
+  const namesIn = async (id: string) =>
+    ((await (await api.get(`/api/v1/workspaces/${ws}/items?folderId=${id}`, { headers: auth })).json()).items as { name: string }[]).map((i) => i.name)
+
+  await page.goto(`/my-drive?folder=${parent}`)
+  await page.waitForLoadState('networkidle')
+
+  // Cắt the file, then "Dán vào "Hộp"" on the folder row: the file moves into "Hộp".
+  await clickMenu(page, clipName, /Cắt\s*Ctrl\+X/)
+  await expect(page.getByText(/Đã cắt 1 mục/)).toBeVisible()
+  await openMenu(page, 'Hộp')
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes('/items/move') && r.ok()),
+    page.getByRole('menuitem', { name: /Dán vào "Hộp" \(1 mục\)/ }).click(),
+  ])
+  await expect(page.getByRole('row', { name: new RegExp(clipName) })).toHaveCount(0)
+
+  // In "Hộp": Sao chép, back to the parent folder, right-click the empty part of the list → "Dán": a copy lands here.
+  await page.getByRole('row', { name: /Hộp/ }).getByText('Hộp').click()
+  await expect(page).toHaveURL(new RegExp(`folder=${box}`))
+  await clickMenu(page, clipName, /Sao chép\s*Ctrl\+C/)
+  await expect(page.getByText(/Đã sao chép 1 mục/)).toBeVisible()
+  await page.locator('.bd-explorer-breadcrumb').getByText(parentName).click()
+  await expect(page).toHaveURL(new RegExp(`folder=${parent}`))
+  await page.waitForLoadState('networkidle')
+  await openContextMenu(page, page.locator('.bd-explorer-main'), /Dán \(1 mục\)/, { x: 40, y: 300 })
+  await expect(page.getByRole('menuitem', { name: /Thư mục mới/ })).toBeVisible()
+  await expect(page.getByRole('menuitem', { name: /Tải lên tệp/ })).toBeVisible()
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes('/items/copy') && r.ok()),
+    page.getByRole('menuitem', { name: /Dán \(1 mục\)/ }).click(),
+  ])
+  await expect(page.getByRole('row', { name: new RegExp(clipName) })).toBeVisible()
+
+  expect(await namesIn(box)).toContain(clipName)
+  expect(await namesIn(parent)).toContain(clipName)
+  expect(errors).toEqual([])
+})
+
+test('"Tìm kiếm nâng cao" từ một thư mục giữ phạm vi thư mục đó (#20/#32)', async ({ page }) => {
+  const errors = watchErrors(page)
+  const word = `phamvi${stamp}`
+  const scoped = (await (await api.post('/api/v1/folders', { headers: auth, data: { workspaceId: ws, parentId: folderId, name: `Phạm vi ${stamp}` } })).json()).id
+  for (const [name, at] of [[`${word} trong.txt`, scoped], [`${word} ngoai.txt`, folderId]] as const) {
+    const up = await api.post('/api/v1/files/upload', {
+      headers: auth,
+      multipart: { file: { name, mimeType: 'text/plain', buffer: Buffer.from('Phạm vi tìm kiếm') }, workspaceId: ws, folderId: at },
+    })
+    expect(up.ok()).toBeTruthy()
+  }
+
+  await page.goto(`/my-drive?folder=${scoped}`)
+  await page.waitForLoadState('networkidle')
+  await page.locator('.bd-scoped-search input').fill(word)
+  await page.locator('.bd-scoped-search input').press('Enter')
+  await expect(page.getByText(new RegExp(`1 kết quả cho "${word}"`))).toBeVisible({ timeout: 15_000 })
+
+  await page.getByRole('button', { name: /Tìm kiếm nâng cao/ }).click()
+  await expect(page).toHaveURL(new RegExp(`/search\\?.*workspaceId=${ws}.*folderId=${scoped}`))
+  await expect(page.getByText(`Chỉ trong thư mục "Phạm vi ${stamp}" và các thư mục con`)).toBeVisible()
+  await expect(page.getByText(/Tìm thấy 1 kết quả/)).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText(`${word} trong.txt`)).toBeVisible()
+
+  // Removing the folder limit widens the search to the whole workspace.
+  await page.getByLabel('Bỏ giới hạn thư mục').click()
+  await page.locator('.bd-search-layout').getByRole('button', { name: /Tìm kiếm$/ }).click()
+  await expect(page.getByText(/Tìm thấy 2 kết quả/)).toBeVisible({ timeout: 15_000 })
   expect(errors).toEqual([])
 })
 

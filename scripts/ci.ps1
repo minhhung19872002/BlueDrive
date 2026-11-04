@@ -54,7 +54,7 @@ if ($E2E) {
 }
 if (-not $SkipDocker) {
     $env:POSTGRES_PASSWORD = 'ci'; $env:JWT_SECRET = 'ci_secret_ci_secret_ci_secret_ci_secret'
-    $env:ADMIN_PASSWORD = 'Ci@12345'; $env:STORAGE_MASTER_KEY = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='; $env:ONLYOFFICE_JWT_SECRET = 'ci'
+    $env:ADMIN_PASSWORD = 'Ci@12345'; $env:STORAGE_MASTER_KEY = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='; $env:ONLYOFFICE_JWT_SECRET = 'ci_office_ci_office_ci_office_ci_office'
     Step 'docker compose config' { docker compose -f deploy/docker-compose.yml config --quiet }
 }
 Write-Host 'CI OK' -ForegroundColor Green

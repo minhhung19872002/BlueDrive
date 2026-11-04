@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Button, Drawer, Grid, Result, Space, Spin, Tabs, Tooltip, Typography, type TabsProps } from 'antd'
+import { App, Button, Drawer, Grid, Result, Space, Spin, Tabs, Tooltip, Typography, type TabsProps } from 'antd'
 import {
   CloseOutlined,
   DownloadOutlined,
@@ -47,6 +47,7 @@ export interface FileViewerProps {
 /** Full viewer: top bar (name, download, share, star, info, close) + preview by type + side info panel. */
 export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate, extraTabs, defaultTab }: FileViewerProps) {
   const { t } = useTranslation()
+  const { modal } = App.useApp()
   const navigate = useNavigate()
   const screens = Grid.useBreakpoint()
   const isMobile = screens.md === false
@@ -63,7 +64,7 @@ export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate
   const kind = f ? previewKind(f.mimeType, f.mediaType, f.extension) : 'none'
   // Images use the server-generated preview JPEG when available; the original is loaded on demand.
   const usePreviewImage = kind === 'image' && !!f?.previewUrl && !original
-  const needsInline = !!f && kind !== 'none' && !usePreviewImage && f.scanStatus !== 'infected'
+  const needsInline = !!f && kind !== 'none' && !usePreviewImage && !f.contentBlocked
   const inline = useInlineUrl(fileId, needsInline)
 
   const star = useApiMutation((starred: boolean) => setFavorite({ type: 'file', id: fileId }, starred), {
@@ -71,8 +72,18 @@ export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate
     invalidate: [qk.drive],
   })
   const download = useApiMutation(() => getDownloadUrl(fileId, false), { onSuccess: (r) => startDownload(r.url) })
+  // Files the scanner could not check (too large / scanner failing) still download, after an explicit warning.
+  const startDownloadChecked = () => {
+    if (f?.scanStatus !== 'too_large' && f?.scanStatus !== 'failed') return download.mutate()
+    modal.confirm({
+      title: t('info.unscannedDownloadTitle'),
+      content: t(f.scanStatus === 'too_large' ? 'info.scanTooLarge' : 'info.scanFailed'),
+      okText: t('info.unscannedDownloadConfirm'),
+      onOk: () => download.mutate(),
+    })
+  }
 
-  const office = !!f && isOfficeFile(f.extension) && f.scanStatus !== 'infected'
+  const office = !!f && isOfficeFile(f.extension) && !f.contentBlocked
   const officeEditable = office && isOfficeEditable(f.extension) && f.access.canEdit && !f.access.workspaceLocked
   const openEditor = () => f && navigate(editorUrl(f.id, !officeEditable))
   const officeLabel = officeEditable ? t('collab.office.openInEditor') : t('collab.office.openInViewer')
@@ -104,7 +115,9 @@ export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate
       title={<span style={{ color: 'inherit', wordBreak: 'break-word' }}>{f.name}</span>}
       subTitle={
         <span style={{ color: 'inherit' }}>
-          {f.scanStatus === 'infected' ? t('info.infected') : t('viewer.noPreview', { size: formatBytes(f.sizeBytes) })}
+          {f.contentBlocked
+            ? t(f.scanStatus === 'infected' ? 'info.infected' : 'info.scanPending')
+            : t('viewer.noPreview', { size: formatBytes(f.sizeBytes) })}
         </span>
       }
       extra={
@@ -114,8 +127,8 @@ export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate
               {officeLabel}
             </Button>
           )}
-          {f.access.canDownload && f.scanStatus !== 'infected' && (
-            <Button type={office ? 'default' : 'primary'} icon={<DownloadOutlined />} onClick={() => download.mutate()} loading={download.isPending}>
+          {f.access.canDownload && !f.contentBlocked && (
+            <Button type={office ? 'default' : 'primary'} icon={<DownloadOutlined />} onClick={startDownloadChecked} loading={download.isPending}>
               {t('actions.download')}
             </Button>
           )}
@@ -128,7 +141,7 @@ export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate
   if (detail.isError) stage = <Result status="warning" title={t('viewer.loadFailed')} subTitle={getErrorMessage(detail.error)} />
   else if (f) {
     const src = usePreviewImage ? f.previewUrl! : inline.data?.url
-    if (kind === 'none' || f.scanStatus === 'infected') stage = <>{fallback}</>
+    if (kind === 'none' || f.contentBlocked) stage = <>{fallback}</>
     else if (inline.isError) stage = <Result status="warning" subTitle={getErrorMessage(inline.error)} />
     else if (src)
       stage = (
@@ -175,9 +188,9 @@ export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate
               </Button>
             </Tooltip>
           )}
-          {f?.access.canDownload && (
+          {f?.access.canDownload && !f.contentBlocked && (
             <Tooltip title={t('actions.download')}>
-              <Button icon={<DownloadOutlined />} onClick={() => download.mutate()} loading={download.isPending}>
+              <Button icon={<DownloadOutlined />} onClick={startDownloadChecked} loading={download.isPending}>
                 {!isMobile && t('actions.download')}
               </Button>
             </Tooltip>

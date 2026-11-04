@@ -2,6 +2,7 @@ using BlueDrive.Application.Abstractions;
 using BlueDrive.Application.Features.Storage;
 using BlueDrive.Infrastructure.Media;
 using Hangfire;
+using Hangfire.Server;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -10,19 +11,28 @@ namespace BlueDrive.Infrastructure.Jobs;
 public sealed class HangfireBackgroundJobs(IBackgroundJobClient client) : IBackgroundJobs
 {
     public void EnqueueFileProcessing(Guid fileId, Guid versionId)
-        => client.Create<FileProcessingJob>(j => j.RunAsync(fileId, versionId, CancellationToken.None), new Hangfire.States.EnqueuedState(HangfireSetup.QueueMedia));
+        => client.Create<FileProcessingJob>(j => j.RunAsync(fileId, versionId, null, CancellationToken.None), new Hangfire.States.EnqueuedState(HangfireSetup.QueueMedia));
 }
 
 /// <summary>Post-upload pipeline executed by the Worker: malware scan, metadata, thumbnails/previews.</summary>
 public sealed class FileProcessingJob(IFileProcessor processor, ILogger<FileProcessingJob> logger)
 {
-    [AutomaticRetry(Attempts = 3, DelaysInSeconds = [30, 120, 600])]
+    public const int MaxRetries = 3;
+
+    /// <param name="context">Supplied by Hangfire: tells the last retry apart, so an unreachable scanner ends as "Không quét được" instead of a stuck file.</param>
+    [AutomaticRetry(Attempts = MaxRetries, DelaysInSeconds = [30, 120, 600])]
     [Queue(HangfireSetup.QueueMedia)]
-    public async Task RunAsync(Guid fileId, Guid versionId, CancellationToken ct)
+    public async Task RunAsync(Guid fileId, Guid versionId, PerformContext? context, CancellationToken ct)
     {
-        logger.LogInformation("Xử lý tệp {FileId} phiên bản {VersionId}", fileId, versionId);
-        await processor.ProcessAsync(fileId, versionId, ct);
+        var retry = context?.GetJobParameter<int>("RetryCount") ?? 0;
+        logger.LogInformation("Xử lý tệp {FileId} phiên bản {VersionId} (lần thử lại {Retry})", fileId, versionId, retry);
+        await processor.ProcessAsync(fileId, versionId, retry >= MaxRetries, ct);
     }
+
+    /// <summary>Signature of jobs enqueued before the retry-aware overload existed.</summary>
+    [AutomaticRetry(Attempts = MaxRetries, DelaysInSeconds = [30, 120, 600])]
+    [Queue(HangfireSetup.QueueMedia)]
+    public Task RunAsync(Guid fileId, Guid versionId, CancellationToken ct) => RunAsync(fileId, versionId, null, ct);
 }
 
 public sealed class TrashRetentionJob(ISender mediator, ILogger<TrashRetentionJob> logger)

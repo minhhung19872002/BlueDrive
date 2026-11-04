@@ -3,6 +3,9 @@
   Xóa sạch toàn bộ dữ liệu khi kết thúc hợp đồng (HSMT mục 3.6) và lập biên bản xóa.
 .DESCRIPTION
   - Ghi nhận danh sách volume, dung lượng, số tệp và mã băm danh mục trước khi xóa.
+  - Nếu lưu trữ trên S3 (S3_BUCKET trong deploy/.env): xóa mọi đối tượng trong bucket (tệp số hóa và bản sao lưu backups/)
+    trước khi dừng dịch vụ, ghi số đối tượng / dung lượng đã xóa vào biên bản. Phiên bản cũ của đối tượng (bucket bật
+    versioning / object lock) phải được xóa thêm trên giao diện nhà cung cấp.
   - Dừng toàn bộ dịch vụ và xóa mọi volume (CSDL, tệp số hóa, bản sao lưu, ONLYOFFICE, log), deploy/.env (khóa mã hóa).
   - Xuất biên bản deploy/bien-ban-xoa-du-lieu-<thời gian>.txt kèm SHA-256 của biên bản.
   Nên thực hiện SAU khi đã bàn giao gói "Xuất toàn bộ dữ liệu" cho Chủ đầu tư.
@@ -40,6 +43,33 @@ try {
         $parts = @($info)
         $lines += "- $v : dung lượng $($parts[0]) byte, $($parts[1]) tệp, mã băm danh mục $($parts[2])"
     }
+    $s3Remaining = 0
+    $bucket = ''
+    if (Test-Path '.env') {
+        $bucketLine = Get-Content '.env' | Where-Object { $_ -match '^\s*S3_BUCKET\s*=' } | Select-Object -Last 1
+        if ($bucketLine) { $bucket = ($bucketLine -replace '^\s*S3_BUCKET\s*=\s*', '').Trim() }
+    }
+    if ($bucket) {
+        # Object storage: empty the bucket (blobs + backups/) while the stack is still configured.
+        Write-Host "==> Xóa dữ liệu trên S3 (bucket $bucket)" -ForegroundColor Cyan
+        $out = docker compose run --rm --no-deps -T worker wipe-s3
+        $code = $LASTEXITCODE
+        $kv = @{}
+        foreach ($l in @($out)) { if ($l -match '^(S3_[A-Z_]+)=(.*)$') { $kv[$Matches[1]] = $Matches[2].Trim() } }
+        $lines += ''
+        if ($kv['S3_CONFIGURED'] -eq 'true') {
+            $s3Remaining = [long]$kv['S3_REMAINING']
+            $lines += "LƯU TRỮ S3 (bucket $($kv['S3_BUCKET'])):"
+            $lines += "- Tệp số hóa đã xóa: $($kv['S3_DATA_OBJECTS']) đối tượng, $($kv['S3_DATA_BYTES']) byte"
+            $lines += "- Bản sao lưu (backups/) đã xóa: $($kv['S3_BACKUP_OBJECTS']) đối tượng, $($kv['S3_BACKUP_BYTES']) byte"
+            $lines += "- Đối tượng còn lại trong bucket: $s3Remaining"
+            $lines += '- Lưu ý: nếu bucket bật versioning / object lock, các phiên bản cũ phải được xóa thêm trên giao diện nhà cung cấp S3.'
+        }
+        else {
+            $s3Remaining = 1
+            $lines += "LƯU TRỮ S3: không xóa được bucket $bucket (mã thoát $code) - CẦN XỬ LÝ THỦ CÔNG."
+        }
+    }
     Write-Host '==> Dừng dịch vụ và xóa volume' -ForegroundColor Cyan
     docker compose --profile clamav down --volumes --remove-orphans
     foreach ($v in $volumes) { docker volume rm -f $v 2>$null | Out-Null }
@@ -55,7 +85,7 @@ try {
     $lines += ''
     $lines += "Volume còn lại sau khi xóa: $(if ($remaining) { $remaining -join ', ' } else { 'không còn' })"
     $lines += "Thời điểm kết thúc: $(Get-Date -Format 'dd/MM/yyyy HH:mm:ss zzz')"
-    $lines += "Kết quả: $(if ($remaining) { 'CHƯA HOÀN TẤT' } else { 'ĐÃ XÓA TOÀN BỘ DỮ LIỆU' })"
+    $lines += "Kết quả: $(if ($remaining -or $s3Remaining -gt 0) { 'CHƯA HOÀN TẤT' } else { 'ĐÃ XÓA TOÀN BỘ DỮ LIỆU' })"
     Set-Content $report ($lines -join [Environment]::NewLine) -Encoding utf8
     $hash = (Get-FileHash $report -Algorithm SHA256).Hash
     Add-Content $report "`r`nSHA-256 của biên bản (trước dòng này): $hash"

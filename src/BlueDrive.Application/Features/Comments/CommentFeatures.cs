@@ -146,6 +146,7 @@ public sealed class GetAttachmentUrlHandler(IAppDbContext db, ICurrentUser me, I
         if (!c.AttachmentFileIds.Contains(q.FileId)) throw new NotFoundException("Không tìm thấy tệp đính kèm.");
         await auth.EnsureAsync(uid, ResourceType.File, c.FileId, AccessLevel.View, ct);
         var f = await db.Files.AsNoTracking().FirstOrDefaultAsync(x => x.Id == q.FileId && !x.IsDeleted, ct) ?? throw new NotFoundException("Tệp đính kèm đã bị xóa.");
+        await ScanGate.EnsureAsync(db, f, f.CurrentVersionId, uid, ct);
         var token = tickets.Issue(new ContentTicket(uid, "attachment", f.Id, f.CurrentVersionId, q.Inline, [new ItemRef("comment", c.Id)], null), TimeSpan.FromHours(1));
         await audit.LogAsync(new AuditEntry(q.Inline ? AuditAction.View : AuditAction.Download, ResourceType.File, f.Id, f.Name, f.WorkspaceId, new { attachmentOf = c.FileId }), ct);
         return new DownloadUrlDto($"/api/v1/content/{Uri.EscapeDataString(token)}", clock.GetUtcNow().UtcDateTime.AddHours(1), f.Name, f.MimeType, f.SizeBytes);

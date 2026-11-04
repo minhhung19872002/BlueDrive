@@ -37,12 +37,22 @@ public sealed record SearchCriteria
 
 public sealed record SearchHit(DriveItemDto Item, string Location, string? HighlightedName, string? HighlightedTitle, string? Snippet, double Rank, string? UploaderOrganization);
 
-public sealed record SearchResult(IReadOnlyList<SearchHit> Items, int Total, int Page, int PageSize, IReadOnlyList<string> Terms, long ElapsedMs);
+/// <param name="TotalCapped">True when the matches were counted only up to <see cref="SearchPaging.CountLimit"/>: there are more than <c>Total</c>.</param>
+public sealed record SearchResult(IReadOnlyList<SearchHit> Items, int Total, int Page, int PageSize, IReadOnlyList<string> Terms, long ElapsedMs, bool TotalCapped = false);
+
+public static class SearchPaging
+{
+    /// <summary>
+    /// Matches are counted up to this number (or one page past the current one). An exact count of a broad term ("dân số" in 80 000
+    /// files) re-checks the access rules of every match and cost as much as the page itself (load test T1, docs/bao-cao-kiem-thu-tai.md).
+    /// </summary>
+    public const int CountLimit = 1000;
+}
 
 /// <summary>Accent-insensitive full-text search over files the user can access (implemented with PostgreSQL FTS).</summary>
 public interface IFileSearchService
 {
-    Task<(IReadOnlyList<(Guid FileId, double Rank)> Page, int Total)> SearchAsync(SearchCriteria criteria, PrincipalSet principals, CancellationToken ct);
+    Task<(IReadOnlyList<(Guid FileId, double Rank)> Page, int Total, bool TotalCapped)> SearchAsync(SearchCriteria criteria, PrincipalSet principals, CancellationToken ct);
 }
 
 public sealed record SearchFilesQuery(SearchCriteria Criteria) : IRequest<SearchResult>;
@@ -67,7 +77,7 @@ public sealed class SearchFilesHandler(IAppDbContext db, ICurrentUser me, IResou
         if (!await perms.HasAsync(uid, Perm.SearchView, ct) && !await perms.HasAsync(uid, Perm.DocView, ct))
             throw new ForbiddenException("Vai trò của bạn không có quyền tìm kiếm tư liệu.");
         var principals = await auth.GetPrincipalsAsync(uid, ct);
-        var (page, total) = await search.SearchAsync(q.Criteria, principals, ct);
+        var (page, total, capped) = await search.SearchAsync(q.Criteria, principals, ct);
 
         var ids = page.Select(p => p.FileId).ToList();
         var items = (await DriveProjection.Files(db, db.Files.AsNoTracking().Where(f => ids.Contains(f.Id)), uid).ToListAsync(ct)).ToDictionary(i => i.Id);
@@ -87,7 +97,7 @@ public sealed class SearchFilesHandler(IAppDbContext db, ICurrentUser me, IResou
         }
         var withThumbs = ThumbnailUrls.Apply(hits.Select(h => h.Item), tickets, uid);
         hits = hits.Select((h, i) => h with { Item = withThumbs[i] }).ToList();
-        return new SearchResult(hits, Math.Max(total, hits.Count), Math.Max(1, q.Criteria.Page), Math.Clamp(q.Criteria.PageSize, 1, 100), terms, sw.ElapsedMilliseconds);
+        return new SearchResult(hits, Math.Max(total, hits.Count), Math.Max(1, q.Criteria.Page), Math.Clamp(q.Criteria.PageSize, 1, 100), terms, sw.ElapsedMilliseconds, capped);
     }
 }
 

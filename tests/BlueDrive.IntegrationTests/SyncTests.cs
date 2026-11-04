@@ -343,6 +343,9 @@ public class SyncTests(ApiFactory factory)
         var policy = await (await device.Client.GetAsync("/api/v1/sync/policy")).ReadJsonAsync();
         policy.GetProperty("enabled").GetBoolean().Should().BeTrue();
         policy.GetProperty("viewOnlyAsLink").GetBoolean().Should().BeTrue();
+        // Upload rules sent too: the client refuses a file before sending it.
+        policy.GetProperty("uploadAllowedExtensions").EnumerateArray().Select(e => e.GetString()).Should().Contain("docx");
+        policy.GetProperty("uploadMaxSizeBytes").GetInt64().Should().BePositive();
 
         using (var scope = factory.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<ISettingsService>().SetAsync(SettingKeys.SyncEnabled, false);

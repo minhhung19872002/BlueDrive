@@ -30,7 +30,7 @@ export const MEDIA_TYPES: MediaType[] = [
 ]
 
 export type ApprovalStatus = 'draft' | 'pending' | 'approved' | 'rejected'
-export type ScanStatus = 'pending' | 'scanning' | 'clean' | 'infected' | 'skipped'
+export type ScanStatus = 'pending' | 'scanning' | 'clean' | 'infected' | 'skipped' | 'too_large' | 'failed'
 export type WorkspaceType = 'personal' | 'group' | 'organization'
 export type WorkspaceMemberRole = 'owner' | 'manager' | 'editor' | 'uploader' | 'approver' | 'viewer'
 export type ItemType = 'file' | 'folder'
@@ -158,6 +158,8 @@ export interface FileDetail {
   isStarred: boolean
   access: AccessFlags
   isDeleted: boolean
+  /** True when the content may not be opened by the current user (malware found, or still being scanned and not the uploader). */
+  contentBlocked: boolean
 }
 
 export interface ListItemsParams {

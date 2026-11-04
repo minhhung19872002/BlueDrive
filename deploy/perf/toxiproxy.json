@@ -1,0 +1,8 @@
+[
+  {
+    "name": "bluedrive",
+    "listen": "0.0.0.0:8091",
+    "upstream": "reverse-proxy:80",
+    "enabled": true
+  }
+]

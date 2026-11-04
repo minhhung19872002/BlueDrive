@@ -4,7 +4,7 @@ export type MediaType =
   | 'image' | 'video' | 'audio' | 'document' | 'spreadsheet' | 'presentation'
   | 'pdf' | 'infographic' | 'epub' | 'archive' | 'design' | 'other';
 export type ApprovalStatus = 'draft' | 'pending' | 'approved' | 'rejected';
-export type ScanStatus = 'pending' | 'scanning' | 'clean' | 'infected' | 'skipped';
+export type ScanStatus = 'pending' | 'scanning' | 'clean' | 'infected' | 'skipped' | 'too_large' | 'failed';
 export type WorkspaceType = 'personal' | 'group' | 'organization';
 export type WorkspaceMemberRole = 'owner' | 'manager' | 'editor' | 'uploader' | 'approver' | 'viewer';
 export type ItemType = 'file' | 'folder';
@@ -167,6 +167,8 @@ export interface FileDetail {
   isStarred: boolean;
   access: AccessFlags;
   isDeleted: boolean;
+  /** Content may not be opened by this user: malware found, or still being scanned and not the uploader. */
+  contentBlocked: boolean;
   thumbnailUrl?: string | null;
   previewUrl?: string | null;
 }
@@ -219,6 +221,8 @@ export interface SearchHit {
 export interface SearchResult extends Paged<SearchHit> {
   terms: string[];
   elapsedMs: number;
+  /** True when the server stopped counting: there are more than `total` matches. */
+  totalCapped?: boolean;
 }
 
 export interface ShareLink {

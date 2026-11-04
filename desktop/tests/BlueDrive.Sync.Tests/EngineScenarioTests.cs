@@ -117,6 +117,25 @@ public class EngineScenarioTests : IDisposable
     }
 
     [Fact]
+    public async Task Server_moves_that_block_each_other_locally_are_untangled()
+    {
+        // Found by SimulationTests: folder "F1" is renamed to "a.txt" while the file "a.txt" moves into a new sub-folder of it.
+        _remote.WebCreateFolder(null, "F1");
+        _remote.WebUpload(null, "a.txt", Content.Of("tệp a"));
+        await _a.SyncAsync();
+        _remote.WebRename("a.txt", "z.txt");
+        _remote.WebMove("z.txt", "F1");
+        _remote.WebRename("F1", "a.txt");
+        _remote.WebCreateFolder("a.txt", "G");
+        _remote.WebMove("a.txt/z.txt", "a.txt/G");
+        for (var i = 0; i < 6 && (await _a.SyncAsync()).Operations > 0; i++) { }
+        Tree(_a.Fs).Should().BeEquivalentTo(_remote.Tree());
+        _a.Fs.Read("a.txt/G/z.txt").Should().Equal(Content.Of("tệp a"));
+        _a.Fs.EngineWrites.Should().Be(1, "the file is moved, never downloaded again");
+        (await _a.SyncAsync()).Operations.Should().Be(0);
+    }
+
+    [Fact]
     public async Task Concurrent_edits_keep_both_versions_with_a_conflict_copy()
     {
         _remote.WebUpload(null, "Hợp đồng.docx", Content.Of("v1"));

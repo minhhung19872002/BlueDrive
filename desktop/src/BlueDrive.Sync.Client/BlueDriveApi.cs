@@ -89,6 +89,19 @@ public sealed class BlueDriveApi(HttpClient http)
         await (await content.Content.ReadAsStreamAsync(ct)).CopyToAsync(destination, ct);
     }
 
+    /// <summary>GET /sync/policy: limits and options set by the administrator ("Cấu hình hệ thống" → Đồng bộ).</summary>
+    public sealed record SyncPolicy(
+        bool Enabled, long MaxFileSizeBytes, List<string> BlockedExtensions, List<Guid> OnlineOnlyWorkspaceIds, string MinClientVersion,
+        bool ViewOnlyAsLink, int PollSeconds, int JournalRetentionDays, List<string>? UploadAllowedExtensions, long UploadMaxSizeBytes, string? WebBaseUrl);
+
+    public Task<SyncPolicy> PolicyAsync(CancellationToken ct = default) => GetAsync<SyncPolicy>("api/v1/sync/policy", ct);
+
+    public sealed record Ticket(Guid Id, string Code);
+
+    /// <summary>"Gửi yêu cầu hỗ trợ" (#76): creates a support ticket; the diagnostic text goes in the content.</summary>
+    public Task<Ticket> CreateTicketAsync(string title, string content, bool urgent, CancellationToken ct = default) =>
+        SendAsync<Ticket>(HttpMethod.Post, "api/v1/tickets", new { title, content, priority = urgent ? "khan_cap" : "khong_khan_cap" }, ct);
+
     private async Task<T> GetAsync<T>(string url, CancellationToken ct)
     {
         using var res = await Send(new HttpRequestMessage(HttpMethod.Get, url), ct);

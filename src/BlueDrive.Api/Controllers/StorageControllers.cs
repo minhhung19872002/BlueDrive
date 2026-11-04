@@ -283,6 +283,13 @@ public class ContentController(IContentTicketService tickets, IFileContentServic
             return;
         }
         var file = await db.Files.AsNoTracking().FirstAsync(f => f.Id == ticket.FileId);
+        // Re-checked per request too: a ticket issued before the file was found infected stops working.
+        if (await ScanGate.BlockReasonAsync(db, file, ticket.VersionId, ticket.UserId, HttpContext.RequestAborted) is { } blocked)
+        {
+            Response.StatusCode = 423;
+            await Response.WriteAsJsonAsync(ProblemFactory.Create(423, blocked));
+            return;
+        }
         var version = await db.FileVersions.AsNoTracking().FirstAsync(v => v.Id == ticket.VersionId);
         await ContentStreaming.WriteFileAsync(HttpContext, content, version, file.Name, file.MimeType, ticket.Inline);
     }

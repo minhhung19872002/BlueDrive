@@ -28,9 +28,11 @@ x-dotnet-env: &dotnet-env
   OnlyOffice__InternalUrl: http://onlyoffice
   OnlyOffice__CallbackBaseUrl: http://api:8080
   OnlyOffice__JwtSecret: ${ONLYOFFICE_JWT_SECRET:?Thiếu ONLYOFFICE_JWT_SECRET trong .env}
+  ReverseProxy__TrustedProxies: ${TRUSTED_PROXIES:-}
   ClamAv__Enabled: ${CLAMAV_ENABLED:-false}
   ClamAv__Host: clamav
   ClamAv__Port: 3310
+  ClamAv__MaxScanMegabytes: ${CLAMAV_MAX_SCAN_MB:-200}
   Smtp__Host: ${SMTP_HOST:-}
   Smtp__Port: ${SMTP_PORT:-587}
   Smtp__User: ${SMTP_USER:-}
@@ -143,6 +145,11 @@ services:
     image: clamav/clamav:1.5-debian
     profiles: ["clamav"]
     restart: unless-stopped
+    environment:
+      # clamd defaults to 25 MB per stream: larger files were refused and retried forever. Keep in step with ClamAv__MaxScanMegabytes.
+      CLAMD_CONF_StreamMaxLength: ${CLAMAV_MAX_SCAN_MB:-200}M
+      CLAMD_CONF_MaxFileSize: ${CLAMAV_MAX_SCAN_MB:-200}M
+      CLAMD_CONF_MaxScanSize: ${CLAMAV_MAX_SCAN_MB:-200}M
     volumes:
       - clamav_db:/var/lib/clamav
     deploy:

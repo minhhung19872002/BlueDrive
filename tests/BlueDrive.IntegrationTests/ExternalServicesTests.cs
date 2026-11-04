@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using BlueDrive.Infrastructure.Email;
 using BlueDrive.Infrastructure.Storage;
+using BlueDrive.IntegrationTests.Infrastructure;
 using DotNet.Testcontainers.Builders;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,26 +17,8 @@ public class ExternalServicesTests
     [Fact]
     public async Task S3_storage_with_encryption_supports_write_ranged_read_list_and_delete()
     {
-        // SeaweedFS (pinned) as the S3 server: MinIO no longer publishes container images (minio/minio is gone from Docker Hub).
-        const string accessKey = "bdtest", secretKey = "bdtest-secret-key";
-        var s3Config = $$"""{"identities":[{"name":"bd","credentials":[{"accessKey":"{{accessKey}}","secretKey":"{{secretKey}}"}],"actions":["Admin","Read","Write","List","Tagging"]}]}""";
-        await using var server = new ContainerBuilder("chrislusf/seaweedfs:3.97")
-            .WithResourceMapping(System.Text.Encoding.UTF8.GetBytes(s3Config), "/etc/seaweedfs/s3.json")
-            .WithCommand("server", "-dir=/data", "-s3", "-s3.port=8333", "-s3.config=/etc/seaweedfs/s3.json")
-            .WithPortBinding(8333, true)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilHttpRequestIsSucceeded(r => r.ForPort(8333).ForStatusCodeMatching(_ => true)))
-            .Build();
-        await server.StartAsync();
-        var serviceUrl = $"http://{server.Hostname}:{server.GetMappedPublicPort(8333)}";
-        var options = Options.Create(new StorageOptions
-        {
-            Provider = "s3", EncryptAtRest = true, MasterKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
-            LocalRoot = Path.Combine(Path.GetTempPath(), "bd-s3-" + Guid.NewGuid().ToString("N")),
-            S3 = new S3Options { ServiceUrl = serviceUrl, Bucket = "bluedrive", AccessKey = accessKey, SecretKey = secretKey },
-        });
-        using (var admin = new Amazon.S3.AmazonS3Client(accessKey, secretKey,
-                   new Amazon.S3.AmazonS3Config { ServiceURL = serviceUrl, ForcePathStyle = true, AuthenticationRegion = "us-east-1" }))
-            await admin.PutBucketAsync("bluedrive");
+        await using var server = await S3TestServer.StartAsync();
+        var options = Options.Create(server.StorageOptions(Path.Combine(Path.GetTempPath(), "bd-s3-" + Guid.NewGuid().ToString("N"))));
         using var s3 = new S3FileStorage(options);
         var content = new FileContentService(s3, options);
 
@@ -53,7 +36,7 @@ public class ExternalServicesTests
             buf.Should().Equal(data[150_000..151_000], "ranged reads from S3 decrypt correctly");
         }
         var keys = new List<string>();
-        await foreach (var k in s3.ListKeysAsync("files/")) keys.Add(k);
+        await foreach (var o in s3.ListAsync("files/")) keys.Add(o.Key);
         keys.Should().Contain(stored.StorageKey);
         await content.DeleteAsync(stored.StorageKey);
         (await s3.ExistsAsync(stored.StorageKey)).Should().BeFalse();

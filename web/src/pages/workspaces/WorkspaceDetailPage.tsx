@@ -18,6 +18,7 @@ import WorkspaceMembersDrawer from '@/features/workspaces/WorkspaceMembersDrawer
 import WorkspaceUsage from '@/features/workspaces/WorkspaceUsage'
 import { useApiMutation } from '@/hooks/useApiMutation'
 import { useCan } from '@/hooks/usePermissions'
+import { useAuthStore } from '@/stores/auth'
 
 /** Group / organization workspace (#28–38): header with members & lock, then the shared FileExplorer. */
 export default function WorkspaceDetailPage() {
@@ -35,7 +36,10 @@ export default function WorkspaceDetailPage() {
   // A user who only received a shared folder may not read the workspace itself: the explorer still works.
   const ws = useQuery({ queryKey: qk.workspace(id), queryFn: () => getWorkspace(id), retry: 0, enabled: !!id })
   const w = ws.data
-  const isManager = can('workspace.admin') || w?.myRole === 'owner' || w?.myRole === 'manager'
+  const me = useAuthStore((s) => s.user?.id)
+  // Same rule as the API: owner or admin, or a manager whose role has workspace.edit.
+  const isManager =
+    can('workspace.admin') || (!!w && w.ownerId === me) || ((w?.myRole === 'owner' || w?.myRole === 'manager') && can('workspace.edit'))
 
   const lock = useApiMutation((locked: boolean) => setWorkspaceLock(id, locked), {
     successMessage: (_, locked) => (locked ? t('workspace.lockedDone') : t('workspace.unlockedDone')),

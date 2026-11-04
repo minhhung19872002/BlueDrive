@@ -1,0 +1,72 @@
+# BlueDrive - local load-test stack (Đợt 5). Overlay on docker-compose.yml, started by scripts/perf-up.ps1:
+#   docker compose -p bluedrive-perf --env-file deploy/.env.perf -f deploy/docker-compose.yml -f deploy/docker-compose.perf.yml up -d
+# Own project name = own containers, network and volumes: never touches a dev or production stack.
+#
+# Shapes the box like the target server (8 cores / 16 GB, HSMT): every service is pinned to CPUs 0-7 (cpuset) and keeps
+# the memory limits of docker-compose.yml. ClamAV is on (profile "clamav").
+# Clients do not hit Caddy directly: k6 goes through "edge" (Toxiproxy) on PERF_EDGE_PORT, whose network namespace carries a
+# tc netem qdisc (≈25 ms round trip, 300 Mbit/s shared by every connection) set up by "edge-shaper". Toxiproxy's own API
+# (127.0.0.1:8474) is there to inject faults (cut the link, add jitter) during a run.
+# Postgres is published on 127.0.0.1:PERF_PG_PORT for the seed tool and pg_stat_statements; it loads pg_stat_statements.
+
+x-pin: &pin
+  cpuset: "0-7"
+
+services:
+  postgres:
+    <<: *pin
+    command: >
+      postgres -c shared_buffers=768MB -c effective_cache_size=2GB -c work_mem=16MB
+      -c maintenance_work_mem=256MB -c max_connections=200
+      -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=top
+      -c pg_stat_statements.max=5000 -c track_io_timing=on -c log_min_duration_statement=1000
+    ports:
+      - "127.0.0.1:${PERF_PG_PORT:-55432}:5432"
+
+  api:
+    <<: *pin
+  worker:
+    <<: *pin
+  web:
+    <<: *pin
+  onlyoffice:
+    <<: *pin
+  clamav:
+    <<: *pin
+    profiles: []
+  reverse-proxy:
+    <<: *pin
+
+  edge:
+    <<: *pin
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    restart: unless-stopped
+    command: ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
+    volumes:
+      - ./perf/toxiproxy.json:/config/toxiproxy.json:ro
+    ports:
+      - "127.0.0.1:${PERF_EDGE_PORT:-8091}:8091"
+      - "127.0.0.1:8474:8474"
+    depends_on: [reverse-proxy]
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 256m }
+
+  edge-shaper:
+    image: alpine:3.22
+    network_mode: "service:edge"
+    cap_add: [NET_ADMIN]
+    environment:
+      PERF_DELAY_MS: ${PERF_DELAY_MS:-12}
+      PERF_RATE_MBIT: ${PERF_RATE_MBIT:-300}
+    # Egress of edge's eth0 carries both directions of client traffic (downloads to k6, upload bodies to Caddy), so one qdisc
+    # caps the shared link and adds PERF_DELAY_MS each way. Re-applied at every start; stays up so "docker compose ps" shows it.
+    command:
+      - sh
+      - -c
+      - |
+        apk add --no-cache iproute2-tc >/dev/null &&
+        tc qdisc replace dev eth0 root netem delay $${PERF_DELAY_MS}ms rate $${PERF_RATE_MBIT}mbit limit 100000 &&
+        tc qdisc show dev eth0 && exec sleep infinity
+    restart: "no"
+    depends_on: [edge]

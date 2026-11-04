@@ -165,7 +165,7 @@ function UserForm({ editing, onClose, onCreated }: Omit<UserFormDrawerProps, 'op
           </Col>
           <Col xs={12}>
             <Form.Item name="quotaGb" label={t('user.quotaGb')} extra={t('user.quotaHint')}>
-              <InputNumber min={0} max={100000} step={1} style={{ width: '100%' }} addonAfter="GB" />
+              <InputNumber min={0} max={100000} step={1} style={{ width: '100%' }} suffix="GB" />
             </Form.Item>
           </Col>
           <Col xs={12}>

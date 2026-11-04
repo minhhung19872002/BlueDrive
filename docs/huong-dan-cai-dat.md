@@ -70,7 +70,7 @@ Sinh khóa chủ: Linux `head -c 32 /dev/urandom | base64`; PowerShell `[Convert
 | Lưu tệp trên S3 | `STORAGE_PROVIDER=s3` và các biến `S3_*` |
 | Sao chép bản sao lưu lên S3 | `BACKUP_S3_ENABLED=true` (hoặc bật trong màn hình Sao lưu) |
 | Email (SMTP) | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` |
-| Dữ liệu mẫu | `scripts/seed.ps1` (5 người dùng `canbo1..canbo5`, mật khẩu `DEMO_PASSWORD` trong `deploy/.env`, mặc định `Demo@12345`) |
+| Dữ liệu mẫu | `scripts/seed.ps1` (5 người dùng `canbo1..canbo5`, mật khẩu `DEMO_PASSWORD` trong `deploy/.env`, do `install`/`seed` sinh ngẫu nhiên — không có mật khẩu mặc định chung) |
 
 ## 6. Kiểm tra sau cài đặt
 

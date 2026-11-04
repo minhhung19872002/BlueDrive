@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { Button, Result, Spin } from 'antd'
+import { App, Button, Result, Spin } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import type { OfficeEditorConfig } from '@/types/collab'
@@ -7,6 +7,11 @@ import '@/styles/collab.css'
 
 interface DocEditorInstance {
   destroyEditor?: () => void
+}
+
+/** Payload of the DocsAPI onError / onWarning events. */
+interface EditorEvent {
+  data?: { errorCode?: number; errorDescription?: string; warningCode?: number; warningDescription?: string }
 }
 
 declare global {
@@ -55,6 +60,19 @@ export default function OfficeEditor({ config, onRetry }: OfficeEditorProps) {
   const placeholderId = `bd-office-${useId().replace(/[^a-zA-Z0-9]/g, '')}`
   const [state, setState] = useState<{ status: Status; attempt: number }>({ status: 'loading', attempt: 0 })
   const attempt = state.attempt
+  const { notification } = App.useApp()
+  // Document Server errors (e.g. the community edition's 20-connection limit) surface as a Vietnamese notice;
+  // kept in a ref so a new translator does not recreate the editor.
+  const notifyRef = useRef<(kind: 'error' | 'warning', e: EditorEvent) => void>(() => {})
+  useEffect(() => {
+    notifyRef.current = (kind, e) => {
+      const description = e?.data?.errorDescription || e?.data?.warningDescription || ''
+      const code = e?.data?.errorCode ?? e?.data?.warningCode ?? ''
+      if (kind === 'error')
+        notification.error({ key: placeholderId, message: t('collab.office.editorErrorTitle'), description: t('collab.office.editorError', { description, code }), duration: 0 })
+      else notification.warning({ key: placeholderId, message: t('collab.office.editorWarningTitle'), description: `${description} (${code})` })
+    }
+  }, [notification, t, placeholderId])
 
   useEffect(() => {
     const host = hostRef.current
@@ -72,6 +90,10 @@ export default function OfficeEditor({ config, onRetry }: OfficeEditorProps) {
           width: '100%',
           height: '100%',
           ...config.config,
+          events: {
+            onError: (e: EditorEvent) => notifyRef.current('error', e),
+            onWarning: (e: EditorEvent) => notifyRef.current('warning', e),
+          },
         })
         // The editor iframe shows its own loading screen from here on.
         setState((s) => ({ ...s, status: 'ready' }))

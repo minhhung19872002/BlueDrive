@@ -38,13 +38,15 @@ export default function ScopedSearchResults({ workspaceId, folderId, scopeName, 
       title={
         <Typography.Text style={{ fontWeight: 500, whiteSpace: 'normal' }}>
           {result.data
-            ? t('collab.search.scopedFound', { count: result.data.total, q, scope: scopeName })
+            ? result.data.totalCapped
+              ? t('collab.search.scopedFoundMore', { n: result.data.total.toLocaleString('vi-VN'), q, scope: scopeName })
+              : t('collab.search.scopedFound', { count: result.data.total, q, scope: scopeName })
             : t('collab.search.scopedSearching', { q, scope: scopeName })}
         </Typography.Text>
       }
       extra={
         <Space size={4} wrap>
-          <Link to={`/search?q=${encodeURIComponent(q)}`}>
+          <Link to={`/search?${new URLSearchParams({ q, workspaceId, ...(folderId ? { folderId } : {}) }).toString()}`}>
             <Button size="small" type="link" icon={<FilterOutlined />}>
               {t('collab.search.advanced')}
             </Button>

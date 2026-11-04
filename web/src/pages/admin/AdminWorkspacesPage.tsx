@@ -198,7 +198,7 @@ export default function AdminWorkspacesPage() {
             rules={[{ required: true, message: t('adminWs.quotaRequired') }]}
             extra={quotaFor && t('adminWs.quotaUsed', { used: Math.round((quotaFor.usedBytes / GB) * 100) / 100 })}
           >
-            <InputNumber min={0} max={100000} step={1} style={{ width: '100%' }} addonAfter="GB" />
+            <InputNumber min={0} max={100000} step={1} style={{ width: '100%' }} suffix="GB" />
           </Form.Item>
         </Form>
       </Modal>

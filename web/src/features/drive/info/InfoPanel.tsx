@@ -7,7 +7,7 @@ import { getErrorMessage } from '@/api/errors'
 import type { AccessTarget } from '@/features/sharing/AccessDialog'
 import VersionsPanel from '@/features/versions/VersionsPanel'
 import { useAuthStore } from '@/stores/auth'
-import type { BreadcrumbItem, DriveItem, FolderInfo } from '@/types/drive'
+import type { BreadcrumbItem, DriveItem, FolderInfo, ScanStatus } from '@/types/drive'
 import { formatBytes, formatDateTime } from '@/utils/format'
 import FileTypeIcon from '../components/FileTypeIcon'
 import { useFileDetail } from '../hooks'
@@ -57,6 +57,18 @@ function LocationLinks({ workspaceId, crumbs }: { workspaceId: string; crumbs: B
   )
 }
 
+/** Malware-scan state the reader should know about: quarantined, still scanning, or never scanned. */
+function ScanAlert({ status, blocked }: { status: ScanStatus; blocked: boolean }) {
+  const { t } = useTranslation()
+  const style = { marginBottom: 12 }
+  if (status === 'infected') return <Alert type="error" showIcon message={t('info.infected')} style={style} />
+  if (status === 'pending' || status === 'scanning')
+    return <Alert type="info" showIcon message={t(blocked ? 'info.scanPending' : 'info.scanPendingOwner')} style={style} />
+  if (status === 'too_large') return <Alert type="warning" showIcon message={t('info.scanTooLarge')} style={style} />
+  if (status === 'failed') return <Alert type="warning" showIcon message={t('info.scanFailed')} style={style} />
+  return null
+}
+
 function FileInfo({ id, onManageAccess }: { id: string; onManageAccess?: InfoPanelProps['onManageAccess'] }) {
   const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
@@ -76,7 +88,7 @@ function FileInfo({ id, onManageAccess }: { id: string; onManageAccess?: InfoPan
       {f.approvalStatus === 'rejected' && f.rejectionReason && (
         <Alert type="error" showIcon message={t('info.rejectedReason', { reason: f.rejectionReason })} style={{ marginBottom: 12 }} />
       )}
-      {f.scanStatus === 'infected' && <Alert type="error" showIcon message={t('info.infected')} style={{ marginBottom: 12 }} />}
+      <ScanAlert status={f.scanStatus} blocked={f.contentBlocked} />
       {editing ? (
         <MetadataEditor
           fileIds={[f.id]}
@@ -91,7 +103,7 @@ function FileInfo({ id, onManageAccess }: { id: string; onManageAccess?: InfoPan
         />
       ) : (
         <>
-          <Descriptions column={1} size="small" colon={false} labelStyle={{ width: 110 }}>
+          <Descriptions column={1} size="small" colon={false} styles={{ label: { width: 110 } }}>
             <Descriptions.Item label={t('info.type')}>
               {f.mediaTypeName} {f.extension && `(.${f.extension})`}
             </Descriptions.Item>
@@ -179,7 +191,7 @@ function FolderItemInfo({ item, onManageAccess }: { item: DriveItem; onManageAcc
   return (
     <>
       <Header icon={<FileTypeIcon type="folder" size={32} />} name={item.name} sub={t('info.folder')} />
-      <Descriptions column={1} size="small" colon={false} labelStyle={{ width: 110 }}>
+      <Descriptions column={1} size="small" colon={false} styles={{ label: { width: 110 } }}>
         {item.workspaceName && <Descriptions.Item label={t('info.workspace')}>{item.workspaceName}</Descriptions.Item>}
         <Descriptions.Item label={t('info.createdBy')}>{item.createdByName ?? '—'}</Descriptions.Item>
         <Descriptions.Item label={t('common.createdAt')}>{formatDateTime(item.createdAt)}</Descriptions.Item>
@@ -205,7 +217,7 @@ function CurrentFolderInfo({ folder, onManageAccess }: { folder: FolderInfo; onM
   return (
     <>
       <Header icon={<FileTypeIcon type="folder" size={32} />} name={folder.name} sub={folder.id ? t('info.currentFolder') : t('info.workspaceRoot')} />
-      <Descriptions column={1} size="small" colon={false} labelStyle={{ width: 110 }}>
+      <Descriptions column={1} size="small" colon={false} styles={{ label: { width: 110 } }}>
         <Descriptions.Item label={t('info.location')}>
           <LocationLinks workspaceId={folder.workspaceId} crumbs={folder.breadcrumb} />
         </Descriptions.Item>

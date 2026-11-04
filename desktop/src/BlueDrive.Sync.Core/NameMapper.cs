@@ -110,6 +110,7 @@ public static class IgnoreRules
         var lower = name.ToLowerInvariant();
         if (lower is "thumbs.db" or "desktop.ini" or ".ds_store" or "$recycle.bin" or "system volume information") return true;
         if (lower.EndsWith(".tmp") || lower.EndsWith(".partial") || lower.EndsWith(".crdownload") || lower.EndsWith(".part")) return true;
-        return false;
+        // "<tên> - Mở trên web.url": written by the engine for view-only files, never uploaded.
+        return SyncClientPolicy.IsLinkName(name);
     }
 }

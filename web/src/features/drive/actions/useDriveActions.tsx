@@ -254,8 +254,8 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
       if (single && shown('copyLink')) list.push({ key: 'copyLink', icon: <LinkOutlined />, label: t('actions.copyLink') })
       list.push({ type: 'divider' })
       if (single && canEdit && shown('rename')) list.push({ key: 'rename', icon: <EditOutlined />, label: t('actions.rename'), extra: 'F2' })
-      if (shown('copyTo')) list.push({ key: 'copyTo', icon: <CopyOutlined />, label: t('actions.copyTo') })
-      if (canEdit && shown('moveTo')) list.push({ key: 'moveTo', icon: <ScissorOutlined />, label: t('actions.moveTo') })
+      if (can('doc.upload') && shown('copyTo')) list.push({ key: 'copyTo', icon: <CopyOutlined />, label: t('actions.copyTo') })
+      if (canEdit && can('doc.upload') && shown('moveTo')) list.push({ key: 'moveTo', icon: <ScissorOutlined />, label: t('actions.moveTo') })
       if (shown('star'))
         list.push(
           allStarred

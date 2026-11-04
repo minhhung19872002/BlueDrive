@@ -11,7 +11,10 @@
       "openFailed": "Không mở được tài liệu",
       "unavailableTitle": "Máy chủ soạn thảo chưa sẵn sàng",
       "unavailable": "Không kết nối được máy chủ soạn thảo trực tuyến (Document Server). Vui lòng thử lại sau ít phút hoặc liên hệ quản trị viên.",
-      "retry": "Thử lại"
+      "retry": "Thử lại",
+      "editorErrorTitle": "Trình soạn thảo báo lỗi",
+      "editorError": "{{description}} (mã lỗi {{code}}). Nếu nhiều người đang mở tài liệu cùng lúc, máy chủ soạn thảo có thể đã đạt giới hạn kết nối đồng thời — vui lòng đóng bớt tài liệu không dùng hoặc thử lại sau, hoặc liên hệ quản trị viên.",
+      "editorWarningTitle": "Lưu ý từ trình soạn thảo"
     },
     "newDoc": {
       "menu": {
@@ -180,6 +183,7 @@
       "deleteSavedConfirm": "Xóa bộ lọc \"{{name}}\"?",
       "results": "Kết quả",
       "found": "Tìm thấy {{count}} kết quả ({{ms}} ms)",
+      "foundMore": "Tìm thấy hơn {{n}} kết quả ({{ms}} ms)",
       "noResults": "Không tìm thấy tư liệu phù hợp. Thử từ khóa không dấu, từ khóa ngắn hơn hoặc bỏ bớt bộ lọc.",
       "failed": "Không tìm kiếm được",
       "sort": {
@@ -193,8 +197,11 @@
       "folderPlaceholder": "Tìm trong thư mục \"{{name}}\" và các thư mục con (tên, tiêu đề, mô tả, thẻ)",
       "folderScope": "thư mục \"{{name}}\"",
       "scopedFound": "{{count}} kết quả cho \"{{q}}\" trong {{scope}}",
+      "scopedFoundMore": "Hơn {{n}} kết quả cho \"{{q}}\" trong {{scope}}",
       "scopedSearching": "Đang tìm \"{{q}}\" trong {{scope}}...",
       "advanced": "Tìm kiếm nâng cao",
+      "inFolder": "Chỉ trong thư mục \"{{name}}\" và các thư mục con",
+      "removeFolderScope": "Bỏ giới hạn thư mục",
       "closeResults": "Đóng tìm kiếm"
     }
   }

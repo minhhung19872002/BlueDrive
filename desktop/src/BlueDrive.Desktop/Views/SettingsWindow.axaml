@@ -140,6 +140,8 @@
                                 Command="{Binding #Root.((vm:SettingsViewModel)DataContext).IgnoreCommand}" CommandParameter="{Binding}" />
                         <Button Content="Thử lại" IsVisible="{Binding IsError}"
                                 Command="{Binding #Root.((vm:SettingsViewModel)DataContext).RetryCommand}" CommandParameter="{Binding}" />
+                        <Button Content="Bỏ qua" IsVisible="{Binding IsError}" ToolTip.Tip="Ẩn vấn đề này cho đến khi nó thay đổi"
+                                Command="{Binding #Root.((vm:SettingsViewModel)DataContext).IgnoreCommand}" CommandParameter="{Binding}" />
                         <Button Content="Mở vị trí"
                                 Command="{Binding #Root.((vm:SettingsViewModel)DataContext).OpenLocationCommand}" CommandParameter="{Binding}" />
                       </StackPanel>
@@ -158,7 +160,15 @@
           <TextBlock TextWrapping="Wrap" Text="Hệ thống lưu trữ sản phẩm truyền thông dân số — ứng dụng đồng bộ tư liệu xuống máy tính." />
           <Button Content="Xuất gói chẩn đoán…" Command="{Binding ExportDiagnosticsCommand}" HorizontalAlignment="Left" />
           <TextBlock Classes="muted" TextWrapping="Wrap" Text="Gói chẩn đoán gồm nhật ký và thông tin hệ thống để gửi bộ phận hỗ trợ; không chứa mật khẩu, mã đăng nhập hay nội dung tệp." />
-          <Button Content="Gửi yêu cầu hỗ trợ" Command="{Binding SupportCommand}" HorizontalAlignment="Left" />
+          <TextBlock Text="Gửi yêu cầu hỗ trợ" Classes="h2" Margin="0,12,0,0" />
+          <TextBox Text="{Binding SupportTitle}" Watermark="Tiêu đề (ví dụ: Không đồng bộ được thư mục Báo cáo)" MaxLength="200" />
+          <TextBox Text="{Binding SupportContent}" Watermark="Mô tả vấn đề" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="80" MaxLength="4000" />
+          <CheckBox IsChecked="{Binding SupportUrgent}" Content="Khẩn cấp" />
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Content="Gửi yêu cầu" Command="{Binding SendSupportCommand}" Classes="accent" />
+            <Button Content="Mở trang hỗ trợ trên web" Command="{Binding SupportCommand}" />
+          </StackPanel>
+          <TextBlock Text="{Binding SupportMessage}" TextWrapping="Wrap" IsVisible="{Binding SupportMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
           <TextBlock Text="Cập nhật" Classes="h2" Margin="0,12,0,0" />
           <TextBlock Text="{Binding UpdateStatus}" TextWrapping="Wrap" />
           <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding UpdatesAvailable}">

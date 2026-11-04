@@ -185,12 +185,13 @@ test('hai người dùng chia sẻ tài liệu qua lại', async ({ browser }) =
   await pageB.getByRole('row', { name: new RegExp(`sau-${stamp}`) }).getByText(`sau-${stamp}.txt`).click()
   await expect(pageB.getByText('Tệp trong thư mục con')).toBeVisible({ timeout: 15_000 })
   await pageB.getByRole('button', { name: 'Đóng' }).first().click()
-  // The sub-folder's share dialog shows the inherited share and where it comes from.
+  // The sub-folder's share dialog lists the inherited share; it cannot be removed there
+  // (only in "Quản lý quyền truy cập", which stops inheriting first).
   await pageA.goto(`/my-drive?folder=${top}`)
   await contextMenu(pageA, 'Thư mục con')
   await pageA.getByRole('menuitem', { name: /Chia sẻ$/ }).click()
   const inheritedRow = pageA.getByRole('dialog').getByRole('listitem').filter({ hasText: b.fullName })
-  await expect(inheritedRow).toContainText(`Kế thừa từ "${folderName}"`)
+  await expect(inheritedRow).toBeVisible()
   await expect(inheritedRow.getByRole('button', { name: 'Hủy chia sẻ' })).toHaveCount(0)
   await pageA.getByRole('dialog').getByRole('button', { name: /Close|Đóng/ }).first().click()
 

@@ -284,8 +284,17 @@ public class DesktopClientTests(ApiFactory factory)
         moved.Name.Should().Be("đổi tên.txt");
         await a.Remote.DeleteAsync(file.Id, moved.Revision, CancellationToken.None);
         await a.Invoking(x => x.Remote.GetItemAsync(file.Id, CancellationToken.None)).Should().ThrowAsync<RemoteNotFoundException>();
-        var changes = await a.Remote.ChangesAsync(0, CancellationToken.None);
-        changes.Changes.Should().Contain(c => c.ItemId == file.Id && c.Kind == RemoteChangeKind.Delete);
+        // The journal is shared by every test in the database: read all pages, as the engine does.
+        var changes = new List<RemoteChange>();
+        RemoteChangePage page;
+        long cursor = 0;
+        do
+        {
+            page = await a.Remote.ChangesAsync(cursor, CancellationToken.None);
+            changes.AddRange(page.Changes);
+            cursor = page.NextCursor;
+        } while (page.HasMore);
+        changes.Should().Contain(c => c.ItemId == file.Id && c.Kind == RemoteChangeKind.Delete);
     }
 
     [Fact]

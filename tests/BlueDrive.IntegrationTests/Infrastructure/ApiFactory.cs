@@ -16,6 +16,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     public string StorageRoot { get; } = Path.Combine(Path.GetTempPath(), "bluedrive-it-" + Guid.NewGuid().ToString("N"));
     public string ConnectionString => _pg.GetConnectionString();
+    public ContainerPgTools PgTools => field ??= new ContainerPgTools(_pg);
     public const string AdminPassword = "Admin@12345";
     public const string OnlyOfficeSecret = "integration_onlyoffice_secret_32_chars!!";
 
@@ -47,6 +48,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.ConfigureServices(services =>
         {
             services.AddSingleton(this);
+            services.AddSingleton<BlueDrive.Infrastructure.Operations.IPgTools>(PgTools);
             // Document Server downloads are routed back into the in-memory test server.
             services.AddHttpClient("onlyoffice").ConfigurePrimaryHttpMessageHandler(() => Server.CreateHandler());
             services.AddSingleton<FakeEmailSender>();

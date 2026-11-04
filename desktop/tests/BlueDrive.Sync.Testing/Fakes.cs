@@ -493,4 +493,10 @@ public sealed class FakeRemoteStore(FakeClock clock) : IRemoteStore
     {
         if (FindPath(path) is { } id) { _nodes[id].CanEdit = canEdit; _nodes[id].Revision++; Journal(_nodes[id], false); }
     }
+
+    /// <summary>"Chỉ xem" share: the file may be opened on the web but not downloaded.</summary>
+    public void SetCanDownload(string path, bool canDownload)
+    {
+        if (FindPath(path) is { } id) { _nodes[id].CanDownload = canDownload; _nodes[id].Revision++; Journal(_nodes[id], false); }
+    }
 }

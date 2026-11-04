@@ -58,12 +58,7 @@ public static class ApiSetup
         services.AddHealthChecks()
             .AddNpgSql(config.GetConnectionString("Default")!, name: "postgres", tags: ["ready"]);
 
-        services.Configure<ForwardedHeadersOptions>(o =>
-        {
-            o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
-            o.KnownIPNetworks.Clear();
-            o.KnownProxies.Clear();
-        });
+        services.Configure<ForwardedHeadersOptions>(o => TrustedProxyNetworks.Apply(o, config["ReverseProxy:TrustedProxies"]));
 
         var origins = config.GetSection("Cors:Origins").Get<string[]>() ?? [];
         services.AddCors(o => o.AddDefaultPolicy(p =>

@@ -96,8 +96,11 @@ public interface IFileStorage
     Task<bool> ExistsAsync(string key, CancellationToken ct = default);
     Task DeleteAsync(string key, CancellationToken ct = default);
     Task<long> GetSizeAsync(string key, CancellationToken ct = default);
-    IAsyncEnumerable<string> ListKeysAsync(string prefix, CancellationToken ct = default);
+    /// <summary>Every blob under <paramref name="prefix"/> ("" = all), with size and last write time (incremental backups).</summary>
+    IAsyncEnumerable<StoredObject> ListAsync(string prefix, CancellationToken ct = default);
 }
+
+public sealed record StoredObject(string Key, long Size, DateTime LastModifiedUtc);
 
 public interface IPermissionService
 {

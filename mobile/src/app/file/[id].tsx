@@ -68,7 +68,7 @@ export default function FileDetailScreen() {
 
         <View style={styles.actions}>
           <Button title={t('detail.openFull')} icon="fullscreen" onPress={() => openFileViewer(f.id, f.name)} style={{ flex: 1 }} />
-          {f.access.canDownload ? (
+          {f.access.canDownload && !f.contentBlocked ? (
             <Button title={t('actions.download')} icon="download" variant="secondary" onPress={() => downloadFile(f)} style={{ flex: 1 }} />
           ) : null}
         </View>

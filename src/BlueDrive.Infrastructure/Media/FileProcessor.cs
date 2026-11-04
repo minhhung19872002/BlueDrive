@@ -7,13 +7,16 @@ namespace BlueDrive.Infrastructure.Media;
 
 public interface IFileProcessor
 {
-    Task ProcessAsync(Guid fileId, Guid versionId, CancellationToken ct);
+    Task ProcessAsync(Guid fileId, Guid versionId, CancellationToken ct) => ProcessAsync(fileId, versionId, false, ct);
+
+    /// <param name="lastAttempt">The job will not be retried: a scanner outage is recorded as <see cref="ScanStatus.Failed"/> instead of thrown.</param>
+    Task ProcessAsync(Guid fileId, Guid versionId, bool lastAttempt, CancellationToken ct);
 }
 
 /// <summary>Runs the configured steps (scan → metadata/thumbnails) for a stored version. Steps are pluggable.</summary>
 public sealed class FileProcessor(IAppDbContext db, IEnumerable<IFileProcessingStep> steps, ILogger<FileProcessor> logger) : IFileProcessor
 {
-    public async Task ProcessAsync(Guid fileId, Guid versionId, CancellationToken ct)
+    public async Task ProcessAsync(Guid fileId, Guid versionId, bool lastAttempt, CancellationToken ct)
     {
         var file = await db.Files.FirstOrDefaultAsync(f => f.Id == fileId, ct);
         var version = await db.FileVersions.FirstOrDefaultAsync(v => v.Id == versionId, ct);
@@ -24,7 +27,14 @@ public sealed class FileProcessor(IAppDbContext db, IEnumerable<IFileProcessingS
         }
         foreach (var step in steps.OrderBy(s => s.Order))
         {
-            var proceed = await step.RunAsync(file, version, ct);
+            bool proceed;
+            try { proceed = await step.RunAsync(file, version, ct); }
+            catch (MalwareScanUnavailableException ex) when (lastAttempt && step is MalwareScanStep scan)
+            {
+                logger.LogError(ex, "Hết số lần thử quét virus tệp {FileId}", fileId);
+                await scan.MarkFailedAsync(file, ex.Message, ct);
+                proceed = true;
+            }
             await db.SaveChangesAsync(ct);
             if (!proceed) break;
         }

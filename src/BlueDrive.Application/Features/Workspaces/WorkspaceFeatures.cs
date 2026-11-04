@@ -32,15 +32,40 @@ public static class WorkspaceQueries
     }
 }
 
+/// <summary>
+/// Who may change a group workspace (information, members): the owner, <c>workspace.admin</c>, or a manager of the
+/// workspace (member role Manager, or a Manage grant on it) whose role holds <c>workspace.edit</c> ("Nhóm tài nguyên - Chỉnh sửa").
+/// </summary>
+public static class WorkspaceManagement
+{
+    public static async Task EnsureCanChangeAsync(IAppDbContext db, IResourceAuthorizationService auth, IPermissionService perms, Guid userId, Workspace ws, CancellationToken ct)
+    {
+        if (ws.OwnerId == userId || await perms.HasAsync(userId, Perm.WorkspaceAdmin, ct)) return;
+        var manager = await db.WorkspaceMembers.AnyAsync(m => m.WorkspaceId == ws.Id && m.UserId == userId
+                                                              && (m.MemberRole == WorkspaceMemberRole.Manager || m.MemberRole == WorkspaceMemberRole.Owner), ct)
+                      || (await auth.GetAccessAsync(userId, ResourceType.Workspace, ws.Id, ct)).Level >= AccessLevel.Manage;
+        if (!manager) throw new ForbiddenException("Chỉ trưởng nhóm, quản lý nhóm hoặc quản trị viên được thay đổi nhóm tài nguyên.");
+        if (!await perms.HasAsync(userId, Perm.WorkspaceEdit, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền chỉnh sửa nhóm tài nguyên.");
+    }
+
+    public static void EnsureNotLocked(Workspace ws)
+    {
+        if (ws.IsLocked) throw new AppException("Nhóm tài nguyên đang bị khóa, chỉ cho phép xem.", 423);
+    }
+}
+
 public sealed record ListMyWorkspacesQuery(WorkspaceType? Type) : IRequest<IReadOnlyList<WorkspaceDto>>;
 
-public sealed class ListMyWorkspacesHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth) : IRequestHandler<ListMyWorkspacesQuery, IReadOnlyList<WorkspaceDto>>
+public sealed class ListMyWorkspacesHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms)
+    : IRequestHandler<ListMyWorkspacesQuery, IReadOnlyList<WorkspaceDto>>
 {
     public async Task<IReadOnlyList<WorkspaceDto>> Handle(ListMyWorkspacesQuery q, CancellationToken ct)
     {
         var uid = me.RequireUserId();
         var query = await WorkspaceQueries.AccessibleAsync(db, auth, uid, ct);
-        query = query.Where(w => w.Type != WorkspaceType.Personal || w.OwnerId == uid);
+        // Group / organization workspaces need "Nhóm tài nguyên - Xem"; the personal space is always listed.
+        var seesGroups = await perms.HasAsync(uid, Perm.WorkspaceView, ct);
+        query = query.Where(w => w.Type == WorkspaceType.Personal ? w.OwnerId == uid : seesGroups);
         if (q.Type.HasValue) query = query.Where(w => w.Type == q.Type);
         return await WorkspaceQueries.Project(db, query.OrderBy(w => w.Type).ThenBy(w => w.Name), uid).ToListAsync(ct);
     }
@@ -114,7 +139,8 @@ public sealed class SaveWorkspaceHandler(IAppDbContext db, ICurrentUser me, IPer
         {
             ws = await db.Workspaces.Include(w => w.Members).FirstOrDefaultAsync(w => w.Id == cmd.Id, ct) ?? throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
             if (ws.Type == WorkspaceType.Personal) throw new AppException("Không gian cá nhân không chỉnh sửa tại đây.");
-            await auth.EnsureAsync(uid, ResourceType.Workspace, ws.Id, AccessLevel.Manage, ct);
+            await WorkspaceManagement.EnsureCanChangeAsync(db, auth, perms, uid, ws, ct);
+            WorkspaceManagement.EnsureNotLocked(ws);
             if (cmd.QuotaGb.HasValue && isAdmin) ws.QuotaBytes = (long)(cmd.QuotaGb.Value * WorkspaceProvisioning.Gb);
             ws.Type = cmd.Type;
         }
@@ -163,14 +189,14 @@ public sealed class DeleteWorkspaceHandler(IAppDbContext db, ICurrentUser me, IP
 /// <summary>#58: lock = read-only workspace.</summary>
 public sealed record SetWorkspaceLockCommand(Guid Id, bool Locked) : IRequest<Unit>;
 
-public sealed class SetWorkspaceLockHandler(IAppDbContext db, ICurrentUser me, IPermissionService perms, IAuditLogger audit) : IRequestHandler<SetWorkspaceLockCommand, Unit>
+public sealed class SetWorkspaceLockHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IAuditLogger audit)
+    : IRequestHandler<SetWorkspaceLockCommand, Unit>
 {
     public async Task<Unit> Handle(SetWorkspaceLockCommand cmd, CancellationToken ct)
     {
         var uid = me.RequireUserId();
         var ws = await db.Workspaces.FirstOrDefaultAsync(w => w.Id == cmd.Id, ct) ?? throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
-        var manager = ws.OwnerId == uid || await db.WorkspaceMembers.AnyAsync(m => m.WorkspaceId == ws.Id && m.UserId == uid && m.MemberRole == WorkspaceMemberRole.Manager, ct);
-        if (!manager && !await perms.HasAsync(uid, Perm.WorkspaceAdmin, ct)) throw new ForbiddenException("Chỉ trưởng nhóm, quản lý nhóm hoặc quản trị viên được khóa/mở khóa nhóm.");
+        await WorkspaceManagement.EnsureCanChangeAsync(db, auth, perms, uid, ws, ct);
         ws.IsLocked = cmd.Locked;
         await db.SaveChangesAsync(ct);
         await audit.LogAsync(new AuditEntry(AuditAction.ConfigChange, ResourceType.Workspace, ws.Id, ws.Name, ws.Id, new { locked = cmd.Locked }), ct);
@@ -181,11 +207,14 @@ public sealed class SetWorkspaceLockHandler(IAppDbContext db, ICurrentUser me, I
 // ---------- Members (#57, #58) ----------
 public sealed record ListWorkspaceMembersQuery(Guid WorkspaceId) : IRequest<IReadOnlyList<WorkspaceMemberDto>>;
 
-public sealed class ListWorkspaceMembersHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth) : IRequestHandler<ListWorkspaceMembersQuery, IReadOnlyList<WorkspaceMemberDto>>
+public sealed class ListWorkspaceMembersHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms)
+    : IRequestHandler<ListWorkspaceMembersQuery, IReadOnlyList<WorkspaceMemberDto>>
 {
     public async Task<IReadOnlyList<WorkspaceMemberDto>> Handle(ListWorkspaceMembersQuery q, CancellationToken ct)
     {
-        await auth.EnsureAsync(me.RequireUserId(), ResourceType.Workspace, q.WorkspaceId, AccessLevel.View, ct);
+        var uid = me.RequireUserId();
+        if (!await perms.HasAsync(uid, Perm.WorkspaceView, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền xem nhóm tài nguyên.");
+        await auth.EnsureAsync(uid, ResourceType.Workspace, q.WorkspaceId, AccessLevel.View, ct);
         return await db.WorkspaceMembers.AsNoTracking().Where(m => m.WorkspaceId == q.WorkspaceId).OrderBy(m => m.MemberRole).ThenBy(m => m.User!.FullName)
             .Select(m => new WorkspaceMemberDto(m.UserId, m.User!.Username, m.User.FullName, m.User.Organization != null ? m.User.Organization.Name : null, m.MemberRole, m.AddedAt))
             .ToListAsync(ct);
@@ -194,14 +223,15 @@ public sealed class ListWorkspaceMembersHandler(IAppDbContext db, ICurrentUser m
 
 public sealed record SetWorkspaceMembersCommand(Guid WorkspaceId, IReadOnlyList<Guid> UserIds, WorkspaceMemberRole Role) : IRequest<int>;
 
-public sealed class SetWorkspaceMembersHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IAuditLogger audit, TimeProvider clock)
+public sealed class SetWorkspaceMembersHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IAuditLogger audit, TimeProvider clock)
     : IRequestHandler<SetWorkspaceMembersCommand, int>
 {
     public async Task<int> Handle(SetWorkspaceMembersCommand cmd, CancellationToken ct)
     {
         var ws = await db.Workspaces.Include(w => w.Members).FirstOrDefaultAsync(w => w.Id == cmd.WorkspaceId, ct) ?? throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
         if (ws.Type == WorkspaceType.Personal) throw new AppException("Không gian cá nhân không có thành viên.");
-        await auth.EnsureAsync(me.RequireUserId(), ResourceType.Workspace, ws.Id, AccessLevel.Manage, ct);
+        await WorkspaceManagement.EnsureCanChangeAsync(db, auth, perms, me.RequireUserId(), ws, ct);
+        WorkspaceManagement.EnsureNotLocked(ws);
         if (cmd.Role == WorkspaceMemberRole.Owner) throw new AppException("Dùng chức năng chuyển trưởng nhóm để đổi trưởng nhóm.");
         var valid = await db.Users.Where(u => cmd.UserIds.Contains(u.Id) && u.IsActive).Select(u => u.Id).ToListAsync(ct);
         var count = 0;
@@ -221,14 +251,19 @@ public sealed class SetWorkspaceMembersHandler(IAppDbContext db, ICurrentUser me
 
 public sealed record RemoveWorkspaceMemberCommand(Guid WorkspaceId, Guid UserId) : IRequest<Unit>;
 
-public sealed class RemoveWorkspaceMemberHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IAuditLogger audit) : IRequestHandler<RemoveWorkspaceMemberCommand, Unit>
+public sealed class RemoveWorkspaceMemberHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IAuditLogger audit)
+    : IRequestHandler<RemoveWorkspaceMemberCommand, Unit>
 {
     public async Task<Unit> Handle(RemoveWorkspaceMemberCommand cmd, CancellationToken ct)
     {
         var ws = await db.Workspaces.FirstOrDefaultAsync(w => w.Id == cmd.WorkspaceId, ct) ?? throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
         var uid = me.RequireUserId();
         // Members may leave on their own; otherwise managers only.
-        if (cmd.UserId != uid) await auth.EnsureAsync(uid, ResourceType.Workspace, ws.Id, AccessLevel.Manage, ct);
+        if (cmd.UserId != uid)
+        {
+            await WorkspaceManagement.EnsureCanChangeAsync(db, auth, perms, uid, ws, ct);
+            WorkspaceManagement.EnsureNotLocked(ws);
+        }
         if (cmd.UserId == ws.OwnerId) throw new AppException("Không thể xóa trưởng nhóm khỏi nhóm. Hãy chuyển trưởng nhóm trước.");
         var removed = await db.WorkspaceMembers.Where(m => m.WorkspaceId == ws.Id && m.UserId == cmd.UserId).ExecuteDeleteAsync(ct);
         if (removed == 0) throw new NotFoundException("Người dùng không phải thành viên nhóm.");

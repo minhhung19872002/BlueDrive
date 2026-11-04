@@ -12,7 +12,8 @@ public enum MediaType { Image, Video, Audio, Document, Spreadsheet, Presentation
 
 public enum ApprovalStatus { Draft, Pending, Approved, Rejected }
 
-public enum ScanStatus { Pending, Scanning, Clean, Infected, Skipped }
+/// <summary>Skipped: no scanner configured. TooLarge: above the scanner stream limit. Failed: the scanner kept failing (retries exhausted).</summary>
+public enum ScanStatus { Pending, Scanning, Clean, Infected, Skipped, TooLarge, Failed }
 
 public enum ResourceType { Workspace, Folder, File }
 
@@ -28,7 +29,7 @@ public enum AuditAction
     UserLock, UserUnlock, Approve, Reject, VersionRestore, Comment, ShareLinkAccess, Export, Backup, Import
 }
 
-public enum AlertType { BruteForce, QuotaExceeded, QuotaWarning, UnusualDownload, BackupFailed, MalwareDetected }
+public enum AlertType { BruteForce, QuotaExceeded, QuotaWarning, UnusualDownload, BackupFailed, MalwareDetected, MalwareScanFailed }
 
 public enum AlertSeverity { Info, Warning, Critical }
 

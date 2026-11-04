@@ -77,7 +77,8 @@ public sealed record CompleteUploadCommand(string TempFilePath, UploadMetadata M
 
 public sealed class CompleteUploadHandler(
     IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IFileTypeInspector types, ISettingsService settings,
-    QuotaService quota, IFileContentService content, IBackgroundJobs jobs, IUserNotifier notify, IAuditLogger audit, TimeProvider clock) : IRequestHandler<CompleteUploadCommand, UploadResult>
+    QuotaService quota, IFileContentService content, IBackgroundJobs jobs, IMalwareScanPolicy scan, IUserNotifier notify, IAuditLogger audit, TimeProvider clock)
+    : IRequestHandler<CompleteUploadCommand, UploadResult>
 {
     public async Task<UploadResult> Handle(CompleteUploadCommand cmd, CancellationToken ct)
     {
@@ -116,7 +117,7 @@ public sealed class CompleteUploadHandler(
             file.ChecksumSha256 = stored.Sha256;
             file.ThumbnailKey = null;
             file.PreviewKey = null;
-            file.ScanStatus = ScanStatus.Pending;
+            file.ScanStatus = scan.InitialStatus(stored.SizeBytes);
             await db.SaveChangesAsync(ct);
             await audit.LogAsync(new AuditEntry(AuditAction.Upload, ResourceType.File, file.Id, file.Name, file.WorkspaceId, new { version = version.VersionNo, size = stored.SizeBytes, newVersion = true }), ct);
         }
@@ -134,7 +135,7 @@ public sealed class CompleteUploadHandler(
                 Extension = info.Extension, MimeType = info.MimeType, MediaType = info.MediaType, SizeBytes = stored.SizeBytes, ChecksumSha256 = stored.Sha256,
                 Title = string.IsNullOrWhiteSpace(cmd.Meta.Title) ? null : cmd.Meta.Title.Trim(), Description = string.IsNullOrWhiteSpace(cmd.Meta.Description) ? null : cmd.Meta.Description.Trim(),
                 Tags = cmd.Meta.Tags?.Select(t => t.Trim()).Where(t => t.Length > 0).Distinct().ToList() ?? [],
-                ApprovalStatus = needsApproval ? ApprovalStatus.Pending : ApprovalStatus.Approved,
+                ApprovalStatus = needsApproval ? ApprovalStatus.Pending : ApprovalStatus.Approved, ScanStatus = scan.InitialStatus(stored.SizeBytes),
                 UploaderOrganizationId = await db.Users.Where(u => u.Id == uid).Select(u => u.OrganizationId).FirstAsync(ct),
             };
             version = NewVersion(file.Id, 1, stored, uid, now, cmd.Meta.ChangeNote ?? "Tải lên lần đầu");

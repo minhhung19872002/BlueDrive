@@ -208,6 +208,8 @@ export interface SearchResult {
   pageSize: number
   terms: string[]
   elapsedMs: number
+  /** True when the server stopped counting: there are more than `total` matches. */
+  totalCapped?: boolean
 }
 
 export interface SavedSearch {

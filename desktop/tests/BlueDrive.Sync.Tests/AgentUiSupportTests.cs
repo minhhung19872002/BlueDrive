@@ -69,6 +69,23 @@ public sealed class AgentUiSupportTests : IDisposable
     }
 
     [Fact]
+    public async Task Ignored_problem_stays_hidden_until_it_changes_and_is_forgotten_once_gone()
+    {
+        await using var a = Agent("ignore");
+        const string exe = "Công cụ.exe: Định dạng .exe chưa được phép tải lên BlueDrive.";
+        const string big = "Phim.mp4: Tệp lớn hơn giới hạn đồng bộ 2 GB.";
+        a.ShownProblems([exe, big]).Should().Equal(exe, big);
+
+        await a.IgnoreProblemAsync(exe);
+        a.ShownProblems([exe, big]).Should().Equal(big);
+        a.ShownProblems([exe + " (đã đổi)", big]).Should().HaveCount(2, "a changed problem shows again");
+
+        // Once the problem no longer occurs it is forgotten: if it ever comes back, it is shown.
+        a.ShownProblems([big]).Should().Equal(big);
+        a.ShownProblems([exe, big]).Should().Equal(exe, big);
+    }
+
+    [Fact]
     public async Task Pause_for_a_while_and_resume()
     {
         await using var a = Agent("pause");

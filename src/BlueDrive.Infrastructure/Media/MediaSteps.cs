@@ -45,25 +45,53 @@ public sealed class ClamAvOptions
     public bool Enabled { get; set; }
     public string Host { get; set; } = "clamav";
     public int Port { get; set; } = 3310;
+    /// <summary>Must match clamd's StreamMaxLength (compose sets both from CLAMAV_MAX_SCAN_MB); clamd's default is only 25 MB.</summary>
+    public int MaxScanMegabytes { get; set; } = 200;
 }
 
+public sealed class ClamAvScanPolicy(IOptions<ClamAvOptions> options) : IMalwareScanPolicy
+{
+    public bool Enabled => options.Value.Enabled;
+    public long MaxScanBytes => options.Value.MaxScanMegabytes * 1024L * 1024L;
+}
+
+/// <summary>The scanner kept failing on this version; thrown so the job is retried, and recorded as Failed on the last attempt.</summary>
+public sealed class MalwareScanUnavailableException(string message) : IOException(message);
+
 /// <summary>Malware scan (ClamAV). Infected files are quarantined: downloads are refused, an alert is raised.</summary>
-public sealed class MalwareScanStep(IOptions<ClamAvOptions> options, IFileContentService content, IAlertService alerts, IAuditLogger audit, ILogger<MalwareScanStep> logger)
-    : IFileProcessingStep
+public sealed class MalwareScanStep(IMalwareScanPolicy policy, IOptions<ClamAvOptions> options, IFileContentService content, IAlertService alerts, IAuditLogger audit,
+    ILogger<MalwareScanStep> logger) : IFileProcessingStep
 {
     public int Order => 10;
 
     public async Task<bool> RunAsync(StoredFile file, FileVersion version, CancellationToken ct)
     {
-        if (!options.Value.Enabled)
+        if (!policy.Enabled)
         {
             file.ScanStatus = ScanStatus.Skipped;
             return true;
         }
+        if (version.SizeBytes > policy.MaxScanBytes)
+        {
+            // clamd would refuse the stream ("INSTREAM size limit exceeded"): retrying can never succeed.
+            file.ScanStatus = ScanStatus.TooLarge;
+            logger.LogInformation("Bỏ qua quét virus tệp {FileId}: {Size} byte vượt giới hạn {Max} byte", file.Id, version.SizeBytes, policy.MaxScanBytes);
+            return true;
+        }
         file.ScanStatus = ScanStatus.Scanning;
-        var clam = new ClamClient(options.Value.Host, options.Value.Port) { MaxStreamSize = long.MaxValue };
+        var clam = new ClamClient(options.Value.Host, options.Value.Port) { MaxStreamSize = policy.MaxScanBytes };
         await using var stream = await content.OpenReadAsync(version, ct);
-        var result = await clam.SendAndScanFileAsync(stream, ct);
+        ClamScanResult result;
+        try { result = await clam.SendAndScanFileAsync(stream, ct); }
+        catch (Exception ex) when (ex is System.Net.Sockets.SocketException or IOException or MaxStreamSizeExceededException)
+        {
+            if (ex is MaxStreamSizeExceededException)
+            {
+                file.ScanStatus = ScanStatus.TooLarge;
+                return true;
+            }
+            throw new MalwareScanUnavailableException($"Không kết nối được ClamAV: {ex.Message}");
+        }
         switch (result.Result)
         {
             case ClamScanResults.Clean:
@@ -77,9 +105,24 @@ public sealed class MalwareScanStep(IOptions<ClamAvOptions> options, IFileConten
                 await audit.LogAsync(new AuditEntry(AuditAction.Edit, ResourceType.File, file.Id, file.Name, file.WorkspaceId, new { quarantine = true, virus }), ct);
                 return false;
             default:
+                if (result.RawResult?.Contains("size limit exceeded", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    // clamd configured with a smaller StreamMaxLength than ClamAv:MaxScanMegabytes.
+                    logger.LogWarning("ClamAV từ chối tệp {FileId} vì vượt StreamMaxLength; kiểm tra CLAMAV_MAX_SCAN_MB", file.Id);
+                    file.ScanStatus = ScanStatus.TooLarge;
+                    return true;
+                }
                 logger.LogWarning("ClamAV không quét được tệp {FileId}: {Raw}", file.Id, result.RawResult);
-                throw new IOException("ClamAV chưa sẵn sàng, sẽ thử lại.");
+                throw new MalwareScanUnavailableException($"ClamAV trả lỗi: {result.RawResult}");
         }
+    }
+
+    /// <summary>Retries are exhausted: record it (the file becomes downloadable with a warning) and tell the administrators.</summary>
+    public async Task MarkFailedAsync(StoredFile file, string reason, CancellationToken ct)
+    {
+        file.ScanStatus = ScanStatus.Failed;
+        await alerts.RaiseAsync(AlertType.MalwareScanFailed, AlertSeverity.Warning,
+            $"Không quét virus được tệp \"{file.Name}\" sau nhiều lần thử ({reason}). Kiểm tra dịch vụ ClamAV.", file.CreatedBy, file.WorkspaceId, ct: ct);
     }
 }
 

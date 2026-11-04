@@ -65,10 +65,13 @@ public sealed class WorkspaceAccessMap
             CanApproveAll = owner || p.IsDocAdmin && isRoot || member is WorkspaceMemberRole.Owner or WorkspaceMemberRole.Manager or WorkspaceMemberRole.Approver
                             || perms.Contains(Perm.DocApprove),
         };
-        var full = owner || (p.IsDocAdmin && isRoot);
-        var memberLevel = member is { } r ? ResourceAuthorizationService.LevelOf(r) : AccessLevel.None;
+        // Owner / member levels are capped by the role's doc.edit (PrincipalSet.CapByRole); ACL and shares are not.
+        var ownerLevel = owner || (p.IsDocAdmin && isRoot) ? p.CapByRole(AccessLevel.Manage) : AccessLevel.None;
+        var full = ownerLevel == AccessLevel.Manage;
+        var memberLevel = member is { } r ? p.CapByRole(ResourceAuthorizationService.LevelOf(r)) : AccessLevel.None;
         var managerial = member is WorkspaceMemberRole.Manager or WorkspaceMemberRole.Owner;
-        map._rootLevel = full ? AccessLevel.Manage : Max(memberLevel, wsAcl);
+        var brokenLevel = Max(ownerLevel, managerial ? memberLevel : AccessLevel.None);
+        map._rootLevel = full ? AccessLevel.Manage : Max(ownerLevel, Max(memberLevel, wsAcl));
 
         var folderSelf = new Dictionary<Guid, AccessLevel>();
         var folderDown = new Dictionary<Guid, AccessLevel>();
@@ -86,7 +89,7 @@ public sealed class WorkspaceAccessMap
         foreach (var s in shares.Where(s => s.ResourceType == ResourceType.File)) map._fileGrants[s.ResourceId] = Max(map._fileGrants.GetValueOrDefault(s.ResourceId), s.AccessLevel);
 
         map._brokenFiles = (await db.Files.AsNoTracking().Where(f => f.WorkspaceId == workspaceId && f.BreakInheritance && !f.IsDeleted).Select(f => f.Id).ToListAsync(ct)).ToHashSet();
-        map._brokenLevel = full ? AccessLevel.Manage : managerial ? memberLevel : AccessLevel.None;
+        map._brokenLevel = full ? AccessLevel.Manage : brokenLevel;
 
         // Parents before children: materialized paths sort that way.
         var folders = await db.Folders.AsNoTracking().Where(f => f.WorkspaceId == workspaceId && !f.IsDeleted)
@@ -95,7 +98,7 @@ public sealed class WorkspaceAccessMap
         {
             AccessLevel inherited;
             if (full) inherited = AccessLevel.Manage;
-            else if (f.BreakInheritance) inherited = managerial ? memberLevel : AccessLevel.None;
+            else if (f.BreakInheritance) inherited = brokenLevel;
             else inherited = f.ParentId is { } pid && map._folders.TryGetValue(pid, out var parent) ? parent.Down : map._rootLevel;
             var level = Max(inherited, folderSelf.GetValueOrDefault(f.Id));
             var down = Max(inherited, folderDown.GetValueOrDefault(f.Id));

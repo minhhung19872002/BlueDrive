@@ -31,6 +31,17 @@ public interface IFileTypeInspector
     bool IsBlockedExtension(string extension);
 }
 
+/// <summary>Malware scanner settings the upload path needs (the scan itself runs in the Worker).</summary>
+public interface IMalwareScanPolicy
+{
+    bool Enabled { get; }
+    /// <summary>Largest file the scanner accepts (ClamAV StreamMaxLength); larger files are not sent to it.</summary>
+    long MaxScanBytes { get; }
+
+    /// <summary>Status of a freshly stored version, before the Worker picks it up.</summary>
+    ScanStatus InitialStatus(long sizeBytes) => !Enabled ? ScanStatus.Skipped : sizeBytes > MaxScanBytes ? ScanStatus.TooLarge : ScanStatus.Pending;
+}
+
 /// <summary>Background work dispatched to the Worker (thumbnails, scanning...).</summary>
 public interface IBackgroundJobs
 {

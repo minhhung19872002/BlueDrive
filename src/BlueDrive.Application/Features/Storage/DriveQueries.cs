@@ -197,7 +197,7 @@ public sealed record FileDetailDto(
     Guid? CreatedBy, string? CreatedByName, DateTime CreatedAt, Guid? UpdatedBy, string? UpdatedByName, DateTime? UpdatedAt,
     ApprovalStatus ApprovalStatus, string? RejectionReason, ScanStatus ScanStatus, int? Width, int? Height, double? DurationSeconds,
     bool HasThumbnail, bool HasPreview, string? ChecksumSha256, IReadOnlyList<CatalogTagDto> Catalogs, IReadOnlyList<FileVersionDto> Versions,
-    bool IsStarred, AccessFlags Access, bool IsDeleted, string? ThumbnailUrl = null, string? PreviewUrl = null);
+    bool IsStarred, AccessFlags Access, bool IsDeleted, string? ThumbnailUrl = null, string? PreviewUrl = null, bool ContentBlocked = false);
 
 public sealed record GetFileDetailQuery(Guid Id, bool RecordView = true) : IRequest<FileDetailDto>;
 
@@ -224,7 +224,9 @@ public sealed class GetFileDetailHandler(IAppDbContext db, ICurrentUser me, IRes
             f.UpdatedBy, f.UpdatedBy is { } u2 ? users.GetValueOrDefault(u2) : null, f.UpdatedAt, f.ApprovalStatus, f.RejectionReason, f.ScanStatus,
             f.Width, f.Height, f.DurationSeconds, f.ThumbnailKey != null, f.PreviewKey != null, f.ChecksumSha256, catalogs, versions, starred,
             AccessFlags.From(access), f.IsDeleted,
-            f.ThumbnailKey != null ? ThumbnailUrls.For(tickets, uid, f.Id) : null, f.PreviewKey != null ? ThumbnailUrls.For(tickets, uid, f.Id, large: true) : null);
+            f.ThumbnailKey != null ? ThumbnailUrls.For(tickets, uid, f.Id) : null, f.PreviewKey != null ? ThumbnailUrls.For(tickets, uid, f.Id, large: true) : null,
+            // Quarantined, or still waiting for its malware scan and uploaded by someone else: the UI shows why instead of the content.
+            await ScanGate.BlockReasonAsync(db, f, null, uid, ct) is not null);
     }
 }
 

@@ -12,7 +12,7 @@ Bảng dưới đây đối chiếu từng nhóm yêu cầu với cách hệ th�
 | Chính sách mật khẩu đủ mạnh, cấu hình được | Mặc định ≥ 8 ký tự, có chữ hoa, chữ thường, số, ký tự đặc biệt; hết hạn sau 90 ngày; không trùng 5 mật khẩu gần nhất. Cấu hình tại *Cấu hình hệ thống > Chính sách mật khẩu*. `PasswordService`. | `AuthTests.First_login_requires_password_change_before_other_endpoints` |
 | Lưu trữ mật khẩu an toàn | Băm PBKDF2-HMAC-SHA512 (ASP.NET Core Identity v3, 100.000 vòng, salt ngẫu nhiên). Không lưu mật khẩu rõ, không ghi log mật khẩu/token. | `PasswordService.Hash` |
 | Bắt buộc đổi mật khẩu khởi tạo | Tài khoản mới/được đặt lại mật khẩu có cờ `must_change_password`; máy chủ chặn mọi API khác (403) tới khi đổi (`PasswordChangeRequiredFilter`). | `AuthTests.First_login_requires_password_change_before_other_endpoints` |
-| Chống dò mật khẩu | Khóa tạm 15 phút sau 5 lần sai (cấu hình được), giới hạn tần suất `/auth/*` (30 yêu cầu/phút/IP), so sánh thời gian bất biến khi tài khoản không tồn tại, cảnh báo `brute_force` realtime + email cho quản trị. | `AuthTests.Five_wrong_passwords_lock_the_account_and_raise_brute_force_alert` |
+| Chống dò mật khẩu | Khóa tạm tài khoản 15 phút sau 5 lần sai (cấu hình được). Chặn tạm **địa chỉ IP** sau 30 lần đăng nhập sai trong 15 phút, cộng dồn mọi tài khoản (chống dò mật khẩu hàng loạt tài khoản; cấu hình được, đăng nhập đúng không bị tính nên cả cơ quan sau một địa chỉ NAT vẫn đăng nhập bình thường). Giới hạn tần suất đăng nhập 300 yêu cầu/phút/IP, quên/đặt lại mật khẩu 60 yêu cầu/phút/IP (`RateLimit__LoginPerMinute`, `RateLimit__AuthPerMinute`). So sánh thời gian bất biến khi tài khoản không tồn tại. Cảnh báo `brute_force` realtime + email cho quản trị. | `AuthTests.Five_wrong_passwords_lock_the_account_and_raise_brute_force_alert`, `AuthTests.Many_failed_logins_from_one_address_block_that_address_only`, `LoginIpGuardTests`; kiểm thử tải T3 (docs/bao-cao-kiem-thu-tai.md) |
 | Khôi phục mật khẩu an toàn | Liên kết qua email, token ngẫu nhiên 256 bit lưu dạng băm SHA-256, dùng một lần, hết hạn sau 30 phút; không tiết lộ tài khoản có tồn tại hay không. | `AuthTests.Forgot_password_sends_single_use_link` |
 
 ## 2. Quản lý phiên
@@ -46,7 +46,7 @@ Bảng dưới đây đối chiếu từng nhóm yêu cầu với cách hệ th�
 |---|---|---|
 | Kiểm tra dữ liệu đầu vào | FluentValidation cho mọi lệnh, thông báo tiếng Việt; lỗi trả về dạng ProblemDetails. | `AdminTests` |
 | Kiểm tra tệp tải lên | Kiểm tra chữ ký nhị phân (magic bytes) theo phần mở rộng, chặn tệp thực thi/kịch bản (kể cả đổi đuôi), danh sách định dạng cho phép và kích thước tối đa cấu hình được, làm sạch tên tệp, chống path traversal ở lớp lưu trữ. | `StorageTests.Magic_bytes_are_verified`, `File_names_are_sanitized`, `StorageTests.Blocked_and_mismatched_files_are_rejected` |
-| Quét mã độc | ClamAV (bật `CLAMAV_ENABLED=true`, profile `clamav`): tệp ở trạng thái đang quét, nhiễm thì cách ly (cấm tải), cảnh báo `malware_detected`. | `MalwareScanStep` |
+| Quét mã độc | ClamAV (bật `CLAMAV_ENABLED=true`, profile `clamav`): tệp đang quét chỉ người tải lên mở được (người khác nhận "Tệp đang được kiểm tra virus"); nhiễm thì cách ly (cấm tải ở mọi đường: URL ký, liên kết công khai, ZIP, ONLYOFFICE), cảnh báo `malware_detected`. Tệp lớn hơn `CLAMAV_MAX_SCAN_MB` (mặc định 200 MB, compose đặt cùng giá trị cho `StreamMaxLength` của clamd) → "Bỏ qua quét (tệp quá lớn)", tải được kèm cảnh báo; ClamAV lỗi sau 3 lần thử → "Không quét được" + cảnh báo `malware_scan_failed`. | `MalwareScanStep`, `ScanGate`; IT `ScanGateTests`, UT `MalwareScanPolicyTests` |
 | Chống XSS/CSRF | SPA dùng Bearer token (không dùng cookie xác thực → không bị CSRF); CSP chặt cho SPA; nội dung người dùng (SVG/HTML) được trả với `Content-Security-Policy: sandbox`; kết quả tìm kiếm chỉ chèn thẻ `<mark>` sau khi đã mã hóa HTML. | `deploy/nginx.conf`, `SearchTextTests.Highlight_encodes_html` |
 
 ## 6. Nhật ký và giám sát
@@ -62,9 +62,9 @@ Bảng dưới đây đối chiếu từng nhóm yêu cầu với cách hệ th�
 
 | Yêu cầu | Cách đáp ứng | Kiểm chứng |
 |---|---|---|
-| Sao lưu định kỳ và đột xuất | Lịch cron cấu hình được (mặc định 2h sáng hằng ngày), đầy đủ hằng tuần + tăng dần, giữ N bản, tùy chọn sao chép lên S3, checksum SHA-256, cảnh báo khi thất bại. | `OperationsTests.Backup_schedule_and_manual_backup_queue`, `scripts/backup-now.ps1` |
-| Phục hồi | `scripts/restore.ps1 <mã>` kiểm tra checksum cả chuỗi rồi phục hồi CSDL + tệp. | xem *Hướng dẫn quản trị* |
-| Bàn giao và xóa dữ liệu khi kết thúc | *Xuất toàn bộ dữ liệu* (tệp giải mã + metadata + nhật ký); `scripts/secure-wipe.ps1` xóa mọi volume, hủy khóa chủ và lập biên bản có mã băm. | `OperationsTests.Full_data_export_package_contains_files_and_metadata` |
+| Sao lưu định kỳ và đột xuất | Lịch cron cấu hình được (mặc định 2h sáng hằng ngày), đầy đủ hằng tuần + tăng dần, giữ N bản, tùy chọn sao chép lên S3 (cả CSDL và tệp, kể cả khi tệp lưu trên S3), checksum SHA-256, cảnh báo khi thất bại. | `OperationsTests.Backup_schedule_and_manual_backup_queue`, `BackupRestoreTests.S3_backup_survives_losing_the_server_and_secure_wipe_empties_the_bucket`, `scripts/backup-now.ps1` |
+| Phục hồi | `scripts/restore.ps1 <mã>` kiểm tra checksum cả chuỗi rồi phục hồi CSDL + tệp; bản không còn trên máy chủ được tải về từ S3. | `BackupRestoreTests.Restore_brings_back_deleted_rows_and_blobs_with_a_valid_audit_chain` (chuỗi nhật ký vẫn toàn vẹn sau phục hồi) |
+| Bàn giao và xóa dữ liệu khi kết thúc | *Xuất toàn bộ dữ liệu* (tệp giải mã + metadata + nhật ký); `scripts/secure-wipe.ps1` xóa bucket S3 (nếu có), mọi volume, hủy khóa chủ và lập biên bản có mã băm. | `OperationsTests.Full_data_export_package_contains_files_and_metadata`, `BackupRestoreTests.S3_backup_survives_losing_the_server_and_secure_wipe_empties_the_bucket` |
 
 ## 8. Cấu hình an toàn khi triển khai
 

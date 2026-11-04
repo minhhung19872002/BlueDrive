@@ -13,6 +13,8 @@ rnd() { LC_ALL=C tr -dc 'A-HJ-NP-Za-km-z2-9' </dev/urandom | head -c "$1"; }
 docker version >/dev/null || { echo "Docker chưa chạy"; exit 1; }
 if [ ! -f "$DEPLOY/.env" ]; then
   ADMIN_PW="Bd@$(rnd 12)"
+  # Upper, lower, digit and symbol guaranteed so the default password policy accepts it.
+  DEMO_PW="Dm@$(rnd 10)7"
   if [ -n "$DOMAIN" ]; then SITE="$DOMAIN"; URL="https://$DOMAIN"
   elif [ "$HTTP_PORT" != 80 ]; then SITE=":80"; URL="http://localhost:$HTTP_PORT"
   else SITE=":80"; URL="http://localhost"; fi
@@ -27,6 +29,7 @@ if [ ! -f "$DEPLOY/.env" ]; then
       -e "s|^ONLYOFFICE_JWT_SECRET=.*|ONLYOFFICE_JWT_SECRET=$(rnd 40)|" \
       -e "s|^STORAGE_MASTER_KEY=.*|STORAGE_MASTER_KEY=$(head -c 32 /dev/urandom | base64)|" \
       -e "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=$ADMIN_PW|" \
+      -e "s|^DEMO_PASSWORD=.*|DEMO_PASSWORD=$DEMO_PW|" \
       -e "s|^GIT_SHA=.*|GIT_SHA=$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo dev)|" \
       "$DEPLOY/.env.example" > "$DEPLOY/.env"
   chmod 600 "$DEPLOY/.env"

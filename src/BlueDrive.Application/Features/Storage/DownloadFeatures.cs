@@ -45,8 +45,8 @@ public sealed class GetDownloadUrlHandler(IAppDbContext db, ICurrentUser me, IRe
         var uid = me.RequireUserId();
         await auth.EnsureAsync(uid, ResourceType.File, q.FileId, q.Inline ? AccessLevel.View : AccessLevel.Download, ct);
         var f = await db.Files.AsNoTracking().FirstAsync(x => x.Id == q.FileId, ct);
-        if (f.ScanStatus == ScanStatus.Infected) throw new AppException("Tệp đã bị cách ly do phát hiện mã độc.", 423);
         var versionId = q.VersionId ?? f.CurrentVersionId!.Value;
+        await ScanGate.EnsureAsync(db, f, versionId, uid, ct);
         var v = await db.FileVersions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == versionId && x.FileId == f.Id, ct) ?? throw new NotFoundException("Không tìm thấy phiên bản.");
         var lifetime = TimeSpan.FromHours(q.Inline ? 4 : 1);
         var token = tickets.Issue(new ContentTicket(uid, "file", f.Id, v.Id, q.Inline, null, null), lifetime);
@@ -105,6 +105,7 @@ public sealed class ResolveZipEntriesHandler(IAppDbContext db, IResourceAuthoriz
             {
                 if (!await auth.CanAsync(q.UserId, ResourceType.File, item.Id, AccessLevel.Download, ct)) continue;
                 var f = await db.Files.AsNoTracking().FirstAsync(x => x.Id == item.Id, ct);
+                if (await ScanGate.BlockReasonAsync(db, f, null, q.UserId, ct) is not null) continue;
                 list.Add(new ZipEntrySource(Unique(f.Name), f.CurrentVersionId!.Value, f.UpdatedAt ?? f.CreatedAt));
                 continue;
             }
@@ -121,7 +122,8 @@ public sealed class ResolveZipEntriesHandler(IAppDbContext db, IResourceAuthoriz
             var files = await db.Files.AsNoTracking().Where(x => x.FolderId != null && folderIds.Contains(x.FolderId.Value) && !x.IsDeleted).ToListAsync(ct);
             foreach (var f in files)
             {
-                if (!await auth.CanAsync(q.UserId, ResourceType.File, f.Id, AccessLevel.Download, ct)) continue;
+                // Quarantined files and files still waiting for their scan (uploaded by someone else) stay out of the zip.
+                if (!await auth.CanAsync(q.UserId, ResourceType.File, f.Id, AccessLevel.Download, ct) || await ScanGate.BlockReasonAsync(db, f, null, q.UserId, ct) is not null) continue;
                 list.Add(new ZipEntrySource(Unique($"{RelPath(f.FolderId!.Value)}/{f.Name}"), f.CurrentVersionId!.Value, f.UpdatedAt ?? f.CreatedAt));
             }
             if (files.Count == 0) used.Add(root.Name + "/");

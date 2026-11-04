@@ -2,7 +2,8 @@ import { fileURLToPath, URL } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
-const backend = 'http://localhost:8080'
+// Dev proxy target; override with VITE_BACKEND when port 8080 is taken on the dev machine.
+const backend = process.env.VITE_BACKEND ?? 'http://localhost:8080'
 
 // https://vite.dev/config/
 export default defineConfig({

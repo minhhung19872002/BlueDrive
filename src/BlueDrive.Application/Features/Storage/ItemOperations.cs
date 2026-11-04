@@ -191,13 +191,15 @@ public sealed class UpdateFileMetadataHandler(IAppDbContext db, ICurrentUser me,
 // ---------- Move / copy / delete (#24, #46, #48) ----------
 public sealed record MoveItemsCommand(IReadOnlyList<ItemRef> Items, Guid TargetWorkspaceId, Guid? TargetFolderId) : IRequest<int>;
 
-public sealed class MoveItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, QuotaService quota, IAuditLogger audit)
+public sealed class MoveItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, QuotaService quota, IPermissionService perms, IAuditLogger audit)
     : IRequestHandler<MoveItemsCommand, int>
 {
     public async Task<int> Handle(MoveItemsCommand cmd, CancellationToken ct)
     {
         var uid = me.RequireUserId();
         if (cmd.Items.Count == 0) throw new AppException("Vui lòng chọn mục cần di chuyển.");
+        // Moving puts items into the target like an upload does (#24, #46): same role right as copy.
+        if (!await perms.HasAsync(uid, Perm.DocUpload, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền đưa tư liệu vào vị trí khác.");
         await auth.EnsureCanUploadAsync(uid, cmd.TargetWorkspaceId, cmd.TargetFolderId, ct);
         Folder? target = cmd.TargetFolderId is { } tid
             ? await db.Folders.FirstOrDefaultAsync(f => f.Id == tid && f.WorkspaceId == cmd.TargetWorkspaceId && !f.IsDeleted, ct) ?? throw new NotFoundException("Không tìm thấy thư mục đích.")

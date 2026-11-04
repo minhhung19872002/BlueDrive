@@ -95,7 +95,7 @@ jobs:
           JWT_SECRET: ci_secret_ci_secret_ci_secret_ci_secret
           ADMIN_PASSWORD: Ci@12345
           STORAGE_MASTER_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
-          ONLYOFFICE_JWT_SECRET: ci
+          ONLYOFFICE_JWT_SECRET: ci_office_ci_office_ci_office_ci_office
         run: docker compose -f deploy/docker-compose.yml config --quiet
 
   deploy:

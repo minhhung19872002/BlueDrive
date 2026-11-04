@@ -89,7 +89,7 @@ public static class Perm
     public static IReadOnlyDictionary<string, string[]> DefaultRolePermissions { get; } = new Dictionary<string, string[]>
     {
         [Roles.Admin] = All.Select(p => p.Code).ToArray(),
-        [Roles.Editor] = [DocView, DocUpload, DocEdit, DocDelete, DocShare, WorkspaceView, WorkspaceCreate, TrashView, TrashRestore, TrashPurge,
+        [Roles.Editor] = [DocView, DocUpload, DocEdit, DocDelete, DocShare, WorkspaceView, WorkspaceCreate, WorkspaceEdit, TrashView, TrashRestore, TrashPurge,
             SearchView, CatalogView, TicketCreate],
         [Roles.Approver] = [DocView, DocApprove, DocShare, WorkspaceView, TrashView, TrashRestore, SearchView, CatalogView, TicketCreate],
         [Roles.Viewer] = [DocView, WorkspaceView, SearchView, CatalogView, TicketCreate],

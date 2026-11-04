@@ -199,6 +199,7 @@ export type AlertType =
   | 'unusual_download'
   | 'backup_failed'
   | 'malware_detected'
+  | 'malware_scan_failed'
 export const ALERT_TYPES: AlertType[] = [
   'brute_force',
   'quota_exceeded',
@@ -206,6 +207,7 @@ export const ALERT_TYPES: AlertType[] = [
   'unusual_download',
   'backup_failed',
   'malware_detected',
+  'malware_scan_failed',
 ]
 
 export type AlertSeverity = 'info' | 'warning' | 'critical'

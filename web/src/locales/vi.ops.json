@@ -120,7 +120,8 @@
       "quota_warning": "Dung lượng sắp vượt ngưỡng",
       "unusual_download": "Tải xuống bất thường",
       "backup_failed": "Sao lưu thất bại",
-      "malware_detected": "Phát hiện mã độc"
+      "malware_detected": "Phát hiện mã độc",
+      "malware_scan_failed": "Không quét được mã độc"
     },
     "alertSeverity": {
       "info": "Thông tin",

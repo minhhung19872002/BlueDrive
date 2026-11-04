@@ -27,8 +27,17 @@ public interface IResourceAuthorizationService
 }
 
 /// <summary>All principals a user acts as: self, groups, organization (and its ancestors), roles.</summary>
-public sealed record PrincipalSet(Guid UserId, IReadOnlyList<Guid> GroupIds, IReadOnlyList<Guid> OrganizationIds, IReadOnlyList<Guid> RoleIds, bool IsDocAdmin, bool CanViewDocs)
+/// <param name="CanEditDocs">The role grants <c>doc.edit</c>: needed to edit through workspace ownership or membership.</param>
+public sealed record PrincipalSet(Guid UserId, IReadOnlyList<Guid> GroupIds, IReadOnlyList<Guid> OrganizationIds, IReadOnlyList<Guid> RoleIds, bool IsDocAdmin, bool CanViewDocs,
+    bool CanEditDocs)
 {
+    /// <summary>
+    /// Edit / manage rights that come from owning or being a member of a workspace need the role's <c>doc.edit</c>;
+    /// without it they stop at view + download. Explicit grants on an item (share, direct permission) are not capped:
+    /// the item's manager chose to let this person edit it.
+    /// </summary>
+    public AccessLevel CapByRole(AccessLevel level) => CanEditDocs || IsDocAdmin || level < AccessLevel.Edit ? level : AccessLevel.Download;
+
     public bool Matches(PrincipalType type, Guid id) => type switch
     {
         PrincipalType.User => id == UserId,
@@ -43,6 +52,7 @@ public sealed record PrincipalSet(Guid UserId, IReadOnlyList<Guid> GroupIds, IRe
 /// Order of evaluation (spec §4.4): doc.admin → workspace owner → workspace member role → direct ACL on the item →
 /// ACL inherited from ancestor folders (until break_inheritance) and the workspace → shares → workspace lock caps writes.
 /// Items not yet approved are visible only to editors/approvers/the uploader. Grants are additive (max wins).
+/// Owner / member levels are capped by the role's doc.edit (<see cref="PrincipalSet.CapByRole"/>); ACL and shares are not.
 /// </summary>
 public sealed class ResourceAuthorizationService(IAppDbContext db, IPermissionService perms, TimeProvider clock) : IResourceAuthorizationService
 {
@@ -54,7 +64,19 @@ public sealed class ResourceAuthorizationService(IAppDbContext db, IPermissionSe
         _ => AccessLevel.View,
     };
 
+    // Scoped service = one request: lists that check every item (recent, search hits, favorites) would otherwise reload the
+    // user's groups, roles and organizations once per item (load test T1, docs/bao-cao-kiem-thu-tai.md).
+    private readonly Dictionary<Guid, PrincipalSet> _principals = [];
+
     public async Task<PrincipalSet> GetPrincipalsAsync(Guid userId, CancellationToken ct = default)
+    {
+        if (_principals.TryGetValue(userId, out var known)) return known;
+        var set = await LoadPrincipalsAsync(userId, ct);
+        _principals[userId] = set;
+        return set;
+    }
+
+    private async Task<PrincipalSet> LoadPrincipalsAsync(Guid userId, CancellationToken ct)
     {
         var u = await db.Users.AsNoTracking().Where(x => x.Id == userId)
             .Select(x => new { x.OrganizationId, OrgPath = x.Organization != null ? x.Organization.Path : null }).FirstOrDefaultAsync(ct);
@@ -62,7 +84,7 @@ public sealed class ResourceAuthorizationService(IAppDbContext db, IPermissionSe
         var roles = await db.UserRoles.Where(r => r.UserId == userId).Select(r => r.RoleId).ToListAsync(ct);
         var orgs = u?.OrgPath?.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Guid.Parse).ToList() ?? [];
         var p = await perms.GetPermissionsAsync(userId, ct);
-        return new PrincipalSet(userId, groups, orgs, roles, p.Contains(Perm.DocAdmin), p.Contains(Perm.DocView));
+        return new PrincipalSet(userId, groups, orgs, roles, p.Contains(Perm.DocAdmin), p.Contains(Perm.DocView), p.Contains(Perm.DocEdit));
     }
 
     public async Task<bool> CanAsync(Guid userId, ResourceType type, Guid resourceId, AccessLevel level, CancellationToken ct = default)
@@ -145,15 +167,26 @@ public sealed class ResourceAuthorizationService(IAppDbContext db, IPermissionSe
         var locked = ws.IsLocked;
 
         if (p.IsDocAdmin) return new ResourceAccess(AccessLevel.Manage, true, true, locked, "admin");
-        if (ws.OwnerId == userId) return new ResourceAccess(AccessLevel.Manage, true, true, locked, "owner");
+        var isOwner = ws.OwnerId == userId;
+        if (isOwner && p.CanEditDocs) return new ResourceAccess(AccessLevel.Manage, true, true, locked, "owner");
 
         var level = AccessLevel.None;
         var source = "none";
         var canUpload = false;
         var canApprove = false;
-        void Grant(AccessLevel l, string why)
+        var uncapped = AccessLevel.None; // before the role cap: decides where the user may upload (doc.upload is checked by the upload itself)
+        void Grant(AccessLevel l, string why, bool viaMembership = false)
         {
-            if (l > level) { level = l; source = why; }
+            if (l > uncapped) uncapped = l;
+            var effective = viaMembership ? p.CapByRole(l) : l;
+            if (effective > level) { level = effective; source = why; }
+        }
+        if (isOwner)
+        {
+            // Owner whose role has no doc.edit: sees and downloads everything, edits only what was granted explicitly.
+            Grant(AccessLevel.Manage, "owner", viaMembership: true);
+            canUpload = true;
+            canApprove = true;
         }
 
         // Break inheritance: the nearest folder (self included) flagged break_inheritance stops workspace-level and higher grants.
@@ -173,12 +206,12 @@ public sealed class ResourceAuthorizationService(IAppDbContext db, IPermissionSe
             var managerial = role is WorkspaceMemberRole.Manager or WorkspaceMemberRole.Owner;
             if (managerial || !broken)
             {
-                Grant(LevelOf(role), $"member:{EnumName(role)}");
-                canUpload = role is WorkspaceMemberRole.Owner or WorkspaceMemberRole.Manager or WorkspaceMemberRole.Editor or WorkspaceMemberRole.Uploader;
-                canApprove = role is WorkspaceMemberRole.Owner or WorkspaceMemberRole.Manager or WorkspaceMemberRole.Approver;
+                Grant(LevelOf(role), $"member:{EnumName(role)}", viaMembership: true);
+                canUpload |= role is WorkspaceMemberRole.Owner or WorkspaceMemberRole.Manager or WorkspaceMemberRole.Editor or WorkspaceMemberRole.Uploader;
+                canApprove |= role is WorkspaceMemberRole.Owner or WorkspaceMemberRole.Manager or WorkspaceMemberRole.Approver;
             }
             // Uploaders may edit what they uploaded themselves.
-            if (role == WorkspaceMemberRole.Uploader && createdBy == userId) Grant(AccessLevel.Edit, "member:uploader_own");
+            if (role == WorkspaceMemberRole.Uploader && createdBy == userId) Grant(AccessLevel.Edit, "member:uploader_own", viaMembership: true);
         }
 
         var now = clock.GetUtcNow().UtcDateTime;
@@ -207,7 +240,7 @@ public sealed class ResourceAuthorizationService(IAppDbContext db, IPermissionSe
             if (s.AccessLevel >= AccessLevel.Edit) canUpload = true;
         }
 
-        if (level < AccessLevel.Edit) canUpload = false;
+        if (uncapped < AccessLevel.Edit) canUpload = false;
         if (member == WorkspaceMemberRole.Uploader && (!broken)) canUpload = true;
 
         // Approval visibility: only approved items are visible to plain viewers.

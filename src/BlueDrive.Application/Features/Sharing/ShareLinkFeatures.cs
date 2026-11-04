@@ -153,18 +153,27 @@ public static class PublicLinks
         return link;
     }
 
-    /// <summary>Resolves a file inside the shared scope (the file itself or any file under the shared folder).</summary>
+    /// <summary>
+    /// Resolves a file inside the shared scope (the file itself or any file under the shared folder) whose content may be served:
+    /// quarantined or not-yet-scanned files are refused with 423 (a link visitor is never the uploader).
+    /// </summary>
     public static async Task<StoredFile> FileInScopeAsync(IAppDbContext db, ShareLink link, Guid? fileId, CancellationToken ct)
     {
+        StoredFile file;
         if (link.ResourceType == ResourceType.File)
         {
             if (fileId.HasValue && fileId != link.ResourceId) throw new NotFoundException("Không tìm thấy tệp trong liên kết chia sẻ.");
-            return await db.Files.AsNoTracking().FirstAsync(f => f.Id == link.ResourceId, ct);
+            file = await db.Files.AsNoTracking().FirstAsync(f => f.Id == link.ResourceId, ct);
         }
-        var root = await db.Folders.AsNoTracking().FirstAsync(f => f.Id == link.ResourceId, ct);
-        return await db.Files.AsNoTracking().Include(f => f.Folder)
-                   .FirstOrDefaultAsync(f => f.Id == fileId && !f.IsDeleted && f.ApprovalStatus == ApprovalStatus.Approved && f.Folder != null && f.Folder.Path.StartsWith(root.Path), ct)
-               ?? throw new NotFoundException("Không tìm thấy tệp trong liên kết chia sẻ.");
+        else
+        {
+            var root = await db.Folders.AsNoTracking().FirstAsync(f => f.Id == link.ResourceId, ct);
+            file = await db.Files.AsNoTracking().Include(f => f.Folder)
+                       .FirstOrDefaultAsync(f => f.Id == fileId && !f.IsDeleted && f.ApprovalStatus == ApprovalStatus.Approved && f.Folder != null && f.Folder.Path.StartsWith(root.Path), ct)
+                   ?? throw new NotFoundException("Không tìm thấy tệp trong liên kết chia sẻ.");
+        }
+        await ScanGate.EnsureAsync(db, file, null, null, ct);
+        return file;
     }
 }
 

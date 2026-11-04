@@ -112,6 +112,14 @@ public sealed class SyncEngine(
     /// <summary>Local deletions waiting to settle: (root, base remote id) → first seen.</summary>
     private readonly Dictionary<(string Root, string Id), DateTime> _deleteSeen = [];
     private bool _deletesDeferred;
+    private SyncClientPolicy _policy = SyncClientPolicy.Default;
+
+    /// <summary>Server sync policy (GET /sync/policy, refreshed by the agent between passes): upload / download limits, "Mở trên web" links.</summary>
+    public SyncClientPolicy Policy
+    {
+        get => Volatile.Read(ref _policy);
+        set => Volatile.Write(ref _policy, value ?? SyncClientPolicy.Default);
+    }
 
     /// <summary>Operations executed since the engine was created (tests check that a converged state stays quiet).</summary>
     public int TotalOperations { get; private set; }
@@ -165,6 +173,7 @@ public sealed class SyncEngine(
             foreach (var c in page.Changes) await ApplyChangeAsync(c, revoked, ct);
             cursor = page.NextCursor;
             if (!page.HasMore) PruneOrphans(revoked);
+            SaveViewOnly();
             state.SetAccount(CursorKey, cursor.ToString());
             state.SetAccount(RevokedKey, JsonSerializer.Serialize(revoked));
             if (!page.HasMore) break;
@@ -201,6 +210,11 @@ public sealed class SyncEngine(
                 if (Diagnostics) state.Log("Gỡ mục mồ côi", root.RootId, string.Join(",", orphans));
                 state.DeleteRemote(orphans);
             }
+            var viewOnly = ViewOnly(root.RootId);
+            var orphanSet = orphans.ToHashSet();
+            var orphanLinks = viewOnly.Values.Where(v => v.ParentId is { } p && (!tree.ContainsKey(p) || orphanSet.Contains(p))).Select(v => v.Id).ToList();
+            foreach (var id in orphanLinks) viewOnly.Remove(id);
+            if (orphanLinks.Count > 0) _viewOnlyDirty.Add(root.RootId);
         }
     }
 
@@ -219,8 +233,13 @@ public sealed class SyncEngine(
                 token = page.NextPageToken;
             } while (token is not null);
             state.ReplaceRemoteTree(root.RootId, items.Where(i => i.CanDownload || i.IsFolder));
+            var viewOnly = ViewOnly(root.RootId);
+            viewOnly.Clear();
+            foreach (var i in items.Where(i => !i.CanDownload && !i.IsFolder)) viewOnly[i.Id] = i;
+            _viewOnlyDirty.Add(root.RootId);
             state.SetCursor(root.RootId, cursor ?? 0, fullSync: true);
         }
+        SaveViewOnly();
         state.SetAccount(CursorKey, (cursor ?? 0).ToString());
     }
 
@@ -235,11 +254,14 @@ public sealed class SyncEngine(
             {
                 var rootId = c.RootId ?? owner?.RootId;
                 if (rootId is null || roots.All(r => r.RootId != rootId)) return;
+                ForgetViewOnly(roots, c.ItemId);
                 if (!item.CanDownload && !item.IsFolder)
                 {
-                    // Downgraded to view only: never kept on the computer.
+                    // Downgraded to view only: never kept on the computer (a "Mở trên web" link instead).
                     RemoveSubtree(rootId, c.ItemId);
                     revoked.Add(c.ItemId);
+                    ViewOnly(rootId)[c.ItemId] = item;
+                    _viewOnlyDirty.Add(rootId);
                     return;
                 }
                 if (owner is not null && owner.RootId != rootId) RemoveSubtree(owner.RootId, c.ItemId);
@@ -248,9 +270,11 @@ public sealed class SyncEngine(
                 return;
             }
             case RemoteChangeKind.Delete:
+                ForgetViewOnly(roots, c.ItemId);
                 if (owner is not null) state.DeleteRemote([c.ItemId]); // descendants: see PruneOrphans
                 return;
             case RemoteChangeKind.AccessRevoked:
+                ForgetViewOnly(roots, c.ItemId);
                 if (owner is not null)
                 {
                     revoked.Add(c.ItemId);
@@ -275,6 +299,10 @@ public sealed class SyncEngine(
                 foreach (var gone in before.Except(keep.Select(i => i.Id))) revoked.Add(gone);
                 state.DeleteRemote(before);
                 foreach (var i in keep) state.UpsertRemote(rootId, i);
+                var viewOnly = ViewOnly(rootId);
+                foreach (var v in viewOnly.Values.Where(v => v.Id == c.ItemId || (v.ParentId is { } p && before.Contains(p))).ToList()) viewOnly.Remove(v.Id);
+                foreach (var i in listed.Where(i => !i.CanDownload && !i.IsFolder)) viewOnly[i.Id] = i;
+                _viewOnlyDirty.Add(rootId);
                 return;
             }
         }
@@ -305,6 +333,33 @@ public sealed class SyncEngine(
     private HashSet<string> Revoked() =>
         state.GetAccount(RevokedKey) is { } json ? JsonSerializer.Deserialize<HashSet<string>>(json) ?? [] : [];
 
+    // View-only files (CanDownload = false) are not part of the remote tree (nothing is downloaded); they are kept aside per root so that
+    // "Mở trên web" links can be written for them. Loaded once, saved together with the change feed cursor.
+    private readonly Dictionary<string, Dictionary<string, RemoteItem>> _viewOnly = [];
+    private readonly HashSet<string> _viewOnlyDirty = [];
+
+    private static string ViewOnlyKey(string rootId) => "viewonly:" + rootId;
+
+    private Dictionary<string, RemoteItem> ViewOnly(string rootId)
+    {
+        if (!_viewOnly.TryGetValue(rootId, out var items))
+            _viewOnly[rootId] = items = state.GetAccount(ViewOnlyKey(rootId)) is { } json
+                ? JsonSerializer.Deserialize<Dictionary<string, RemoteItem>>(json) ?? [] : [];
+        return items;
+    }
+
+    private void ForgetViewOnly(IEnumerable<RootState> roots, string id)
+    {
+        foreach (var r in roots)
+            if (ViewOnly(r.RootId).Remove(id)) _viewOnlyDirty.Add(r.RootId);
+    }
+
+    private void SaveViewOnly()
+    {
+        foreach (var rootId in _viewOnlyDirty) state.SetAccount(ViewOnlyKey(rootId), JsonSerializer.Serialize(ViewOnly(rootId)));
+        _viewOnlyDirty.Clear();
+    }
+
     // ================================================================= sync pass
 
     /// <summary>Refreshes the remote trees and reconciles every enabled root until nothing is left to do.</summary>
@@ -331,6 +386,7 @@ public sealed class SyncEngine(
             }
             if (_placeholders.OnDemand) await MarkSyncedAsync(root, started, errors.Count == errorsBefore && rootMass == 0, ct);
             MarkReadOnly(root);
+            await MaterializeLinksAsync(root, ct);
             // Clear processed revocations: the items are gone from the base now.
             var revoked = Revoked();
             var known = state.Items(root.RootId).Select(i => i.RemoteId).ToHashSet();
@@ -376,6 +432,92 @@ public sealed class SyncEngine(
         }
         if (target.Count > 0 || marked.Count > 0) state.SetAccount(key, JsonSerializer.Serialize(target));
     }
+
+    /// <summary>Server files of this tree the policy keeps off the computer ("Đuôi tệp không đồng bộ xuống máy", size limit).</summary>
+    private List<string> PolicyBlocked(Dictionary<string, RemoteItem> tree)
+    {
+        var policy = Policy;
+        return tree.Values.Where(i => !i.IsFolder && policy.DownloadRefusal(i.Name, i.Size) is not null).Select(i => i.Id).ToList();
+    }
+
+    private static string LinksKey(string rootId) => "links:" + rootId;
+
+    /// <summary>
+    /// "&lt;tên&gt; - Mở trên web.url" where a file would be, for view-only files (when the policy shows them as links) and files the policy
+    /// does not download (spec 7.2). Links are ignored by the scan (never uploaded); links no longer wanted are removed. Plain files, not
+    /// placeholders: in Files On-Demand they are never dehydrated nor fetched.
+    /// </summary>
+    private async Task MaterializeLinksAsync(RootState root, CancellationToken ct)
+    {
+        var written = new HashSet<string>(
+            state.GetAccount(LinksKey(root.RootId)) is { } json ? JsonSerializer.Deserialize<List<string>>(json) ?? [] : [], StringComparer.OrdinalIgnoreCase);
+        var policy = Policy;
+        var want = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase); // link path (relative to the root) → web address
+        if (policy.WebBaseUrl is { Length: > 0 } web)
+        {
+            var tree = state.RemoteTree(root.RootId);
+            var names = LocalNames(tree);
+            var excluded = new HashSet<string>();
+            foreach (var id in ExcludedFolders(root.RootId).Where(tree.ContainsKey)) excluded.UnionWith(Subtree(tree, id));
+            var blocked = PolicyBlocked(tree).ToHashSet();
+            var candidates = tree.Values.Where(i => blocked.Contains(i.Id))
+                .Concat(policy.ViewOnlyAsLink ? ViewOnly(root.RootId).Values.Where(v => !tree.ContainsKey(v.Id)) : []);
+            var folderPaths = new Dictionary<string, string?>();
+            foreach (var i in candidates)
+            {
+                if (excluded.Contains(i.Id) || (i.ParentId is { } pid && excluded.Contains(pid))) continue;
+                var parent = i.ParentId is null ? "" : FolderPath(i.ParentId);
+                if (parent is null) continue;
+                if (parent.Length > 0 && !(fs.Exists(RootPath(root, parent), out var isFolder) && isFolder)) continue; // folder not there yet
+                var localName = names.GetValueOrDefault(i.Id) ?? NameMapper.ToLocal(i.Name);
+                if (blocked.Contains(i.Id) && fs.Exists(RootPath(root, NameMapper.Combine(parent, localName)), out _)) continue; // copy kept from before
+                want[NameMapper.Combine(parent, SyncClientPolicy.LinkName(localName))] = $"{web}/files/{i.Id}";
+            }
+
+            string? FolderPath(string id)
+            {
+                if (folderPaths.TryGetValue(id, out var known)) return known;
+                var parts = new List<string>();
+                string? cur = id;
+                for (var guard = 0; cur is not null; guard++)
+                {
+                    if (guard >= 256 || !tree.TryGetValue(cur, out var f) || !f.IsFolder) return folderPaths[id] = null;
+                    parts.Add(names.GetValueOrDefault(f.Id, f.Name));
+                    cur = f.ParentId;
+                }
+                parts.Reverse();
+                return folderPaths[id] = string.Join('/', parts);
+            }
+        }
+        var kept = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (path, url) in want)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                if (!written.Contains(path) || !fs.Exists(RootPath(root, path), out _))
+                {
+                    var bytes = System.Text.Encoding.UTF8.GetBytes(SyncClientPolicy.LinkContent(url));
+                    await fs.WriteAtomicAsync(RootPath(root, path), dest => dest.WriteAsync(bytes, ct).AsTask(), clock.UtcNow, ct);
+                }
+                kept.Add(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } // next pass
+        }
+        foreach (var path in written.Where(p => !want.ContainsKey(p)))
+        {
+            if (!SyncClientPolicy.IsLinkName(NameMapper.NameOf(path))) continue;
+            try
+            {
+                if (fs.Exists(RootPath(root, path), out var isFolder) && !isFolder) fs.Delete(RootPath(root, path));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { kept.Add(path); } // removed next pass
+        }
+        if (!kept.SetEquals(written))
+            state.SetAccount(LinksKey(root.RootId), kept.Count == 0 ? null : JsonSerializer.Serialize(kept.Order(StringComparer.Ordinal).ToList()));
+    }
+
+    private static string RootPath(RootState root, string rel) => NameMapper.Combine(root.LocalPath.Length == 0 ? null : root.LocalPath, rel);
 
     /// <summary>
     /// Files On-Demand: everything recorded during this pass is shown as synced in Explorer (status icon); so is the root's own folder
@@ -561,6 +703,7 @@ public sealed class SyncEngine(
                 ops++;
                 break; // one at a time, then re-plan
             }
+        if (ops == 0 && ParkBlockingOccupant(c, plan)) ops++;
         TotalOperations += ops;
         return (ops, massPending);
     }
@@ -579,9 +722,11 @@ public sealed class SyncEngine(
         var tree = state.RemoteTree(root.RootId);
         var names = LocalNames(tree);
         var items = state.Items(root.RootId);
-        // Excluded folders (with everything inside) are left out of all three trees: never downloaded, never seen as deleted.
+        // Excluded folders (with everything inside) and files the policy keeps off this computer (blocked type, too large) are left out of
+        // all three trees: never downloaded, never seen as deleted.
         var excludedPaths = new List<string>();
         var excluded = ExcludedFolders(root.RootId);
+        excluded.UnionWith(PolicyBlocked(tree));
         if (excluded.Count > 0)
         {
             var gone = new HashSet<string>();
@@ -982,6 +1127,7 @@ public sealed class SyncEngine(
     private async Task<bool> UploadNewAsync(Ctx c, LocalEntry l, CancellationToken ct)
     {
         if (!SameAsScan(c, l)) return false;
+        if (!l.IsFolder && Policy.UploadRefusal(NameMapper.NameOf(l.Path), l.Size) is { } refused) throw new RemotePermanentException(refused, 413);
         var parentId = ParentRemoteIdForLocalPath(c, l.Path, out var ok);
         if (!ok) return false; // parent folder not on the server yet: next round
         var name = NameMapper.NameOf(l.Path);
@@ -1022,6 +1168,7 @@ public sealed class SyncEngine(
         var b = s.Base!;
         var l = s.LocalEntry!;
         if (!SameAsScan(c, l)) return false;
+        if (Policy.UploadRefusal(b.Name, l.Size) is { } refused) throw new RemotePermanentException(refused, 413);
         var (data, hash) = await ReadSnapshotAsync(c, l.Path, ct);
         RemoteItem r;
         await using (data) r = await remote.UploadVersionAsync(b.RemoteId, b.RemoteRevision, data, hash, ct);
@@ -1267,16 +1414,8 @@ public sealed class SyncEngine(
         var r = s.Remote!;
         var from = s.LocalEntry?.Path ?? BasePath(c, b);
         if (from is null || fs.Stat(Abs(c, from)) is null) return false;
-        // Target: under the parent's current local location.
-        string? parentPath = null;
-        if (r.ParentId is { } pid)
-        {
-            if (!c.BaseByRemote.TryGetValue(pid, out var pb)) return false;
-            parentPath = BasePath(c, pb);
-            if (parentPath is null || fs.Stat(Abs(c, parentPath)) is not { IsFolder: true }) return false;
-        }
-        var name = c.RemoteLocalName.GetValueOrDefault(r.Id) ?? NameMapper.ToLocal(r.Name);
-        var to = NameMapper.Combine(parentPath, name);
+        if (LocalMoveTarget(c, r) is not { } to) return false;
+        var name = NameMapper.NameOf(to);
         if (string.Equals(from, to, StringComparison.Ordinal)) { }
         else if (fs.Stat(Abs(c, to)) is not null && !string.Equals(from, to, StringComparison.OrdinalIgnoreCase)) return false; // occupied: next round
         else fs.Move(Abs(c, from), Abs(c, to));
@@ -1287,6 +1426,46 @@ public sealed class SyncEngine(
         state.SaveItem(b);
         Log("Đổi tên/di chuyển", to, $"Từ {from}");
         return true;
+    }
+
+    /// <summary>Where a server move puts the item locally: under its parent's current local location (null while that folder is not there).</summary>
+    private string? LocalMoveTarget(Ctx c, RemoteItem r)
+    {
+        string? parentPath = null;
+        if (r.ParentId is { } pid)
+        {
+            if (!c.BaseByRemote.TryGetValue(pid, out var pb)) return null;
+            parentPath = BasePath(c, pb);
+            if (parentPath is null || fs.Stat(Abs(c, parentPath)) is not { IsFolder: true }) return null;
+        }
+        return NameMapper.Combine(parentPath, LocalName(c, r));
+    }
+
+    /// <summary>
+    /// Server moves that block each other locally (e.g. folder "F1" renamed to "a.txt" while the file "a.txt" moved into a new
+    /// sub-folder of it): the item sitting on a target, itself waiting for its own server move, is renamed aside to a free name.
+    /// Its base follows the local rename, so the next round still sees (and applies) its server move.
+    /// </summary>
+    private bool ParkBlockingOccupant(Ctx c, List<Step> plan)
+    {
+        var pendingMoves = plan.Where(p => p.Decision.Has(SyncAction.MoveLocal) && p.Base is not null && p.Remote is not null).ToList();
+        foreach (var step in pendingMoves.OrderBy(x => x.Depth))
+        {
+            var from = step.LocalEntry?.Path ?? BasePath(c, step.Base!);
+            if (LocalMoveTarget(c, step.Remote!) is not { } target || from is null || string.Equals(from, target, StringComparison.OrdinalIgnoreCase)) continue;
+            if (fs.Stat(Abs(c, target)) is null) continue;
+            var occupant = pendingMoves.FirstOrDefault(o => o != step && BasePath(c, o.Base!) is { } p && string.Equals(p, target, StringComparison.OrdinalIgnoreCase)
+                                                            && (o.LocalEntry is null || string.Equals(o.LocalEntry.Path, p, StringComparison.Ordinal)));
+            if (occupant is null) continue;
+            var parent = NameMapper.ParentOf(target);
+            var free = NameMapper.NextFree(NameMapper.NameOf(target), n => fs.Stat(Abs(c, NameMapper.Combine(parent, n))) is not null);
+            fs.Move(Abs(c, target), Abs(c, NameMapper.Combine(parent, free)));
+            occupant.Base!.Name = free;
+            state.SaveItem(occupant.Base);
+            Log("Đổi tên", target, $"Tạm đổi thành \"{free}\" để nhường chỗ cho mục khác trên máy chủ, sẽ chuyển về vị trí mới ở vòng sau");
+            return true;
+        }
+        return false;
     }
 
     private async Task<bool> DeleteRemoteAsync(Ctx c, Step s, CancellationToken ct)

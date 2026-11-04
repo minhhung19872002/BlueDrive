@@ -346,6 +346,45 @@ public sealed class SyncAgent : IAsyncDisposable
     /// Resolves a conflict: keep both (default), keep the computer's copy (it becomes the new version of the original; the server copy stays in the
     /// version history), or keep BlueDrive's copy (the conflict copy goes to the Recycle Bin). The next pass carries the change to the server.
     /// </summary>
+    private const string IgnoredProblemsKey = "ignored_problems";
+
+    private HashSet<string> IgnoredProblems() =>
+        _db.GetAccount(IgnoredProblemsKey) is { } json ? System.Text.Json.JsonSerializer.Deserialize<HashSet<string>>(json) ?? [] : [];
+
+    /// <summary>
+    /// "Bỏ qua" in "Vấn đề": the problem is no longer listed (nor counted) while it stays exactly the same; it shows again if it changes, and
+    /// is forgotten once it is gone.
+    /// </summary>
+    public async Task IgnoreProblemAsync(string problem)
+    {
+        await _pass.WaitAsync();
+        try
+        {
+            var ignored = IgnoredProblems();
+            if (ignored.Add(problem)) _db.SetAccount(IgnoredProblemsKey, System.Text.Json.JsonSerializer.Serialize(ignored));
+            var left = Status.Problems.Where(p => p != problem).ToList();
+            Status = Status with
+            {
+                Problems = left,
+                Message = Status.State == AgentState.Idle && Status.PendingMassDelete == 0
+                    ? left.Count > 0 ? $"Đã đồng bộ, {left.Count} mục chưa đồng bộ được." : "Đã đồng bộ."
+                    : Status.Message,
+            };
+        }
+        finally { _pass.Release(); }
+        StatusChanged?.Invoke(Status);
+    }
+
+    /// <summary>Problems of a pass that "Vấn đề" lists: ignored ones are left out, and ignored ones that no longer occur are forgotten.</summary>
+    internal List<string> ShownProblems(IReadOnlyCollection<string> errors)
+    {
+        var ignored = IgnoredProblems();
+        var shown = errors.Where(e => !ignored.Contains(e)).ToList();
+        if (ignored.RemoveWhere(e => !errors.Contains(e)) > 0)
+            _db.SetAccount(IgnoredProblemsKey, ignored.Count == 0 ? null : System.Text.Json.JsonSerializer.Serialize(ignored));
+        return shown;
+    }
+
     public async Task ResolveConflictAsync(ConflictEntry conflict, ConflictChoice choice)
     {
         await _pass.WaitAsync();
@@ -495,6 +534,7 @@ public sealed class SyncAgent : IAsyncDisposable
             return;
         }
         _watcher ??= NewWatcher();
+        await RefreshPolicyAsync(ct);
         await RefreshRootsAsync(ct);
         GuardTopLevel();
         foreach (var r in _db.Roots().Where(r => r.Enabled))
@@ -508,12 +548,48 @@ public sealed class SyncAgent : IAsyncDisposable
         var result = await _engine.SyncAsync(ct);
         Memory.TrimAfter(result.Operations);
         if (result.DeletesDeferred) RequestLocal(); // the deletions go up (or the mass delete question comes) once they have settled
-        var problems = result.Errors.ToList();
+        var problems = ShownProblems(result.Errors);
         var msg = result.MassDeletePending > 0
             ? $"Bạn vừa xóa {result.MassDeletePending} tệp. Xóa cả trên BlueDrive?"
             : problems.Count > 0 ? $"Đã đồng bộ, {problems.Count} mục chưa đồng bộ được." : "Đã đồng bộ.";
         Status = new AgentStatus(AgentState.Idle, msg, DateTime.UtcNow, result.MassDeletePending, problems);
         StatusChanged?.Invoke(Status);
+    }
+
+    private DateTime _policyAt = DateTime.MinValue;
+
+    /// <summary>Last sync policy received from the server (null until the first answer).</summary>
+    public BlueDriveApi.SyncPolicy? Policy { get; private set; }
+
+    /// <summary>
+    /// Server sync policy (spec 8.2), asked again every 10 minutes: what may be uploaded / downloaded, "Mở trên web" links for view-only files,
+    /// poll interval without the real-time connection. The last known policy stays in force while the server cannot be reached.
+    /// </summary>
+    private async Task RefreshPolicyAsync(CancellationToken ct)
+    {
+        if (DateTime.UtcNow - _policyAt < TimeSpan.FromMinutes(10)) return;
+        try
+        {
+            var p = await Api.PolicyAsync(ct);
+            _policyAt = DateTime.UtcNow;
+            Policy = p;
+            static HashSet<string> Set(IEnumerable<string>? values) =>
+                (values ?? []).Select(e => e.Trim().TrimStart('.').ToLowerInvariant()).Where(e => e.Length > 0).ToHashSet();
+            _engine.Policy = new SyncClientPolicy
+            {
+                MaxFileSizeBytes = Math.Max(0, p.MaxFileSizeBytes),
+                UploadMaxSizeBytes = Math.Max(0, p.UploadMaxSizeBytes),
+                BlockedDownloadExtensions = Set(p.BlockedExtensions),
+                AllowedUploadExtensions = Set(p.UploadAllowedExtensions),
+                ViewOnlyAsLink = p.ViewOnlyAsLink,
+                WebBaseUrl = string.IsNullOrWhiteSpace(p.WebBaseUrl) ? BlueDriveHttp.Normalize(_o.Server).ToString().TrimEnd('/') : p.WebBaseUrl.TrimEnd('/'),
+            };
+            if (_notes is not null && p.PollSeconds > 0) _notes.DisconnectedPollInterval = TimeSpan.FromSeconds(Math.Max(5, p.PollSeconds));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException and not SignInRequiredException)
+        {
+            _policyAt = DateTime.UtcNow - TimeSpan.FromMinutes(9); // ask again in a minute; the last policy stays
+        }
     }
 
     /// <summary>

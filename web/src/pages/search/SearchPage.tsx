@@ -19,6 +19,7 @@ import {
   Select,
   Space,
   Spin,
+  Tag,
   TreeSelect,
   Typography,
   type MenuProps,
@@ -30,6 +31,8 @@ import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { getErrorMessage } from '@/api/errors'
 import { qkc } from '@/api/queryKeys.collab'
+import { getFolderInfo } from '@/api/drive'
+import { qk } from '@/api/queryKeys'
 import { compactCriteria, deleteSavedSearch, listSavedSearches, saveSearch, searchFiles } from '@/api/search'
 import { lookupUsers } from '@/api/users'
 import PageHeader from '@/components/PageHeader'
@@ -69,6 +72,8 @@ interface FormValues {
   maxMb?: number | null
   tag?: string
   scope?: string
+  /** Set when the search comes from a folder ("Tìm kiếm nâng cao" in the explorer); only kept with a workspace scope. */
+  folderId?: string
 }
 
 interface CatalogNode {
@@ -95,6 +100,7 @@ function toCriteria(v: FormValues): SearchCriteria {
     maxSize: v.maxMb != null ? Math.round(v.maxMb * MB) : undefined,
     tag: v.tag,
     workspaceId: v.scope && v.scope !== 'all' ? v.scope : undefined,
+    folderId: v.scope && v.scope !== 'all' ? v.folderId : undefined,
   })
 }
 
@@ -118,6 +124,7 @@ function toForm(c: SearchCriteria, itemCatalog: Map<string, string>): FormValues
     maxMb: c.maxSize != null ? Math.round((c.maxSize / MB) * 100) / 100 : null,
     tag: c.tag ?? undefined,
     scope: c.workspaceId ?? 'all',
+    folderId: c.workspaceId ? (c.folderId ?? undefined) : undefined,
   }
 }
 
@@ -149,14 +156,47 @@ function UserSelect({ value, onChange }: { value?: string; onChange?: (v?: strin
   )
 }
 
-function SearchInner({ initialQ }: { initialQ: string }) {
+/** The folder the search is limited to; closing it widens the search to the whole workspace. */
+function FolderScopeTag({ workspaceId, folderId, onClear }: { workspaceId: string; folderId: string; onClear: () => void }) {
+  const { t } = useTranslation()
+  const info = useQuery({
+    queryKey: qk.folderInfo(workspaceId, folderId),
+    queryFn: () => getFolderInfo(workspaceId, folderId),
+    staleTime: 60_000,
+  })
+  return (
+    <Tag
+      closable
+      color="blue"
+      style={{ marginBottom: 12, whiteSpace: 'normal' }}
+      closeIcon={<span aria-label={t('collab.search.removeFolderScope')}>×</span>}
+      onClose={(e) => {
+        e.preventDefault()
+        onClear()
+      }}
+    >
+      {t('collab.search.inFolder', { name: info.data?.name ?? '…' })}
+    </Tag>
+  )
+}
+
+interface SearchInnerProps {
+  initialQ: string
+  initialWorkspaceId?: string
+  initialFolderId?: string
+}
+
+function SearchInner({ initialQ, initialWorkspaceId, initialFolderId }: SearchInnerProps) {
   const { t } = useTranslation()
   const { modal } = App.useApp()
   const screens = Grid.useBreakpoint()
   const isMobile = screens.md === false
   const [form] = Form.useForm<FormValues>()
   const [advanced, setAdvanced] = useState(!isMobile)
-  const [criteria, setCriteria] = useState<SearchCriteria | null>(initialQ ? { q: initialQ } : null)
+  const initialFolder = initialWorkspaceId ? initialFolderId : undefined
+  const [criteria, setCriteria] = useState<SearchCriteria | null>(
+    initialQ || initialWorkspaceId ? compactCriteria({ q: initialQ, workspaceId: initialWorkspaceId, folderId: initialFolder }) : null,
+  )
   const [sort, setSort] = useState<string>(initialQ ? 'relevance' : '-createdAt')
   const [page, setPage] = useState(1)
   const [saving, setSaving] = useState(false)
@@ -260,6 +300,8 @@ function SearchInner({ initialQ }: { initialQ: string }) {
   }
 
   const organizationId = Form.useWatch('organizationId', form)
+  const scope = Form.useWatch('scope', form)
+  const folderId = Form.useWatch('folderId', form)
   const hasKeyword = !!criteria?.q
 
   let results
@@ -295,9 +337,12 @@ function SearchInner({ initialQ }: { initialQ: string }) {
           <Form<FormValues>
             form={form}
             layout="vertical"
-            initialValues={{ q: initialQ, includeSubOrganizations: true, scope: 'all' }}
+            initialValues={{ q: initialQ, includeSubOrganizations: true, scope: initialWorkspaceId ?? 'all', folderId: initialFolder }}
             onFinish={run}
           >
+            <Form.Item name="folderId" hidden>
+              <Input />
+            </Form.Item>
             <Row gutter={12}>
               <Col xs={24} md={14}>
                 <Form.Item name="q" label={t('collab.search.keyword')} rules={[{ max: 200, message: t('validation.maxLength', { max: 200 }) }]}>
@@ -310,6 +355,7 @@ function SearchInner({ initialQ }: { initialQ: string }) {
                     loading={workspaces.isLoading}
                     showSearch
                     optionFilterProp="label"
+                    onChange={() => form.setFieldsValue({ folderId: undefined })}
                     options={[
                       { value: 'all', label: t('collab.search.scopeAll') },
                       ...(workspaces.data ?? []).map((w) => ({
@@ -321,6 +367,9 @@ function SearchInner({ initialQ }: { initialQ: string }) {
                 </Form.Item>
               </Col>
             </Row>
+            {folderId && scope && scope !== 'all' && (
+              <FolderScopeTag workspaceId={scope} folderId={folderId} onClear={() => form.setFieldsValue({ folderId: undefined })} />
+            )}
             {advanced && (
               <>
                 <Row gutter={12}>
@@ -431,7 +480,7 @@ function SearchInner({ initialQ }: { initialQ: string }) {
               <Button
                 onClick={() => {
                   form.resetFields()
-                  form.setFieldsValue({ q: '', includeSubOrganizations: true, scope: 'all' })
+                  form.setFieldsValue({ q: '', includeSubOrganizations: true, scope: 'all', folderId: undefined })
                   setCriteria(null)
                   setPage(1)
                 }}
@@ -451,7 +500,9 @@ function SearchInner({ initialQ }: { initialQ: string }) {
           title={
             criteria && result.data ? (
               <Typography.Text type="secondary" style={{ fontWeight: 400 }}>
-                {t('collab.search.found', { count: result.data.total, ms: result.data.elapsedMs })}
+                {result.data.totalCapped
+                  ? t('collab.search.foundMore', { n: result.data.total.toLocaleString('vi-VN'), ms: result.data.elapsedMs })
+                  : t('collab.search.found', { count: result.data.total, ms: result.data.elapsedMs })}
               </Typography.Text>
             ) : (
               t('collab.search.results')
@@ -519,10 +570,15 @@ function SearchInner({ initialQ }: { initialQ: string }) {
   )
 }
 
-/** Advanced search (#20, #32, #50–52). The header search box links here with ?q=. */
+/**
+ * Advanced search (#20, #32, #50–52). The header search box links here with ?q=; "Tìm kiếm nâng cao" in the explorer adds
+ * &workspaceId= (and &folderId=) so the search keeps its scope.
+ */
 export default function SearchPage() {
   const [params] = useSearchParams()
   const q = params.get('q')?.trim() ?? ''
-  // Remount on a new header query so the form and results start from it.
-  return <SearchInner key={q} initialQ={q} />
+  const workspaceId = params.get('workspaceId') || undefined
+  const folderId = params.get('folderId') || undefined
+  // Remount on a new query / scope so the form and results start from it.
+  return <SearchInner key={params.toString()} initialQ={q} initialWorkspaceId={workspaceId} initialFolderId={folderId} />
 }

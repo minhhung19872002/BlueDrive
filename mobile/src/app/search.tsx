@@ -56,7 +56,7 @@ export default function SearchScreen() {
       </View>
       {first ? (
         <Text style={{ color: c.textMuted, fontSize: 12, paddingHorizontal: 16, paddingBottom: 8 }}>
-          {t('search.results', { count: first.total, ms: first.elapsedMs })}
+          {t(first.totalCapped ? 'search.resultsMore' : 'search.results', { count: first.total.toLocaleString('vi-VN'), ms: first.elapsedMs })}
         </Text>
       ) : null}
     </View>

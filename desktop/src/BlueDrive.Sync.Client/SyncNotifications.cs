@@ -13,7 +13,8 @@ public sealed class SyncNotifications : IAsyncDisposable
     private Task? _poller;
 
     public TimeSpan PollInterval { get; init; } = TimeSpan.FromMinutes(5);
-    public TimeSpan DisconnectedPollInterval { get; init; } = TimeSpan.FromSeconds(30);
+    /// <summary>"Chu kỳ hỏi thay đổi khi không có kết nối thời gian thực" (server policy, updated while running).</summary>
+    public TimeSpan DisconnectedPollInterval { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>Raised on a server push or a poll tick: the receiver should run a sync round (coalesce bursts).</summary>
     public event Action<string>? SyncRequested;

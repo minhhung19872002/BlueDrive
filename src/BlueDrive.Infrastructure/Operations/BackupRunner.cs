@@ -1,10 +1,7 @@
-using System.Diagnostics;
 using System.Formats.Tar;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
-using Amazon.S3;
-using Amazon.S3.Model;
 using BlueDrive.Application.Abstractions;
 using BlueDrive.Application.Features.Monitoring;
 using BlueDrive.Application.Features.Operations;
@@ -17,10 +14,8 @@ using BlueDrive.Infrastructure.Storage;
 using Cronos;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Npgsql;
 
 namespace BlueDrive.Infrastructure.Operations;
 
@@ -38,14 +33,18 @@ public sealed record BackupManifest(Guid Id, string Mode, Guid? BasedOn, DateTim
 public sealed record BackupPart(string Name, long Size, string Sha256);
 
 /// <summary>
-/// Backup = pg_dump (custom format, full every time) + tar of the storage volume: full weekly (or when requested / no full yet),
-/// otherwise incremental (files changed since the previous backup). Each backup folder has a manifest with SHA-256 checksums.
+/// Backup = pg_dump (custom format, full every time) + tar of the stored blobs (local volume or S3 bucket): full weekly (or when
+/// requested / no full yet), otherwise incremental (blobs changed since the previous backup). Each backup folder has a manifest with
+/// SHA-256 checksums and can be copied to the S3 bucket (<c>backups/</c>) so it survives the loss of the server.
 /// </summary>
 public sealed class BackupRunner(
-    AppDbContext db, IOptions<BackupOptions> backupOptions, IOptions<StorageOptions> storageOptions, IConfiguration config, ISettingsService settings,
+    AppDbContext db, IOptions<BackupOptions> backupOptions, IOptions<StorageOptions> storageOptions, IFileStorage storage, IPgTools pgTools, ISettingsService settings,
     IAlertService alerts, TimeProvider clock, ILogger<BackupRunner> logger) : IBackupRunner
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    /// <summary>Blobs written this long before the previous backup started are still re-copied: absorbs the S3 server's clock
+    /// skew and its one-second LastModified resolution (copying a blob twice is harmless, missing one is not).</summary>
+    private static readonly TimeSpan IncrementalOverlap = TimeSpan.FromMinutes(5);
     private string Root => Path.GetFullPath(backupOptions.Value.Root);
 
     public async Task RunAsync(Guid backupJobId, CancellationToken ct)
@@ -68,14 +67,20 @@ public sealed class BackupRunner(
             var full = job.Mode == "full" || !hasFull || previous is null || ((int)now.AddHours(7).DayOfWeek == fullDay && !fullToday);
             job.Mode = full ? "full" : "incremental";
 
-            var dbPart = await DumpDatabaseAsync(Path.Combine(dir, "db.dump"), ct);
+            var dumpPath = Path.Combine(dir, "db.dump");
+            await pgTools.DumpAsync(dumpPath, ct);
+            var dbPart = new BackupPart("db.dump", new FileInfo(dumpPath).Length, await Sha256Async(dumpPath, ct));
             var since = full ? (DateTime?)null : previous!.StartedAt;
-            var (filesPart, count) = await ArchiveFilesAsync(Path.Combine(dir, "files.tar"), since, ct);
+            var (filesPart, count) = await ArchiveFilesAsync(dir, "files.tar", since, ct);
             var manifest = new BackupManifest(job.Id, job.Mode, full ? null : previous!.Id, now,
                 Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "1.0.0", dbPart, filesPart, count, since);
             await File.WriteAllTextAsync(Path.Combine(dir, "manifest.json"), JsonSerializer.Serialize(manifest, Json), ct);
 
-            if (await settings.GetAsync(SettingKeys.BackupToS3, false, ct) || backupOptions.Value.S3Enabled) await CopyToS3Async(dir, ct);
+            if (await CopyToS3EnabledAsync(ct))
+            {
+                using var remote = BackupS3Store.TryCreate(storageOptions.Value.S3) ?? throw new InvalidOperationException("Đã bật sao lưu lên S3 nhưng chưa cấu hình Storage:S3.");
+                await remote.UploadFolderAsync(dir, ct);
+            }
 
             var rel = Path.GetRelativePath(Root, dir).Replace('\\', '/');
             job.DbDumpKey = $"{rel}/db.dump";
@@ -102,64 +107,51 @@ public sealed class BackupRunner(
         }
     }
 
-    private async Task<BackupPart> DumpDatabaseAsync(string path, CancellationToken ct)
-    {
-        var cs = new NpgsqlConnectionStringBuilder(config.GetConnectionString("Default"));
-        var psi = new ProcessStartInfo(backupOptions.Value.PgDump) { RedirectStandardError = true, UseShellExecute = false };
-        foreach (var a in new[] { "-h", cs.Host ?? "localhost", "-p", cs.Port.ToString(), "-U", cs.Username ?? "", "-d", cs.Database ?? "", "-Fc", "--no-owner", "-f", path })
-            psi.ArgumentList.Add(a);
-        psi.Environment["PGPASSWORD"] = cs.Password ?? "";
-        using var p = Process.Start(psi) ?? throw new InvalidOperationException("Không chạy được pg_dump.");
-        var err = await p.StandardError.ReadToEndAsync(ct);
-        await p.WaitForExitAsync(ct);
-        if (p.ExitCode != 0) throw new IOException($"pg_dump lỗi: {err.Trim()}");
-        return new BackupPart("db.dump", new FileInfo(path).Length, await Sha256Async(path, ct));
-    }
+    private async Task<bool> CopyToS3EnabledAsync(CancellationToken ct) => backupOptions.Value.S3Enabled || await settings.GetAsync(SettingKeys.BackupToS3, false, ct);
 
-    private async Task<(BackupPart Part, int Count)> ArchiveFilesAsync(string path, DateTime? since, CancellationToken ct)
+    /// <summary>Upload scratch areas and the S3 backup copies themselves are never archived.</summary>
+    internal static bool IsArchived(string key) =>
+        !(key.StartsWith(".tmp/", StringComparison.Ordinal) || key.StartsWith(".tus/", StringComparison.Ordinal) || key.StartsWith(BackupS3Store.Prefix, StringComparison.Ordinal) || key.Contains(".part-"));
+
+    private async Task<(BackupPart Part, int Count)> ArchiveFilesAsync(string dir, string name, DateTime? since, CancellationToken ct)
     {
-        var root = Path.GetFullPath(storageOptions.Value.LocalRoot);
+        var path = Path.Combine(dir, name);
+        var localRoot = Path.GetFullPath(storageOptions.Value.LocalRoot);
         var count = 0;
         await using (var fs = File.Create(path))
         await using (var tar = new TarWriter(fs, TarEntryFormat.Pax, leaveOpen: false))
         {
-            if (Directory.Exists(root))
-                foreach (var file in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+            await foreach (var o in storage.ListAsync("", ct))
+            {
+                if (!IsArchived(o.Key) || (since is { } s && o.LastModifiedUtc < s - IncrementalOverlap)) continue;
+                if (storage is LocalFileStorage)
+                    await tar.WriteEntryAsync(Path.Combine(localRoot, o.Key.Replace('/', Path.DirectorySeparatorChar)), o.Key, ct);
+                else
                 {
-                    var rel = Path.GetRelativePath(root, file).Replace('\\', '/');
-                    if (rel.StartsWith(".tmp/") || rel.StartsWith(".tus/") || rel.Contains(".part-")) continue;
-                    if (since is { } s && File.GetLastWriteTimeUtc(file) < s) continue;
-                    await tar.WriteEntryAsync(file, rel, ct);
-                    count++;
+                    // Object storage: stage each blob on local disk so the tar entry gets its exact length.
+                    var tmp = Path.Combine(dir, ".object");
+                    try
+                    {
+                        await using (var src = await storage.OpenReadAsync(o.Key, ct))
+                        await using (var dst = File.Create(tmp))
+                            await src.CopyToAsync(dst, ct);
+                        await tar.WriteEntryAsync(tmp, o.Key, ct);
+                    }
+                    finally { File.Delete(tmp); }
                 }
+                count++;
+            }
         }
-        return (new BackupPart("files.tar", new FileInfo(path).Length, await Sha256Async(path, ct)), count);
+        return (new BackupPart(name, new FileInfo(path).Length, await Sha256Async(path, ct)), count);
     }
 
-    private static async Task<string> Sha256Async(string path, CancellationToken ct)
+    internal static async Task<string> Sha256Async(string path, CancellationToken ct)
     {
         await using var s = File.OpenRead(path);
         return Convert.ToHexStringLower(await SHA256.HashDataAsync(s, ct));
     }
 
-    private async Task CopyToS3Async(string dir, CancellationToken ct)
-    {
-        var s3 = storageOptions.Value.S3;
-        if (string.IsNullOrWhiteSpace(s3.Bucket)) throw new InvalidOperationException("Đã bật sao lưu lên S3 nhưng chưa cấu hình Storage:S3.");
-        // Same as S3FileStorage: no default aws-chunked checksums, which some S3-compatible servers store verbatim.
-        var cfg = new AmazonS3Config
-        {
-            ForcePathStyle = true, AuthenticationRegion = s3.Region,
-            RequestChecksumCalculation = Amazon.Runtime.RequestChecksumCalculation.WHEN_REQUIRED,
-            ResponseChecksumValidation = Amazon.Runtime.ResponseChecksumValidation.WHEN_REQUIRED,
-        };
-        if (!string.IsNullOrWhiteSpace(s3.ServiceUrl)) cfg.ServiceURL = s3.ServiceUrl;
-        using var client = new AmazonS3Client(s3.AccessKey, s3.SecretKey, cfg);
-        foreach (var f in Directory.EnumerateFiles(dir))
-            await client.PutObjectAsync(new PutObjectRequest { BucketName = s3.Bucket, Key = $"backups/{Path.GetFileName(dir)}/{Path.GetFileName(f)}", FilePath = f }, ct);
-    }
-
-    /// <summary>Keeps the newest N backups plus every full backup their incrementals depend on.</summary>
+    /// <summary>Keeps the newest N backups plus every full backup their incrementals depend on (locally and in the S3 copy).</summary>
     private async Task ApplyRetentionAsync(CancellationToken ct)
     {
         var keep = await settings.GetAsync(SettingKeys.BackupRetentionCount, 7, ct);
@@ -176,10 +168,18 @@ public sealed class BackupRunner(
                 if (all[i].Mode == "full") break;
             }
         }
-        foreach (var old in all.Except(kept))
+        var expired = all.Except(kept).ToList();
+        if (expired.Count == 0) return;
+        using var remote = await CopyToS3EnabledAsync(ct) ? BackupS3Store.TryCreate(storageOptions.Value.S3) : null;
+        foreach (var old in expired)
         {
-            var folder = old.ManifestKey is { } m ? Path.Combine(Root, Path.GetDirectoryName(m)!) : null;
-            if (folder is not null && Directory.Exists(folder)) Directory.Delete(folder, true);
+            var folderName = old.ManifestKey is { } m ? Path.GetDirectoryName(m) : null;
+            if (folderName is not null)
+            {
+                var folder = Path.Combine(Root, folderName);
+                if (Directory.Exists(folder)) Directory.Delete(folder, true);
+                if (remote is not null) await remote.DeleteFolderAsync(folderName.Replace('\\', '/'), ct);
+            }
             old.Status = JobStatus.Expired;
             old.Error = "Đã xóa theo chính sách lưu giữ";
             old.DbDumpKey = old.FilesArchiveKey = old.ManifestKey = null;
@@ -196,56 +196,75 @@ public sealed class BackupRunner(
     }
 }
 
-/// <summary>Restores a backup chain: pg_restore of the chosen dump, then full + incremental archives in order.</summary>
-public sealed class RestoreRunner(IOptions<BackupOptions> backupOptions, IOptions<StorageOptions> storageOptions, IConfiguration config, ILogger<RestoreRunner> logger)
+/// <summary>
+/// Restores a backup chain: checksums of every part, pg_restore of the chosen dump, then full + incremental archives in order
+/// (into the local volume or back into the S3 bucket). Folders missing on this server are fetched from the S3 copy.
+/// </summary>
+public sealed class RestoreRunner(IOptions<BackupOptions> backupOptions, IOptions<StorageOptions> storageOptions, IFileStorage storage, IPgTools pgTools, ILogger<RestoreRunner> logger)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public async Task<int> RestoreAsync(string backupRef, CancellationToken ct)
     {
         var root = Path.GetFullPath(backupOptions.Value.Root);
-        var dirs = Directory.EnumerateDirectories(root).ToList();
-        var target = dirs.FirstOrDefault(d => Path.GetFileName(d).Contains(backupRef.Replace("-", ""), StringComparison.OrdinalIgnoreCase) || Path.GetFileName(d) == backupRef)
-                     ?? throw new DirectoryNotFoundException($"Không tìm thấy bản sao lưu '{backupRef}' trong {root}.");
-        var manifests = dirs.Where(d => File.Exists(Path.Combine(d, "manifest.json")))
-            .Select(d => (Dir: d, M: JsonSerializer.Deserialize<BackupManifest>(File.ReadAllText(Path.Combine(d, "manifest.json")), Json)!)).ToDictionary(x => x.M.Id);
+        Directory.CreateDirectory(root);
+        using var remote = BackupS3Store.TryCreate(storageOptions.Value.S3);
+        var wanted = Guid.TryParse(backupRef, out var id) ? id.ToString("N") : backupRef;
+        var target = await LocateAsync(root, wanted, remote, ct)
+                     ?? throw new DirectoryNotFoundException($"Không tìm thấy bản sao lưu '{backupRef}' trong {root}{(remote is null ? "" : " và trên S3")}.");
+
         var chain = new List<(string Dir, BackupManifest M)>();
-        var current = manifests.Values.Single(x => x.Dir == target);
+        var current = (Dir: target, M: ReadManifest(target));
         while (true)
         {
             chain.Insert(0, current);
             if (current.M.BasedOn is not { } parent) break;
-            if (!manifests.TryGetValue(parent, out current)) throw new InvalidOperationException($"Thiếu bản sao lưu gốc {parent} của chuỗi tăng dần.");
+            var parentDir = await LocateAsync(root, parent.ToString("N"), remote, ct)
+                            ?? throw new InvalidOperationException($"Thiếu bản sao lưu gốc {parent} của chuỗi tăng dần.");
+            current = (parentDir, ReadManifest(parentDir));
         }
         foreach (var (dir, m) in chain)
             foreach (var part in new[] { m.Database, m.Files }.Where(p => p is not null))
-            {
-                await using var s = File.OpenRead(Path.Combine(dir, part!.Name));
-                var sha = Convert.ToHexStringLower(await SHA256.HashDataAsync(s, ct));
-                if (sha != part.Sha256) throw new InvalidOperationException($"Sai checksum {part.Name} trong {Path.GetFileName(dir)} — bản sao lưu bị hỏng.");
-            }
+                if (await BackupRunner.Sha256Async(Path.Combine(dir, part!.Name), ct) != part.Sha256)
+                    throw new InvalidOperationException($"Sai checksum {part.Name} trong {Path.GetFileName(dir)} — bản sao lưu bị hỏng.");
         logger.LogInformation("Checksum hợp lệ. Phục hồi CSDL từ {Dir}", Path.GetFileName(target));
+        await pgTools.RestoreAsync(Path.Combine(target, "db.dump"), ct);
 
-        var cs = new NpgsqlConnectionStringBuilder(config.GetConnectionString("Default"));
-        var psi = new ProcessStartInfo(backupOptions.Value.PgRestore) { RedirectStandardError = true, UseShellExecute = false };
-        foreach (var a in new[] { "-h", cs.Host ?? "localhost", "-p", cs.Port.ToString(), "-U", cs.Username ?? "", "-d", cs.Database ?? "", "--clean", "--if-exists", "--no-owner", Path.Combine(target, "db.dump") })
-            psi.ArgumentList.Add(a);
-        psi.Environment["PGPASSWORD"] = cs.Password ?? "";
-        using (var p = Process.Start(psi)!)
-        {
-            var err = await p.StandardError.ReadToEndAsync(ct);
-            await p.WaitForExitAsync(ct);
-            if (p.ExitCode != 0) logger.LogWarning("pg_restore cảnh báo: {Err}", err.Trim());
-        }
-
-        var storageRoot = Path.GetFullPath(storageOptions.Value.LocalRoot);
         foreach (var (dir, m) in chain)
         {
-            logger.LogInformation("Giải nén {Mode} {Dir} ({Count} tệp)", m.Mode, Path.GetFileName(dir), m.FileCount);
-            await TarFile.ExtractToDirectoryAsync(Path.Combine(dir, "files.tar"), storageRoot, overwriteFiles: true, ct);
+            logger.LogInformation("Phục hồi tệp {Mode} {Dir} ({Count} tệp)", m.Mode, Path.GetFileName(dir), m.FileCount);
+            var archive = Path.Combine(dir, "files.tar");
+            if (storage is LocalFileStorage)
+            {
+                var storageRoot = Path.GetFullPath(storageOptions.Value.LocalRoot);
+                Directory.CreateDirectory(storageRoot);
+                await TarFile.ExtractToDirectoryAsync(archive, storageRoot, overwriteFiles: true, ct);
+                continue;
+            }
+            await using var fs = File.OpenRead(archive);
+            await using var tar = new TarReader(fs);
+            while (await tar.GetNextEntryAsync(copyData: false, ct) is { } entry)
+                if (entry.EntryType is TarEntryType.RegularFile or TarEntryType.V7RegularFile && entry.DataStream is { } data && BackupRunner.IsArchived(entry.Name))
+                    await storage.WriteAsync(entry.Name, data, ct);
         }
         logger.LogInformation("Phục hồi hoàn tất từ chuỗi {Count} bản sao lưu.", chain.Count);
         return 0;
+    }
+
+    private static BackupManifest ReadManifest(string dir) =>
+        JsonSerializer.Deserialize<BackupManifest>(File.ReadAllText(Path.Combine(dir, "manifest.json")), Json)
+        ?? throw new InvalidOperationException($"manifest.json hỏng trong {Path.GetFileName(dir)}.");
+
+    /// <summary>Backup folder named "&lt;time&gt;-&lt;id without dashes&gt;": on this server first, else downloaded from the S3 copy.</summary>
+    private async Task<string?> LocateAsync(string root, string nameOrId, BackupS3Store? remote, CancellationToken ct)
+    {
+        var local = Directory.EnumerateDirectories(root).FirstOrDefault(d =>
+            (Path.GetFileName(d) == nameOrId || Path.GetFileName(d).EndsWith(nameOrId, StringComparison.OrdinalIgnoreCase)) && File.Exists(Path.Combine(d, "manifest.json")));
+        if (local is not null || remote is null) return local;
+        var fetched = await remote.DownloadFolderAsync(nameOrId, root, ct);
+        if (fetched is null || !File.Exists(Path.Combine(fetched, "manifest.json"))) return null;
+        logger.LogInformation("Đã tải bản sao lưu {Dir} từ S3", Path.GetFileName(fetched));
+        return fetched;
     }
 }
 

@@ -38,3 +38,7 @@ web/e2e/.auth/
 artifacts/
 desktop/packaging/.dev-cert/
 deploy/downloads/
+
+## Load-test stack (scripts/perf-up.ps1)
+deploy/.env.perf
+tests/load/results/

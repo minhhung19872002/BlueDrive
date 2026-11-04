@@ -3,15 +3,20 @@ using BlueDrive.Application.Common;
 using BlueDrive.Application.Settings;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace BlueDrive.Application.Features.Sync;
 
-/// <summary>Desktop sync policy (system_settings "sync.*"), sent to the client and enforced by the server.</summary>
+/// <summary>
+/// Desktop sync policy (system_settings "sync.*"), sent to the client and enforced by the server. The client also gets the upload rules
+/// (allowed extensions, maximum size) to refuse a file before sending it, and the web address used by "Mở trên web" links.
+/// </summary>
 public sealed record SyncPolicyDto(
     bool Enabled, long MaxFileSizeBytes, IReadOnlyList<string> BlockedExtensions, IReadOnlyList<Guid> OnlineOnlyWorkspaceIds,
-    string MinClientVersion, bool ViewOnlyAsLink, int PollSeconds, int JournalRetentionDays);
+    string MinClientVersion, bool ViewOnlyAsLink, int PollSeconds, int JournalRetentionDays,
+    IReadOnlyList<string>? UploadAllowedExtensions = null, long UploadMaxSizeBytes = 0, string? WebBaseUrl = null);
 
-public sealed class SyncPolicyService(IAppDbContext db, ISettingsService settings)
+public sealed class SyncPolicyService(IAppDbContext db, ISettingsService settings, IConfiguration config)
 {
     public async Task<SyncPolicyDto> GetAsync(CancellationToken ct)
     {
@@ -29,7 +34,11 @@ public sealed class SyncPolicyService(IAppDbContext db, ISettingsService setting
             await settings.GetAsync(SettingKeys.SyncMinClientVersion, "1.0.0", ct),
             await settings.GetAsync(SettingKeys.SyncViewOnlyAsLink, true, ct),
             Math.Max(5, await settings.GetAsync(SettingKeys.SyncPollSeconds, 30, ct)),
-            await settings.GetAsync(SettingKeys.SyncJournalRetentionDays, 90, ct));
+            await settings.GetAsync(SettingKeys.SyncJournalRetentionDays, 90, ct),
+            (await settings.GetAsync(SettingKeys.UploadAllowedExtensions, SettingKeys.DefaultAllowedExtensions, ct))
+                .Select(e => e.Trim().TrimStart('.').ToLowerInvariant()).Where(e => e.Length > 0).ToList(),
+            Math.Max(0, await settings.GetAsync(SettingKeys.UploadMaxSizeMb, 5120, ct)) * 1024L * 1024L,
+            string.IsNullOrWhiteSpace(config["App:PublicBaseUrl"]) ? null : config["App:PublicBaseUrl"]!.TrimEnd('/'));
     }
 
     /// <summary>Throws 403 when desktop sync is disabled or the user's role / organization is not allowed.</summary>

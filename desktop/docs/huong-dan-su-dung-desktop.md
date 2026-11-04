@@ -34,6 +34,10 @@ Tải bộ cài trên web: menu tài khoản → **Tải ứng dụng máy tính
   - **Giải phóng dung lượng**: bỏ nội dung khỏi máy, tệp vẫn còn trên BlueDrive.
 - Tệp bạn chỉ có quyền **xem**: không xóa / đổi tên được từ máy; nếu sửa, bản sửa được chuyển vào thư mục `_Không đồng bộ được`.
 - Không gian **chỉ xem trực tuyến** theo chính sách của đơn vị: không giữ tệp trên máy được; nội dung tự giải phóng sau khi đóng tệp.
+- Tệp bạn chỉ được **xem** (không có quyền tải xuống) và tệp có định dạng đơn vị không cho tải về máy hiện thành lối tắt
+  `<tên tệp> - Mở trên web`: nhấp đúp để xem trên BlueDrive bằng trình duyệt. Khi được cấp quyền tải xuống, tệp tự về máy và lối tắt biến mất.
+- Tệp có định dạng hoặc kích thước đơn vị không cho tải lên (ví dụ `.exe`, tệp quá lớn) vẫn nằm trên máy, không được gửi đi, và hiện trong
+  **Cài đặt → Vấn đề** kèm lý do.
 - **Nút trạng thái BlueDrive** ở đầu thanh địa chỉ (Windows 11 22H2 trở lên): bấm vào để xem trạng thái đồng bộ, dung lượng đã dùng,
   **Mở BlueDrive** và **Xem trên web**.
 
@@ -104,8 +108,8 @@ Vào **Cài đặt → Vấn đề → Xử lý xung đột…** để so sánh 
 | Đồng bộ | Mở thư mục BlueDrive; **Đổi vị trí…** (chọn nơi mới, ví dụ ổ D: — BlueDrive tạm dừng, chuyển tệp đã có trên máy, tệp chỉ có trên mạng không cần chép, rồi đồng bộ tiếp ở chỗ mới); **chọn thư mục hiện trên máy này** — cả thư mục gốc lẫn thư mục con (bỏ chọn: thư mục được gỡ khỏi máy sau khi mọi thay đổi đã lên BlueDrive, vẫn còn nguyên trên BlueDrive); bật/tắt **tệp theo yêu cầu** (tắt: mọi tệp được tải về trước); **giải phóng dung lượng cho tệp không dùng** sau 1/7/14/30/60 ngày; **Khi nhấp đúp tệp Office trong BlueDrive**: *Mở bằng ứng dụng mặc định* hoặc *Luôn mở chế độ cùng soạn (khi có mạng)* — tài liệu mở trong ONLYOFFICE Desktop Editors (hoặc trình duyệt) để cùng sửa, khi mất mạng thì mở bản trên máy bằng Word/Excel/PowerPoint như thường; tệp ngoài thư mục BlueDrive không bị ảnh hưởng; danh sách tệp không đồng bộ (tệp tạm, tệp khóa của Office, `Thumbs.db`, `desktop.ini`, liên kết tượng trưng…). |
 | Mạng | Giới hạn băng thông tải lên/tải xuống (KB/giây), proxy (theo Windows, không dùng, tự nhập), **tạm dừng khi dùng mạng tính phí** và **khi chạy pin dưới 20%** (mặc định bật); **Đồng bộ trong mạng LAN** (mặc định tắt): lấy tệp lớn từ máy BlueDrive khác cùng mạng thay vì tải từ máy chủ — máy chủ vẫn kiểm tra quyền, nội dung được mã hóa, không gửi bản đang sửa; lần đầu Windows có thể hỏi cho phép qua tường lửa. |
 | Chung | Khởi động cùng Windows, thông báo, giao diện sáng/tối/theo hệ thống. |
-| Vấn đề | Danh sách xung đột và mục chưa đồng bộ được, với **Xử lý xung đột…**, **Giữ cả hai**, **Thử lại**, **Mở vị trí**. |
-| Giới thiệu | Phiên bản, **Xuất gói chẩn đoán…** (nhật ký + thông tin hệ thống, đã ẩn mã đăng nhập, không chứa nội dung tệp) để gửi bộ phận hỗ trợ, **Gửi yêu cầu hỗ trợ** (mở trang Hỗ trợ của BlueDrive); trạng thái ONLYOFFICE Desktop Editors, nút **Cài BlueDrive vào ONLYOFFICE** và **Cài / cập nhật ONLYOFFICE Desktop Editors** (cần quyền quản trị), thông tin giấy phép AGPL v3 của ONLYOFFICE; **Cập nhật**: tình trạng, **Kiểm tra bản cập nhật**, **Khởi động lại để cập nhật**, nhận bản thử nghiệm (beta). |
+| Vấn đề | Danh sách xung đột và mục chưa đồng bộ được, với **Xử lý xung đột…**, **Giữ cả hai**, **Thử lại**, **Bỏ qua** (ẩn mục đó cho tới khi lỗi thay đổi), **Mở vị trí**. |
+| Giới thiệu | Phiên bản, **Xuất gói chẩn đoán…** (nhật ký + thông tin hệ thống, đã ẩn mã đăng nhập, không chứa nội dung tệp) để gửi bộ phận hỗ trợ, **Gửi yêu cầu hỗ trợ** (nhập tiêu đề, mô tả, chọn Khẩn cấp; ứng dụng gửi kèm phiên bản, tên máy và các vấn đề đang có, rồi báo mã yêu cầu; theo dõi kết quả ở trang Hỗ trợ trên web — nút **Mở trang hỗ trợ trên web**); trạng thái ONLYOFFICE Desktop Editors, nút **Cài BlueDrive vào ONLYOFFICE** và **Cài / cập nhật ONLYOFFICE Desktop Editors** (cần quyền quản trị), thông tin giấy phép AGPL v3 của ONLYOFFICE; **Cập nhật**: tình trạng, **Kiểm tra bản cập nhật**, **Khởi động lại để cập nhật**, nhận bản thử nghiệm (beta). |
 
 ## 6. Câu hỏi thường gặp
 

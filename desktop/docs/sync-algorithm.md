@@ -80,9 +80,21 @@ giữ mtime theo máy chủ.
 - Tệp **đang mở / bị khóa** (không đọc được để tính hash hoặc tải lên): mục đó đứng yên trong lượt này và được báo "sẽ đồng bộ khi tệp được đóng"; lỗi đọc/ghi ổ đĩa ở một bước chỉ dừng bước đó (như crash), không dừng cả lượt.
 - 404: chỉ gỡ đúng mục máy chủ báo thiếu (có thể là thư mục đích), không gỡ mục đang thao tác.
 - **Chống kẹt**: nếu hai bên di chuyển tạo vòng (mỗi bên chuyển một thư mục vào thư mục kia), máy chủ từ chối (400) hoặc không
-  bước nào chạy được → hoàn tác di chuyển trên máy (ưu tiên máy chủ), rồi áp bố cục của máy chủ.
+  bước nào chạy được → hoàn tác di chuyển trên máy (ưu tiên máy chủ), rồi áp bố cục của máy chủ. Các di chuyển của máy chủ
+  chặn nhau trên máy (thư mục "F1" đổi tên thành "a.txt" trong khi tệp "a.txt" chuyển vào thư mục con mới của nó) → mục đang
+  chiếm chỗ (cũng đang chờ di chuyển) được tạm đổi sang tên trống, bản ghi gốc theo tên tạm, vòng sau áp tiếp di chuyển.
 - **Crash bất kỳ lúc nào**: base cập nhật ngay sau từng thao tác; lượt sau thấy trạng thái cũ hoặc mới và hội tụ. Ví dụ tải lên xong
   mà mất phản hồi → hai bên cùng có tệp cùng hash → liên kết, không tạo bản trùng.
+
+### Chính sách của máy chủ (mục 8.2)
+
+- Tệp có đuôi bị chặn tải xuống hoặc lớn hơn giới hạn đồng bộ: bỏ khỏi cả 3 cây khi lập kế hoạch (như thư mục không chọn đồng bộ) — không
+  tải về, bản đã có trên máy không bị xóa trên máy chủ, sửa trên máy không được tải lên. Bỏ chặn → vòng sau tải về như tệp mới.
+- Tệp chỉ xem (`canDownload = false`): không có trong cây máy chủ của engine; bản đã tải trước đây bị gỡ khỏi máy (không phải xóa trên máy chủ).
+  Có quyền tải lại → tải về.
+- Liên kết `<tên> - Mở trên web.url` cho hai loại trên được tạo/gỡ cuối mỗi vòng (`MaterializeLinksAsync`); liên kết luôn bị bỏ qua khi quét.
+- Tải lên (tệp mới hoặc phiên bản mới): đuôi không được phép / quá kích thước → lỗi vĩnh viễn của riêng tệp đó (`RemotePermanentException`
+  413, không phải 403 nên không bị chuyển vào `_Không đồng bộ được`), tệp ở yên trên máy và hiện trong Vấn đề.
 
 ## 5. Tên tệp (mục 6.4)
 

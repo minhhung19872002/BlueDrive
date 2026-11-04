@@ -15,6 +15,7 @@ namespace BlueDrive.Api.Infrastructure;
 public static class SecuritySetup
 {
     public const string AuthRateLimit = "auth";
+    public const string LoginRateLimit = "login";
     public const string PublicRateLimit = "public";
     public const string RefreshRateLimit = "refresh";
 
@@ -86,6 +87,11 @@ public static class SecuritySetup
             o.AddPolicy(AuthRateLimit, ctx => disabled ? RateLimitPartition.GetNoLimiter("off")
                 : RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                     _ => new FixedWindowRateLimiterOptions { PermitLimit = config.GetValue("RateLimit:AuthPerMinute", 60), Window = TimeSpan.FromMinutes(1) }));
+            // Login: a whole office behind one NAT address logs in at the start of the day. Password guessing is stopped by the
+            // per-account lockout and the per-address failure guard (LoginIpGuard), so this only caps raw request floods.
+            o.AddPolicy(LoginRateLimit, ctx => disabled ? RateLimitPartition.GetNoLimiter("off")
+                : RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                    _ => new FixedWindowRateLimiterOptions { PermitLimit = config.GetValue("RateLimit:LoginPerMinute", 300), Window = TimeSpan.FromMinutes(1) }));
             // Token refresh happens every ~15 minutes per open tab; many users may share one office NAT address.
             o.AddPolicy(RefreshRateLimit, ctx => disabled ? RateLimitPartition.GetNoLimiter("off")
                 : RateLimitPartition.GetFixedWindowLimiter(ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",

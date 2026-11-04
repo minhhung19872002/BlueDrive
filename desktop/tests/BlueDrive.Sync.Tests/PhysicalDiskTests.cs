@@ -215,13 +215,32 @@ public sealed class LargeFileTests : IDisposable
         var a = new SyncEngine(dba, remote, fa, SystemClock.Instance, options);
         var b = new SyncEngine(dbb, remote, fb, SystemClock.Instance, options);
 
-        var data = new byte[3 * 1024 * 1024];
-        Random.Shared.NextBytes(data);
-        File.WriteAllBytes(fa.Abs("video.mp4"), data);
+        // SYNC_LARGE_FILE_MB sets the size (CI default 3 MB; the release check runs 1.5 GB). The file is written and checked by streaming.
+        var mb = int.TryParse(Environment.GetEnvironmentVariable("SYNC_LARGE_FILE_MB"), out var n) && n > 0 ? n : 3;
+        var written = await WriteRandomAsync(fa.Abs("video.mp4"), (long)mb * 1024 * 1024);
         (await a.SyncAsync(CancellationToken.None)).Errors.Should().BeEmpty();
         Directory.GetFiles(snapshots).Should().BeEmpty("snapshot files are deleted once uploaded");
         (await b.SyncAsync(CancellationToken.None)).Errors.Should().BeEmpty();
-        File.ReadAllBytes(fb.Abs("video.mp4")).Should().Equal(data);
+        new FileInfo(fb.Abs("video.mp4")).Length.Should().Be((long)mb * 1024 * 1024);
+        await using var read = File.OpenRead(fb.Abs("video.mp4"));
+        Convert.ToHexString(await System.Security.Cryptography.SHA256.HashDataAsync(read)).Should().Be(written);
+    }
+
+    private static async Task<string> WriteRandomAsync(string path, long size)
+    {
+        using var sha = System.Security.Cryptography.IncrementalHash.CreateHash(System.Security.Cryptography.HashAlgorithmName.SHA256);
+        var buffer = new byte[4 * 1024 * 1024];
+        await using (var f = File.Create(path))
+        {
+            for (var left = size; left > 0; left -= buffer.Length)
+            {
+                var chunk = (int)Math.Min(buffer.Length, left);
+                Random.Shared.NextBytes(buffer.AsSpan(0, chunk));
+                sha.AppendData(buffer, 0, chunk);
+                await f.WriteAsync(buffer.AsMemory(0, chunk));
+            }
+        }
+        return Convert.ToHexString(sha.GetHashAndReset());
     }
 }
 

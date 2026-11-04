@@ -62,9 +62,10 @@ export function FilePreview({ file, compact, onOpenFull }: { file: FileDetail; c
   const c = useColors();
   const kind = previewKind(file);
   const needsUrl = kind === 'image' || kind === 'video' || kind === 'audio';
-  const url = useInlineUrl(file.id, needsUrl && !(compact && kind === 'image'));
+  const url = useInlineUrl(file.id, needsUrl && !file.contentBlocked && !(compact && kind === 'image'));
 
-  if (file.scanStatus === 'infected') return <ErrorState message={t('scan.infected')} />;
+  if (file.contentBlocked)
+    return <ErrorState message={t(file.scanStatus === 'infected' ? 'scan.infected' : 'scan.pendingBlocked')} />;
 
   if (kind === 'image' && compact) {
     const src = absoluteUrl(file.previewUrl ?? file.thumbnailUrl);

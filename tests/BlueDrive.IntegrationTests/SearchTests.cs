@@ -1,7 +1,11 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using BlueDrive.Domain.Entities;
+using BlueDrive.Domain.Enums;
+using BlueDrive.Infrastructure.Persistence;
 using BlueDrive.IntegrationTests.Infrastructure;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BlueDrive.IntegrationTests;
 
@@ -68,5 +72,42 @@ public class SearchTests(ApiFactory factory)
         await (await c.PostAsJsonAsync("/api/v1/search/saved", new { name = "Ảnh chủ đề", criteria = new { q = marker, mediaTypes = new[] { "image" } } })).ReadJsonAsync();
         var saved = await (await c.GetAsync("/api/v1/search/saved")).ReadJsonAsync();
         saved[0].GetProperty("criteria").GetProperty("mediaTypes")[0].GetString().Should().Be("image");
+    }
+
+    [Fact]
+    public async Task Broad_terms_are_counted_up_to_the_limit_and_reported_as_more()
+    {
+        var (c, userId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(c);
+        var marker = "Cap" + Random.Shared.Next(100000, 999999);
+        const int count = 1050;
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            for (var i = 0; i < count; i++)
+                db.Files.Add(new StoredFile
+                {
+                    WorkspaceId = ws, Name = $"Tờ rơi {marker} {i:0000}.txt", Extension = "txt", MimeType = "text/plain", MediaType = MediaType.Document,
+                    SizeBytes = 10, ApprovalStatus = ApprovalStatus.Approved, ScanStatus = ScanStatus.Clean, CreatedBy = userId, CreatedAt = DateTime.UtcNow,
+                });
+            await db.SaveChangesAsync();
+        }
+
+        var first = await Search(c, new { q = marker, page = 1, pageSize = 20 });
+        first.GetProperty("total").GetInt32().Should().Be(1000, "matches are counted up to the limit");
+        first.GetProperty("totalCapped").GetBoolean().Should().BeTrue();
+        first.GetProperty("items").GetArrayLength().Should().Be(20);
+
+        var deep = await Search(c, new { q = marker, page = 51, pageSize = 20 });
+        deep.GetProperty("total").GetInt32().Should().Be(1040, "past the limit the count reaches one page beyond the current one");
+        deep.GetProperty("totalCapped").GetBoolean().Should().BeTrue();
+        var next = await Search(c, new { q = marker, page = 52, pageSize = 20 });
+        next.GetProperty("total").GetInt32().Should().Be(count, "the next page is the last one, so the count is exact");
+        next.GetProperty("totalCapped").GetBoolean().Should().BeFalse();
+
+        var last = await Search(c, new { q = marker, page = 53, pageSize = 20 });
+        last.GetProperty("items").GetArrayLength().Should().Be(10);
+        last.GetProperty("total").GetInt32().Should().Be(count, "the last, partly filled page gives the exact total");
+        last.GetProperty("totalCapped").GetBoolean().Should().BeFalse();
     }
 }

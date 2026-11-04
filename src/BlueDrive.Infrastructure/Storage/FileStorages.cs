@@ -94,15 +94,16 @@ public sealed class LocalFileStorage(IOptions<StorageOptions> options) : IFileSt
 
     public Task<long> GetSizeAsync(string key, CancellationToken ct = default) => Task.FromResult(new FileInfo(PathOf(key)).Length);
 
-    public async IAsyncEnumerable<string> ListKeysAsync(string prefix, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    public async IAsyncEnumerable<StoredObject> ListAsync(string prefix, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
-        var dir = PathOf(prefix.TrimEnd('/'));
+        var dir = prefix.Trim('/') is { Length: > 0 } p ? PathOf(p) : _root;
         if (!Directory.Exists(dir)) yield break;
         foreach (var f in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
         {
             ct.ThrowIfCancellationRequested();
             if (f.Contains(".part-")) continue;
-            yield return Path.GetRelativePath(_root, f).Replace(Path.DirectorySeparatorChar, '/');
+            var info = new FileInfo(f);
+            yield return new StoredObject(Path.GetRelativePath(_root, f).Replace(Path.DirectorySeparatorChar, '/'), info.Length, info.LastWriteTimeUtc);
             await Task.Yield();
         }
     }
@@ -175,13 +176,14 @@ public sealed class S3FileStorage : IFileStorage, IDisposable
     public async Task<long> GetSizeAsync(string key, CancellationToken ct = default)
         => (await _client.GetObjectMetadataAsync(_bucket, key, ct)).ContentLength;
 
-    public async IAsyncEnumerable<string> ListKeysAsync(string prefix, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    public async IAsyncEnumerable<StoredObject> ListAsync(string prefix, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
         string? token = null;
         do
         {
             var res = await _client.ListObjectsV2Async(new ListObjectsV2Request { BucketName = _bucket, Prefix = prefix, ContinuationToken = token }, ct);
-            foreach (var o in res.S3Objects ?? []) yield return o.Key;
+            foreach (var o in res.S3Objects ?? [])
+                yield return new StoredObject(o.Key, o.Size ?? 0, o.LastModified?.ToUniversalTime() ?? DateTime.UtcNow);
             token = res.IsTruncated == true ? res.NextContinuationToken : null;
         } while (token is not null);
     }

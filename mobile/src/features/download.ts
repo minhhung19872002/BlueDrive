@@ -1,7 +1,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import * as Sharing from 'expo-sharing';
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 
 import { absoluteUrl, errorMessage, USER_AGENT } from '@/api/client';
 import { driveApi } from '@/api/endpoints';
@@ -9,7 +9,7 @@ import { t } from '@/i18n';
 import { toast } from '@/store/toast';
 import { newTransferId, useTransfers } from '@/store/transfers';
 import { isGalleryMedia } from '@/utils/format';
-import type { MediaType } from '@/api/types';
+import type { MediaType, ScanStatus } from '@/api/types';
 
 function safeName(name: string): string {
   const cleaned = name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').trim();
@@ -72,7 +72,18 @@ async function share(file: File, mimeType: string, name: string) {
  * #84 Tải xuống về thiết bị: ảnh/video → Thư viện ảnh (Gallery); tệp khác → bảng chia sẻ hệ thống
  * (Lưu vào Tệp/Files, Google Drive, Zalo...).
  */
-export async function downloadFile(item: { id: string; name: string; mediaType?: MediaType | null; extension?: string | null; mimeType?: string | null }) {
+type DownloadItem = { id: string; name: string; mediaType?: MediaType | null; extension?: string | null; mimeType?: string | null; scanStatus?: ScanStatus };
+
+export function downloadFile(item: DownloadItem) {
+  // Files the scanner could not check still download, but only after an explicit warning.
+  if (item.scanStatus !== 'too_large' && item.scanStatus !== 'failed') return void saveDownload(item);
+  Alert.alert(t('scan.unscannedTitle'), t(item.scanStatus === 'too_large' ? 'scan.tooLargeWarning' : 'scan.failedWarning'), [
+    { text: t('common.cancel'), style: 'cancel' },
+    { text: t('scan.downloadAnyway'), onPress: () => void saveDownload(item) },
+  ]);
+}
+
+async function saveDownload(item: DownloadItem) {
   try {
     const { file, mimeType, name } = await downloadToCache(item.id);
     if (isGalleryMedia({ ...item, mimeType: item.mimeType ?? mimeType })) {

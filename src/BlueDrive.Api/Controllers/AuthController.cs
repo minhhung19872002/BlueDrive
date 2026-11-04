@@ -13,7 +13,7 @@ namespace BlueDrive.Api.Controllers;
 public class AuthController : ApiControllerBase
 {
     /// <summary>Đăng nhập bằng tên đăng nhập/mật khẩu.</summary>
-    [HttpPost("login"), AllowAnonymous, EnableRateLimiting(SecuritySetup.AuthRateLimit)]
+    [HttpPost("login"), AllowAnonymous, EnableRateLimiting(SecuritySetup.LoginRateLimit)]
     public Task<AuthResult> Login(LoginCommand cmd) => Mediator.Send(cmd);
 
     /// <summary>Làm mới access token (refresh token xoay vòng, dùng một lần).</summary>

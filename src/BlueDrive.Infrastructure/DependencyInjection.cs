@@ -70,6 +70,7 @@ public static class DependencyInjection
         services.AddSingleton<IOfficeEditorProvider, Office.OnlyOfficeProvider>();
         services.AddSingleton<Application.Features.Office.IFileStorageTemp, Storage.FileStorageTemp>();
         services.AddScoped<Media.PlainCopy>();
+        services.AddSingleton<IMalwareScanPolicy, Media.ClamAvScanPolicy>();
         services.AddScoped<Media.IFileProcessingStep, Media.MalwareScanStep>();
         services.AddScoped<Media.IFileProcessingStep, Media.ThumbnailStep>();
 
@@ -84,6 +85,8 @@ public static class DependencyInjection
         services.AddScoped<Application.Features.Operations.IBackupScheduler, Operations.HangfireBackupScheduler>();
         services.AddScoped<Operations.BackupJobRunner>();
         services.AddScoped<Operations.RestoreRunner>();
+        services.AddSingleton<Operations.IPgTools, Operations.ProcessPgTools>();
+        services.AddScoped<Operations.S3Wiper>();
         services.AddScoped<Jobs.IRecurringJobRegistration, Operations.BackupRecurringRegistration>();
         services.AddScoped<Application.Features.Operations.IDataExporter, Operations.DataExporter>();
         services.AddScoped<Application.Features.Operations.ISystemStatusService, Operations.SystemStatusService>();

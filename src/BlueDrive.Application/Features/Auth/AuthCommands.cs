@@ -56,7 +56,7 @@ public sealed class LoginValidator : AbstractValidator<LoginCommand>
 
 public sealed class LoginHandler(
     IAppDbContext db, IPasswordService passwords, ITokenService tokens, ISettingsService settings, IAuditLogger audit,
-    IAlertService alerts, IPermissionService perms, ISensitiveDataProtector pii, ICurrentUser caller, TimeProvider clock)
+    IAlertService alerts, IPermissionService perms, ISensitiveDataProtector pii, ICurrentUser caller, LoginIpGuard ipGuard, TimeProvider clock)
     : IRequestHandler<LoginCommand, AuthResult>
 {
     private const string InvalidCredentials = "Tên đăng nhập hoặc mật khẩu không đúng.";
@@ -65,12 +65,18 @@ public sealed class LoginHandler(
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var username = cmd.Username.Trim().ToLowerInvariant();
+        if (ipGuard.BlockedFor(caller.Ip) is { } wait)
+        {
+            await audit.LogAsync(new AuditEntry(AuditAction.LoginFailed, Username: username, Detail: new { reason = "Địa chỉ IP đang bị chặn tạm" }), ct);
+            throw new AppException($"Có quá nhiều lần đăng nhập sai từ địa chỉ mạng của bạn. Vui lòng thử lại sau {Math.Ceiling(wait.TotalMinutes)} phút.", 429);
+        }
         var user = await db.Users.FirstOrDefaultAsync(u => u.Username == username, ct);
         if (user is null)
         {
             // Burn comparable CPU time so response timing does not reveal whether the account exists.
             passwords.Verify("AQAAAAIAAYagAAAAEFakeHashFakeHashFakeHashFakeHashFakeHashFakeHashFakeHashFakeHash==", cmd.Password);
             await audit.LogAsync(new AuditEntry(AuditAction.LoginFailed, Username: username, Detail: new { reason = "Tài khoản không tồn tại" }), ct);
+            await RecordIpFailure(ct);
             throw new AppException(InvalidCredentials, 401);
         }
         if (!user.IsActive) await Fail(user, "Tài khoản đã bị vô hiệu hóa.", "inactive", ct);
@@ -96,6 +102,7 @@ public sealed class LoginHandler(
             await db.SaveChangesAsync(ct);
             await audit.LogAsync(new AuditEntry(AuditAction.LoginFailed,
                 Detail: new { reason = "Sai mật khẩu", attempts, locked }, UserId: user.Id, Username: user.Username), ct);
+            await RecordIpFailure(ct);
             if (locked)
             {
                 await alerts.RaiseAsync(AlertType.BruteForce, AlertSeverity.Critical,
@@ -134,7 +141,19 @@ public sealed class LoginHandler(
     private async Task Fail(User user, string message, string reason, CancellationToken ct)
     {
         await audit.LogAsync(new AuditEntry(AuditAction.LoginFailed, Detail: new { reason }, UserId: user.Id, Username: user.Username), ct);
+        await RecordIpFailure(ct);
         throw new AppException(message, 401);
+    }
+
+    /// <summary>Counts the failure against the caller's address; the failure that crosses the limit blocks it and alerts the admins.</summary>
+    private async Task RecordIpFailure(CancellationToken ct)
+    {
+        var max = await settings.GetAsync(SettingKeys.LoginIpMaxFailures, 30, ct);
+        var minutes = await settings.GetAsync(SettingKeys.LoginIpBlockMinutes, 15, ct);
+        if (!ipGuard.RecordFailure(caller.Ip, max, TimeSpan.FromMinutes(minutes))) return;
+        await alerts.RaiseAsync(AlertType.BruteForce, AlertSeverity.Critical,
+            $"Địa chỉ IP {caller.Ip} đăng nhập sai {max} lần trong {minutes} phút (có thể đang dò mật khẩu nhiều tài khoản). Đã chặn đăng nhập từ địa chỉ này {minutes} phút.",
+            ct: ct);
     }
 }
 
