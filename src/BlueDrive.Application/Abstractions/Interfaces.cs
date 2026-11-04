@@ -52,6 +52,7 @@ public interface IAppDbContext
     DbSet<Guest> Guests { get; }
     DbSet<Shortcut> Shortcuts { get; }
     DbSet<LibrarySettings> LibrarySettings { get; }
+    DbSet<SensitivityLabel> SensitivityLabels { get; }
     DbSet<LibraryColumn> LibraryColumns { get; }
     DbSet<FileColumnValue> FileColumnValues { get; }
     DbSet<FolderColumnDefault> FolderColumnDefaults { get; }

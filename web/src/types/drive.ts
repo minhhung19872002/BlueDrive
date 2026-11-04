@@ -131,6 +131,10 @@ export interface CatalogTag {
 }
 
 export interface FileDetail {
+  /** Spec 7.1/11.9: the effective sensitivity label and whether the viewer gets a watermark. */
+  labelName?: string | null
+  labelColor?: string | null
+  watermark?: boolean
   /** Spec 1.4: check-out, drafts, the library's rules. */
   checkedOutBy?: string | null
   checkedOutByName?: string | null

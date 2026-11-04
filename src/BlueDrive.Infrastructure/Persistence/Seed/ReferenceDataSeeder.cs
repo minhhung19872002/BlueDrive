@@ -21,6 +21,7 @@ public sealed class ReferenceDataSeeder(
     {
         await SeedPermissionsAsync(ct);
         await SeedRolesAsync(ct);
+        await SeedLabelsAsync(ct);
         await SeedCatalogsAsync(ct);
         var root = await SeedRootOrganizationAsync(ct);
         await SeedAdminAsync(root, ct);
@@ -46,6 +47,22 @@ public sealed class ReferenceDataSeeder(
             await db.RolePermissions.Where(rp => obsolete.Contains(rp.PermissionCode)).ExecuteDeleteAsync(ct);
             db.Permissions.RemoveRange(existing.Where(kv => obsolete.Contains(kv.Key)).Select(kv => kv.Value));
         }
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Default sensitivity labels (spec 7.1). BlueDrive is not for state secrets: no "Mật" / "Tối mật" / "Tuyệt mật".</summary>
+    private async Task SeedLabelsAsync(CancellationToken ct)
+    {
+        if (await db.SensitivityLabels.AnyAsync(ct)) return;
+        const string note = " Không dùng cho thông tin bí mật nhà nước (hệ thống không lưu trữ thông tin mật).";
+        db.SensitivityLabels.AddRange(
+            new SensitivityLabel { Name = "Công khai", Color = "#52c41a", Priority = 0, Description = "Được phép công bố rộng rãi." + note },
+            new SensitivityLabel { Name = "Nội bộ", Color = "#1677ff", Priority = 10, BlockAnyoneLinks = true, Description = "Dùng trong đơn vị; không tạo liên kết cho bất kỳ ai." + note },
+            new SensitivityLabel
+            {
+                Name = "Hạn chế", Color = "#fa541c", Priority = 20, BlockExternal = true, BlockAnyoneLinks = true, ViewOnlyOutsideSpace = true, Watermark = true, BlockSync = true,
+                Description = "Chỉ những người cần biết; không chia sẻ ra ngoài, người ngoài Space chỉ xem, có hình mờ, không đồng bộ xuống máy." + note,
+            });
         await db.SaveChangesAsync(ct);
     }
 

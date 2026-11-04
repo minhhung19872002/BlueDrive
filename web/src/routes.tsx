@@ -58,6 +58,7 @@ const layoutRoutes: AppRoute[] = [
   { path: 'admin/dashboard', perm: 'dashboard.view', Component: lazy(() => import('@/pages/admin/AdminDashboardPage')) },
   { path: 'admin/organizations', perm: 'org.view', Component: lazy(() => import('@/pages/admin/organizations/OrganizationsPage')) },
   { path: 'admin/access-levels', perm: 'role.view', Component: lazy(() => import('@/pages/admin/AccessLevelsPage')) },
+  { path: 'admin/labels', perm: 'settings.view', Component: lazy(() => import('@/pages/admin/LabelsPage')) },
   { path: 'admin/space-trash', perm: 'workspace.admin', Component: lazy(() => import('@/pages/admin/SpaceTrashPage')) },
   { path: 'admin/guests', perm: 'user.view', Component: lazy(() => import('@/pages/admin/GuestsPage')) },
   { path: 'admin/users', perm: 'user.view', Component: lazy(() => import('@/pages/admin/users/UsersPage')) },

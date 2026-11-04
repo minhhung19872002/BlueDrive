@@ -67,7 +67,8 @@
     "accessLevels": "Cấp quyền truy cập",
     "sharedByMe": "Tôi đã chia sẻ",
     "storage": "Bộ nhớ",
-    "adminDevices": "Thiết bị đồng bộ"
+    "adminDevices": "Thiết bị đồng bộ",
+    "labels": "Nhãn phân loại"
   },
   "header": {
     "searchPlaceholder": "Tìm kiếm tài liệu, thư mục...",
@@ -1549,5 +1550,33 @@
     "opening": "Đang mở tài liệu trong ONLYOFFICE…",
     "openFailed": "Không mở được tài liệu",
     "noTicket": "Thiếu mã mở tài liệu. Hãy mở lại từ BlueDrive Desktop (chuột phải → Cùng soạn thảo bằng ONLYOFFICE)."
+  },
+  "labels": {
+    "label": "Nhãn",
+    "none": "Không có nhãn",
+    "change": "Đổi nhãn",
+    "changeTitle": "Đổi nhãn phân loại",
+    "changed": "Đã đổi nhãn",
+    "inherit": "Không đặt riêng (kế thừa từ thư mục / Space)",
+    "reason": "Lý do hạ nhãn (bắt buộc)",
+    "spaceDefault": "Nhãn mặc định",
+    "description": "Nhãn quy định cách tệp được chia sẻ, xem và đồng bộ. Tệp kế thừa nhãn của thư mục gần nhất hoặc nhãn mặc định của Space.",
+    "secretNotice": "Hệ thống không dùng để lưu trữ thông tin thuộc danh mục bí mật nhà nước (Mật, Tối mật, Tuyệt mật). Không được đặt các tên nhãn này.",
+    "new": "Thêm nhãn",
+    "edit": "Sửa nhãn",
+    "saved": "Đã lưu nhãn",
+    "priority": "Mức độ",
+    "priorityHint": "Số lớn hơn là nhạy cảm hơn; hạ xuống mức thấp hơn cần lý do.",
+    "descriptionLabel": "Mô tả",
+    "color": "Màu",
+    "rules": "Quy tắc áp dụng",
+    "active": "Đang dùng",
+    "rule": {
+      "blockExternal": "Chặn chia sẻ ra ngoài",
+      "blockAnyoneLinks": "Chặn link \"Bất kỳ ai\"",
+      "viewOnlyOutsideSpace": "Người ngoài Space chỉ xem",
+      "watermark": "Hiện watermark khi xem",
+      "blockSync": "Không đồng bộ xuống máy"
+    }
   }
 }

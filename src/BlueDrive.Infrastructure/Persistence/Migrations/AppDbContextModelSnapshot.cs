@@ -932,6 +932,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_trash_root");
 
+                    b.Property<Guid?>("LabelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("label_id");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -2461,6 +2465,69 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.ToTable("security_incidents", (string)null);
                 });
 
+            modelBuilder.Entity("BlueDrive.Domain.Entities.SensitivityLabel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("BlockAnyoneLinks")
+                        .HasColumnType("boolean")
+                        .HasColumnName("block_anyone_links");
+
+                    b.Property<bool>("BlockExternal")
+                        .HasColumnType("boolean")
+                        .HasColumnName("block_external");
+
+                    b.Property<bool>("BlockSync")
+                        .HasColumnType("boolean")
+                        .HasColumnName("block_sync");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("color");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer")
+                        .HasColumnName("priority");
+
+                    b.Property<bool>("ViewOnlyOutsideSpace")
+                        .HasColumnType("boolean")
+                        .HasColumnName("view_only_outside_space");
+
+                    b.Property<bool>("Watermark")
+                        .HasColumnType("boolean")
+                        .HasColumnName("watermark");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sensitivity_labels");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_sensitivity_labels_name");
+
+                    b.ToTable("sensitivity_labels", (string)null);
+                });
+
             modelBuilder.Entity("BlueDrive.Domain.Entities.Share", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2898,6 +2965,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsTrashRoot")
                         .HasColumnType("boolean")
                         .HasColumnName("is_trash_root");
+
+                    b.Property<Guid?>("LabelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("label_id");
 
                     b.Property<string>("MediaType")
                         .IsRequired()
@@ -3679,6 +3750,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
+
+                    b.Property<Guid?>("DefaultLabelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("default_label_id");
 
                     b.Property<string>("Description")
                         .HasColumnType("text")

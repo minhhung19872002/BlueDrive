@@ -29,11 +29,14 @@ public sealed class WorkspaceAccessMap
     /// <summary>"Chỉ mục này" grants: they count only for the scope's own node.</summary>
     private readonly Dictionary<Guid, (Domain.Permissions.AccessRight Direct, Domain.Permissions.AccessRight Membership)> _selfOnly = [];
     private Access.Restrictions.User _user = null!;
+    /// <summary>Effective sensitivity label of each node (own, nearest folder above, Space default) — spec 7.1.</summary>
+    private readonly Dictionary<Guid, SensitivityLabel?> _labels = [];
+    private bool _inSpace;
     private AccessLevel _rootLevel;
 
     public static async Task<WorkspaceAccessMap?> LoadAsync(IAppDbContext db, PrincipalSet p, IReadOnlySet<string> perms, Guid workspaceId, DateTime now, CancellationToken ct)
     {
-        var ws = await db.Workspaces.AsNoTracking().Where(w => w.Id == workspaceId).Select(w => new { w.Id, w.OwnerId, w.IsLocked, w.Type, w.Name }).FirstOrDefaultAsync(ct);
+        var ws = await db.Workspaces.AsNoTracking().Where(w => w.Id == workspaceId).Select(w => new { w.Id, w.OwnerId, w.IsLocked, w.Type, w.Name, w.DefaultLabelId }).FirstOrDefaultAsync(ct);
         if (ws is null) return null;
         var principals = await db.PrincipalMemberships.Where(m => m.UserId == p.UserId).Select(m => m.PrincipalId).ToListAsync(ct);
         var user = Access.Restrictions.User.From(p.UserId, perms, principals);
@@ -51,7 +54,7 @@ public sealed class WorkspaceAccessMap
 
         var map = new WorkspaceAccessMap
         {
-            WorkspaceId = ws.Id, WorkspaceType = ws.Type, WorkspaceName = ws.Name, Locked = ws.IsLocked, _user = user,
+            WorkspaceId = ws.Id, WorkspaceType = ws.Type, WorkspaceName = ws.Name, Locked = ws.IsLocked, _user = user, _inSpace = ws.Type != WorkspaceType.Personal,
             SharerName = string.IsNullOrWhiteSpace(sharer) ? ws.Name : sharer.Trim(),
         };
         foreach (var g in live.Where(e => !e.AppliesToChildren).GroupBy(e => e.ScopeId))
@@ -60,6 +63,23 @@ public sealed class WorkspaceAccessMap
         foreach (var g in live.Where(e => e.AppliesToChildren).GroupBy(e => e.ScopeId))
             map._scopes[g.Key] = (g.Where(e => e.Source != AclSource.SpaceDefault).Aggregate(Domain.Permissions.AccessRight.None, (m, e) => m | e.Permissions),
                 g.Where(e => e.Source == AclSource.SpaceDefault).Aggregate(Domain.Permissions.AccessRight.None, (m, e) => m | e.Permissions));
+
+        // Labels: own (file / folder), else the nearest folder's above, else the Space's default.
+        var labels = await db.SensitivityLabels.AsNoTracking().Where(l => l.IsActive).ToDictionaryAsync(l => l.Id, ct);
+        if (labels.Count > 0)
+        {
+            var own = (await db.Folders.AsNoTracking().Where(f => f.WorkspaceId == workspaceId && f.LabelId != null).Select(f => new { f.Id, f.LabelId }).ToListAsync(ct))
+                .Concat(await db.Files.AsNoTracking().Where(f => f.WorkspaceId == workspaceId && f.LabelId != null).Select(f => new { f.Id, f.LabelId }).ToListAsync(ct))
+                .ToDictionary(x => x.Id, x => labels.GetValueOrDefault(x.LabelId!.Value));
+            var parents = nodes.ToDictionary(n => n.Id, n => n.ParentId);
+            SensitivityLabel? Effective(Guid id)
+            {
+                if (map._labels.TryGetValue(id, out var known)) return known;
+                var l = own.GetValueOrDefault(id) ?? (parents.GetValueOrDefault(id) is { } parent ? Effective(parent) : ws.DefaultLabelId is { } d ? labels.GetValueOrDefault(d) : null);
+                return map._labels[id] = l;
+            }
+            foreach (var n in nodes) Effective(n.Id);
+        }
 
         // A Library sits between the workspace and its top folders: for the features, a top folder's parent is the workspace (null).
         var library = Access.PermissionProjection.LibraryOf(workspaceId);
@@ -91,15 +111,16 @@ public sealed class WorkspaceAccessMap
     {
         var (direct, membership) = _scopes.GetValueOrDefault(scope);
         if (node == scope && _selfOnly.TryGetValue(scope, out var own)) { direct |= own.Direct; membership |= own.Membership; }
-        return Access.Restrictions.Apply(_user, owner, direct, membership, file, locked: false);
+        return Access.Labels.Apply(_labels.GetValueOrDefault(node), _inSpace, membership, Access.Restrictions.Apply(_user, owner, direct, membership, file, locked: false));
     }
 
     public AccessLevel FolderLevel(Guid folderId) => _folders.TryGetValue(folderId, out var f) ? f.Level : AccessLevel.None;
 
     public bool FolderExists(Guid folderId) => _folders.ContainsKey(folderId);
 
+    /// <summary>A file whose label forbids syncing to computers (spec 7.1) is not part of the synced tree.</summary>
     public AccessLevel FileLevel(Guid fileId, Guid? folderId, ApprovalStatus approval, Guid? createdBy, Guid? checkedOutBy = null, bool published = true) =>
-        _fileNodes.TryGetValue(fileId, out var n)
+        _fileNodes.TryGetValue(fileId, out var n) && _labels.GetValueOrDefault(fileId) is not { BlockSync: true }
             ? Access.ReferencePermissionEvaluator.ToLevel(Rights(fileId, n.Scope, n.Owner,
                 new Access.Restrictions.FileFacts(createdBy, approval == ApprovalStatus.Approved, checkedOutBy, published)))
             : AccessLevel.None;

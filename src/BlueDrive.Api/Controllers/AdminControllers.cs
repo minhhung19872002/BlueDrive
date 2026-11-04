@@ -342,6 +342,35 @@ public class ItemAccessController : ApiControllerBase
     }
 }
 
+/// <summary>Nhãn phân loại (không dùng cho thông tin bí mật nhà nước).</summary>
+[Route("api/v1")]
+public class LabelsController : ApiControllerBase
+{
+    [HttpGet("labels")]
+    public Task<IReadOnlyList<Application.Features.Access.LabelDto>> List() => Mediator.Send(new Application.Features.Access.ListLabelsQuery());
+
+    [HttpPost("admin/labels"), HasPermission(Perm.SettingsEdit)]
+    public async Task<IActionResult> Create(Application.Features.Access.SaveLabelCommand cmd) => Ok(new { id = await Mediator.Send(cmd with { Id = null }) });
+
+    [HttpPut("admin/labels/{id:guid}"), HasPermission(Perm.SettingsEdit)]
+    public async Task<IActionResult> Save(Guid id, Application.Features.Access.SaveLabelCommand cmd)
+    {
+        await Mediator.Send(cmd with { Id = id });
+        return NoContent();
+    }
+
+    [HttpGet("items/{id:guid}/label")]
+    public Task<Application.Features.Access.ItemLabelDto> ItemLabel(Guid id) => Mediator.Send(new Application.Features.Access.GetItemLabelQuery(id));
+
+    /// <summary>Gán / đổi / gỡ nhãn của tệp, thư mục hoặc Space (mặc định); hạ nhãn cần lý do.</summary>
+    [HttpPut("items/{id:guid}/label")]
+    public async Task<IActionResult> SetLabel(Guid id, Application.Features.Access.SetLabelCommand cmd)
+    {
+        await Mediator.Send(cmd with { ItemId = id });
+        return NoContent();
+    }
+}
+
 /// <summary>Quản trị cấp quyền (ma trận quyền × cấp quyền).</summary>
 [Route("api/v1/admin/permission-levels")]
 public class PermissionLevelAdminController : ApiControllerBase

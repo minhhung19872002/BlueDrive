@@ -3,6 +3,7 @@ import { Alert, Button, Descriptions, Drawer, Empty, Result, Skeleton, Space, Ta
 import { EditOutlined, HistoryOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { versionLabel } from '@/api/libraries'
+import ItemLabel from '@/features/labels/ItemLabel'
 import FileColumnsEditor from '@/features/libraries/FileColumnsEditor'
 import FileLibraryBar from '@/features/libraries/FileLibraryBar'
 import { Link } from 'react-router-dom'
@@ -128,6 +129,9 @@ function FileInfo({ id, onManageAccess }: { id: string; onManageAccess?: InfoPan
             <Descriptions.Item label={t('info.location')}>
               <LocationLinks workspaceId={f.workspaceId} crumbs={f.location} />
             </Descriptions.Item>
+            <Descriptions.Item label={t('labels.label')}>
+              <ItemLabel itemId={f.id} />
+            </Descriptions.Item>
             <Descriptions.Item label={t('info.versions')}>
               {t('info.versionsValue', { count: f.versions.length, current: current ? versionLabel(current) : '1' })}{' '}
               <Button type="link" size="small" icon={<HistoryOutlined />} onClick={() => setVersionsOpen(true)} style={{ padding: 0, height: 'auto' }}>
@@ -201,6 +205,9 @@ function FolderItemInfo({ item, onManageAccess }: { item: DriveItem; onManageAcc
         <Descriptions.Item label={t('info.createdBy')}>{item.createdByName ?? '—'}</Descriptions.Item>
         <Descriptions.Item label={t('common.createdAt')}>{formatDateTime(item.createdAt)}</Descriptions.Item>
         {item.updatedAt && <Descriptions.Item label={t('info.updatedAt')}>{formatDateTime(item.updatedAt)}</Descriptions.Item>}
+        <Descriptions.Item label={t('labels.label')}>
+          <ItemLabel itemId={item.id} />
+        </Descriptions.Item>
       </Descriptions>
       <AccessSummary
         type="folder"
@@ -225,6 +232,9 @@ function CurrentFolderInfo({ folder, onManageAccess }: { folder: FolderInfo; onM
       <Descriptions column={1} size="small" colon={false} styles={{ label: { width: 110 } }}>
         <Descriptions.Item label={t('info.location')}>
           <LocationLinks workspaceId={folder.workspaceId} crumbs={folder.breadcrumb} />
+        </Descriptions.Item>
+        <Descriptions.Item label={folder.id ? t('labels.label') : t('labels.spaceDefault')}>
+          <ItemLabel itemId={id} />
         </Descriptions.Item>
         {folder.id && (
           <Descriptions.Item label={t('access.requiresApproval')}>

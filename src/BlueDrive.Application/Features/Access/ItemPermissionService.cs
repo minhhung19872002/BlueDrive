@@ -33,7 +33,7 @@ public interface IItemPermissionService
     Task<(AccessRight Rights, bool Locked)> GetWithLockAsync(Guid userId, Guid itemId, CancellationToken ct = default);
 }
 
-public sealed class ItemPermissionService(IAppDbContext db, IPermissionService rbac, IMemoryCache cache, TimeProvider clock) : IItemPermissionService
+public sealed class ItemPermissionService(IAppDbContext db, IPermissionService rbac, IMemoryCache cache, TimeProvider clock, Labels labels) : IItemPermissionService
 {
     private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(5);
     private readonly Dictionary<(Guid, Guid), (AccessRight, bool)> _request = [];
@@ -57,7 +57,7 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
     {
         if (_request.TryGetValue((userId, itemId), out var known)) return known;
         var node = await db.Securables.AsNoTracking().Where(s => s.Id == itemId && !s.IsDeleted)
-            .Select(s => new { s.Id, s.Kind, s.AclScopeId, s.OwnerUserId, Root = s.SpaceId ?? s.PersonalDriveId }).FirstOrDefaultAsync(ct);
+            .Select(s => new { s.Id, s.Kind, s.AclScopeId, s.OwnerUserId, Root = s.SpaceId ?? s.PersonalDriveId, Space = s.SpaceId != null }).FirstOrDefaultAsync(ct);
         var result = (AccessRight.None, false);
         if (node is not null && await StillThereAsync(node.Kind, node.Id, ct))
         {
@@ -66,8 +66,9 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
             {
                 var (direct, membership) = await ScopeRightsAsync(user, node.AclScopeId, node.Id == node.AclScopeId, ct);
                 var state = await SpaceAsync(node.Root, ct);
-                result = (state.Apply(Restrictions.Apply(user, node.OwnerUserId == userId, direct, membership, await FileFactsAsync(node.Kind, node.Id, ct), locked: false)),
-                    state.Locked);
+                var rights = state.Apply(Restrictions.Apply(user, node.OwnerUserId == userId, direct, membership, await FileFactsAsync(node.Kind, node.Id, ct), locked: false));
+                var label = node.Kind is SecurableKind.File or SecurableKind.Folder ? (await labels.ForAsync(node.Id, ct))?.Label : null;
+                result = (Labels.Apply(label, node.Space, membership, rights), state.Locked);
             }
         }
         _request[(userId, itemId)] = result;

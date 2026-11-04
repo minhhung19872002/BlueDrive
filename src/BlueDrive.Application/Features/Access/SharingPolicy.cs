@@ -18,7 +18,7 @@ namespace BlueDrive.Application.Features.Access;
 public sealed record EffectiveSharingPolicy(ExternalSharing External, string ExternalSource, int AnyoneLinkMaxDays, bool MembersShareOutside,
     bool AllowItemSharing, AccessRequestDeciders Deciders, bool InSpace, ExternalSharing? ItemExternal);
 
-public sealed class SharingPolicy(IAppDbContext db, ISettingsService settings, IItemPermissionService engine, TimeProvider clock)
+public sealed class SharingPolicy(IAppDbContext db, ISettingsService settings, IItemPermissionService engine, TimeProvider clock, Labels labels)
 {
     public static string Label(ExternalSharing e) => e switch
     {
@@ -62,6 +62,16 @@ public sealed class SharingPolicy(IAppDbContext db, ISettingsService settings, I
                 external = t.ExternalSharing.Value;
                 source = t.Id == node.Id ? "Mục này" : $"Thư mục \"{t.Name}\"";
             }
+        // The sensitivity label (spec 5.4 "Nhãn phân loại" tier).
+        if (node.Kind is SecurableKind.File or SecurableKind.Folder && await labels.ForAsync(node.Id, ct) is { } lab)
+        {
+            var cap = lab.Label.BlockExternal ? ExternalSharing.Off : lab.Label.BlockAnyoneLinks ? ExternalSharing.NewAndExistingGuests : ExternalSharing.Anyone;
+            if (cap < external)
+            {
+                external = cap;
+                source = $"Nhãn \"{lab.Label.Name}\"";
+            }
+        }
         var own = node.Kind == SecurableKind.File ? file?.ExternalSharing : folders.FirstOrDefault(f => f.Id == node.Id)?.ExternalSharing;
         var inSpace = node.SpaceId is not null;
         return new EffectiveSharingPolicy(external, source, maxDays, !inSpace || (ws?.MembersShareOutside ?? true), !inSpace || (ws?.AllowItemSharing ?? true),

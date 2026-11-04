@@ -212,7 +212,7 @@ public class PermissionEngineProperties
             _db.ChangeTracker.Clear();
             var rbac = Substitute.For<IPermissionService>();
             rbac.GetPermissionsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(c => _codes[c.Arg<Guid>()]);
-            var engine = new ItemPermissionService(_db, rbac, _cache, _clock); // a new request, the same memory cache
+            var engine = new ItemPermissionService(_db, rbac, _cache, _clock, new Labels(_db)); // a new request, the same memory cache
             var reference = new ReferencePermissionEvaluator(_db, rbac, _clock);
             var nodes = await _db.Securables.AsNoTracking().Select(s => new { s.Id, s.Name }).ToListAsync();
             foreach (var u in _users)

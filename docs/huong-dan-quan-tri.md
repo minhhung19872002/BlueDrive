@@ -23,6 +23,7 @@ Dành cho cán bộ quản trị hệ thống (vai trò **Quản trị hệ th�
 - 4 vai trò hệ thống (không xóa được): **Quản trị hệ thống**, **Biên tập/Tải lên**, **Phê duyệt**, **Chỉ xem**.
 - *Vai trò & phân quyền*: tạo vai trò mới (có thể sao chép quyền từ vai trò khác). Ma trận: dòng là chức năng theo phân hệ, cột là hành động (Xem, Tải lên/Thêm mới, Chỉnh sửa, Xóa, Chia sẻ, Phê duyệt, Quản trị); chọn cả dòng/cột. Mỗi lần lưu được ghi nhật ký *Đổi quyền*.
 - *Bảng đối chiếu quyền*: toàn bộ chức năng × vai trò để rà soát, lọc theo phân hệ/từ khóa, xuất Excel/PDF.
+- *Nhãn phân loại* (quyền *Cấu hình hệ thống*): thêm / sửa nhãn, màu, mức độ (số lớn hơn là nhạy cảm hơn) và quy tắc của nhãn. Thay đổi quy tắc áp dụng ngay cho mọi tệp mang nhãn. Không đặt các tên "Mật", "Tối mật", "Tuyệt mật" — hệ thống không phục vụ lưu trữ bí mật nhà nước.
 
 ## 4. Danh mục dùng chung (#10)
 Loại danh mục (loại sản phẩm truyền thông, chủ đề, chiến dịch, đối tượng, nguồn, năm...) và các mục (phân cấp, thứ tự, bật/tắt). Danh mục dùng làm thuộc tính gắn cho tư liệu và bộ lọc tìm kiếm. Nhập/xuất Excel (cột: Mã, Tên, Mã mục cha, Thứ tự, Trạng thái).

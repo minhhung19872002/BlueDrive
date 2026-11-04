@@ -191,12 +191,13 @@ public sealed record FileDetailDto(
     bool HasThumbnail, bool HasPreview, string? ChecksumSha256, IReadOnlyList<CatalogTagDto> Catalogs, IReadOnlyList<FileVersionDto> Versions,
     bool IsStarred, AccessFlags Access, bool IsDeleted, string? ThumbnailUrl = null, string? PreviewUrl = null, bool ContentBlocked = false,
     Guid? CheckedOutBy = null, string? CheckedOutByName = null, DateTime? CheckedOutAt = null, bool HasDraft = false, VersioningMode Versioning = VersioningMode.Major,
-    bool RequireCheckout = false, string? LibraryName = null);
+    bool RequireCheckout = false, string? LibraryName = null,
+    string? LabelName = null, string? LabelColor = null, bool Watermark = false);
 
 public sealed record GetFileDetailQuery(Guid Id, bool RecordView = true) : IRequest<FileDetailDto>;
 
 public sealed class GetFileDetailHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets, TimeProvider clock,
-    Libraries.Libraries libraries, Access.IItemPermissionService engine)
+    Libraries.Libraries libraries, Access.IItemPermissionService engine, Access.Labels labels)
     : IRequestHandler<GetFileDetailQuery, FileDetailDto>
 {
     public async Task<FileDetailDto> Handle(GetFileDetailQuery q, CancellationToken ct)
@@ -214,6 +215,7 @@ public sealed class GetFileDetailHandler(IAppDbContext db, ICurrentUser me, IRes
             .Select(v => new FileVersionDto(v.Id, v.VersionNo, v.SizeBytes, v.ChangeNote, v.CreatedBy,
                 db.Users.Where(u => u.Id == v.CreatedBy).Select(u => u.FullName).FirstOrDefault(), v.CreatedAt, v.Id == f.CurrentVersionId, v.Major, v.Minor, v.IsPublished)).ToListAsync(ct);
         var library = await libraries.ForAsync(f.WorkspaceId, f.FolderId, ct);
+        var label = (await labels.ForAsync(f.Id, ct))?.Label;
         var catalogs = await db.FileCatalogItems.AsNoTracking().Where(c => c.FileId == f.Id)
             .Select(c => new CatalogTagDto(c.CatalogItemId, c.CatalogItem!.CatalogId, c.CatalogItem.Catalog!.Name, c.CatalogItem.Name)).ToListAsync(ct);
         var starred = await db.UserFavorites.AnyAsync(s => s.UserId == uid && s.ItemType == FavoriteItemType.File && s.ItemId == f.Id, ct);
@@ -227,7 +229,9 @@ public sealed class GetFileDetailHandler(IAppDbContext db, ICurrentUser me, IRes
             // Quarantined, or still waiting for its malware scan and uploaded by someone else: the UI shows why instead of the content.
             await ScanGate.BlockReasonAsync(db, f, null, uid, ct) is not null,
             f.CheckedOutBy, f.CheckedOutBy is { } co ? users.GetValueOrDefault(co) : null, f.CheckedOutAt, drafts && f.PublishedVersionId != f.CurrentVersionId,
-            library.Versioning, library.RequireCheckout, library.Name);
+            library.Versioning, library.RequireCheckout, library.Name,
+            // Spec 11.9: a watermark for "Chỉ xem" and for labels requiring it.
+            label?.Name, label?.Color, label?.Watermark == true || !access.CanDownload);
     }
 }
 

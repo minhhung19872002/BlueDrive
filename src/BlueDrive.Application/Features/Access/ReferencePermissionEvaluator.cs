@@ -56,7 +56,9 @@ public sealed class ReferencePermissionEvaluator(IAppDbContext db, IPermissionSe
         Restrictions.FileFacts? file = node.Kind != SecurableKind.File ? null
             : await db.Files.AsNoTracking().Where(f => f.Id == node.Id).Select(f => new Restrictions.FileFacts(f.CreatedBy, f.ApprovalStatus == ApprovalStatus.Approved, f.CheckedOutBy, f.PublishedVersionId != null)).FirstOrDefaultAsync(ct);
         var state = await SpaceState.LoadAsync(db, node.SpaceId ?? node.PersonalDriveId, ct);
-        return state.Apply(Restrictions.Apply(who, node.OwnerUserId == user.UserId, direct, membership, file, state.Locked));
+        var rights = state.Apply(Restrictions.Apply(who, node.OwnerUserId == user.UserId, direct, membership, file, state.Locked));
+        var label = node.Kind is SecurableKind.File or SecurableKind.Folder ? (await new Labels(db).ForAsync(node.Id, ct))?.Label : null;
+        return Labels.Apply(label, node.SpaceId is not null, membership, rights);
     }
 
     /// <summary>The current model's scale (None → Manage), for comparing the two models.</summary>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Watermark from './Watermark'
 import { App, Button, Drawer, Grid, Result, Space, Spin, Tabs, Tooltip, Typography, type TabsProps } from 'antd'
 import {
   CloseOutlined,
@@ -222,7 +223,14 @@ export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate
         </Space>
       </div>
       <div className="bd-viewer-body">
-        <div className="bd-viewer-stage">{stage}</div>
+        <div
+            className="bd-viewer-stage"
+            style={f?.watermark ? { position: 'relative' } : undefined}
+            onContextMenu={f?.watermark ? (e) => e.preventDefault() : undefined}
+          >
+            {stage}
+            {f?.watermark && <Watermark />}
+          </div>
         {!isMobile && sideOpen && <aside className="bd-viewer-side">{side}</aside>}
       </div>
       {isMobile && (

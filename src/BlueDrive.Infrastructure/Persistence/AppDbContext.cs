@@ -38,6 +38,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Guest> Guests => Set<Guest>();
     public DbSet<Shortcut> Shortcuts => Set<Shortcut>();
     public DbSet<LibrarySettings> LibrarySettings => Set<LibrarySettings>();
+    public DbSet<SensitivityLabel> SensitivityLabels => Set<SensitivityLabel>();
     public DbSet<LibraryColumn> LibraryColumns => Set<LibraryColumn>();
     public DbSet<FileColumnValue> FileColumnValues => Set<FileColumnValue>();
     public DbSet<FolderColumnDefault> FolderColumnDefaults => Set<FolderColumnDefault>();
@@ -262,6 +263,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.ToTable("library_settings");
             e.HasIndex(x => x.WorkspaceId);
             e.Property(x => x.Name).HasMaxLength(255);
+        });
+        b.Entity<SensitivityLabel>(e =>
+        {
+            e.HasIndex(x => x.Name).IsUnique();
+            e.Property(x => x.Name).HasMaxLength(100);
+            e.Property(x => x.Color).HasMaxLength(16);
+            e.Property(x => x.Description).HasMaxLength(1000);
         });
         b.Entity<LibraryColumn>(e =>
         {

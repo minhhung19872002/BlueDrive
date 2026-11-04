@@ -53,4 +53,50 @@ public class AdvancedAdminTests(ApiFactory factory)
         (await (await admin.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().Single(l => l.GetProperty("id").GetGuid() == commenter)
             .GetProperty("name").GetString().Should().Be("Người nhận xét");
     }
+
+    [Fact]
+    public async Task A_label_restricts_sharing_outsiders_and_lowering_it_needs_a_reason()
+    {
+        var admin = await factory.AdminClientAsync();
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (member, memberId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (outsider, outsiderId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var labels = (await (await owner.GetAsync("/api/v1/labels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("name").GetString()!, l => l.GetProperty("id").GetGuid());
+        labels.Keys.Should().Contain(["Công khai", "Nội bộ", "Hạn chế"]);
+        (await admin.PostAsJsonAsync("/api/v1/admin/labels", new { name = "Tối mật", color = "#ff0000", priority = 99 })).StatusCode.Should().Be(HttpStatusCode.BadRequest, "not for state secrets");
+
+        var ws = (await (await owner.PostAsJsonAsync("/api/v1/workspaces", new { name = "Space nhãn", type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        await (await owner.PostAsJsonAsync($"/api/v1/workspaces/{ws}/members", new { userIds = new[] { memberId }, role = "editor" })).ReadJsonAsync();
+        var folder = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Hồ sơ" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var file = (await StorageTests.UploadAsync(owner, ws, folder, "nhay-cam.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+        await (await owner.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { new { kind = "user", id = outsiderId } }, levelId = levels["editor"], notify = false })).ReadJsonAsync();
+        (await outsider.GetAsync($"/api/v1/files/{file}/download-url")).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // "Hạn chế" on the folder: the outsider only views (no download, a watermark), members keep working; no outside sharing.
+        (await owner.PutAsJsonAsync($"/api/v1/items/{folder}/label", new { labelId = labels["Hạn chế"] })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var label = await (await member.GetAsync($"/api/v1/items/{file}/label")).ReadJsonAsync();
+        label.GetProperty("label").GetProperty("name").GetString().Should().Be("Hạn chế");
+        label.GetProperty("source").GetString().Should().Be("Thư mục \"Hồ sơ\"");
+        (await outsider.GetAsync($"/api/v1/files/{file}/download-url")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await outsider.PutAsJsonAsync($"/api/v1/files/{file}/name", new { name = "doi.png" })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var detail = await (await outsider.GetAsync($"/api/v1/files/{file}")).ReadJsonAsync();
+        detail.GetProperty("watermark").GetBoolean().Should().BeTrue();
+        detail.GetProperty("labelName").GetString().Should().Be("Hạn chế");
+        (await member.GetAsync($"/api/v1/files/{file}/download-url")).StatusCode.Should().Be(HttpStatusCode.OK);
+        var policy = await (await owner.GetAsync($"/api/v1/items/{file}/sharing-policy")).ReadJsonAsync();
+        policy.GetProperty("external").GetString().Should().Be("off");
+        policy.GetProperty("externalSource").GetString().Should().Be("Nhãn \"Hạn chế\"");
+        (await owner.PostAsJsonAsync("/api/v1/share-links", new { resourceType = "file", resourceId = file, scope = "anyone", levelId = levels["viewer"], allowDownload = true }))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        // Lowering: who manages the item, with a reason; raising needs neither.
+        (await member.PutAsJsonAsync($"/api/v1/items/{folder}/label", new { labelId = labels["Công khai"], reason = "Đã công bố" })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await owner.PutAsJsonAsync($"/api/v1/items/{folder}/label", new { labelId = labels["Công khai"] })).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await owner.PutAsJsonAsync($"/api/v1/items/{folder}/label", new { labelId = labels["Công khai"], reason = "Đã công bố" })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await outsider.GetAsync($"/api/v1/files/{file}/download-url")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await member.PutAsJsonAsync($"/api/v1/items/{file}/label", new { labelId = labels["Nội bộ"] })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var audit = await (await admin.PostAsJsonAsync("/api/v1/audit-logs/search?pageSize=50", new { actions = new[] { "label_changed" }, workspaceId = ws })).ReadJsonAsync();
+        audit.GetProperty("items").EnumerateArray().Should().Contain(a => a.GetProperty("resourceId").GetGuid() == folder);
+    }
 }

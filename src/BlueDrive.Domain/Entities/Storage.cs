@@ -59,6 +59,8 @@ public class Workspace : AuditableEntity
     public int? TrashRetentionDays { get; set; }
     /// <summary>Members see the Activity tab (otherwise only who manages the Space).</summary>
     public bool ActivityForMembers { get; set; } = true;
+    /// <summary>Default sensitivity label of what is in the Space (spec 7.1).</summary>
+    public Guid? DefaultLabelId { get; set; }
     /// <summary>Who manages the Space may move items out of it (spec 1.1 "có thể bị cấm").</summary>
     public bool AllowMoveOut { get; set; } = true;
 }
@@ -98,6 +100,8 @@ public class Folder : AuditableEntity, ISoftDeletable
     public ExternalSharing? ExternalSharing { get; set; }
     /// <summary>A top folder that is a document library of its own (spec 1.4), with its own settings.</summary>
     public bool IsLibrary { get; set; }
+    /// <summary>Sensitivity label of the folder (what is below follows unless labelled itself).</summary>
+    public Guid? LabelId { get; set; }
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }
     public Guid? DeletedBy { get; set; }
@@ -125,6 +129,8 @@ public class StoredFile : AuditableEntity, ISoftDeletable
     /// <summary>Checked out (spec 1.4): only this person changes it until it is checked in.</summary>
     public Guid? CheckedOutBy { get; set; }
     public DateTime? CheckedOutAt { get; set; }
+    /// <summary>Sensitivity label of the file itself (spec 7.1).</summary>
+    public Guid? LabelId { get; set; }
     public string? ChecksumSha256 { get; set; }
     public string? Title { get; set; }
     public string? Description { get; set; }
@@ -347,6 +353,24 @@ public class LibraryTemplate : Entity
     public string Name { get; set; } = "";
     public Guid FileId { get; set; }
     public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>
+/// Sensitivity label (spec 7.1): a colour, a description and what it enforces. BlueDrive is not for information classified as state secret.
+/// </summary>
+public class SensitivityLabel : Entity
+{
+    public string Name { get; set; } = "";
+    public string Color { get; set; } = "#1677ff";
+    public string Description { get; set; } = "";
+    /// <summary>Higher = more restrictive; lowering a label needs a reason.</summary>
+    public int Priority { get; set; }
+    public bool BlockExternal { get; set; }
+    public bool BlockAnyoneLinks { get; set; }
+    public bool ViewOnlyOutsideSpace { get; set; }
+    public bool Watermark { get; set; }
+    public bool BlockSync { get; set; }
+    public bool IsActive { get; set; } = true;
 }
 
 /// <summary>Spec 1.1: an offer to make someone else the owner of an item of one's Drive của tôi; it takes effect when they accept.</summary>
