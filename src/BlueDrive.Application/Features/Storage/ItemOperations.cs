@@ -195,13 +195,18 @@ public sealed class MoveItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
     Access.AclEditor acl, Access.IItemPermissionService engine)
     : IRequestHandler<MoveItemsCommand, int>
 {
-    public async Task<int> Handle(MoveItemsCommand cmd, CancellationToken ct)
+    public Task<int> Handle(MoveItemsCommand cmd, CancellationToken ct) => MoveAsync(me.RequireUserId(), cmd, trusted: false, ct);
+
+    /// <summary>
+    /// The move itself. <paramref name="trusted"/>: a move the system makes on someone's behalf after its own checks (an ownership transfer
+    /// accepted), without the mover's rights on source and target.
+    /// </summary>
+    public async Task<int> MoveAsync(Guid uid, MoveItemsCommand cmd, bool trusted, CancellationToken ct)
     {
-        var uid = me.RequireUserId();
         if (cmd.Items.Count == 0) throw new AppException("Vui lòng chọn mục cần di chuyển.");
         // Moving puts items into the target like an upload does (#24, #46): same role right as copy.
-        if (!await perms.HasAsync(uid, Perm.DocUpload, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền đưa tư liệu vào vị trí khác.");
-        await auth.EnsureCanUploadAsync(uid, cmd.TargetWorkspaceId, cmd.TargetFolderId, ct);
+        if (!trusted && !await perms.HasAsync(uid, Perm.DocUpload, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền đưa tư liệu vào vị trí khác.");
+        if (!trusted) await auth.EnsureCanUploadAsync(uid, cmd.TargetWorkspaceId, cmd.TargetFolderId, ct);
         Folder? target = cmd.TargetFolderId is { } tid
             ? await db.Folders.FirstOrDefaultAsync(f => f.Id == tid && f.WorkspaceId == cmd.TargetWorkspaceId && !f.IsDeleted, ct) ?? throw new NotFoundException("Không tìm thấy thư mục đích.")
             : null;
@@ -212,10 +217,10 @@ public sealed class MoveItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
         {
             if (item.IsFile)
             {
-                await auth.EnsureAsync(uid, ResourceType.File, item.Id, AccessLevel.Edit, ct);
+                if (!trusted) await auth.EnsureAsync(uid, ResourceType.File, item.Id, AccessLevel.Edit, ct);
                 var f = await db.Files.FirstAsync(x => x.Id == item.Id, ct);
                 if (f.WorkspaceId == cmd.TargetWorkspaceId && f.FolderId == cmd.TargetFolderId) continue;
-                await MoveRules.EnsureMayLeaveAsync(db, engine, perms, uid, f.WorkspaceId, cmd.TargetWorkspaceId, ct);
+                if (!trusted) await MoveRules.EnsureMayLeaveAsync(db, engine, perms, uid, f.WorkspaceId, cmd.TargetWorkspaceId, ct);
                 var bytes = await db.FileVersions.Where(v => v.FileId == f.Id).SumAsync(v => v.SizeBytes, ct);
                 var fromWs = f.WorkspaceId;
                 var fromFolder = f.FolderId;
@@ -235,11 +240,11 @@ public sealed class MoveItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
             }
             else
             {
-                await auth.EnsureAsync(uid, ResourceType.Folder, item.Id, AccessLevel.Edit, ct);
+                if (!trusted) await auth.EnsureAsync(uid, ResourceType.Folder, item.Id, AccessLevel.Edit, ct);
                 var folder = await db.Folders.FirstAsync(x => x.Id == item.Id, ct);
                 if (target is not null && target.Path.StartsWith(folder.Path)) throw new AppException($"Không thể di chuyển thư mục \"{folder.Name}\" vào chính nó hoặc thư mục con của nó.");
                 if (folder.WorkspaceId == cmd.TargetWorkspaceId && folder.ParentId == cmd.TargetFolderId) continue;
-                await MoveRules.EnsureMayLeaveAsync(db, engine, perms, uid, folder.WorkspaceId, cmd.TargetWorkspaceId, ct);
+                if (!trusted) await MoveRules.EnsureMayLeaveAsync(db, engine, perms, uid, folder.WorkspaceId, cmd.TargetWorkspaceId, ct);
                 var fromWs = folder.WorkspaceId;
                 var subtreeFolderIds = await db.Folders.Where(x => x.Path.StartsWith(folder.Path)).Select(x => x.Id).ToListAsync(ct);
                 var bytes = await db.FileVersions.Where(v => v.File!.FolderId != null && subtreeFolderIds.Contains(v.File.FolderId.Value)).SumAsync(v => v.SizeBytes, ct);

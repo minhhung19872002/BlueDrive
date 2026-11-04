@@ -162,3 +162,36 @@ export async function previewMove(items: ItemRef[], targetWorkspaceId: string, t
   const { data } = await api.post<MovePreview>('/items/move-preview', { items, targetWorkspaceId, targetFolderId })
   return data
 }
+
+export interface OwnershipTransfer {
+  id: string
+  itemId: string
+  itemType: 'file' | 'folder'
+  itemName: string
+  fromUserId: string
+  fromName: string
+  toUserId: string
+  toName: string
+  status: 'pending' | 'accepted' | 'declined' | 'cancelled'
+  createdAt: string
+  decidedAt: string | null
+}
+
+/** Spec 1.1: offer an item of my drive to someone (they accept or decline). */
+export async function offerOwnership(itemId: string, toUserId: string): Promise<void> {
+  await api.post('/ownership-transfers', { itemId, toUserId })
+}
+
+export async function listOwnershipTransfers(incoming: boolean): Promise<OwnershipTransfer[]> {
+  const { data } = await api.get<OwnershipTransfer[]>('/ownership-transfers', { params: { incoming } })
+  return data
+}
+
+export async function getOwnershipTransfer(id: string): Promise<OwnershipTransfer> {
+  const { data } = await api.get<OwnershipTransfer>(`/ownership-transfers/${id}`)
+  return data
+}
+
+export async function decideOwnership(id: string, action: 'accept' | 'decline' | 'cancel'): Promise<void> {
+  await api.post(`/ownership-transfers/${id}/${action}`)
+}

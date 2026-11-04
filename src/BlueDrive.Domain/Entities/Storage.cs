@@ -245,6 +245,19 @@ public class ShareLink : AuditableEntity
     public bool AllowEdit { get; set; }
 }
 
+/// <summary>Spec 1.1: an offer to make someone else the owner of an item of one's Drive của tôi; it takes effect when they accept.</summary>
+public class OwnershipTransfer : Entity
+{
+    public Guid ItemId { get; set; }
+    public string ItemType { get; set; } = "file";
+    public string ItemName { get; set; } = "";
+    public Guid FromUserId { get; set; }
+    public Guid ToUserId { get; set; }
+    public OwnershipTransferStatus Status { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? DecidedAt { get; set; }
+}
+
 /// <summary>Spec 1.2: a shortcut to a file or folder in a drive or a Space folder. It carries no rights; deleting it leaves the target.</summary>
 public class Shortcut : Entity
 {

@@ -161,6 +161,39 @@ public class SpaceTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Ownership_moves_only_when_the_recipient_accepts_and_the_former_owner_keeps_editing()
+    {
+        var (owner, ownerId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (heir, heirId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (other, otherId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ownerWs = await StorageTests.PersonalWorkspaceAsync(owner);
+        var heirWs = await StorageTests.PersonalWorkspaceAsync(heir);
+        var file = (await StorageTests.UploadAsync(owner, ownerWs, null, "ban-giao.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+        await (await owner.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { new { kind = "user", id = otherId } }, levelId = levels["viewer"], notify = false })).ReadJsonAsync();
+
+        (await heir.PostAsJsonAsync("/api/v1/ownership-transfers", new { itemId = file, toUserId = otherId })).StatusCode.Should().Be(HttpStatusCode.NotFound, "not theirs (they cannot even see it)");
+        var offer = (await (await owner.PostAsJsonAsync("/api/v1/ownership-transfers", new { itemId = file, toUserId = heirId })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        (await (await heir.GetAsync("/api/v1/notifications")).ReadJsonAsync()).GetProperty("items").EnumerateArray()
+            .Should().Contain(n => n.GetProperty("link").GetString() == $"/ownership/{offer}");
+        // Nothing changes before the recipient accepts; someone else cannot accept for them.
+        (await heir.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await other.PostAsync($"/api/v1/ownership-transfers/{offer}/accept", null)).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await owner.PostAsync($"/api/v1/ownership-transfers/{offer}/accept", null)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        (await heir.PostAsync($"/api/v1/ownership-transfers/{offer}/accept", null)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var detail = await (await heir.GetAsync($"/api/v1/files/{file}")).ReadJsonAsync();
+        detail.GetProperty("workspaceId").GetGuid().Should().Be(heirWs, "it is in the new owner's drive");
+        (await other.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK, "direct grants go with it");
+        var rights = await (await owner.GetAsync($"/api/v1/items/{file}/effective-permissions")).ReadJsonAsync();
+        rights.GetProperty("rights").EnumerateArray().Select(r => r.GetString()).Should().Contain("EditItems").And.NotContain("ManagePermissions");
+        (await heir.PostAsync($"/api/v1/ownership-transfers/{offer}/decline", null)).StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await (await owner.GetAsync("/api/v1/ownership-transfers?incoming=false")).ReadJsonAsync()).EnumerateArray()
+            .Single(t => t.GetProperty("id").GetGuid() == offer).GetProperty("status").GetString().Should().Be("accepted");
+        _ = ownerId;
+    }
+
+    [Fact]
     public async Task Shortcuts_carry_no_rights_and_outlive_nothing_but_themselves()
     {
         var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");

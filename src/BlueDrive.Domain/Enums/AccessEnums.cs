@@ -22,3 +22,5 @@ public enum ExternalSharing { Off, ExistingGuests, NewAndExistingGuests, Anyone 
 
 /// <summary>Who decides access requests in a Space: whoever manages the item's permissions, or only the Space's owners.</summary>
 public enum AccessRequestDeciders { ItemManagers, SpaceOwners }
+
+public enum OwnershipTransferStatus { Pending, Accepted, Declined, Cancelled }

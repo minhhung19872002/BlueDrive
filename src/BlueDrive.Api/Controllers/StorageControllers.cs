@@ -18,6 +18,29 @@ using tusdotnet.Stores;
 
 namespace BlueDrive.Api.Controllers;
 
+/// <summary>Chuyển quyền sở hữu tư liệu trong Drive của tôi (người nhận chấp nhận).</summary>
+[Route("api/v1/ownership-transfers")]
+public class OwnershipTransfersController : ApiControllerBase
+{
+    [HttpPost]
+    public async Task<IActionResult> Offer(OfferOwnershipCommand cmd) => Ok(new { id = await Mediator.Send(cmd) });
+
+    /// <summary>incoming = gửi tới tôi; false = tôi đã gửi.</summary>
+    [HttpGet]
+    public Task<IReadOnlyList<OwnershipTransferDto>> List([FromQuery] bool incoming = true) => Mediator.Send(new ListOwnershipTransfersQuery(incoming));
+
+    [HttpGet("{id:guid}")]
+    public Task<OwnershipTransferDto> Get(Guid id) => Mediator.Send(new GetOwnershipTransferQuery(id));
+
+    /// <summary>decision = accept | decline | cancel.</summary>
+    [HttpPost("{id:guid}/{decision:regex(^(accept|decline|cancel)$)}")]
+    public async Task<IActionResult> Decide(Guid id, string decision)
+    {
+        await Mediator.Send(new DecideOwnershipTransferCommand(id, decision));
+        return NoContent();
+    }
+}
+
 /// <summary>Lối tắt tới tệp / thư mục (không mang quyền).</summary>
 [Route("api/v1/shortcuts")]
 public class ShortcutsController : ApiControllerBase

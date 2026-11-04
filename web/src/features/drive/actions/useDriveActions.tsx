@@ -4,6 +4,7 @@ import { App, Drawer, type MenuProps } from 'antd'
 import {
   CommentOutlined,
   CopyOutlined,
+  UserSwitchOutlined,
   KeyOutlined,
   RollbackOutlined,
   DeleteOutlined,
@@ -38,6 +39,7 @@ import { getMessage } from '@/utils/antdStatic'
 import { copyText } from '@/utils/clipboard'
 import CopyMoveModal, { type CopyMoveRequest } from '../dialogs/CopyMoveModal'
 import NameModal from '../dialogs/NameModal'
+import TransferOwnershipModal from '../dialogs/TransferOwnershipModal'
 import FileDetailsTabs, { type DetailsTab } from '../info/FileDetailsTabs'
 import InfoPanel from '../info/InfoPanel'
 import { useClearClipboardIfContains } from '../useClipboard'
@@ -86,6 +88,7 @@ export type ItemAction =
   | 'addShortcut'
   | 'removeShortcut'
   | 'requestAccess'
+  | 'transferOwnership'
 
 interface DriveActionsOptions {
   /** Open a folder in place (explorer). Default: navigate to the folder's explorer page. */
@@ -112,6 +115,7 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
   const clearClipboard = useClearClipboardIfContains()
   const { onOpenFolder, onShowInfo, siblingFileIds, hide } = options
 
+  const [transferring, setTransferring] = useState<DriveItem | null>(null)
   const [viewerId, setViewerId] = useState<string | null>(null)
   const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null)
   const [accessTarget, setAccessTarget] = useState<AccessTarget | null>(null)
@@ -306,6 +310,9 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
       if (single && canManage && shown('access')) list.push({ key: 'access', icon: <SafetyOutlined />, label: t('actions.manageAccess') })
       if (single && personalWorkspaceId && shown('addShortcut'))
         list.push({ key: 'addShortcut', icon: <RollbackOutlined rotate={180} />, label: t('shortcut.add') })
+      // Spec 1.1: only what is in my own drive can be given away (in a Space it belongs to the Space).
+      if (single && single.workspaceId === personalWorkspaceId && shown('transferOwnership'))
+        list.push({ key: 'transferOwnership', icon: <UserSwitchOutlined />, label: t('ownership.menu') })
       if (canEdit && can('doc.delete') && shown('delete'))
         list.push({ key: 'delete', icon: <DeleteOutlined />, label: t('actions.delete'), danger: true, extra: 'Del' })
       return compactDividers(list)
@@ -329,6 +336,8 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
       switch (action as ItemAction) {
         case 'addShortcut':
           return addShortcut.mutate(single)
+        case 'transferOwnership':
+          return setTransferring(single)
         case 'open':
           return open(single)
         case 'openEditor':
@@ -366,6 +375,7 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
 
   const dialogs: ReactNode = (
     <>
+      {transferring && <TransferOwnershipModal item={transferring} onClose={() => setTransferring(null)} />}
       {viewerId && <FileViewerModal fileId={viewerId} siblings={siblingFileIds} onClose={() => setViewerId(null)} />}
       {shareTarget && <ShareDialog target={shareTarget} onClose={() => setShareTarget(null)} />}
       {accessTarget && <AccessDialog target={accessTarget} onClose={() => setAccessTarget(null)} />}
