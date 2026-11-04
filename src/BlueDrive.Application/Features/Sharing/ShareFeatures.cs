@@ -55,7 +55,8 @@ public sealed class CreateShareHandler(IAppDbContext db, ICurrentUser me, IResou
             count++;
         }
         await db.SaveChangesAsync(ct);
-        await sync.SyncAsync(cmd.ResourceType, cmd.ResourceId, copyOnBreak: true, uid, ct);
+        foreach (var t in cmd.Targets.Distinct().Where(t => !(t.Type == PrincipalType.User && t.Id == uid)))
+            await sync.SetOneAsync(cmd.ResourceId, t.Type, t.Id, cmd.AccessLevel, cmd.Message, uid, ct);
         var recipients = (await PrincipalNames.ExpandToUsersAsync(db, cmd.Targets, ct)).Where(x => x != uid).ToList();
         var link = cmd.ResourceType == ResourceType.File ? $"/files/{cmd.ResourceId}" : "/shared";
         foreach (var r in recipients)
@@ -146,7 +147,7 @@ public sealed class DeleteShareHandler(IAppDbContext db, ICurrentUser me, IResou
         if (s.SharedBy != uid && !isRecipient) await auth.EnsureAsync(uid, s.ResourceType, s.ResourceId, AccessLevel.Manage, ct);
         db.Shares.Remove(s);
         await db.SaveChangesAsync(ct);
-        await sync.SyncAsync(s.ResourceType, s.ResourceId, copyOnBreak: true, uid, ct);
+        await sync.SetOneAsync(s.ResourceId, s.SharedWithType, s.SharedWithId, null, null, uid, ct);
         await audit.LogAsync(new AuditEntry(AuditAction.Unshare, s.ResourceType, s.ResourceId, null, null, new { shareId = s.Id, s.SharedWithType, s.SharedWithId }), ct);
         return Unit.Value;
     }

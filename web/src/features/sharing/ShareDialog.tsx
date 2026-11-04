@@ -3,8 +3,8 @@ import { LinkOutlined, TeamOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { useCan } from '@/hooks/usePermissions'
 import type { ItemType } from '@/types/drive'
-import InternalShareTab from './InternalShareTab'
 import LinkShareTab from './LinkShareTab'
+import PeopleAccessTab from './PeopleAccessTab'
 
 export interface ShareTarget {
   type: ItemType
@@ -41,9 +41,7 @@ export default function ShareDialog({ target, onClose }: { target: ShareTarget; 
                 <TeamOutlined /> {t('sharing.tabInternal')}
               </span>
             ),
-            children: (
-              <InternalShareTab resourceType={target.type} resourceId={target.id} resourceName={target.name} workspaceId={target.workspaceId} />
-            ),
+            children: <PeopleAccessTab itemId={target.id} />,
           },
           {
             key: 'link',

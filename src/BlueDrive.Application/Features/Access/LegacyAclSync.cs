@@ -73,6 +73,21 @@ public sealed class LegacyAclSync(IAppDbContext db, AclEditor editor, TimeProvid
         await editor.TouchAsync(id, ct);
     }
 
+    /// <summary>
+    /// "Chia sẻ" through the old API (POST/DELETE /shares) for one principal: only that principal's own entry on the item changes
+    /// (null level = removed); everything else on the item — grants made with the new screens included — stays.
+    /// </summary>
+    public async Task SetOneAsync(Guid id, PrincipalType type, Guid principalId, AccessLevel? level, string? message, Guid? by, CancellationToken ct)
+    {
+        if (Map(type, principalId) is not { } p) return;
+        var node = await db.Securables.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id, ct);
+        if (node is null) return; // not projected yet: the projection imports it
+        if (node.HasUniqueAcl)
+            await db.AclEntries.Where(e => e.ScopeId == id && e.Source == AclSource.Direct && e.PrincipalKind == p.Kind && e.PrincipalId == p.Id).ExecuteDeleteAsync(ct);
+        if (level is { } l) await editor.GrantAsync(id, p.Kind, p.Id, PermissionProjection.LevelOf(l), null, by, ct, message);
+        else if (node.HasUniqueAcl) await editor.TouchAsync(id, ct);
+    }
+
     /// <summary>Old principal → principal of the new model (unit grants always included the sub-units).</summary>
     public static (PrincipalKind Kind, Guid Id)? Map(PrincipalType type, Guid id) => type switch
     {

@@ -139,4 +139,28 @@ public class SharingModelTests(ApiFactory factory)
         (await owner.PostAsJsonAsync($"/api/v1/access-requests/{pending.GetProperty("id").GetGuid()}/decide", new { approve = false }))
             .StatusCode.Should().Be(HttpStatusCode.Conflict, "already decided");
     }
+
+    [Fact]
+    public async Task Old_share_api_changes_only_its_own_principal()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (newModel, newModelId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (legacy, legacyId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var file = (await StorageTests.UploadAsync(owner, ws, null, "chia-se-hai-cach.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+
+        await (await owner.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { User(newModelId) }, levelId = levels["commenter"], notify = false })).ReadJsonAsync();
+        // Shared through the old API (mobile / scripts): the grant made with the new dialog stays.
+        await (await owner.PostAsJsonAsync("/api/v1/shares", new { resourceType = "file", resourceId = file, targets = new[] { new { type = "user", id = legacyId } }, accessLevel = 1 })).ReadJsonAsync();
+        (await newModel.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await legacy.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var share = (await (await owner.GetAsync($"/api/v1/shares?resourceType=file&resourceId={file}")).ReadJsonAsync()).EnumerateArray().Single();
+        (await owner.DeleteAsync($"/api/v1/shares/{share.GetProperty("id").GetGuid()}")).IsSuccessStatusCode.Should().BeTrue();
+        (await legacy.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await newModel.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        var entries = (await (await owner.GetAsync($"/api/v1/items/{file}/permissions")).ReadJsonAsync()).GetProperty("entries").EnumerateArray().ToList();
+        entries.Should().ContainSingle(e => e.GetProperty("principalId").GetGuid() == newModelId).Which.GetProperty("levelName").GetString().Should().Be("Người nhận xét");
+    }
 }

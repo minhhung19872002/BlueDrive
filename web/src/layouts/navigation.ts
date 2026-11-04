@@ -16,6 +16,7 @@ import {
   FolderOutlined,
   HistoryOutlined,
   HomeOutlined,
+  KeyOutlined,
   DesktopOutlined,
   LaptopOutlined,
   MonitorOutlined,
@@ -52,6 +53,7 @@ export const mainNav: NavItem[] = [
   { path: '/workspaces', labelKey: 'menu.workspaces', icon: TeamOutlined },
   { path: '/search', labelKey: 'menu.search', icon: FileSearchOutlined },
   { path: '/trash', labelKey: 'menu.trash', icon: DeleteOutlined },
+  { path: '/access-requests', labelKey: 'menu.accessRequests', icon: KeyOutlined },
   { path: '/approvals', labelKey: 'menu.approvals', icon: CheckSquareOutlined, perm: 'doc.approve' },
 ]
 
