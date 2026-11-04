@@ -3260,6 +3260,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("allow_item_sharing");
 
+                    b.Property<bool>("AllowMoveOut")
+                        .HasColumnType("boolean")
+                        .HasColumnName("allow_move_out");
+
                     b.Property<bool>("AllowSync")
                         .HasColumnType("boolean")
                         .HasColumnName("allow_sync");

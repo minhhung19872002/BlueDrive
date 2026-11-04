@@ -112,6 +112,55 @@ public class SpaceTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Moving_between_a_space_and_a_drive_keeps_direct_grants_only()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (member, memberId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (direct, directId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+        var space = (await (await owner.PostAsJsonAsync("/api/v1/workspaces", new { name = "Space di chuyển", type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        await (await owner.PostAsJsonAsync($"/api/v1/workspaces/{space}/members", new { userIds = new[] { memberId }, role = "editor" })).ReadJsonAsync();
+        var folder = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = space, name = "Hồ sơ đi" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var file = (await StorageTests.UploadAsync(owner, space, folder, "ho-so.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        // Given its own permissions in the Space: a copy of the Space's members, plus someone directly.
+        await (await owner.PostAsJsonAsync($"/api/v1/items/{folder}/permissions", new { targets = new[] { new { kind = "user", id = directId } }, levelId = levels["viewer"], notify = false })).ReadJsonAsync();
+        (await member.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        var drive = await StorageTests.PersonalWorkspaceAsync(owner);
+        var items = new[] { new { type = "folder", id = folder } };
+
+        // A member who does not manage the Space may not take things out of it.
+        (await member.PostAsJsonAsync("/api/v1/items/move", new { items, targetWorkspaceId = await StorageTests.PersonalWorkspaceAsync(member), targetFolderId = (Guid?)null }))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        // The Space may forbid it even to who manages it.
+        (await owner.PutAsJsonAsync($"/api/v1/workspaces/{space}/settings", new { allowDownload = true, allowSync = true, activityForMembers = true, allowMoveOut = false }))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await (await owner.PostAsJsonAsync("/api/v1/items/move-preview", new { items, targetWorkspaceId = drive, targetFolderId = (Guid?)null })).ReadJsonAsync())
+            .GetProperty("blocked").GetBoolean().Should().BeTrue();
+        (await owner.PostAsJsonAsync("/api/v1/items/move", new { items, targetWorkspaceId = drive, targetFolderId = (Guid?)null })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await owner.PutAsJsonAsync($"/api/v1/workspaces/{space}/settings", new { allowDownload = true, allowSync = true, activityForMembers = true, allowMoveOut = true }))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        // The warning says the Space's members lose access; the person given access directly is not listed.
+        var preview = await (await owner.PostAsJsonAsync("/api/v1/items/move-preview", new { items, targetWorkspaceId = drive, targetFolderId = (Guid?)null })).ReadJsonAsync();
+        preview.GetProperty("lose").EnumerateArray().Select(x => x.GetString()).Should().Contain(n => n!.Contains("Space di chuyển"));
+        preview.GetProperty("lose").EnumerateArray().Select(x => x.GetString()).Should().NotContain(n => n!.Contains("bien") || n == "");
+        (await owner.PostAsJsonAsync("/api/v1/items/move", new { items, targetWorkspaceId = drive, targetFolderId = (Guid?)null })).IsSuccessStatusCode.Should().BeTrue();
+        (await member.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound, "what came from the Space stays there");
+        (await direct.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK, "a direct grant goes with the item");
+
+        // Out of someone's drive only by its owner: an editor of it may not move it into a Space.
+        var mine = (await StorageTests.UploadAsync(owner, drive, null, "cua-toi.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        await (await owner.PostAsJsonAsync($"/api/v1/items/{mine}/permissions", new { targets = new[] { new { kind = "user", id = memberId } }, levelId = levels["editor"], notify = false })).ReadJsonAsync();
+        (await member.PostAsJsonAsync("/api/v1/items/move", new { items = new[] { new { type = "file", id = mine } }, targetWorkspaceId = space, targetFolderId = (Guid?)null }))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var toSpace = await (await owner.PostAsJsonAsync("/api/v1/items/move-preview", new { items = new[] { new { type = "file", id = mine } }, targetWorkspaceId = space, targetFolderId = (Guid?)null })).ReadJsonAsync();
+        toSpace.GetProperty("ownershipToSpace").GetBoolean().Should().BeTrue();
+        (await owner.PostAsJsonAsync("/api/v1/items/move", new { items = new[] { new { type = "file", id = mine } }, targetWorkspaceId = space, targetFolderId = (Guid?)null }))
+            .IsSuccessStatusCode.Should().BeTrue();
+        (await member.GetAsync($"/api/v1/files/{mine}")).StatusCode.Should().Be(HttpStatusCode.OK, "now a Space member's");
+    }
+
+    [Fact]
     public async Task Shortcuts_carry_no_rights_and_outlive_nothing_but_themselves()
     {
         var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");

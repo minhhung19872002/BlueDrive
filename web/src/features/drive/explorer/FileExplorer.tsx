@@ -29,6 +29,7 @@ import MetadataEditor from '../info/MetadataEditor'
 import { collectDroppedFiles, isOsFileDrag } from '../upload/filePicker'
 import { useUploadLauncher, type NamedTarget } from '../upload/useUploadLauncher'
 import { DRAG_MIME, itemKey, toRef } from '../utils'
+import { confirmMove, MoveCancelled } from '../dialogs/confirmMove'
 import ExplorerBreadcrumb from './ExplorerBreadcrumb'
 import ExplorerToolbar from './ExplorerToolbar'
 import ItemGridView from './ItemGridView'
@@ -163,11 +164,14 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
   const transfer = useApiMutation(
     ({ mode, refs, target }: { mode: 'copy' | 'move'; refs: ItemRef[]; target: string | null }): Promise<{ mode: 'copy' | 'move'; count: number }> =>
       mode === 'move'
-        ? moveItems(refs, workspaceId, target).then((r) => ({ mode, count: r.moved }))
+        ? confirmMove(t, refs, workspaceId, target)
+            .then(() => moveItems(refs, workspaceId, target))
+            .then((r) => ({ mode, count: r.moved }))
         : copyItems(refs, workspaceId, target).then((r) => ({ mode, count: r.copied })),
     {
       successMessage: (r) => (r.mode === 'move' ? t('drive.moved', { count: r.count }) : t('drive.copied', { count: r.count })),
       invalidate: [qk.drive, qk.workspaces, qk.me],
+      onError: (e) => e instanceof MoveCancelled,
       onSuccess: (r) => {
         if (r.mode === 'move' && useDriveUi.getState().clipboard?.mode === 'cut') setClipboard(null)
         clearSelection()

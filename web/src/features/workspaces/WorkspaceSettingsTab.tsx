@@ -23,7 +23,7 @@ import WorkspaceSharingTab from './WorkspaceSharingTab'
 
 const GROUP_ROLES: WorkspaceMemberRole[] = ['manager', 'editor', 'uploader', 'approver', 'viewer']
 
-type SettingsForm = Pick<SpaceSettings, 'allowDownload' | 'allowSync' | 'trashRetentionDays' | 'activityForMembers'>
+type SettingsForm = Pick<SpaceSettings, 'allowDownload' | 'allowSync' | 'trashRetentionDays' | 'activityForMembers' | 'allowMoveOut'>
 
 /** Spec 6: the Space's member groups (user groups, units), settings, status (archive / delete) and sharing policy. */
 export default function WorkspaceSettingsTab({ workspaceId, name }: { workspaceId: string; name: string }) {
@@ -120,6 +120,9 @@ export default function WorkspaceSettingsTab({ workspaceId, name }: { workspaceI
             <Switch />
           </Form.Item>
           <Form.Item name="activityForMembers" label={t('spaceSettings.activityForMembers')} valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Form.Item name="allowMoveOut" label={t('spaceSettings.allowMoveOut')} valuePropName="checked" extra={t('spaceSettings.allowMoveOutHint')}>
             <Switch />
           </Form.Item>
           <Form.Item name="trashRetentionDays" label={t('spaceSettings.trashDays')} extra={t('spaceSettings.trashDaysHint')}>

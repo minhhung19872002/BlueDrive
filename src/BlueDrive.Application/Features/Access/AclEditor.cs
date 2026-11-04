@@ -57,7 +57,7 @@ public sealed class AclEditor(IAppDbContext db, TimeProvider clock)
         var parentScope = await db.Securables.Where(s => s.Id == parentId).Select(s => s.AclScopeId).FirstAsync(ct);
         var scopes = new List<Guid> { node.Id };
         if (recursive)
-            scopes.AddRange(await Subtree(node).Where(s => s.HasUniqueAcl && s.Id != node.Id).Select(s => s.Id).ToListAsync(ct));
+            scopes.AddRange((await UniqueScopesUnderAsync(node, ct)).Where(id => id != node.Id));
         foreach (var scope in scopes) await RepointSubtreeAsync(node, from: scope, to: parentScope, ct);
         await db.AclEntries.Where(e => scopes.Contains(e.ScopeId)).ExecuteDeleteAsync(ct);
         await db.ScopeGrants.Where(g => scopes.Contains(g.ScopeId)).ExecuteDeleteAsync(ct);
@@ -106,6 +106,45 @@ public sealed class AclEditor(IAppDbContext db, TimeProvider clock)
 
     /// <summary>The entries of a scope were changed directly: new version, grants rewritten.</summary>
     public Task TouchAsync(Guid scopeId, CancellationToken ct) => BumpAsync(scopeId, ct);
+
+    /// <summary>
+    /// After a move to another place (spec 1.1): the item loses what it had from its old place and gets what its new place gives, keeping only
+    /// what was given to it directly (people, links). A node inheriting needs nothing (it follows its new parent); a node with its own ACL
+    /// gets a fresh copy of the new parent's, and the nodes with their own ACL below it get that copy instead of the old one.
+    /// </summary>
+    public async Task RebaseAfterMoveAsync(Guid nodeId, Guid newParentId, Guid? by, CancellationToken ct)
+    {
+        var node = await db.Securables.AsNoTracking().FirstOrDefaultAsync(s => s.Id == nodeId, ct);
+        if (node is null) return;
+        var parentScope = await db.Securables.Where(s => s.Id == newParentId).Select(s => (Guid?)s.AclScopeId).FirstOrDefaultAsync(ct);
+        if (parentScope is null) return;
+        var fromParent = await db.AclEntries.AsNoTracking().Where(e => e.ScopeId == parentScope && e.AppliesToChildren).ToListAsync(ct);
+        var scopes = await UniqueScopesUnderAsync(node, ct);
+        if (scopes.Count == 0) return;
+        AclEntry Copy(AclEntry e, Guid scope) => new()
+        {
+            ScopeId = scope, PrincipalKind = e.PrincipalKind, PrincipalId = e.PrincipalId, PermissionLevelId = e.PermissionLevelId, ExpiresAt = e.ExpiresAt,
+            GrantedBy = e.GrantedBy, GrantedAt = e.GrantedAt, Source = e.Source == AclSource.Direct || e.Source == AclSource.Link ? AclSource.Inherited : e.Source,
+        };
+        // The moved node's own grants stay; below it, what came from it (its grants and its new copy) replaces what came from the old place.
+        var rootOwn = node.HasUniqueAcl
+            ? await db.AclEntries.AsNoTracking().Where(e => e.ScopeId == node.Id && (e.Source == AclSource.Direct || e.Source == AclSource.Link) && e.AppliesToChildren).ToListAsync(ct)
+            : [];
+        foreach (var scope in scopes)
+        {
+            await db.AclEntries.Where(e => e.ScopeId == scope && e.Source != AclSource.Direct && e.Source != AclSource.Link).ExecuteDeleteAsync(ct);
+            db.AclEntries.AddRange(fromParent.Select(e => Copy(e, scope)));
+            if (scope != node.Id) db.AclEntries.AddRange(rootOwn.Select(e => Copy(e, scope)));
+            await db.SaveChangesAsync(ct);
+            await BumpAsync(scope, ct);
+        }
+    }
+
+    /// <summary>The node and the nodes below it that have their own ACL (ltree on PostgreSQL).</summary>
+    private async Task<List<Guid>> UniqueScopesUnderAsync(Securable node, CancellationToken ct) =>
+        db.Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL"
+            ? await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM securables WHERE path <@ {node.Path}::ltree AND has_unique_acl").ToListAsync(ct)
+            : await Subtree(node).Where(s => s.HasUniqueAcl).Select(s => s.Id).ToListAsync(ct);
 
     private IQueryable<Securable> Subtree(Securable node) =>
         db.Securables.Where(s => s.Id == node.Id || s.Path.StartsWith(node.Path + "."));

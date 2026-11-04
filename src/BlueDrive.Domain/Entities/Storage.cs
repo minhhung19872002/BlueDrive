@@ -59,6 +59,8 @@ public class Workspace : AuditableEntity
     public int? TrashRetentionDays { get; set; }
     /// <summary>Members see the Activity tab (otherwise only who manages the Space).</summary>
     public bool ActivityForMembers { get; set; } = true;
+    /// <summary>Who manages the Space may move items out of it (spec 1.1 "có thể bị cấm").</summary>
+    public bool AllowMoveOut { get; set; } = true;
 }
 
 /// <summary>A user group or a unit (with its sub-units) in one of the Space's member groups (spec 6 "Thành viên").</summary>

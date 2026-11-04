@@ -57,12 +57,12 @@ public sealed record RemoveSpaceGroupMemberCommand(Guid WorkspaceId, Guid Princi
 public sealed record SetSpaceStatusCommand(Guid WorkspaceId, SpaceStatus Status) : IRequest<Unit>;
 
 public sealed record SpaceSettingsDto(Guid WorkspaceId, bool AllowDownload, bool AllowSync, int? TrashRetentionDays, bool ActivityForMembers, Guid? CoverFileId,
-    SpaceStatus Status, string? Template, bool CanEdit);
+    SpaceStatus Status, string? Template, bool CanEdit, bool AllowMoveOut = true);
 
 public sealed record GetSpaceSettingsQuery(Guid WorkspaceId) : IRequest<SpaceSettingsDto>;
 
-public sealed record SetSpaceSettingsCommand(Guid WorkspaceId, bool AllowDownload, bool AllowSync, int? TrashRetentionDays, bool ActivityForMembers, Guid? CoverFileId)
-    : IRequest<Unit>;
+public sealed record SetSpaceSettingsCommand(Guid WorkspaceId, bool AllowDownload, bool AllowSync, int? TrashRetentionDays, bool ActivityForMembers, Guid? CoverFileId,
+    bool AllowMoveOut = true) : IRequest<Unit>;
 
 public sealed class SetSpaceSettingsValidator : AbstractValidator<SetSpaceSettingsCommand>
 {
@@ -171,7 +171,7 @@ public sealed class SpaceHandlers(IAppDbContext db, ICurrentUser me, IItemPermis
         await engine.DemandAsync(uid, q.WorkspaceId, AccessRight.ViewItems, ct);
         var ws = await SpaceAsync(q.WorkspaceId, ct);
         var can = await perms.HasAsync(uid, Perm.WorkspaceAdmin, ct) || (await engine.GetWithLockAsync(uid, ws.Id, ct)).Rights.Has(AccessRight.ManageSpace);
-        return new SpaceSettingsDto(ws.Id, ws.AllowDownload, ws.AllowSync, ws.TrashRetentionDays, ws.ActivityForMembers, ws.CoverFileId, ws.Status, ws.Template, can);
+        return new SpaceSettingsDto(ws.Id, ws.AllowDownload, ws.AllowSync, ws.TrashRetentionDays, ws.ActivityForMembers, ws.CoverFileId, ws.Status, ws.Template, can, ws.AllowMoveOut);
     }
 
     public async Task<Unit> Handle(SetSpaceSettingsCommand cmd, CancellationToken ct)
@@ -186,6 +186,7 @@ public sealed class SpaceHandlers(IAppDbContext db, ICurrentUser me, IItemPermis
         ws.TrashRetentionDays = cmd.TrashRetentionDays;
         ws.ActivityForMembers = cmd.ActivityForMembers;
         ws.CoverFileId = cmd.CoverFileId;
+        ws.AllowMoveOut = cmd.AllowMoveOut;
         await db.SaveChangesAsync(ct);
         await audit.LogAsync(new AuditEntry(AuditAction.ConfigChange, ResourceType.Workspace, ws.Id, ws.Name, ws.Id, new { before, after = cmd }), ct);
         return Unit.Value;

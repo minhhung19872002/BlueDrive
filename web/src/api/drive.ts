@@ -148,3 +148,17 @@ export async function createShortcut(targetId: string, workspaceId?: string, fol
 export async function deleteShortcut(id: string): Promise<void> {
   await api.delete(`/shortcuts/${id}`)
 }
+
+export interface MovePreview {
+  lose: string[]
+  gain: string[]
+  ownershipToSpace: boolean
+  blocked: boolean
+  blockedReason: string | null
+}
+
+/** Spec 1.1: before moving, who will lose / get access from the place. */
+export async function previewMove(items: ItemRef[], targetWorkspaceId: string, targetFolderId: string | null): Promise<MovePreview> {
+  const { data } = await api.post<MovePreview>('/items/move-preview', { items, targetWorkspaceId, targetFolderId })
+  return data
+}

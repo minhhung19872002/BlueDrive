@@ -825,6 +825,8 @@
     "allowDownloadHint": "Tắt: chỉ Quản lý Space tải xuống được; mọi người khác chỉ xem trực tuyến.",
     "allowSync": "Cho phép đồng bộ về máy tính (BlueDrive Desktop)",
     "activityForMembers": "Thành viên thấy tab Hoạt động",
+    "allowMoveOut": "Cho phép chuyển tư liệu ra khỏi Space",
+    "allowMoveOutHint": "Chỉ Quản lý Space chuyển được tư liệu ra ngoài; tắt để cấm hẳn.",
     "trashDays": "Số ngày giữ trong thùng rác",
     "trashDaysHint": "Để trống: theo cấu hình hệ thống.",
     "asSystem": "Theo hệ thống",
@@ -868,6 +870,16 @@
     "decidersItemManagers": "Người quản lý quyền của mục (chủ sở hữu, Quản lý nội dung)",
     "decidersSpaceOwners": "Chỉ Quản lý Space",
     "saved": "Đã lưu chính sách chia sẻ."
+  },
+  "moveWarning": {
+    "title": "Di chuyển sẽ thay đổi quyền truy cập",
+    "ownership": "Tư liệu chuyển vào Space sẽ thuộc về Space (không còn thuộc Drive của bạn).",
+    "lose": "Sẽ mất quyền (quyền có từ vị trí cũ):",
+    "gain": "Sẽ có thêm quyền (từ vị trí mới):",
+    "direct": "Những người được cấp quyền trực tiếp trên tư liệu vẫn giữ quyền.",
+    "more": " và {{count}} người/nhóm khác",
+    "ok": "Vẫn di chuyển",
+    "blocked": "Không được di chuyển tư liệu tới vị trí này."
   },
   "shortcut": {
     "tag": "Lối tắt",

@@ -119,6 +119,7 @@ export interface SpaceSettings {
   status: 'active' | 'archived' | 'deleted'
   template: string | null
   canEdit: boolean
+  allowMoveOut: boolean
 }
 
 export async function getSpaceSettings(id: string): Promise<SpaceSettings> {
@@ -128,7 +129,7 @@ export async function getSpaceSettings(id: string): Promise<SpaceSettings> {
 
 export async function setSpaceSettings(
   id: string,
-  body: Pick<SpaceSettings, 'allowDownload' | 'allowSync' | 'trashRetentionDays' | 'activityForMembers' | 'coverFileId'>,
+  body: Pick<SpaceSettings, 'allowDownload' | 'allowSync' | 'trashRetentionDays' | 'activityForMembers' | 'coverFileId' | 'allowMoveOut'>,
 ): Promise<void> {
   await api.put(`/workspaces/${id}/settings`, body)
 }

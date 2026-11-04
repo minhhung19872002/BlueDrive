@@ -191,7 +191,8 @@ public sealed class UpdateFileMetadataHandler(IAppDbContext db, ICurrentUser me,
 // ---------- Move / copy / delete (#24, #46, #48) ----------
 public sealed record MoveItemsCommand(IReadOnlyList<ItemRef> Items, Guid TargetWorkspaceId, Guid? TargetFolderId) : IRequest<int>;
 
-public sealed class MoveItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, QuotaService quota, IPermissionService perms, IAuditLogger audit)
+public sealed class MoveItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, QuotaService quota, IPermissionService perms, IAuditLogger audit,
+    Access.AclEditor acl, Access.IItemPermissionService engine)
     : IRequestHandler<MoveItemsCommand, int>
 {
     public async Task<int> Handle(MoveItemsCommand cmd, CancellationToken ct)
@@ -205,6 +206,8 @@ public sealed class MoveItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
             ? await db.Folders.FirstOrDefaultAsync(f => f.Id == tid && f.WorkspaceId == cmd.TargetWorkspaceId && !f.IsDeleted, ct) ?? throw new NotFoundException("Không tìm thấy thư mục đích.")
             : null;
         var moved = 0;
+        // What the item gets from its new place (spec 1.1): its new parent in the tree.
+        var newParent = cmd.TargetFolderId ?? Access.PermissionProjection.LibraryOf(cmd.TargetWorkspaceId);
         foreach (var item in cmd.Items)
         {
             if (item.IsFile)
@@ -212,6 +215,7 @@ public sealed class MoveItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
                 await auth.EnsureAsync(uid, ResourceType.File, item.Id, AccessLevel.Edit, ct);
                 var f = await db.Files.FirstAsync(x => x.Id == item.Id, ct);
                 if (f.WorkspaceId == cmd.TargetWorkspaceId && f.FolderId == cmd.TargetFolderId) continue;
+                await MoveRules.EnsureMayLeaveAsync(db, engine, perms, uid, f.WorkspaceId, cmd.TargetWorkspaceId, ct);
                 var bytes = await db.FileVersions.Where(v => v.FileId == f.Id).SumAsync(v => v.SizeBytes, ct);
                 var fromWs = f.WorkspaceId;
                 var fromFolder = f.FolderId;
@@ -225,6 +229,7 @@ public sealed class MoveItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
                     await quota.AddUsageAsync(fromWs, -bytes, ct);
                     await quota.AddUsageAsync(cmd.TargetWorkspaceId, bytes, ct);
                 }
+                await acl.RebaseAfterMoveAsync(f.Id, newParent, uid, ct);
                 await audit.LogAsync(new AuditEntry(AuditAction.Move, ResourceType.File, f.Id, f.Name, cmd.TargetWorkspaceId,
                     new { fromWorkspace = fromWs, fromFolder, toWorkspace = cmd.TargetWorkspaceId, toFolder = cmd.TargetFolderId }), ct);
             }
@@ -234,6 +239,7 @@ public sealed class MoveItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
                 var folder = await db.Folders.FirstAsync(x => x.Id == item.Id, ct);
                 if (target is not null && target.Path.StartsWith(folder.Path)) throw new AppException($"Không thể di chuyển thư mục \"{folder.Name}\" vào chính nó hoặc thư mục con của nó.");
                 if (folder.WorkspaceId == cmd.TargetWorkspaceId && folder.ParentId == cmd.TargetFolderId) continue;
+                await MoveRules.EnsureMayLeaveAsync(db, engine, perms, uid, folder.WorkspaceId, cmd.TargetWorkspaceId, ct);
                 var fromWs = folder.WorkspaceId;
                 var subtreeFolderIds = await db.Folders.Where(x => x.Path.StartsWith(folder.Path)).Select(x => x.Id).ToListAsync(ct);
                 var bytes = await db.FileVersions.Where(v => v.File!.FolderId != null && subtreeFolderIds.Contains(v.File.FolderId.Value)).SumAsync(v => v.SizeBytes, ct);
@@ -252,12 +258,77 @@ public sealed class MoveItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
                     await quota.AddUsageAsync(fromWs, -bytes, ct);
                     await quota.AddUsageAsync(cmd.TargetWorkspaceId, bytes, ct);
                 }
+                await acl.RebaseAfterMoveAsync(folder.Id, newParent, uid, ct);
                 await audit.LogAsync(new AuditEntry(AuditAction.Move, ResourceType.Folder, folder.Id, folder.Name, cmd.TargetWorkspaceId,
                     new { fromWorkspace = fromWs, toWorkspace = cmd.TargetWorkspaceId, toFolder = cmd.TargetFolderId }), ct);
             }
             moved++;
         }
         return moved;
+    }
+}
+
+/// <summary>
+/// Spec 1.1 moving between Drive của tôi and a Space: out of a drive only by its owner (the Space then owns it); out of a Space only by who
+/// manages it, and only if the Space allows items to leave.
+/// </summary>
+public static class MoveRules
+{
+    public static async Task EnsureMayLeaveAsync(IAppDbContext db, Access.IItemPermissionService engine, IPermissionService perms, Guid uid, Guid fromWs, Guid toWs,
+        CancellationToken ct)
+    {
+        if (fromWs == toWs) return;
+        var from = await db.Workspaces.AsNoTracking().Where(w => w.Id == fromWs).Select(w => new { w.Type, w.OwnerId, w.AllowMoveOut, w.Name }).FirstAsync(ct);
+        if (from.Type == WorkspaceType.Personal)
+        {
+            if (from.OwnerId != uid) throw new ForbiddenException("Chỉ chủ sở hữu được chuyển tư liệu ra khỏi Drive của họ.");
+            return;
+        }
+        if (await perms.HasAsync(uid, Perm.WorkspaceAdmin, ct)) return;
+        if (!Domain.Permissions.AccessRights.Has(await engine.GetEffectiveAsync(uid, fromWs, ct), Domain.Permissions.AccessRight.ManageSpace))
+            throw new ForbiddenException($"Chỉ Quản lý Space \"{from.Name}\" được chuyển tư liệu ra khỏi Space.");
+        if (!from.AllowMoveOut) throw new ForbiddenException($"Space \"{from.Name}\" không cho phép chuyển tư liệu ra ngoài.");
+    }
+}
+
+/// <summary>Before a move: who will lose access (what came from the old place) and who will get it (from the new place); direct grants stay.</summary>
+public sealed record MovePreviewQuery(IReadOnlyList<ItemRef> Items, Guid TargetWorkspaceId, Guid? TargetFolderId) : IRequest<MovePreviewDto>;
+
+public sealed record MovePreviewDto(IReadOnlyList<string> Lose, IReadOnlyList<string> Gain, bool OwnershipToSpace, bool Blocked, string? BlockedReason);
+
+public sealed class MovePreviewHandler(IAppDbContext db, ICurrentUser me, Access.IItemPermissionService engine, IPermissionService perms)
+    : IRequestHandler<MovePreviewQuery, MovePreviewDto>
+{
+    public async Task<MovePreviewDto> Handle(MovePreviewQuery q, CancellationToken ct)
+    {
+        var uid = me.RequireUserId();
+        var parent = q.TargetFolderId ?? Access.PermissionProjection.LibraryOf(q.TargetWorkspaceId);
+        var parentScope = await db.Securables.Where(s => s.Id == parent).Select(s => (Guid?)s.AclScopeId).FirstOrDefaultAsync(ct);
+        var gaining = parentScope is null ? []
+            : await db.AclEntries.AsNoTracking().Where(e => e.ScopeId == parentScope && e.AppliesToChildren && e.PrincipalId != uid).Select(e => e.PrincipalId).Distinct().ToListAsync(ct);
+        var lose = new HashSet<Guid>();
+        var gain = new HashSet<Guid>();
+        var toSpace = false;
+        string? blocked = null;
+        foreach (var item in q.Items.Take(50))
+        {
+            var node = await db.Securables.AsNoTracking().FirstOrDefaultAsync(s => s.Id == item.Id, ct);
+            if (node is null) continue;
+            await engine.DemandAsync(uid, node.Id, Domain.Permissions.AccessRight.ViewItems, ct);
+            var fromWs = node.SpaceId ?? node.PersonalDriveId ?? Guid.Empty;
+            if (node.PersonalDriveId is not null && fromWs != q.TargetWorkspaceId) toSpace = true;
+            try { await MoveRules.EnsureMayLeaveAsync(db, engine, perms, uid, fromWs, q.TargetWorkspaceId, ct); }
+            catch (ForbiddenException e) { blocked ??= e.Message; }
+            var entries = await db.AclEntries.AsNoTracking().Where(e => e.ScopeId == node.AclScopeId && e.PrincipalId != uid).ToListAsync(ct);
+            var direct = entries.Where(e => e.ScopeId == node.Id && (e.Source == AclSource.Direct || e.Source == AclSource.Link)).Select(e => e.PrincipalId).ToHashSet();
+            var now = entries.Select(e => e.PrincipalId).ToHashSet();
+            foreach (var p in now.Where(p => !direct.Contains(p) && !gaining.Contains(p))) lose.Add(p);
+            foreach (var p in gaining.Where(p => !now.Contains(p))) gain.Add(p);
+        }
+        var names = await Access.PrincipalDisplay.ResolveAsync(db, lose.Concat(gain), ct);
+        string Name(Guid id) => names.GetValueOrDefault(id, ("(không xác định)", null)).Name;
+        return new MovePreviewDto(lose.Select(Name).Order().ToList(), gain.Select(Name).Order().ToList(),
+            toSpace && await db.Workspaces.AnyAsync(w => w.Id == q.TargetWorkspaceId && w.Type != WorkspaceType.Personal, ct), blocked is not null, blocked);
     }
 }
 

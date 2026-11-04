@@ -197,6 +197,10 @@ public class DriveController : ApiControllerBase
     [HttpPut("files/metadata")]
     public async Task<IActionResult> Metadata(UpdateFileMetadataCommand cmd) => Ok(new { updated = await Mediator.Send(cmd) });
 
+    /// <summary>Trước khi di chuyển: ai sẽ mất / được thêm quyền, có bị chặn không.</summary>
+    [HttpPost("items/move-preview")]
+    public Task<MovePreviewDto> MovePreview(MovePreviewQuery query) => Mediator.Send(query);
+
     [HttpPost("items/move"), SyncIfMatch]
     public async Task<IActionResult> Move(MoveItemsCommand cmd) => Ok(new { moved = await Mediator.Send(cmd) });
 
