@@ -49,6 +49,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AclScope> AclScopes => Set<AclScope>();
     public DbSet<AclEntry> AclEntries => Set<AclEntry>();
     public DbSet<ScopeGrant> ScopeGrants => Set<ScopeGrant>();
+    public DbSet<AccessRequest> AccessRequests => Set<AccessRequest>();
     public DbSet<Comment> Comments => Set<Comment>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<SavedSearch> SavedSearches => Set<SavedSearch>();
@@ -341,6 +342,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(x => x.ScopeId);
             e.HasIndex(x => x.PrincipalId);
             e.HasIndex(x => x.ExpiresAt);
+        });
+        b.Entity<AccessRequest>(e =>
+        {
+            e.HasIndex(x => new { x.SecurableId, x.Status });
+            e.HasIndex(x => new { x.RequesterId, x.CreatedAt });
+            e.Property(x => x.Message).HasMaxLength(1000);
+            e.Property(x => x.DecisionNote).HasMaxLength(1000);
         });
         b.Entity<ScopeGrant>(e =>
         {

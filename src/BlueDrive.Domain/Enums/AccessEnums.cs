@@ -11,3 +11,5 @@ public enum PrincipalKind { User, Group, OrgUnit, OrgUnitTree, SpaceGroup, Every
 public enum SpaceGroupKind { Owners, Members, Contributors, Approvers, Visitors, Custom }
 
 public enum AclSource { Direct, SpaceDefault, Link, Inherited }
+
+public enum AccessRequestStatus { Pending, Approved, Rejected, Expired }

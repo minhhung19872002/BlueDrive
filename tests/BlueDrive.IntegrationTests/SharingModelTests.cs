@@ -102,4 +102,41 @@ public class SharingModelTests(ApiFactory factory)
         (await owner.PutAsJsonAsync($"/api/v1/items/{folder}/general-access", new { mode = "restricted" })).StatusCode.Should().Be(HttpStatusCode.NoContent);
         (await anyone.GetAsync($"/api/v1/items/{folder}/permissions")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    [Fact]
+    public async Task Request_access_then_approve_with_another_level()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (asker, askerId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var file = (await StorageTests.UploadAsync(owner, ws, null, "bao-cao-rieng.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+
+        // Opened by its address: no access, the owner's name but not the file's.
+        (await asker.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        var info = await (await asker.GetAsync($"/api/v1/items/{file}/access-info")).ReadJsonAsync();
+        info.GetProperty("hasAccess").GetBoolean().Should().BeFalse();
+        info.GetProperty("ownerName").GetString().Should().NotBeNullOrEmpty();
+        info.ToString().Should().NotContain("bao-cao-rieng");
+
+        (await asker.PostAsJsonAsync($"/api/v1/items/{file}/access-requests", new { levelId = levels["editor"], message = "Cần sửa số liệu" })).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await (await asker.GetAsync($"/api/v1/items/{file}/access-info")).ReadJsonAsync()).GetProperty("requestPending").GetBoolean().Should().BeTrue();
+        var notes = await (await owner.GetAsync("/api/v1/notifications")).ReadJsonAsync();
+        notes.GetProperty("items").EnumerateArray().Should().Contain(n => n.GetProperty("type").GetString() == "access_request");
+        (await asker.GetAsync($"/api/v1/items/{file}/access-requests")).StatusCode.Should().Be(HttpStatusCode.NotFound, "only who manages the item sees its requests");
+
+        var pending = (await (await owner.GetAsync("/api/v1/access-requests")).ReadJsonAsync()).EnumerateArray().Single(r => r.GetProperty("itemId").GetGuid() == file);
+        pending.GetProperty("requesterId").GetGuid().Should().Be(askerId);
+        pending.GetProperty("requestedLevelName").GetString().Should().Be("Biên tập");
+        // Approved, but as "Người xem".
+        (await owner.PostAsJsonAsync($"/api/v1/access-requests/{pending.GetProperty("id").GetGuid()}/decide", new { approve = true, levelId = levels["viewer"] }))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await asker.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        var rights = await (await asker.GetAsync($"/api/v1/items/{file}/effective-permissions")).ReadJsonAsync();
+        rights.GetProperty("rights").EnumerateArray().Select(r => r.GetString()).Should().Contain("Download").And.NotContain("EditItems");
+        (await (await asker.GetAsync("/api/v1/notifications")).ReadJsonAsync()).GetProperty("items").EnumerateArray()
+            .Should().Contain(n => n.GetProperty("type").GetString() == "access_request" && n.GetProperty("title").GetString()!.Contains("đã được duyệt"));
+        (await owner.PostAsJsonAsync($"/api/v1/access-requests/{pending.GetProperty("id").GetGuid()}/decide", new { approve = false }))
+            .StatusCode.Should().Be(HttpStatusCode.Conflict, "already decided");
+    }
 }

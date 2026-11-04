@@ -160,6 +160,23 @@ public class AclEntry
     public string? Message { get; set; }
 }
 
+/// <summary>"Yêu cầu quyền truy cập" (spec 5.2): someone asks for a level on an item; who manages it approves (maybe another level) or refuses.</summary>
+public class AccessRequest
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+    public Guid SecurableId { get; set; }
+    public Guid RequesterId { get; set; }
+    public Guid RequestedLevelId { get; set; }
+    public string? Message { get; set; }
+    public AccessRequestStatus Status { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime ExpiresAt { get; set; }
+    public Guid? DecidedBy { get; set; }
+    public Guid? DecidedLevelId { get; set; }
+    public DateTime? DecidedAt { get; set; }
+    public string? DecisionNote { get; set; }
+}
+
 /// <summary>Flattened ACL used to trim queries in SQL: per scope and principal, the OR of the rights of its live entries.</summary>
 public class ScopeGrant
 {

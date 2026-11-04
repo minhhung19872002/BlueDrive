@@ -23,6 +23,7 @@ public interface IAppDbContext
     DbSet<AclScope> AclScopes { get; }
     DbSet<AclEntry> AclEntries { get; }
     DbSet<ScopeGrant> ScopeGrants { get; }
+    DbSet<AccessRequest> AccessRequests { get; }
     DbSet<User> Users { get; }
     DbSet<PasswordHistory> PasswordHistories { get; }
     DbSet<UserGroup> UserGroups { get; }

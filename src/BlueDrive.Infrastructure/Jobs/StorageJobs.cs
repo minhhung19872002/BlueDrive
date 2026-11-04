@@ -119,6 +119,9 @@ public sealed class AclExpiryJob(IAppDbContext db, Application.Features.Access.A
         var scopes = await db.AclEntries.Where(e => e.ExpiresAt != null && e.ExpiresAt > since && e.ExpiresAt <= now).Select(e => e.ScopeId).Distinct().ToListAsync(ct);
         foreach (var scope in scopes) await editor.RefreshGrantsAsync(scope, ct);
         if (scopes.Count > 0) logger.LogInformation("Đã cập nhật quyền hết hạn của {Count} phạm vi", scopes.Count);
+        // Access requests not answered within 30 days end (spec 5.2).
+        await db.AccessRequests.Where(r => r.Status == Domain.Enums.AccessRequestStatus.Pending && r.ExpiresAt <= now)
+            .ExecuteUpdateAsync(u => u.SetProperty(r => r.Status, Domain.Enums.AccessRequestStatus.Expired), ct);
         return scopes.Count;
     }
 }

@@ -330,6 +330,35 @@ public class ItemAccessController : ApiControllerBase
     }
 }
 
+/// <summary>Yêu cầu quyền truy cập.</summary>
+[Route("api/v1")]
+public class AccessRequestsController : ApiControllerBase
+{
+    /// <summary>Người chưa có quyền mở địa chỉ một mục: có tồn tại không, ai quản lý (không có tên mục).</summary>
+    [HttpGet("items/{id:guid}/access-info")]
+    public Task<Application.Features.Access.AccessInfoDto> Info(Guid id) => Mediator.Send(new Application.Features.Access.GetAccessInfoQuery(id));
+
+    [HttpPost("items/{id:guid}/access-requests")]
+    public async Task<IActionResult> RequestAccess(Guid id, Application.Features.Access.RequestAccessCommand cmd) =>
+        Ok(new { id = await Mediator.Send(cmd with { ItemId = id }) });
+
+    [HttpGet("items/{id:guid}/access-requests")]
+    public Task<IReadOnlyList<Application.Features.Access.AccessRequestDto>> OfItem(Guid id) =>
+        Mediator.Send(new Application.Features.Access.ListAccessRequestsQuery(id));
+
+    /// <summary>Yêu cầu đang chờ trên các mục tôi quản lý (mine = yêu cầu của tôi).</summary>
+    [HttpGet("access-requests")]
+    public Task<IReadOnlyList<Application.Features.Access.AccessRequestDto>> Pending([FromQuery] bool mine = false) =>
+        Mediator.Send(new Application.Features.Access.ListAccessRequestsQuery(null, mine));
+
+    [HttpPost("access-requests/{id:guid}/decide")]
+    public async Task<IActionResult> Decide(Guid id, Application.Features.Access.DecideAccessRequestCommand cmd)
+    {
+        await Mediator.Send(cmd with { Id = id });
+        return NoContent();
+    }
+}
+
 /// <summary>Cấp quyền (Permission Level).</summary>
 [Route("api/v1/permission-levels")]
 public class PermissionLevelsController : ApiControllerBase

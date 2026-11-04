@@ -27,6 +27,73 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "unaccent");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("BlueDrive.Domain.Entities.AccessRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("decided_at");
+
+                    b.Property<Guid?>("DecidedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("decided_by");
+
+                    b.Property<Guid?>("DecidedLevelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("decided_level_id");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("decision_note");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("message");
+
+                    b.Property<Guid>("RequestedLevelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_level_id");
+
+                    b.Property<Guid>("RequesterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requester_id");
+
+                    b.Property<Guid>("SecurableId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("securable_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_access_requests");
+
+                    b.HasIndex("RequesterId", "CreatedAt")
+                        .HasDatabaseName("ix_access_requests_requester_id_created_at");
+
+                    b.HasIndex("SecurableId", "Status")
+                        .HasDatabaseName("ix_access_requests_securable_id_status");
+
+                    b.ToTable("access_requests", (string)null);
+                });
+
             modelBuilder.Entity("BlueDrive.Domain.Entities.AclEntry", b =>
                 {
                     b.Property<Guid>("Id")
