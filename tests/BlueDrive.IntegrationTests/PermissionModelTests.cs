@@ -16,6 +16,57 @@ namespace BlueDrive.IntegrationTests;
 [Collection(ApiCollection.Name)]
 public class PermissionModelTests(ApiFactory factory)
 {
+    /// <summary>The model kept up to date change by change equals the model rebuilt from scratch.</summary>
+    private async Task<(List<string> Nodes, List<string> Entries, List<string> Memberships)> SnapshotAsync(IEnumerable<Guid> workspaces, IEnumerable<Guid> users)
+    {
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var ws = workspaces.ToList();
+        var us = users.ToList();
+        var nodes = (await db.Securables.AsNoTracking().Where(s => ws.Contains(s.SpaceId ?? s.PersonalDriveId ?? Guid.Empty)).ToListAsync())
+            .Select(s => $"{s.Id}|{s.Kind}|{s.ParentId}|{s.Path}|{s.Name}|{s.HasUniqueAcl}|{s.AclScopeId}|{s.IsDeleted}").ToList();
+        var ids = await db.Securables.AsNoTracking().Where(s => ws.Contains(s.SpaceId ?? s.PersonalDriveId ?? Guid.Empty)).Select(s => s.Id).ToListAsync();
+        var entries = (await db.AclEntries.AsNoTracking().Where(e => ids.Contains(e.ScopeId)).ToListAsync())
+            .Select(e => $"{e.ScopeId}|{e.PrincipalId}|{e.PermissionLevelId}|{e.Source}|{e.ExpiresAt}").ToList();
+        var memberships = (await db.PrincipalMemberships.AsNoTracking().Where(m => us.Contains(m.UserId)).ToListAsync()).Select(m => $"{m.UserId}|{m.PrincipalId}").ToList();
+        return ([.. nodes.Order()], [.. entries.Order()], [.. memberships.Order()]);
+    }
+
+    [Fact]
+    public async Task Every_change_keeps_the_new_model_equal_to_a_full_rebuild()
+    {
+        var admin = await factory.AdminClientAsync();
+        await (await admin.PostAsync("/api/v1/admin/permission-model/rebuild", null)).ReadJsonAsync();
+        var (owner, ownerId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (member, memberId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (_, friendId, _) = await factory.CreateUserClientAsync("chi_xem");
+        var personal = await StorageTests.PersonalWorkspaceAsync(owner);
+        var ws = (await (await owner.PostAsJsonAsync("/api/v1/workspaces", new { name = "Nhóm đồng bộ quyền", type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        await (await owner.PostAsJsonAsync($"/api/v1/workspaces/{ws}/members", new { userIds = new[] { memberId }, role = "editor" })).ReadJsonAsync();
+        var a = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "A" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var b = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, parentId = a, name = "B" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var f1 = (await StorageTests.UploadAsync(owner, ws, b, "mot.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        await StorageTests.UploadAsync(owner, ws, null, "anh/con/hai.png", StorageTests.Png, "anh/con/hai.png"); // folders created with the file
+        await StorageTests.UploadAsync(owner, personal, null, "rieng.png", StorageTests.Png);
+        (await owner.PutAsJsonAsync($"/api/v1/access/folder/{b}", new
+        {
+            entries = new[] { new { principalType = "user", principalId = friendId, accessLevel = "download", inherit = true } }, breakInheritance = true,
+        })).EnsureSuccessStatusCode();
+        await (await owner.PostAsJsonAsync("/api/v1/shares", new { resourceType = "file", resourceId = f1, targets = new[] { new { type = "user", id = memberId } }, accessLevel = 3 })).ReadJsonAsync();
+        (await owner.PutAsJsonAsync($"/api/v1/files/{f1}/name", new { name = "một.png" })).IsSuccessStatusCode.Should().BeTrue();
+        await (await owner.PostAsJsonAsync("/api/v1/items/move", new { items = new[] { new { type = "folder", id = b } }, targetFolderId = (Guid?)null, targetWorkspaceId = ws })).ReadJsonAsync();
+        await (await owner.PostAsJsonAsync("/api/v1/items/delete", new { items = new[] { new { type = "folder", id = a } } })).ReadJsonAsync();
+        await (await admin.PostAsJsonAsync("/api/v1/user-groups", new { name = "Nhóm đồng bộ " + Guid.NewGuid().ToString("N")[..6], memberIds = new[] { friendId } })).ReadJsonAsync();
+
+        var live = await SnapshotAsync([ws, personal], [ownerId, memberId, friendId]);
+        live.Nodes.Should().Contain(n => n.StartsWith(f1 + "|")).And.HaveCountGreaterThan(6);
+        await (await admin.PostAsync("/api/v1/admin/permission-model/rebuild", null)).ReadJsonAsync();
+        var rebuilt = await SnapshotAsync([ws, personal], [ownerId, memberId, friendId]);
+        live.Nodes.Should().Equal(rebuilt.Nodes);
+        live.Entries.Should().BeEquivalentTo(rebuilt.Entries);
+        live.Memberships.Should().Equal(rebuilt.Memberships);
+    }
+
     [Fact]
     public async Task The_current_model_is_projected_without_losing_any_right()
     {

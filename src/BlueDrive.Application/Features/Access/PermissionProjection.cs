@@ -54,18 +54,35 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock)
 
     private sealed record Grant(PrincipalKind Kind, Guid Principal, Guid Level, DateTime? ExpiresAt, Guid? GrantedBy, DateTime GrantedAt, AclSource Source, bool Inherits);
 
-    public async Task<Result> RebuildAsync(CancellationToken ct)
+    /// <summary>Everything, from scratch.</summary>
+    public Task<Result> RebuildAsync(CancellationToken ct) => ProjectAsync(null, null, ct);
+
+    /// <summary>
+    /// Projects only some workspaces (their nodes, Space groups and ACLs) and the memberships of some users — what one change touched
+    /// (<see cref="IAccessModelSync"/>); <c>null</c> = all. Members of the projected workspaces (before and after) get their memberships
+    /// recomputed too. Runs inside the caller's transaction when there is one.
+    /// </summary>
+    public async Task<Result> ProjectAsync(IReadOnlyCollection<Guid>? workspaceIds, IReadOnlyCollection<Guid>? userIds, CancellationToken ct)
     {
+        var full = workspaceIds is null && userIds is null;
+        var wsIds = workspaceIds ?? [];
         var now = clock.GetUtcNow().UtcDateTime;
         await EnsureLevelsAsync(ct);
         var levels = await db.PermissionLevels.AsNoTracking().ToDictionaryAsync(l => l.Id, l => l.Permissions, ct);
 
-        var workspaces = await db.Workspaces.AsNoTracking().ToListAsync(ct);
-        var members = await db.WorkspaceMembers.AsNoTracking().ToListAsync(ct);
-        var folders = await db.Folders.AsNoTracking().Where(f => !f.IsDeleted).Select(f => new { f.Id, f.WorkspaceId, f.ParentId, f.Name, f.Path, f.BreakInheritance }).ToListAsync(ct);
-        var files = await db.Files.AsNoTracking().Where(f => !f.IsDeleted).Select(f => new { f.Id, f.WorkspaceId, f.FolderId, f.Name, f.BreakInheritance }).ToListAsync(ct);
-        var acl = await db.ResourcePermissions.AsNoTracking().ToListAsync(ct);
-        var shares = await db.Shares.AsNoTracking().ToListAsync(ct);
+        var wsQuery = db.Workspaces.AsNoTracking();
+        var workspaces = full ? await wsQuery.ToListAsync(ct) : await wsQuery.Where(w => wsIds.Contains(w.Id)).ToListAsync(ct);
+        var members = full ? await db.WorkspaceMembers.AsNoTracking().ToListAsync(ct)
+            : await db.WorkspaceMembers.AsNoTracking().Where(m => wsIds.Contains(m.WorkspaceId)).ToListAsync(ct);
+        var folders = await db.Folders.AsNoTracking().Where(f => !f.IsDeleted && (full || wsIds.Contains(f.WorkspaceId)))
+            .Select(f => new { f.Id, f.WorkspaceId, f.ParentId, f.Name, f.Path, f.BreakInheritance }).ToListAsync(ct);
+        var files = await db.Files.AsNoTracking().Where(f => !f.IsDeleted && (full || wsIds.Contains(f.WorkspaceId)))
+            .Select(f => new { f.Id, f.WorkspaceId, f.FolderId, f.Name, f.BreakInheritance }).ToListAsync(ct);
+        var resourceIds = full ? null : wsIds.Concat(folders.Select(f => f.Id)).Concat(files.Select(f => f.Id)).ToHashSet();
+        var acl = full ? await db.ResourcePermissions.AsNoTracking().ToListAsync(ct)
+            : await db.ResourcePermissions.AsNoTracking().Where(r => resourceIds!.Contains(r.ResourceId)).ToListAsync(ct);
+        var shares = full ? await db.Shares.AsNoTracking().ToListAsync(ct)
+            : await db.Shares.AsNoTracking().Where(r => resourceIds!.Contains(r.ResourceId)).ToListAsync(ct);
         var users = await db.Users.AsNoTracking().Select(u => new { u.Id, u.FullName, u.OrganizationId }).ToListAsync(ct);
         var orgs = await db.Organizations.AsNoTracking().Select(o => new { o.Id, o.Name, o.Path }).ToListAsync(ct);
         var groups = await db.UserGroups.AsNoTracking().Select(g => new { g.Id, g.Name }).ToListAsync(ct);
@@ -211,13 +228,20 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock)
             }
         }
 
-        // ---- memberships (flattened)
+        // ---- memberships (flattened), for every user (full) or for those a change concerns
+        var oldGroups = full ? [] : await db.SpaceGroups.AsNoTracking().Where(g => wsIds.Contains(g.RootId)).Select(g => g.Id).ToListAsync(ct);
+        var otherSpaceGroupMembers = full ? []
+            : await db.SpaceGroupMembers.AsNoTracking().Where(m => !oldGroups.Contains(m.SpaceGroupId)).ToListAsync(ct);
+        var affected = full ? users.Select(u => u.Id).ToHashSet()
+            : (userIds ?? []).Concat(spaceGroupMembers.Select(m => m.PrincipalId))
+                .Concat(await db.SpaceGroupMembers.AsNoTracking().Where(m => oldGroups.Contains(m.SpaceGroupId)).Select(m => m.PrincipalId).ToListAsync(ct))
+                .ToHashSet();
         var groupsOf = groupMembers.ToLookup(m => m.UserId, m => m.GroupId);
         var parentsOfGroup = nesting.ToLookup(n => n.ChildGroupId, n => n.ParentGroupId);
-        var spaceGroupsOf = spaceGroupMembers.ToLookup(m => m.PrincipalId, m => m.SpaceGroupId);
+        var spaceGroupsOf = spaceGroupMembers.Concat(otherSpaceGroupMembers).ToLookup(m => m.PrincipalId, m => m.SpaceGroupId);
         var rolesOf = userRoles.ToLookup(r => r.UserId, r => r.RoleId);
         var memberships = new List<PrincipalMembership>();
-        foreach (var u in users)
+        foreach (var u in users.Where(u => affected.Contains(u.Id)))
         {
             var set = new HashSet<Guid> { u.Id, StableGuid.Everyone };
             foreach (var g in Closure(groupsOf[u.Id], parentsOfGroup)) set.Add(g);
@@ -242,18 +266,38 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock)
         // Versions only grow (cache keys of the permission engine): ticks of the rebuild.
         var scopes = securables.Where(s => s.HasUniqueAcl).Select(s => new AclScope { ScopeId = s.Id, AclVersion = now.Ticks }).ToList();
 
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        await db.ScopeGrants.ExecuteDeleteAsync(ct);
-        await db.AclEntries.ExecuteDeleteAsync(ct);
-        await db.AclScopes.ExecuteDeleteAsync(ct);
-        await db.Securables.ExecuteDeleteAsync(ct);
-        await db.SpaceGroupMembers.ExecuteDeleteAsync(ct);
-        await db.SpaceGroups.ExecuteDeleteAsync(ct);
-        await db.Libraries.ExecuteDeleteAsync(ct);
-        await db.Spaces.ExecuteDeleteAsync(ct);
-        await db.PersonalDrives.ExecuteDeleteAsync(ct);
-        await db.PrincipalMemberships.ExecuteDeleteAsync(ct);
-        await db.Principals.ExecuteDeleteAsync(ct);
+        Detach();
+        var own = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(ct) : null;
+        if (full)
+        {
+            await db.ScopeGrants.ExecuteDeleteAsync(ct);
+            await db.AclEntries.ExecuteDeleteAsync(ct);
+            await db.AclScopes.ExecuteDeleteAsync(ct);
+            await db.Securables.ExecuteDeleteAsync(ct);
+            await db.SpaceGroupMembers.ExecuteDeleteAsync(ct);
+            await db.SpaceGroups.ExecuteDeleteAsync(ct);
+            await db.Libraries.ExecuteDeleteAsync(ct);
+            await db.Spaces.ExecuteDeleteAsync(ct);
+            await db.PersonalDrives.ExecuteDeleteAsync(ct);
+            await db.PrincipalMemberships.ExecuteDeleteAsync(ct);
+            await db.Principals.ExecuteDeleteAsync(ct);
+        }
+        else
+        {
+            var nodes = db.Securables.Where(n => wsIds.Contains(n.SpaceId ?? n.PersonalDriveId ?? Guid.Empty)).Select(n => n.Id);
+            await db.ScopeGrants.Where(g => nodes.Contains(g.ScopeId)).ExecuteDeleteAsync(ct);
+            await db.AclEntries.Where(e => nodes.Contains(e.ScopeId)).ExecuteDeleteAsync(ct);
+            await db.AclScopes.Where(a => nodes.Contains(a.ScopeId)).ExecuteDeleteAsync(ct);
+            await db.Securables.Where(n => wsIds.Contains(n.SpaceId ?? n.PersonalDriveId ?? Guid.Empty)).ExecuteDeleteAsync(ct);
+            await db.SpaceGroupMembers.Where(m => oldGroups.Contains(m.SpaceGroupId)).ExecuteDeleteAsync(ct);
+            await db.SpaceGroups.Where(g => wsIds.Contains(g.RootId)).ExecuteDeleteAsync(ct);
+            await db.Libraries.Where(l => wsIds.Contains(l.SpaceId ?? l.PersonalDriveId ?? Guid.Empty)).ExecuteDeleteAsync(ct);
+            await db.Spaces.Where(x => wsIds.Contains(x.Id)).ExecuteDeleteAsync(ct);
+            await db.PersonalDrives.Where(x => wsIds.Contains(x.Id)).ExecuteDeleteAsync(ct);
+            await db.PrincipalMemberships.Where(m => affected.Contains(m.UserId)).ExecuteDeleteAsync(ct);
+            // Users, groups, roles and units: few rows, always refreshed; Space group principals only for these workspaces.
+            await db.Principals.Where(x => x.Kind != PrincipalKind.SpaceGroup || wsIds.Contains(x.RefId ?? Guid.Empty)).ExecuteDeleteAsync(ct);
+        }
         db.Principals.AddRange(principals.DistinctBy(p => p.Id));
         db.Spaces.AddRange(spaces);
         db.PersonalDrives.AddRange(drives);
@@ -266,9 +310,25 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock)
         db.ScopeGrants.AddRange(grants);
         db.PrincipalMemberships.AddRange(memberships);
         await db.SaveChangesAsync(ct);
-        await BumpMembershipVersionsAsync(users.Select(u => u.Id), ct);
-        await tx.CommitAsync(ct);
+        await BumpMembershipVersionsAsync(affected, ct);
+        Detach();
+        if (own is not null)
+        {
+            await own.CommitAsync(ct);
+            await own.DisposeAsync();
+        }
         return new Result(securables.Count, scopes.Count, entries.Count, grants.Count, principals.Count, memberships.Count);
+    }
+
+    /// <summary>
+    /// The rows of the new model are rewritten with bulk deletes the change tracker does not see: forget what an earlier projection in
+    /// the same unit of work left tracked, and what this one added.
+    /// </summary>
+    private void Detach()
+    {
+        foreach (var e in db.ChangeTracker.Entries().Where(e => e.Entity is Principal or PrincipalMembership or Space or PersonalDrive or Library or SpaceGroup
+                     or SpaceGroupMember or Securable or AclScope or AclEntry or ScopeGrant or MembershipVersion).ToList())
+            e.State = EntityState.Detached;
     }
 
     /// <summary>Seeds or refreshes the built-in permission levels (custom levels are left alone).</summary>

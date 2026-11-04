@@ -66,6 +66,7 @@ public interface IAppDbContext
     DbSet<SyncDevice> Devices { get; }
     DbSet<OAuthAuthorizationCode> OAuthAuthorizationCodes { get; }
     DatabaseFacade Database { get; }
+    Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }
 
