@@ -574,3 +574,47 @@ public class LegalHoldsController : ApiControllerBase
 
     public sealed record ReleaseHoldBody(string Reason);
 }
+
+/// <summary>Người dùng nghỉ việc / chuyển đơn vị (đặc tả 8.3).</summary>
+[Route("api/v1/admin/offboarding")]
+public class OffboardingController : ApiControllerBase
+{
+    [HttpGet]
+    public Task<IReadOnlyList<Application.Features.Users.OffboardingReportDto>> List() => Mediator.Send(new Application.Features.Users.ListOffboardingsQuery());
+
+    [HttpGet("{userId:guid}/preview")]
+    public Task<Application.Features.Users.OffboardingPreviewDto> Preview(Guid userId) => Mediator.Send(new Application.Features.Users.GetOffboardingPreviewQuery(userId));
+
+    [HttpPost("{userId:guid}")]
+    public Task<Application.Features.Users.OffboardingReportDto> Run(Guid userId, Application.Features.Users.OffboardUserCommand cmd) => Mediator.Send(cmd with { UserId = userId });
+
+    /// <summary>Biên bản bàn giao (Excel/PDF).</summary>
+    [HttpGet("records/{id:guid}/export")]
+    public async Task<IActionResult> Export(Guid id, [FromQuery] string format = "xlsx")
+    {
+        var file = await Mediator.Send(new Application.Features.Users.ExportOffboardingQuery(id, format));
+        return File(file.Content, file.ContentType, file.FileName);
+    }
+
+    /// <summary>Chuyển đơn vị: kèm danh sách quyền thay đổi theo.</summary>
+    [HttpPost("{userId:guid}/unit")]
+    public Task<Application.Features.Users.UnitChangeReportDto> ChangeUnit(Guid userId, Application.Features.Users.ChangeUserUnitCommand cmd) => Mediator.Send(cmd with { UserId = userId });
+}
+
+/// <summary>Truy cập khẩn cấp của quản trị (đặc tả 8.5).</summary>
+[Route("api/v1/admin/emergency-access")]
+public class EmergencyAccessController : ApiControllerBase
+{
+    [HttpGet]
+    public Task<IReadOnlyList<Application.Features.Access.EmergencyAccessDto>> List() => Mediator.Send(new Application.Features.Access.ListEmergencyAccessQuery());
+
+    [HttpPost]
+    public async Task<IActionResult> Grant(Application.Features.Access.GrantEmergencyAccessCommand cmd) => Ok(new { id = await Mediator.Send(cmd) });
+
+    [HttpPost("{id:guid}/end")]
+    public async Task<IActionResult> End(Guid id)
+    {
+        await Mediator.Send(new Application.Features.Access.EndEmergencyAccessCommand(id));
+        return NoContent();
+    }
+}

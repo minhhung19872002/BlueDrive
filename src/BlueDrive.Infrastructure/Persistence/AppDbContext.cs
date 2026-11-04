@@ -41,6 +41,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<SensitivityLabel> SensitivityLabels => Set<SensitivityLabel>();
     public DbSet<RetentionPolicy> RetentionPolicies => Set<RetentionPolicy>();
     public DbSet<LegalHold> LegalHolds => Set<LegalHold>();
+    public DbSet<OffboardingRecord> OffboardingRecords => Set<OffboardingRecord>();
+    public DbSet<EmergencyAccess> EmergencyAccesses => Set<EmergencyAccess>();
     public DbSet<LibraryColumn> LibraryColumns => Set<LibraryColumn>();
     public DbSet<FileColumnValue> FileColumnValues => Set<FileColumnValue>();
     public DbSet<FolderColumnDefault> FolderColumnDefaults => Set<FolderColumnDefault>();
@@ -285,6 +287,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Reason).HasMaxLength(1000);
             e.Property(x => x.ReleaseReason).HasMaxLength(1000);
             e.HasIndex(x => x.ReleasedAt);
+        });
+        b.Entity<OffboardingRecord>(e =>
+        {
+            e.HasIndex(x => x.UserId);
+            e.Property(x => x.ReportJson).HasColumnType("jsonb");
+        });
+        b.Entity<EmergencyAccess>(e =>
+        {
+            e.Property(x => x.Reason).HasMaxLength(1000);
+            e.HasIndex(x => new { x.WorkspaceId, x.CreatedAt });
         });
         b.Entity<LibraryColumn>(e =>
         {

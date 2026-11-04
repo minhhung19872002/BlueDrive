@@ -55,6 +55,8 @@ public interface IAppDbContext
     DbSet<SensitivityLabel> SensitivityLabels { get; }
     DbSet<RetentionPolicy> RetentionPolicies { get; }
     DbSet<LegalHold> LegalHolds { get; }
+    DbSet<OffboardingRecord> OffboardingRecords { get; }
+    DbSet<EmergencyAccess> EmergencyAccesses { get; }
     DbSet<LibraryColumn> LibraryColumns { get; }
     DbSet<FileColumnValue> FileColumnValues { get; }
     DbSet<FolderColumnDefault> FolderColumnDefaults { get; }

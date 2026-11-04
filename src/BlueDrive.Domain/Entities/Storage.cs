@@ -482,3 +482,31 @@ public class LegalHold : Entity
     public Guid? ReleasedBy { get; set; }
     public string? ReleaseReason { get; set; }
 }
+
+/// <summary>Spec 8.3: what was done when a user left (the handover report).</summary>
+public class OffboardingRecord : Entity
+{
+    public Guid UserId { get; set; }
+    public Guid RecipientId { get; set; }
+    public Guid PerformedBy { get; set; }
+    public DateTime PerformedAt { get; set; }
+    public bool RevokedLinks { get; set; }
+    /// <summary>The report lines (item, detail).</summary>
+    public string ReportJson { get; set; } = "[]";
+}
+
+/// <summary>Spec 8.5: an administrator's temporary access (at most 24 hours) to a Drive or a Space, with its reason.</summary>
+public class EmergencyAccess : Entity
+{
+    public Guid AdminId { get; set; }
+    public Guid WorkspaceId { get; set; }
+    public string Reason { get; set; } = "";
+    /// <summary>"Điều tra": the owner and managers are not told (needs the investigation permission).</summary>
+    public bool Investigation { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime ExpiresAt { get; set; }
+    public DateTime? EndedAt { get; set; }
+    public Guid? EndedBy { get; set; }
+    /// <summary>The ACL entries given (the root and the places below it with their own permissions).</summary>
+    public List<Guid> EntryIds { get; set; } = [];
+}

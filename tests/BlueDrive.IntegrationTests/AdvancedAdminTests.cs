@@ -240,4 +240,69 @@ public class AdvancedAdminTests(ApiFactory factory)
         var (other, _, _) = await factory.CreateUserClientAsync("bien_tap");
         (await other.GetAsync($"/api/v1/storage/usage?workspaceId={ws}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
+
+    [Fact]
+    public async Task Offboarding_hands_the_drive_over_keeping_shares_and_reports_it()
+    {
+        var admin = await factory.AdminClientAsync();
+        var (leaver, leaverId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (_, recipientId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (reader, readerId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var drive = await StorageTests.PersonalWorkspaceAsync(leaver);
+        var folder = (await (await leaver.PostAsJsonAsync("/api/v1/folders", new { workspaceId = drive, name = "Kế hoạch" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var file = (await StorageTests.UploadAsync(leaver, drive, folder, "ke-hoach.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var loose = (await StorageTests.UploadAsync(leaver, drive, null, "rieng.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var levels = (await (await leaver.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+        await (await leaver.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { new { kind = "user", id = readerId } }, levelId = levels["viewer"], notify = false })).ReadJsonAsync();
+        var space = (await (await leaver.PostAsJsonAsync("/api/v1/workspaces", new { name = "Space của người nghỉ", type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        (await leaver.GetAsync("/api/v1/admin/offboarding")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var preview = await (await admin.GetAsync($"/api/v1/admin/offboarding/{leaverId}/preview")).ReadJsonAsync();
+        preview.GetProperty("files").GetInt32().Should().Be(2);
+        preview.GetProperty("spaces").EnumerateArray().Single(s => s.GetProperty("id").GetGuid() == space).GetProperty("soleOwner").GetBoolean().Should().BeTrue();
+
+        var report = await (await admin.PostAsJsonAsync($"/api/v1/admin/offboarding/{leaverId}", new { recipientId, revokeLinks = true, deactivate = true })).ReadJsonAsync();
+        report.GetProperty("lines").EnumerateArray().Should().NotBeEmpty();
+        // In the recipient's Drive, under "Dữ liệu từ …", with the share kept.
+        var moved = await (await admin.GetAsync($"/api/v1/users/{recipientId}")).ReadJsonAsync();
+        moved.GetProperty("usedBytes").GetInt64().Should().Be(StorageTests.Png.Length * 2);
+        (await reader.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK, "the share stays");
+        (await reader.GetAsync($"/api/v1/files/{loose}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await (await admin.GetAsync($"/api/v1/users/{leaverId}")).ReadJsonAsync()).GetProperty("isActive").GetBoolean().Should().BeFalse();
+        var spaces = await (await admin.GetAsync($"/api/v1/workspaces/all?q=Space%20c%E1%BB%A7a%20ng%C6%B0%E1%BB%9Di%20ngh%E1%BB%89&pageSize=50")).ReadJsonAsync();
+        spaces.GetProperty("items").EnumerateArray().Single(w => w.GetProperty("id").GetGuid() == space).GetProperty("ownerId").GetGuid().Should().Be(recipientId);
+        var id = report.GetProperty("id").GetGuid();
+        var xlsx = await admin.GetAsync($"/api/v1/admin/offboarding/records/{id}/export?format=xlsx");
+        xlsx.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await xlsx.Content.ReadAsByteArrayAsync()).Length.Should().BeGreaterThan(100);
+    }
+
+    [Fact]
+    public async Task Emergency_access_is_temporary_audited_and_told_to_the_owner()
+    {
+        var admin = await factory.AdminClientAsync();
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var drive = await StorageTests.PersonalWorkspaceAsync(owner);
+        var file = (await StorageTests.UploadAsync(owner, drive, null, "noi-bo.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        (await admin.GetAsync($"/api/v1/files/{file}")).IsSuccessStatusCode.Should().BeFalse("administrators do not see others' content by default");
+        (await admin.PostAsJsonAsync("/api/v1/admin/emergency-access", new { workspaceId = drive, hours = 25, reason = "Kiểm tra sự cố an toàn thông tin" }))
+            .StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await admin.PostAsJsonAsync("/api/v1/admin/emergency-access", new { workspaceId = drive, hours = 2, reason = "ngắn" })).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await owner.PostAsJsonAsync("/api/v1/admin/emergency-access", new { workspaceId = drive, hours = 2, reason = "Kiểm tra sự cố an toàn thông tin" }))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        var id = (await (await admin.PostAsJsonAsync("/api/v1/admin/emergency-access", new { workspaceId = drive, hours = 2, reason = "Kiểm tra sự cố an toàn thông tin" }))
+            .ReadJsonAsync()).GetProperty("id").GetGuid();
+        (await admin.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await (await owner.GetAsync("/api/v1/notifications")).ReadJsonAsync()).GetProperty("items").EnumerateArray()
+            .Should().Contain(n => n.GetProperty("type").GetString() == "emergency");
+        var row = (await (await admin.GetAsync("/api/v1/admin/emergency-access")).ReadJsonAsync()).EnumerateArray().Single(r => r.GetProperty("id").GetGuid() == id);
+        row.GetProperty("active").GetBoolean().Should().BeTrue();
+        row.GetProperty("expiresAt").GetDateTime().Should().BeCloseTo(DateTime.UtcNow.AddHours(2), TimeSpan.FromMinutes(5));
+        var audit = await (await admin.PostAsJsonAsync("/api/v1/audit-logs/search?pageSize=50", new { actions = new[] { "emergency_access" }, workspaceId = drive })).ReadJsonAsync();
+        audit.GetProperty("items").EnumerateArray().Should().NotBeEmpty();
+
+        (await admin.PostAsync($"/api/v1/admin/emergency-access/{id}/end", null)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await admin.GetAsync($"/api/v1/files/{file}")).IsSuccessStatusCode.Should().BeFalse();
+    }
 }

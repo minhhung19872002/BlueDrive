@@ -34,6 +34,7 @@ public static class Perm
     public const string AnnouncementView = "announcement.view", AnnouncementEdit = "announcement.edit";
     public const string DataExportAdmin = "dataexport.admin";
     public const string RetentionView = "retention.view", RetentionAdmin = "retention.admin";
+    public const string EmergencyAdmin = "emergency.admin", AuditInvestigation = "investigation.admin";
     public const string DocView = "doc.view", DocUpload = "doc.upload", DocEdit = "doc.edit", DocDelete = "doc.delete",
         DocShare = "doc.share", DocApprove = "doc.approve", DocAdmin = "doc.admin";
     public const string WorkspaceView = "workspace.view", WorkspaceCreate = "workspace.upload", WorkspaceEdit = "workspace.edit",
@@ -59,6 +60,8 @@ public static class Perm
         ("monitor", "Giám sát hệ thống", "session", "Phiên đăng nhập", ["view", "admin"]),
         ("monitor", "Giám sát hệ thống", "device", "Thiết bị đồng bộ (BlueDrive Desktop)", ["view", "admin"]),
         ("monitor", "Giám sát hệ thống", "dashboard", "Dashboard quản trị", ["view"]),
+        ("monitor", "Giám sát hệ thống", "emergency", "Truy cập khẩn cấp (tối đa 24 giờ, có ghi nhật ký và thông báo)", ["admin"]),
+        ("monitor", "Giám sát hệ thống", "investigation", "Điều tra (truy cập khẩn cấp không thông báo)", ["admin"]),
         ("ops", "Vận hành", "settings", "Cấu hình hệ thống", ["view", "edit"]),
         ("ops", "Vận hành", "backup", "Sao lưu & phục hồi", ["view", "admin"]),
         ("ops", "Vận hành", "ticket", "Hỗ trợ & sự cố", ["view", "upload", "edit", "admin"]),

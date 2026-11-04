@@ -141,7 +141,7 @@ public sealed class AclEditor(IAppDbContext db, TimeProvider clock)
     }
 
     /// <summary>The node and the nodes below it that have their own ACL (ltree on PostgreSQL).</summary>
-    private async Task<List<Guid>> UniqueScopesUnderAsync(Securable node, CancellationToken ct) =>
+    public async Task<List<Guid>> UniqueScopesUnderAsync(Securable node, CancellationToken ct) =>
         db.Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL"
             ? await db.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM securables WHERE path <@ {node.Path}::ltree AND has_unique_acl").ToListAsync(ct)
             : await Subtree(node).Where(s => s.HasUniqueAcl).Select(s => s.Id).ToListAsync(ct);

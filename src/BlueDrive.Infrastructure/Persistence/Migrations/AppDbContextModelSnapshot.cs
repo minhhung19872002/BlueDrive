@@ -726,6 +726,61 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.ToTable("comments", (string)null);
                 });
 
+            modelBuilder.Entity("BlueDrive.Domain.Entities.EmergencyAccess", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AdminId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("admin_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ended_at");
+
+                    b.Property<Guid?>("EndedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ended_by");
+
+                    b.PrimitiveCollection<List<Guid>>("EntryIds")
+                        .IsRequired()
+                        .HasColumnType("uuid[]")
+                        .HasColumnName("entry_ids");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<bool>("Investigation")
+                        .HasColumnType("boolean")
+                        .HasColumnName("investigation");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_emergency_accesses");
+
+                    b.HasIndex("WorkspaceId", "CreatedAt")
+                        .HasDatabaseName("ix_emergency_accesses_workspace_id_created_at");
+
+                    b.ToTable("emergency_accesses", (string)null);
+                });
+
             modelBuilder.Entity("BlueDrive.Domain.Entities.FileCatalogItem", b =>
                 {
                     b.Property<Guid>("FileId")
@@ -1622,6 +1677,47 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_oauth_authorization_codes_code_hash");
 
                     b.ToTable("oauth_authorization_codes", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.OffboardingRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("PerformedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("performed_at");
+
+                    b.Property<Guid>("PerformedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("performed_by");
+
+                    b.Property<Guid>("RecipientId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recipient_id");
+
+                    b.Property<string>("ReportJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("report_json");
+
+                    b.Property<bool>("RevokedLinks")
+                        .HasColumnType("boolean")
+                        .HasColumnName("revoked_links");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_offboarding_records");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_offboarding_records_user_id");
+
+                    b.ToTable("offboarding_records", (string)null);
                 });
 
             modelBuilder.Entity("BlueDrive.Domain.Entities.Organization", b =>
