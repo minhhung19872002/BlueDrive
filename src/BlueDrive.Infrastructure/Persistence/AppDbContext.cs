@@ -34,6 +34,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ResourcePermission> ResourcePermissions => Set<ResourcePermission>();
     public DbSet<Share> Shares => Set<Share>();
     public DbSet<ShareLink> ShareLinks => Set<ShareLink>();
+    public DbSet<FileText> FileTexts => Set<FileText>();
     public DbSet<Comment> Comments => Set<Comment>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<SavedSearch> SavedSearches => Set<SavedSearch>();
@@ -223,6 +224,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(x => new { x.ResourceType, x.ResourceId });
         });
         b.Entity<ShareLink>(e => { e.HasIndex(x => x.Token).IsUnique(); e.HasIndex(x => new { x.ResourceType, x.ResourceId }); });
+        b.Entity<FileText>(e =>
+        {
+            e.HasKey(x => x.FileId);
+            e.HasOne<StoredFile>().WithOne().HasForeignKey<FileText>(x => x.FileId).OnDelete(DeleteBehavior.Cascade);
+            if (Database.IsNpgsql())
+            {
+                // Accent-insensitive like files.search_vector; weight D: a match in the name or title ranks first.
+                e.Property<NpgsqlTsVector>("ContentVector").HasComputedColumnSql("setweight(to_tsvector('simple', f_unaccent(text)), 'D')", stored: true);
+                e.HasIndex("ContentVector").HasMethod("GIN");
+            }
+        });
 
         b.Entity<Comment>().HasIndex(x => new { x.FileId, x.CreatedAt });
         b.Entity<Notification>().HasIndex(x => new { x.UserId, x.IsRead, x.CreatedAt });

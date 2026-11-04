@@ -4,6 +4,7 @@ using BlueDrive.Infrastructure.Media;
 using Hangfire;
 using Hangfire.Server;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace BlueDrive.Infrastructure.Jobs;
@@ -61,6 +62,34 @@ public sealed class TrashRetentionJob(ISender mediator, ILogger<TrashRetentionJo
     }
 }
 
+/// <summary>
+/// Reads the text of documents stored before searching inside documents existed, or whose reading failed: a batch every 10 minutes
+/// until every current version has its row in file_texts (new uploads get theirs right after the scan).
+/// </summary>
+public sealed class TextIndexBackfillJob(IAppDbContext db, Media.TextIndexStep step, ILogger<TextIndexBackfillJob> logger)
+{
+    public const int BatchSize = 200;
+    private static readonly string[] Extensions = [.. Media.DocumentText.Extensions];
+
+    [AutomaticRetry(Attempts = 0)]
+    [DisableConcurrentExecution(600)]
+    [Queue(HangfireSetup.QueueMaintenance)]
+    public async Task<int> RunAsync(CancellationToken ct)
+    {
+        Domain.Enums.ScanStatus[] ready = [Domain.Enums.ScanStatus.Clean, Domain.Enums.ScanStatus.Skipped, Domain.Enums.ScanStatus.TooLarge, Domain.Enums.ScanStatus.Failed];
+        var todo = await db.Files.Where(f => !f.IsDeleted && f.CurrentVersionId != null && ready.Contains(f.ScanStatus) && Extensions.Contains(f.Extension)
+                                             && !db.FileTexts.Any(t => t.FileId == f.Id && t.VersionId == f.CurrentVersionId))
+            .OrderBy(f => f.CreatedAt).Take(BatchSize).ToListAsync(ct);
+        foreach (var f in todo)
+        {
+            var v = await db.FileVersions.FirstOrDefaultAsync(x => x.Id == f.CurrentVersionId, ct);
+            if (v is not null) await step.IndexAsync(f, v, ct);
+        }
+        if (todo.Count > 0) logger.LogInformation("Đã đọc nội dung {Count} tệp để tìm kiếm", todo.Count);
+        return todo.Count;
+    }
+}
+
 public sealed class SyncJournalRetentionJob(ISender mediator, ILogger<SyncJournalRetentionJob> logger)
 {
     [Queue(HangfireSetup.QueueMaintenance)]
@@ -79,6 +108,7 @@ public sealed class StorageRecurringJobs(IRecurringJobManager jobs) : IRecurring
             new RecurringJobOptions { TimeZone = Reporting.VietnamTime.Zone });
         jobs.AddOrUpdate<SyncJournalRetentionJob>("sync-journal-retention", j => j.RunAsync(CancellationToken.None), "45 1 * * *",
             new RecurringJobOptions { TimeZone = Reporting.VietnamTime.Zone });
+        jobs.AddOrUpdate<TextIndexBackfillJob>("text-index-backfill", j => j.RunAsync(CancellationToken.None), "*/10 * * * *");
         return Task.CompletedTask;
     }
 }

@@ -10,8 +10,8 @@ using NpgsqlTypes;
 namespace BlueDrive.Infrastructure.Search;
 
 /// <summary>
-/// PostgreSQL full-text search on files.search_vector (unaccented, 'simple' config) with prefix matching, plus an
-/// unaccented substring fallback on the name. The access scope is expressed in SQL; the handler re-checks each hit.
+/// PostgreSQL full-text search on files.search_vector and on the text inside documents (file_texts.content_vector), unaccented,
+/// 'simple' config, with prefix matching, plus an unaccented substring fallback on the name. The access scope is expressed in SQL; the handler re-checks each hit.
 /// </summary>
 public sealed class FileSearchService(AppDbContext db, TimeProvider clock) : IFileSearchService
 {
@@ -84,9 +84,16 @@ public sealed class FileSearchService(AppDbContext db, TimeProvider clock) : IFi
         {
             var tsQuery = string.Join(" & ", terms.Select(t => t + ":*"));
             var phrase = string.Join(' ', terms);
+            // Name, title, description, tags — and the text inside the document (file_texts, weight D: ranks after the name).
             var matched = q.Where(f => EF.Property<NpgsqlTsVector>(f, "SearchVector").Matches(EF.Functions.ToTsQuery("simple", tsQuery))
-                                       || DbFn.Unaccent(f.Name).Contains(phrase));
-            var ranked = matched.Select(f => new { f.Id, f.CreatedAt, f.Name, f.SizeBytes, Rank = EF.Property<NpgsqlTsVector>(f, "SearchVector").Rank(EF.Functions.ToTsQuery("simple", tsQuery)) });
+                                       || DbFn.Unaccent(f.Name).Contains(phrase)
+                                       || db.FileTexts.Any(t => t.FileId == f.Id && EF.Property<NpgsqlTsVector>(t, "ContentVector").Matches(EF.Functions.ToTsQuery("simple", tsQuery))));
+            var ranked = matched.Select(f => new
+            {
+                f.Id, f.CreatedAt, f.Name, f.SizeBytes,
+                Rank = EF.Property<NpgsqlTsVector>(f, "SearchVector").Rank(EF.Functions.ToTsQuery("simple", tsQuery))
+                       + (db.FileTexts.Where(t => t.FileId == f.Id).Select(t => (float?)EF.Property<NpgsqlTsVector>(t, "ContentVector").Rank(EF.Functions.ToTsQuery("simple", tsQuery))).FirstOrDefault() ?? 0f),
+            });
             ranked = c.Sort switch
             {
                 "-createdAt" => ranked.OrderByDescending(x => x.CreatedAt),

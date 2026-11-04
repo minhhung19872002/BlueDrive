@@ -575,6 +575,42 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.ToTable("file_catalog_items", (string)null);
                 });
 
+            modelBuilder.Entity("BlueDrive.Domain.Entities.FileText", b =>
+                {
+                    b.Property<Guid>("FileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("file_id");
+
+                    b.Property<NpgsqlTsVector>("ContentVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasColumnName("content_vector")
+                        .HasComputedColumnSql("setweight(to_tsvector('simple', f_unaccent(text)), 'D')", true);
+
+                    b.Property<DateTime>("ExtractedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("extracted_at");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("text");
+
+                    b.Property<Guid>("VersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("version_id");
+
+                    b.HasKey("FileId")
+                        .HasName("pk_file_texts");
+
+                    b.HasIndex("ContentVector")
+                        .HasDatabaseName("ix_file_texts_content_vector");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("ContentVector"), "GIN");
+
+                    b.ToTable("file_texts", (string)null);
+                });
+
             modelBuilder.Entity("BlueDrive.Domain.Entities.FileVersion", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2386,6 +2422,16 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_file_catalog_items_files_file_id");
 
                     b.Navigation("CatalogItem");
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.FileText", b =>
+                {
+                    b.HasOne("BlueDrive.Domain.Entities.StoredFile", null)
+                        .WithOne()
+                        .HasForeignKey("BlueDrive.Domain.Entities.FileText", "FileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_file_texts_files_file_id");
                 });
 
             modelBuilder.Entity("BlueDrive.Domain.Entities.FileVersion", b =>

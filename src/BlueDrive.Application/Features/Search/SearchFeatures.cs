@@ -81,6 +81,8 @@ public sealed class SearchFilesHandler(IAppDbContext db, ICurrentUser me, IResou
         var meta = await db.Files.AsNoTracking().Include(f => f.Workspace).Include(f => f.Folder).Where(f => ids.Contains(f.Id))
             .Select(f => new { f, Org = db.Organizations.Where(o => o.Id == f.UploaderOrganizationId).Select(o => o.Name).FirstOrDefault() }).ToDictionaryAsync(x => x.f.Id, ct);
         var terms = SearchText.Terms(q.Criteria.Q);
+        // Text inside the documents of this page, for the excerpt when the words are found there and not in the description.
+        var bodies = terms.Count == 0 ? [] : await db.FileTexts.AsNoTracking().Where(t => ids.Contains(t.FileId) && t.Text != "").ToDictionaryAsync(t => t.FileId, t => t.Text, ct);
         var hits = new List<SearchHit>();
         foreach (var (fileId, rank) in page)
         {
@@ -90,7 +92,8 @@ public sealed class SearchFilesHandler(IAppDbContext db, ICurrentUser me, IResou
             var m = meta[fileId];
             var location = FileLocation.ToText(await FileLocation.BuildAsync(db, m.f.Workspace!, m.f.Folder, uid, ct));
             hits.Add(new SearchHit(item, location, SearchText.Highlight(m.f.Name, terms), SearchText.Highlight(m.f.Title, terms),
-                SearchText.Snippet(m.f.Description, terms), rank, m.Org));
+                !SearchText.Mentions(m.f.Description, terms) && bodies.TryGetValue(fileId, out var body) && SearchText.Mentions(body, terms)
+                    ? SearchText.Snippet(body, terms) : SearchText.Snippet(m.f.Description, terms), rank, m.Org));
         }
         var withThumbs = ThumbnailUrls.Apply(hits.Select(h => h.Item), tickets, uid);
         hits = hits.Select((h, i) => h with { Item = withThumbs[i] }).ToList();
@@ -128,6 +131,14 @@ public static class SearchText
             if (marks[i] && (i == original.Length - 1 || !marks[i + 1])) sb.Append("</mark>");
         }
         return sb.ToString();
+    }
+
+    /// <summary>One of the words occurs in <paramref name="text"/> (accent-insensitive).</summary>
+    public static bool Mentions(string? text, IReadOnlyList<string> terms)
+    {
+        if (string.IsNullOrEmpty(text) || terms.Count == 0) return false;
+        var plain = TextUtil.Unaccent(text);
+        return terms.Any(t => plain.Contains(t, StringComparison.Ordinal));
     }
 
     public static string? Snippet(string? text, IReadOnlyList<string> terms)

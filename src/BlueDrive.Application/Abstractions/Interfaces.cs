@@ -8,6 +8,7 @@ namespace BlueDrive.Application.Abstractions;
 public interface IAppDbContext
 {
     DbSet<Organization> Organizations { get; }
+    DbSet<FileText> FileTexts { get; }
     DbSet<User> Users { get; }
     DbSet<PasswordHistory> PasswordHistories { get; }
     DbSet<UserGroup> UserGroups { get; }

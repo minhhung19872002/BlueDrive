@@ -5,6 +5,7 @@ using BlueDrive.Domain.Enums;
 using BlueDrive.Infrastructure.Persistence;
 using BlueDrive.IntegrationTests.Infrastructure;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace BlueDrive.IntegrationTests;
@@ -39,6 +40,72 @@ public class SearchTests(ApiFactory factory)
 
         var quick = await (await owner.GetAsync($"/api/v1/search?q={marker}")).ReadJsonAsync();
         quick.GetProperty("total").GetInt32().Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Words_inside_documents_are_found_with_an_excerpt_and_only_by_people_who_can_see_them()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (other, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var marker = "Nd" + Random.Shared.Next(100000, 999999);
+        byte[] workbook;
+        using (var wb = new ClosedXML.Excel.XLWorkbook())
+        {
+            wb.AddWorksheet("Kế hoạch").Cell(3, 2).Value = $"Chiến dịch truyền thông dân số tỉnh Quảng Trị mã {marker}";
+            using var ms = new MemoryStream();
+            wb.SaveAs(ms);
+            workbook = ms.ToArray();
+        }
+        var xlsx = await StorageTests.UploadAsync(owner, ws, null, "ke-hoach-2026.xlsx", workbook);
+        var txt = await StorageTests.UploadAsync(owner, ws, null, "ghi-chu.txt", System.Text.Encoding.UTF8.GetBytes($"Biên bản họp: thống nhất in tờ rơi {marker}."));
+        using (var scope = factory.Services.CreateScope())
+        {
+            var processor = scope.ServiceProvider.GetRequiredService<BlueDrive.Infrastructure.Media.IFileProcessor>();
+            foreach (var up in new[] { xlsx, txt })
+                await processor.ProcessAsync(up.GetProperty("fileId").GetGuid(), up.GetProperty("versionId").GetGuid(), CancellationToken.None);
+        }
+
+        var res = await Search(owner, new { q = $"quang tri {marker}" });
+        var hit = res.GetProperty("items").EnumerateArray().Single();
+        hit.GetProperty("item").GetProperty("id").GetGuid().Should().Be(xlsx.GetProperty("fileId").GetGuid());
+        hit.GetProperty("snippet").GetString().Should().Contain("<mark>Quảng</mark> <mark>Trị</mark>", "the excerpt comes from the document text");
+        (await Search(owner, new { q = marker })).GetProperty("total").GetInt32().Should().Be(2);
+        (await Search(owner, new { q = $"to roi {marker}" })).GetProperty("items").EnumerateArray().Single()
+            .GetProperty("item").GetProperty("name").GetString().Should().Be("ghi-chu.txt");
+        (await Search(other, new { q = marker })).GetProperty("total").GetInt32().Should().Be(0, "other users cannot find what is inside private files");
+
+        // A new version replaces the text: the old words are no longer found.
+        var v2 = await StorageTests.UploadAsync(owner, ws, null, "ghi-chu.txt", System.Text.Encoding.UTF8.GetBytes("Nội dung đã thay thế."),
+            target: txt.GetProperty("fileId").GetGuid());
+        v2.GetProperty("fileId").GetGuid().Should().Be(txt.GetProperty("fileId").GetGuid());
+        using (var scope = factory.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<BlueDrive.Infrastructure.Media.IFileProcessor>()
+                .ProcessAsync(v2.GetProperty("fileId").GetGuid(), v2.GetProperty("versionId").GetGuid(), CancellationToken.None);
+        (await Search(owner, new { q = $"to roi {marker}" })).GetProperty("total").GetInt32().Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Documents_stored_before_content_search_are_read_by_the_backfill_job()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var marker = "Bf" + Random.Shared.Next(100000, 999999);
+        var up = await StorageTests.UploadAsync(owner, ws, null, "cu.txt", System.Text.Encoding.UTF8.GetBytes($"tài liệu cũ {marker}"));
+        var fileId = up.GetProperty("fileId").GetGuid();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            await db.Files.Where(f => f.Id == fileId).ExecuteUpdateAsync(s => s.SetProperty(f => f.ScanStatus, ScanStatus.Clean));
+            await db.FileTexts.Where(t => t.FileId == fileId).ExecuteDeleteAsync(); // as on a server upgraded with files already there
+        }
+        (await Search(owner, new { q = marker })).GetProperty("total").GetInt32().Should().Be(0);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var job = scope.ServiceProvider.GetRequiredService<BlueDrive.Infrastructure.Jobs.TextIndexBackfillJob>();
+            while (await job.RunAsync(CancellationToken.None) == BlueDrive.Infrastructure.Jobs.TextIndexBackfillJob.BatchSize) { }
+        }
+        (await Search(owner, new { q = marker })).GetProperty("total").GetInt32().Should().Be(1);
     }
 
     [Fact]

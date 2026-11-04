@@ -81,7 +81,7 @@ Người có vai trò **Phê duyệt** vào mục *Phê duyệt*: xem trước t
 
 ![Tìm kiếm](images/tim-kiem.png)
 
-- Ô tìm kiếm trên đầu trang hoặc mục **Tìm kiếm nâng cao**. Gõ **có dấu hoặc không dấu** ("dan so" tìm được "Dân số"); tìm theo tên, tiêu đề, mô tả, thẻ.
+- Ô tìm kiếm trên đầu trang hoặc mục **Tìm kiếm nâng cao**. Gõ **có dấu hoặc không dấu** ("dan so" tìm được "Dân số"); tìm theo tên, tiêu đề, mô tả, thẻ và **nội dung bên trong tài liệu** (Word, Excel, PowerPoint, OpenDocument, PDF có lớp chữ, tệp văn bản): kết quả hiện đoạn trích có từ khóa được tô sáng. Tệp mới tải lên tìm được theo nội dung sau khi quét virus xong (vài giây); tệp đã có từ trước được hệ thống đọc dần trong nền. PDF chỉ là ảnh quét (không có lớp chữ) và định dạng cũ `.doc/.xls/.ppt` chưa tìm được theo nội dung.
 - Bộ lọc: loại tư liệu, định dạng, danh mục (loại sản phẩm, chủ đề, chiến dịch, đối tượng...), **đơn vị đăng tải** (gồm đơn vị con), người đăng, khoảng thời gian, dung lượng, thẻ, phạm vi (toàn hệ thống hoặc một nhóm).
 - Kết quả tô sáng từ khóa, hiển thị vị trí và đơn vị đăng tải; chỉ gồm tư liệu bạn có quyền xem. **Lưu bộ lọc** để dùng lại.
 

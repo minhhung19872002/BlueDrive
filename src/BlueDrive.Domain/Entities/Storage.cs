@@ -173,6 +173,18 @@ public class Share : Entity
     public DateTime CreatedAt { get; set; }
 }
 
+/// <summary>
+/// Text of the current version (Word, Excel, PowerPoint, OpenDocument, PDF, plain text), extracted after the malware scan for
+/// searching inside documents. Kept apart from <see cref="StoredFile"/> so listings never load it.
+/// </summary>
+public class FileText
+{
+    public Guid FileId { get; set; }
+    public Guid VersionId { get; set; }
+    public string Text { get; set; } = "";
+    public DateTime ExtractedAt { get; set; }
+}
+
 public class ShareLink : AuditableEntity
 {
     public string Token { get; set; } = "";

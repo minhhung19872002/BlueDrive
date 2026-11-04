@@ -148,7 +148,7 @@
       }
     },
     "search": {
-      "description": "Tìm có dấu hoặc không dấu theo tên, tiêu đề, mô tả, thẻ; kết hợp bộ lọc loại tư liệu, danh mục, đơn vị, thời gian, dung lượng.",
+      "description": "Tìm có dấu hoặc không dấu theo tên, tiêu đề, mô tả, thẻ và nội dung bên trong tài liệu (Word, Excel, PowerPoint, PDF, văn bản); kết hợp bộ lọc loại tư liệu, danh mục, đơn vị, thời gian, dung lượng.",
       "keyword": "Từ khóa",
       "keywordPlaceholder": "VD: dan so 2025, chiến dịch truyền thông...",
       "scope": "Phạm vi",
@@ -193,8 +193,8 @@
         "name": "Tên (A–Z)",
         "size": "Dung lượng lớn nhất"
       },
-      "scopedPlaceholder": "Tìm trong toàn bộ {{scope}} (tên, tiêu đề, mô tả, thẻ)",
-      "folderPlaceholder": "Tìm trong thư mục \"{{name}}\" và các thư mục con (tên, tiêu đề, mô tả, thẻ)",
+      "scopedPlaceholder": "Tìm trong toàn bộ {{scope}} (tên, mô tả, thẻ, nội dung tài liệu)",
+      "folderPlaceholder": "Tìm trong thư mục \"{{name}}\" và các thư mục con (tên, mô tả, thẻ, nội dung tài liệu)",
       "folderScope": "thư mục \"{{name}}\"",
       "scopedFound": "{{count}} kết quả cho \"{{q}}\" trong {{scope}}",
       "scopedFoundMore": "Hơn {{n}} kết quả cho \"{{q}}\" trong {{scope}}",

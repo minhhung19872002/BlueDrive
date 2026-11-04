@@ -74,6 +74,9 @@ public static class DependencyInjection
         services.AddSingleton<IMalwareScanPolicy, Media.ClamAvScanPolicy>();
         services.AddScoped<Media.IFileProcessingStep, Media.MalwareScanStep>();
         services.AddScoped<Media.IFileProcessingStep, Media.ThumbnailStep>();
+        services.AddScoped<Media.TextIndexStep>();
+        services.AddScoped<Media.IFileProcessingStep>(sp => sp.GetRequiredService<Media.TextIndexStep>());
+        services.AddScoped<Jobs.TextIndexBackfillJob>();
 
         services.AddScoped<Application.Features.Search.IFileSearchService, Search.FileSearchService>();
         services.AddSingleton<IAuditObserver, UnusualDownloadObserver>();
