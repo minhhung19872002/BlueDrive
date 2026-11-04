@@ -62,6 +62,7 @@ public sealed class MalwareScanUnavailableException(string message) : IOExceptio
 public sealed class MalwareScanStep(IMalwareScanPolicy policy, IOptions<ClamAvOptions> options, IFileContentService content, IAlertService alerts, IAuditLogger audit,
     ILogger<MalwareScanStep> logger) : IFileProcessingStep
 {
+    public FileProcessingStage Stage => FileProcessingStage.Scan;
     public int Order => 10;
 
     public async Task<bool> RunAsync(StoredFile file, FileVersion version, CancellationToken ct)
@@ -130,6 +131,7 @@ public sealed class MalwareScanStep(IMalwareScanPolicy policy, IOptions<ClamAvOp
 public sealed class ThumbnailStep(IFileContentService content, PlainCopy plain, IOfficeEditorProvider office, IContentTicketService tickets, ILogger<ThumbnailStep> logger)
     : IFileProcessingStep
 {
+    public FileProcessingStage Stage => FileProcessingStage.Derivatives;
     public int Order => 20;
     private const int ThumbSize = 320, PreviewSize = 1600;
 

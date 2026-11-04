@@ -98,7 +98,7 @@ public sealed class FileSearchService(AppDbContext db, TimeProvider clock) : IFi
                 _ => ranked.OrderByDescending(x => x.Rank).ThenByDescending(x => x.CreatedAt),
             };
             var rows = await ranked.Skip((page - 1) * size).Take(size).ToListAsync(ct);
-            var (total, capped) = await TotalAsync(matched, page, size, rows.Count, ct);
+            var (total, capped) = await matched.CappedTotalAsync(page, size, rows.Count, ct);
             return (rows.Select(r => (r.Id, (double)r.Rank)).ToList(), total, capped);
         }
         else
@@ -113,22 +113,8 @@ public sealed class FileSearchService(AppDbContext db, TimeProvider clock) : IFi
                 _ => q.OrderByDescending(f => f.CreatedAt),
             };
             var rows = await q.Skip((page - 1) * size).Take(size).Select(f => f.Id).ToListAsync(ct);
-            var (total, capped) = await TotalAsync(q, page, size, rows.Count, ct);
+            var (total, capped) = await q.CappedTotalAsync(page, size, rows.Count, ct);
             return (rows.Select(id => (id, 0d)).ToList(), total, capped);
         }
-    }
-
-    /// <summary>
-    /// A partly filled page is the last one, so the total follows from it without a second pass over the matches. Otherwise the
-    /// matches are counted up to <see cref="SearchPaging.CountLimit"/> (or one page past this one); beyond that the total is a
-    /// lower bound and the client shows "more than".
-    /// </summary>
-    private static async Task<(int Total, bool Capped)> TotalAsync(IQueryable<StoredFile> matched, int page, int size, int rowsOnPage, CancellationToken ct)
-    {
-        var seen = (page - 1) * size + rowsOnPage;
-        if (rowsOnPage < size && (rowsOnPage > 0 || page == 1)) return (seen, false);
-        var limit = Math.Max(SearchPaging.CountLimit, seen + size);
-        var n = await matched.Take(limit + 1).CountAsync(ct);
-        return n > limit ? (limit, true) : (n, false);
     }
 }

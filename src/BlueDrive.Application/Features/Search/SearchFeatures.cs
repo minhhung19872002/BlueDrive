@@ -42,11 +42,8 @@ public sealed record SearchResult(IReadOnlyList<SearchHit> Items, int Total, int
 
 public static class SearchPaging
 {
-    /// <summary>
-    /// Matches are counted up to this number (or one page past the current one). An exact count of a broad term ("dân số" in 80 000
-    /// files) re-checks the access rules of every match and cost as much as the page itself (load test T1, docs/bao-cao-kiem-thu-tai.md).
-    /// </summary>
-    public const int CountLimit = 1000;
+    /// <summary>Matches are counted up to this number: an exact count of a broad term re-checks the access rules of every match.</summary>
+    public const int CountLimit = PagingExtensions.CountLimit;
 }
 
 /// <summary>Accent-insensitive full-text search over files the user can access (implemented with PostgreSQL FTS).</summary>

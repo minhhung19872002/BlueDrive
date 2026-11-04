@@ -7,7 +7,7 @@ namespace BlueDrive.Infrastructure.Jobs;
 
 public static class HangfireSetup
 {
-    public const string QueueDefault = "default", QueueMedia = "media", QueueReports = "reports", QueueMaintenance = "maintenance";
+    public const string QueueDefault = "default", QueueScan = "scan", QueueMedia = "media", QueueReports = "reports", QueueMaintenance = "maintenance";
 
     /// <summary>Registers Hangfire with PostgreSQL storage. API enqueues only; the Worker runs the server.</summary>
     public static IServiceCollection AddBlueDriveHangfire(this IServiceCollection services, IConfiguration config, bool runServer)
@@ -30,6 +30,13 @@ public static class HangfireSetup
                 o.ServerName = $"worker-{Environment.MachineName}";
                 o.Queues = [QueueDefault, QueueMedia, QueueReports, QueueMaintenance];
                 o.WorkerCount = config.GetValue("Worker:Concurrency", Math.Max(2, Environment.ProcessorCount / 2));
+            });
+            // Malware scans get their own workers: they gate downloads by other users, and are quick next to thumbnails.
+            services.AddHangfireServer(o =>
+            {
+                o.ServerName = $"scan-{Environment.MachineName}";
+                o.Queues = [QueueScan];
+                o.WorkerCount = config.GetValue("Worker:ScanConcurrency", 2);
             });
         }
         return services;

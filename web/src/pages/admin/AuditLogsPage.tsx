@@ -311,7 +311,10 @@ export default function AuditLogsPage() {
             total: query.data?.total ?? 0,
             showSizeChanger: true,
             pageSizeOptions: [20, 50, 100, 200],
-            showTotal: (count) => t('common.totalItems', { count }),
+            showTotal: (count) =>
+              query.data?.totalCapped
+                ? t('common.totalItemsMore', { n: count.toLocaleString('vi-VN') })
+                : t('common.totalItems', { count }),
             onChange: (p, s) => {
               setPage(s !== pageSize ? 1 : p)
               setPageSize(s)

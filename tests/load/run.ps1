@@ -100,7 +100,7 @@ try {
                 Start-Sleep -Seconds 150   # let T1 log in and settle
             }
             $code = Invoke-K6 't7-large-data.js' $runName @{ DURATION = $(if ($Duration) { $Duration } else { '10m' }) }
-            if ($bg) { Receive-Job $bg -Wait | Out-Host }
+            if ($bg) { Receive-Job $bg -Wait -ErrorAction Continue 2>&1 | Out-Host }   # k6 reports crossed thresholds on stderr
         }
         't9' { $code = Invoke-K6 't9-sync.js' $runName @{} }
         't6' {
@@ -128,7 +128,7 @@ try {
             } while ($now.status -in @('queued', 'running'))
             $backupSeconds = [int]((Get-Date) - $t0).TotalSeconds
             Write-Host "Sao lưu: $($now.status) sau $backupSeconds giây, $([math]::Round($now.sizeBytes / 1GB, 2)) GB" -ForegroundColor Green
-            Receive-Job $bg -Wait | Out-Host
+            Receive-Job $bg -Wait -ErrorAction Continue 2>&1 | Out-Host
             if ($now.status -ne 'succeeded') { throw "Sao lưu lỗi: $($now.error)" }
 
             $before = (Psql 'SELECT count(*) FROM files;' | Select-Object -Index 2).Trim()

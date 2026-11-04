@@ -54,6 +54,8 @@ function buffer() {
   for (let i = 0; i < seed.length; i++) seed[i] = (i * 2654435761 + exec.vu.idInTest) & 0xff;
   const big = new Uint8Array(CHUNK);
   for (let off = 0; off < CHUNK; off += seed.length) big.set(seed, off);
+  // The server checks the signature of what it receives (FileTypeInspector): an .mp4 must start with an ISO-BMFF "ftyp" box.
+  big.set([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 2, 0, 0x69, 0x73, 0x6f, 0x6d, 0x69, 0x73, 0x6f, 0x32], 0);
   chunk = big.buffer;
   return chunk;
 }

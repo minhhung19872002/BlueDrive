@@ -29,7 +29,8 @@
     "reset": "Nhập lại",
     "sortOrder": "Thứ tự",
     "status": "Trạng thái",
-    "totalItems": "Tổng cộng {{count}} bản ghi"
+    "totalItems": "Tổng cộng {{count}} bản ghi",
+    "totalItemsMore": "Hơn {{n}} bản ghi"
   },
   "menu": {
     "home": "Trang chủ",

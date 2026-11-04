@@ -81,7 +81,7 @@ public sealed class SearchAuditLogsHandler(IAppDbContext db) : IRequestHandler<S
 {
     public async Task<PagedResult<AuditLogDto>> Handle(SearchAuditLogsQuery q, CancellationToken ct)
         => await AuditQueries.Project(db, (await AuditQueries.FilterAsync(db, q.Filter, ct)).OrderByDescending(a => a.Id))
-            .ToPagedAsync(new PageQuery { Page = q.Page, PageSize = q.PageSize }, ct);
+            .ToCappedPagedAsync(new PageQuery { Page = q.Page, PageSize = q.PageSize }, ct);
 }
 
 /// <summary>Recomputes the hash chain to detect tampering (spec §4.11).</summary>

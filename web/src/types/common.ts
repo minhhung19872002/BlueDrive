@@ -4,6 +4,8 @@ export interface Paged<T> {
   total: number
   page: number
   pageSize: number
+  /** True when the server counted only up to a limit: there are more rows than `total`. */
+  totalCapped?: boolean
 }
 
 /** Common paging query parameters (page is 1-based). */

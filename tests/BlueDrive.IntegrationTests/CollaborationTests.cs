@@ -228,6 +228,35 @@ public class CollaborationTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Scan_stage_settles_the_file_before_and_without_the_thumbnail_stage()
+    {
+        var (c, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(c);
+        using var bmp = new SKBitmap(640, 480);
+        using (var canvas = new SKCanvas(bmp)) canvas.Clear(SKColors.OrangeRed);
+        var up = await StorageTests.UploadAsync(c, ws, null, "poster.jpg", SKImage.FromBitmap(bmp).Encode(SKEncodedImageFormat.Jpeg, 90).ToArray());
+        var fileId = up.GetProperty("fileId").GetGuid();
+        var versionId = up.GetProperty("versionId").GetGuid();
+
+        bool deriveNext;
+        using (var scope = factory.Services.CreateScope())
+            deriveNext = await scope.ServiceProvider.GetRequiredService<IFileProcessor>().ScanAsync(fileId, versionId, false, CancellationToken.None);
+
+        deriveNext.Should().BeTrue();
+        var scanned = await (await c.GetAsync($"/api/v1/files/{fileId}")).ReadJsonAsync();
+        scanned.GetProperty("scanStatus").GetString().Should().Be("skipped", "the scan outcome must not wait for thumbnails");
+        (!scanned.TryGetProperty("thumbnailUrl", out var thumb) || thumb.ValueKind == System.Text.Json.JsonValueKind.Null).Should().BeTrue("thumbnails come in the second stage");
+        (await c.GetAsync($"/api/v1/files/{fileId}/download-url")).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using (var scope = factory.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<IFileProcessor>().DeriveAsync(fileId, versionId, CancellationToken.None);
+
+        var derived = await (await c.GetAsync($"/api/v1/files/{fileId}")).ReadJsonAsync();
+        derived.GetProperty("width").GetInt32().Should().Be(640);
+        derived.GetProperty("thumbnailUrl").GetString().Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
     public async Task Transparent_png_thumbnail_has_white_background()
     {
         var (c, _, _) = await factory.CreateUserClientAsync("bien_tap");

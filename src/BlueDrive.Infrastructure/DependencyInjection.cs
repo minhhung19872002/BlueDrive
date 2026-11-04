@@ -62,6 +62,7 @@ public static class DependencyInjection
         services.AddScoped<IBackgroundJobs, Jobs.HangfireBackgroundJobs>();
         services.AddScoped<Media.IFileProcessor, Media.FileProcessor>();
         services.AddScoped<Jobs.FileProcessingJob>();
+        services.AddScoped<Jobs.FileDerivativesJob>();
         services.AddScoped<Jobs.TrashRetentionJob>();
         services.AddScoped<Jobs.IRecurringJobRegistration, Jobs.StorageRecurringJobs>();
         services.Configure<Office.OnlyOfficeOptions>(config.GetSection("OnlyOffice"));

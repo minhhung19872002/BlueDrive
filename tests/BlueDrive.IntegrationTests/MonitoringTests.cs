@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using BlueDrive.Application.Common;
 using BlueDrive.Application.Features.Monitoring;
 using BlueDrive.Infrastructure.Persistence;
 using BlueDrive.IntegrationTests.Infrastructure;
@@ -59,6 +60,35 @@ public class MonitoringTests(ApiFactory factory)
         var verify = await (await admin.GetAsync("/api/v1/audit-logs/verify")).ReadJsonAsync();
         verify.GetProperty("valid").GetBoolean().Should().BeTrue();
         verify.GetProperty("checked").GetInt64().Should().BeGreaterThan(10);
+    }
+
+    [Fact]
+    public async Task Long_lists_count_only_up_to_the_limit()
+    {
+        // Load test T7: an exact count of 2 000 000 audit rows took up to 10 s, so the total is capped and the screen shows "hơn 1.000".
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        IQueryable<int> Rows(int n) => db.Database.SqlQueryRaw<int>($"SELECT generate_series(1, {n}) AS \"Value\"").OrderBy(v => v);
+
+        var first = await Rows(1500).ToCappedPagedAsync(new PageQuery { Page = 1, PageSize = 50 }, default);
+        first.Items.Should().HaveCount(50).And.StartWith(1);
+        (first.Total, first.TotalCapped).Should().Be((PagingExtensions.CountLimit, true));
+
+        var deep = await Rows(1500).ToCappedPagedAsync(new PageQuery { Page = 30, PageSize = 50 }, default);
+        (deep.Total, deep.TotalCapped).Should().Be((1500, false), "trang sâu vẫn đếm tới hết trang kế tiếp");
+        deep.Items.Should().StartWith(1451);
+
+        var last = await Rows(1500).ToCappedPagedAsync(new PageQuery { Page = 38, PageSize = 40 }, default);
+        (last.Items.Count, last.Total, last.TotalCapped).Should().Be((20, 1500, false), "trang thiếu là trang cuối, không cần đếm");
+
+        var small = await Rows(7).ToCappedPagedAsync(new PageQuery { Page = 1, PageSize = 50 }, default);
+        (small.Total, small.TotalCapped).Should().Be((7, false));
+
+        var admin = await factory.AdminClientAsync();
+        var page = await (await admin.PostAsJsonAsync("/api/v1/audit-logs/search?pageSize=1", new { q = "admin" })).ReadJsonAsync();
+        page.GetProperty("items").GetArrayLength().Should().Be(1);
+        page.GetProperty("total").GetInt32().Should().BeGreaterThan(1, "đăng nhập + đổi mật khẩu của admin");
+        page.TryGetProperty("totalCapped", out _).Should().BeTrue();
     }
 
     [Fact]

@@ -11,28 +11,44 @@ namespace BlueDrive.Infrastructure.Jobs;
 public sealed class HangfireBackgroundJobs(IBackgroundJobClient client) : IBackgroundJobs
 {
     public void EnqueueFileProcessing(Guid fileId, Guid versionId)
-        => client.Create<FileProcessingJob>(j => j.RunAsync(fileId, versionId, null, CancellationToken.None), new Hangfire.States.EnqueuedState(HangfireSetup.QueueMedia));
+        => client.Create<FileProcessingJob>(j => j.RunAsync(fileId, versionId, null, CancellationToken.None), new Hangfire.States.EnqueuedState(HangfireSetup.QueueScan));
 }
 
-/// <summary>Post-upload pipeline executed by the Worker: malware scan, metadata, thumbnails/previews.</summary>
-public sealed class FileProcessingJob(IFileProcessor processor, ILogger<FileProcessingJob> logger)
+/// <summary>
+/// First stage after an upload: the malware scan, on its own queue and workers so that a backlog of thumbnails never keeps a
+/// new file "đang quét" (other users cannot download it until then). Thumbnails/previews follow as <see cref="FileDerivativesJob"/>.
+/// </summary>
+public sealed class FileProcessingJob(IFileProcessor processor, IBackgroundJobClient client, ILogger<FileProcessingJob> logger)
 {
     public const int MaxRetries = 3;
 
     /// <param name="context">Supplied by Hangfire: tells the last retry apart, so an unreachable scanner ends as "Không quét được" instead of a stuck file.</param>
     [AutomaticRetry(Attempts = MaxRetries, DelaysInSeconds = [30, 120, 600])]
-    [Queue(HangfireSetup.QueueMedia)]
+    [Queue(HangfireSetup.QueueScan)]
     public async Task RunAsync(Guid fileId, Guid versionId, PerformContext? context, CancellationToken ct)
     {
         var retry = context?.GetJobParameter<int>("RetryCount") ?? 0;
-        logger.LogInformation("Xử lý tệp {FileId} phiên bản {VersionId} (lần thử lại {Retry})", fileId, versionId, retry);
-        await processor.ProcessAsync(fileId, versionId, retry >= MaxRetries, ct);
+        logger.LogInformation("Quét tệp {FileId} phiên bản {VersionId} (lần thử lại {Retry})", fileId, versionId, retry);
+        if (await processor.ScanAsync(fileId, versionId, retry >= MaxRetries, ct))
+            client.Create<FileDerivativesJob>(j => j.RunAsync(fileId, versionId, CancellationToken.None), new Hangfire.States.EnqueuedState(HangfireSetup.QueueMedia));
     }
 
     /// <summary>Signature of jobs enqueued before the retry-aware overload existed.</summary>
     [AutomaticRetry(Attempts = MaxRetries, DelaysInSeconds = [30, 120, 600])]
-    [Queue(HangfireSetup.QueueMedia)]
+    [Queue(HangfireSetup.QueueScan)]
     public Task RunAsync(Guid fileId, Guid versionId, CancellationToken ct) => RunAsync(fileId, versionId, null, ct);
+}
+
+/// <summary>Second stage: metadata, thumbnails and previews (images, video, PDF, Office through ONLYOFFICE).</summary>
+public sealed class FileDerivativesJob(IFileProcessor processor, ILogger<FileDerivativesJob> logger)
+{
+    [AutomaticRetry(Attempts = 2, DelaysInSeconds = [60, 600])]
+    [Queue(HangfireSetup.QueueMedia)]
+    public async Task RunAsync(Guid fileId, Guid versionId, CancellationToken ct)
+    {
+        logger.LogInformation("Tạo ảnh xem trước tệp {FileId} phiên bản {VersionId}", fileId, versionId);
+        await processor.DeriveAsync(fileId, versionId, ct);
+    }
 }
 
 public sealed class TrashRetentionJob(ISender mediator, ILogger<TrashRetentionJob> logger)
