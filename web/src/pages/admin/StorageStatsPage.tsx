@@ -199,7 +199,7 @@ export default function StorageStatsPage() {
           { key: 'free', title: t('ops.stats.diskFree'), value: formatBytes(tt?.diskFreeBytes ?? 0) },
         ].map((c) => (
           <Col key={c.key} xs={12} md={8} xl={4}>
-            <Card size="small" loading={totals.isLoading}>
+            <Card size="small" loading={totals.isLoading} className="bd-stat-card">
               <Statistic title={c.title} value={c.value} />
             </Card>
           </Col>

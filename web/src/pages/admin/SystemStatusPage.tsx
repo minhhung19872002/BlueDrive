@@ -105,7 +105,7 @@ export default function SystemStatusPage() {
           />
           <Row gutter={[16, 16]}>
             <Col xs={12} md={6}>
-              <Card size="small">
+              <Card size="small" className="bd-stat-card">
                 <Statistic title={t('ops.sys.version')} value={s.version} />
                 <Typography.Text type="secondary" className="bd-code-inline">
                   {s.gitSha}
@@ -113,17 +113,17 @@ export default function SystemStatusPage() {
               </Card>
             </Col>
             <Col xs={12} md={6}>
-              <Card size="small">
+              <Card size="small" className="bd-stat-card">
                 <Statistic title={t('ops.sys.workers')} value={s.workerServers} valueStyle={{ color: s.workerServers > 0 ? '#389e0d' : '#cf1322' }} />
               </Card>
             </Col>
             <Col xs={12} md={6}>
-              <Card size="small">
+              <Card size="small" className="bd-stat-card">
                 <Statistic title={t('ops.sys.queued')} value={s.queuedJobs} />
               </Card>
             </Col>
             <Col xs={12} md={6}>
-              <Card size="small">
+              <Card size="small" className="bd-stat-card">
                 <Statistic title={t('ops.sys.failed')} value={s.failedJobs} valueStyle={s.failedJobs > 0 ? { color: '#cf1322' } : undefined} />
               </Card>
             </Col>

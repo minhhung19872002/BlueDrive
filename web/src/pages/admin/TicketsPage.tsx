@@ -252,7 +252,7 @@ export default function TicketsPage() {
           { key: 'normal', title: t('ops.ticket.sla.avgNormal'), value: fmtHours(s?.avgHoursNormal) },
         ].map((c) => (
           <Col key={c.key} xs={12} md={8} xl={c.key === 'urgent' || c.key === 'normal' ? 4 : 3}>
-            <Card size="small" loading={sla.isLoading} style={{ height: '100%' }}>
+            <Card size="small" loading={sla.isLoading} className="bd-stat-card">
               <Statistic title={c.title} value={c.value} valueStyle={c.color ? { color: c.color } : undefined} />
             </Card>
           </Col>

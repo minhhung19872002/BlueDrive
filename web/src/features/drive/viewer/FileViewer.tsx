@@ -65,7 +65,8 @@ export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate
   // Images use the server-generated preview JPEG when available; the original is loaded on demand.
   const usePreviewImage = kind === 'image' && !!f?.previewUrl && !original
   const needsInline = !!f && kind !== 'none' && !usePreviewImage && !f.contentBlocked
-  const inline = useInlineUrl(fileId, needsInline)
+  const currentVersionId = f?.versions.find((v) => v.isCurrent)?.id
+  const inline = useInlineUrl(fileId, needsInline, currentVersionId)
 
   const star = useApiMutation((starred: boolean) => setFavorite({ type: 'file', id: fileId }, starred), {
     successMessage: (_, starred) => (starred ? t('actions.starred') : t('actions.unstarred')),

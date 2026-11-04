@@ -7,10 +7,13 @@ import { listMyWorkspaces } from '@/api/workspaces'
 /** Signed inline URLs live 4 h on the server: reuse them for 3 h. */
 export const CONTENT_URL_STALE = 3 * 60 * 60 * 1000
 
-/** Signed inline content URL of a file, cached per file. */
-export function useInlineUrl(fileId: string | null | undefined, enabled = true) {
+/**
+ * Signed inline content URL of a file, cached per file version: the server binds the URL to the
+ * version that was current when it was signed, so a new or restored version needs a new URL.
+ */
+export function useInlineUrl(fileId: string | null | undefined, enabled = true, versionId?: string | null) {
   return useQuery({
-    queryKey: qk.contentUrl(fileId ?? '', true),
+    queryKey: [...qk.contentUrl(fileId ?? '', true), versionId ?? null],
     queryFn: () => getDownloadUrl(fileId!, true),
     enabled: !!fileId && enabled,
     staleTime: CONTENT_URL_STALE,

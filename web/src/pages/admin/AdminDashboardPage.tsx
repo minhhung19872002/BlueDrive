@@ -102,7 +102,7 @@ export default function AdminDashboardPage() {
           <Row gutter={[16, 16]}>
             {cards.map((c) => (
               <Col key={c.key} xs={12} md={8} xl={4}>
-                <Card size="small">
+                <Card size="small" className="bd-stat-card">
                   <Statistic title={c.title} value={c.value} prefix={c.icon} />
                 </Card>
               </Col>
@@ -132,7 +132,7 @@ export default function AdminDashboardPage() {
                       size="small"
                       hoverable={can(l.perm)}
                       onClick={() => can(l.perm) && navigate(l.path)}
-                      style={{ height: '100%' }}
+                      className="bd-stat-card"
                     >
                       <Statistic
                         title={

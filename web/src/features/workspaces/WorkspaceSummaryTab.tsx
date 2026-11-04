@@ -53,17 +53,17 @@ export default function WorkspaceSummaryTab({ workspaceId }: { workspaceId: stri
     <Space direction="vertical" size={16} style={{ width: '100%' }}>
       <Row gutter={[16, 16]}>
         <Col xs={12} md={6}>
-          <Card size="small">
+          <Card size="small" className="bd-stat-card">
             <Statistic title={t('collab.summary.totalFiles')} value={s?.totalFiles ?? 0} loading={summary.isLoading} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card size="small">
+          <Card size="small" className="bd-stat-card">
             <Statistic title={t('collab.summary.totalSize')} value={formatBytes(s?.totalBytes ?? 0)} loading={summary.isLoading} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card size="small">
+          <Card size="small" className="bd-stat-card">
             <Statistic
               title={t('collab.summary.contributors')}
               value={(s?.members ?? []).filter((m) => m.fileCount > 0).length}

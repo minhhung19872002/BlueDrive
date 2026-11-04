@@ -1101,3 +1101,22 @@ body {
   /* The editor is a tab of ONLYOFFICE Desktop Editors: its tab shows the name and closes it. */
   display: none;
 }
+
+/* Dashboard stat cards: equal height in a row, value pinned to the bottom so numbers line up
+   even when a title wraps to two lines on narrow screens. */
+.bd-stat-card {
+  height: 100%;
+}
+.bd-stat-card > .ant-card-body {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.bd-stat-card .ant-statistic {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.bd-stat-card .ant-statistic-content {
+  margin-top: auto;
+}
