@@ -812,6 +812,18 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_encrypted");
 
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_published");
+
+                    b.Property<int>("Major")
+                        .HasColumnType("integer")
+                        .HasColumnName("major");
+
+                    b.Property<int>("Minor")
+                        .HasColumnType("integer")
+                        .HasColumnName("minor");
+
                     b.Property<long>("SizeBytes")
                         .HasColumnType("bigint")
                         .HasColumnName("size_bytes");
@@ -874,6 +886,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean")
                         .HasColumnName("is_deleted");
+
+                    b.Property<bool>("IsLibrary")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_library");
 
                     b.Property<bool>("IsTrashRoot")
                         .HasColumnType("boolean")
@@ -1098,6 +1114,75 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_libraries_space_id");
 
                     b.ToTable("libraries", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.LibrarySettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.PrimitiveCollection<List<string>>("AllowedExtensions")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("allowed_extensions");
+
+                    b.Property<bool>("ContentApproval")
+                        .HasColumnType("boolean")
+                        .HasColumnName("content_approval");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int?>("DeleteVersionsOlderThanDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("delete_versions_older_than_days");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_default");
+
+                    b.Property<int>("MajorLimit")
+                        .HasColumnType("integer")
+                        .HasColumnName("major_limit");
+
+                    b.Property<int?>("MaxFileSizeMb")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_file_size_mb");
+
+                    b.Property<int>("MinorLimit")
+                        .HasColumnType("integer")
+                        .HasColumnName("minor_limit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<bool>("RequireCheckout")
+                        .HasColumnType("boolean")
+                        .HasColumnName("require_checkout");
+
+                    b.Property<string>("Versioning")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("versioning");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_library_settings");
+
+                    b.HasIndex("WorkspaceId")
+                        .HasDatabaseName("ix_library_settings_workspace_id");
+
+                    b.ToTable("library_settings", (string)null);
                 });
 
             modelBuilder.Entity("BlueDrive.Domain.Entities.MembershipVersion", b =>
@@ -2501,6 +2586,14 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("break_inheritance");
 
+                    b.Property<DateTime?>("CheckedOutAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("checked_out_at");
+
+                    b.Property<Guid?>("CheckedOutBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("checked_out_by");
+
                     b.Property<string>("ChecksumSha256")
                         .HasColumnType("text")
                         .HasColumnName("checksum_sha256");
@@ -2585,6 +2678,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.Property<string>("PreviewKey")
                         .HasColumnType("text")
                         .HasColumnName("preview_key");
+
+                    b.Property<Guid?>("PublishedVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("published_version_id");
 
                     b.Property<string>("RejectionReason")
                         .HasColumnType("text")

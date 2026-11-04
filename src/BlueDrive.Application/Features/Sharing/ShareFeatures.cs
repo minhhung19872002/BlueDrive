@@ -183,8 +183,13 @@ public sealed class ListSharedWithMeHandler(IAppDbContext db, ICurrentUser me, I
             .OrderByDescending(x => x.e.GrantedAt).ToListAsync(ct);
         var fileIds = rows.Where(r => r.Kind == Domain.Enums.SecurableKind.File).Select(r => r.e.ScopeId).ToList();
         var okFiles = (await db.Files.AsNoTracking().Where(f => fileIds.Contains(f.Id) && !f.IsDeleted && f.ApprovalStatus == ApprovalStatus.Approved
-                                                              && (q.MediaType == null || f.MediaType == q.MediaType)).Select(f => f.Id).ToListAsync(ct)).ToHashSet();
-        rows = rows.Where(r => r.Kind == Domain.Enums.SecurableKind.File ? okFiles.Contains(r.e.ScopeId) : q.MediaType == null)
+                                                              && (q.MediaType == null || f.MediaType == q.MediaType))
+            .Select(f => new { f.Id, Published = f.PublishedVersionId != null }).ToListAsync(ct)).ToDictionary(f => f.Id, f => f.Published);
+        // A file with only drafts (spec 1.4) is shared with who may edit it or see drafts, not with a reader.
+        bool SeesDrafts(Domain.Permissions.AccessRight p) => (p & (Domain.Permissions.AccessRight.EditItems | Domain.Permissions.AccessRight.ViewDrafts)) != 0;
+        rows = rows.Where(r => r.Kind == Domain.Enums.SecurableKind.File
+                ? okFiles.TryGetValue(r.e.ScopeId, out var published) && (published || SeesDrafts(r.Permissions))
+                : q.MediaType == null)
             .GroupBy(r => r.e.ScopeId).Select(g => g.First()).ToList();
         if (!string.IsNullOrWhiteSpace(q.Q))
         {

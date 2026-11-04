@@ -18,6 +18,39 @@ using tusdotnet.Stores;
 
 namespace BlueDrive.Api.Controllers;
 
+/// <summary>Thư viện tài liệu của Space: cài đặt phiên bản, check-out, phê duyệt, định dạng.</summary>
+[Route("api/v1")]
+public class LibrariesController : ApiControllerBase
+{
+    [HttpGet("workspaces/{id:guid}/libraries")]
+    public Task<IReadOnlyList<Application.Features.Libraries.LibraryDto>> List(Guid id) => Mediator.Send(new Application.Features.Libraries.ListLibrariesQuery(id));
+
+    [HttpPost("workspaces/{id:guid}/libraries")]
+    public async Task<IActionResult> Create(Guid id, Application.Features.Libraries.CreateLibraryCommand cmd) =>
+        Ok(new { id = await Mediator.Send(cmd with { WorkspaceId = id }) });
+
+    [HttpPut("workspaces/{id:guid}/libraries/{libraryId:guid}")]
+    public async Task<IActionResult> Save(Guid id, Guid libraryId, Application.Features.Libraries.SaveLibrarySettingsCommand cmd)
+    {
+        await Mediator.Send(cmd with { WorkspaceId = id, Id = libraryId });
+        return NoContent();
+    }
+
+    /// <summary>Xuất bản bản nháp hiện tại thành phiên bản chính.</summary>
+    [HttpPost("files/{id:guid}/publish")]
+    public async Task<IActionResult> Publish(Guid id) => Ok(new { version = await Mediator.Send(new Application.Features.Libraries.PublishFileCommand(id)) });
+
+    /// <summary>step = check_out | check_in | discard | force_check_in.</summary>
+    [HttpPost("files/{id:guid}/checkout/{step:regex(^(check_out|check_in|discard|force_check_in)$)}")]
+    public async Task<IActionResult> CheckOut(Guid id, string step, [FromBody] CheckInBody? body)
+    {
+        await Mediator.Send(new Application.Features.Libraries.CheckOutCommand(id, step, body?.Note, body?.Publish ?? false));
+        return NoContent();
+    }
+
+    public sealed record CheckInBody(string? Note, bool Publish = false);
+}
+
 /// <summary>Chuyển quyền sở hữu tư liệu trong Drive của tôi (người nhận chấp nhận).</summary>
 [Route("api/v1/ownership-transfers")]
 public class OwnershipTransfersController : ApiControllerBase

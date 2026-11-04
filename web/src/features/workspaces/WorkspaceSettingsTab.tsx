@@ -19,6 +19,7 @@ import { splitPrincipal, type PrincipalValue } from '@/features/sharing/levels'
 import PrincipalSelect from '@/features/sharing/PrincipalSelect'
 import { useApiMutation } from '@/hooks/useApiMutation'
 import type { WorkspaceMemberRole } from '@/types/drive'
+import LibrarySettingsCard from '@/features/libraries/LibrarySettingsCard'
 import WorkspaceSharingTab from './WorkspaceSharingTab'
 
 const GROUP_ROLES: WorkspaceMemberRole[] = ['manager', 'editor', 'uploader', 'approver', 'viewer']
@@ -135,6 +136,8 @@ export default function WorkspaceSettingsTab({ workspaceId, name }: { workspaceI
           )}
         </Form>
       </Card>
+
+      <LibrarySettingsCard workspaceId={workspaceId} canCreate={can} />
 
       <WorkspaceSharingTab workspaceId={workspaceId} />
 

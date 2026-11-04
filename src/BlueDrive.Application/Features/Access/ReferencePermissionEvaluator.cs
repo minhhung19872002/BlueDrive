@@ -54,7 +54,7 @@ public sealed class ReferencePermissionEvaluator(IAppDbContext db, IPermissionSe
             else direct |= level.Permissions;
         }
         Restrictions.FileFacts? file = node.Kind != SecurableKind.File ? null
-            : await db.Files.AsNoTracking().Where(f => f.Id == node.Id).Select(f => new Restrictions.FileFacts(f.CreatedBy, f.ApprovalStatus == ApprovalStatus.Approved)).FirstOrDefaultAsync(ct);
+            : await db.Files.AsNoTracking().Where(f => f.Id == node.Id).Select(f => new Restrictions.FileFacts(f.CreatedBy, f.ApprovalStatus == ApprovalStatus.Approved, f.CheckedOutBy, f.PublishedVersionId != null)).FirstOrDefaultAsync(ct);
         var state = await SpaceState.LoadAsync(db, node.SpaceId ?? node.PersonalDriveId, ct);
         return state.Apply(Restrictions.Apply(who, node.OwnerUserId == user.UserId, direct, membership, file, state.Locked));
     }

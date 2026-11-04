@@ -46,6 +46,8 @@ export interface DriveItem {
   name: string
   /** A shortcut row (spec 1.2): id / type are the target's; this is the shortcut's own id. */
   shortcutId?: string | null
+  /** Checked out (spec 1.4) by this user. */
+  checkedOutBy?: string | null
   /** ok, no_access (open shows "Bạn cần quyền truy cập"), deleted. */
   shortcutState?: 'ok' | 'no_access' | 'deleted' | null
   workspaceId: string
@@ -115,6 +117,10 @@ export interface FileVersion {
   createdByName: string | null
   createdAt: string
   isCurrent: boolean
+  /** 1.0 / 1.1 (spec 1.4); a minor version is a draft. */
+  major?: number
+  minor?: number
+  isPublished?: boolean
 }
 
 export interface CatalogTag {
@@ -125,6 +131,14 @@ export interface CatalogTag {
 }
 
 export interface FileDetail {
+  /** Spec 1.4: check-out, drafts, the library's rules. */
+  checkedOutBy?: string | null
+  checkedOutByName?: string | null
+  checkedOutAt?: string | null
+  hasDraft?: boolean
+  versioning?: 'major' | 'major_minor'
+  requireCheckout?: boolean
+  libraryName?: string | null
   id: string
   name: string
   title: string | null

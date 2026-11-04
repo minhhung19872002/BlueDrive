@@ -12,7 +12,7 @@ public sealed record DriveItemDto(
     Guid Id, string Type, string Name, Guid WorkspaceId, Guid? ParentId, long SizeBytes, MediaType? MediaType, string? Extension, string? MimeType,
     DateTime CreatedAt, DateTime? UpdatedAt, Guid? CreatedBy, string? CreatedByName, bool IsStarred, bool HasThumbnail, ApprovalStatus? ApprovalStatus,
     int? VersionNo, string? Title, IReadOnlyList<string>? Tags, string? WorkspaceName = null, string? ThumbnailUrl = null,
-    Guid? ShortcutId = null, string? ShortcutState = null);
+    Guid? ShortcutId = null, string? ShortcutState = null, Guid? CheckedOutBy = null);
 
 /// <summary>Adds short-lived signed thumbnail URLs (usable in &lt;img src&gt;) to listing items.</summary>
 public static class ThumbnailUrls
@@ -42,7 +42,7 @@ public static class DriveProjection
         db.Users.Where(u => u.Id == f.CreatedBy).Select(u => u.FullName).FirstOrDefault(),
         db.UserFavorites.Any(s => s.UserId == userId && s.ItemType == FavoriteItemType.File && s.ItemId == f.Id),
         f.ThumbnailKey != null, f.ApprovalStatus, db.FileVersions.Where(v => v.Id == f.CurrentVersionId).Select(v => (int?)v.VersionNo).FirstOrDefault(),
-        f.Title, f.Tags, f.Workspace!.Name));
+        f.Title, f.Tags, f.Workspace!.Name, null, null, null, f.CheckedOutBy));
 
     public static IQueryable<DriveItemDto> Folders(IAppDbContext db, IQueryable<Folder> q, Guid userId) => q.Select(f => new DriveItemDto(
         f.Id, "folder", f.Name, f.WorkspaceId, f.ParentId, 0, null, null, null, f.CreatedAt, f.UpdatedAt, f.CreatedBy,
@@ -177,7 +177,9 @@ public sealed class GetFolderTreeHandler(IAppDbContext db, ICurrentUser me, IRes
     }
 }
 
-public sealed record FileVersionDto(Guid Id, int VersionNo, long SizeBytes, string? ChangeNote, Guid? CreatedBy, string? CreatedByName, DateTime CreatedAt, bool IsCurrent);
+/// <param name="Major">With <paramref name="Minor"/>: the 1.0 / 1.1 label (spec 1.4); a minor version is a draft.</param>
+public sealed record FileVersionDto(Guid Id, int VersionNo, long SizeBytes, string? ChangeNote, Guid? CreatedBy, string? CreatedByName, DateTime CreatedAt, bool IsCurrent,
+    int Major = 0, int Minor = 0, bool IsPublished = true);
 
 public sealed record CatalogTagDto(Guid Id, Guid CatalogId, string CatalogName, string Name);
 
@@ -187,11 +189,14 @@ public sealed record FileDetailDto(
     Guid? CreatedBy, string? CreatedByName, DateTime CreatedAt, Guid? UpdatedBy, string? UpdatedByName, DateTime? UpdatedAt,
     ApprovalStatus ApprovalStatus, string? RejectionReason, ScanStatus ScanStatus, int? Width, int? Height, double? DurationSeconds,
     bool HasThumbnail, bool HasPreview, string? ChecksumSha256, IReadOnlyList<CatalogTagDto> Catalogs, IReadOnlyList<FileVersionDto> Versions,
-    bool IsStarred, AccessFlags Access, bool IsDeleted, string? ThumbnailUrl = null, string? PreviewUrl = null, bool ContentBlocked = false);
+    bool IsStarred, AccessFlags Access, bool IsDeleted, string? ThumbnailUrl = null, string? PreviewUrl = null, bool ContentBlocked = false,
+    Guid? CheckedOutBy = null, string? CheckedOutByName = null, DateTime? CheckedOutAt = null, bool HasDraft = false, VersioningMode Versioning = VersioningMode.Major,
+    bool RequireCheckout = false, string? LibraryName = null);
 
 public sealed record GetFileDetailQuery(Guid Id, bool RecordView = true) : IRequest<FileDetailDto>;
 
-public sealed class GetFileDetailHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets, TimeProvider clock)
+public sealed class GetFileDetailHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets, TimeProvider clock,
+    Libraries.Libraries libraries, Access.IItemPermissionService engine)
     : IRequestHandler<GetFileDetailQuery, FileDetailDto>
 {
     public async Task<FileDetailDto> Handle(GetFileDetailQuery q, CancellationToken ct)
@@ -200,11 +205,15 @@ public sealed class GetFileDetailHandler(IAppDbContext db, ICurrentUser me, IRes
         var access = await auth.EnsureAsync(uid, ResourceType.File, q.Id, AccessLevel.View, ct);
         var f = await db.Files.AsNoTracking().Include(x => x.Workspace).Include(x => x.Folder).FirstAsync(x => x.Id == q.Id, ct);
         var location = await FileLocation.BuildAsync(db, f.Workspace!, f.Folder, uid, ct, auth);
-        var userIds = new[] { f.CreatedBy, f.UpdatedBy }.Where(x => x.HasValue).Select(x => x!.Value).ToList();
+        var userIds = new[] { f.CreatedBy, f.UpdatedBy, f.CheckedOutBy }.Where(x => x.HasValue).Select(x => x!.Value).ToList();
         var users = await db.Users.AsNoTracking().Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName, ct);
-        var versions = await db.FileVersions.AsNoTracking().Where(v => v.FileId == f.Id).OrderByDescending(v => v.VersionNo)
+        // Drafts (minor versions) are listed only to who may see them (spec 1.4).
+        var rights = await engine.GetEffectiveAsync(uid, f.Id, ct);
+        var drafts = Domain.Permissions.AccessRights.Has(rights, Domain.Permissions.AccessRight.ViewDrafts) || Domain.Permissions.AccessRights.Has(rights, Domain.Permissions.AccessRight.EditItems);
+        var versions = await db.FileVersions.AsNoTracking().Where(v => v.FileId == f.Id && (drafts || v.IsPublished)).OrderByDescending(v => v.VersionNo)
             .Select(v => new FileVersionDto(v.Id, v.VersionNo, v.SizeBytes, v.ChangeNote, v.CreatedBy,
-                db.Users.Where(u => u.Id == v.CreatedBy).Select(u => u.FullName).FirstOrDefault(), v.CreatedAt, v.Id == f.CurrentVersionId)).ToListAsync(ct);
+                db.Users.Where(u => u.Id == v.CreatedBy).Select(u => u.FullName).FirstOrDefault(), v.CreatedAt, v.Id == f.CurrentVersionId, v.Major, v.Minor, v.IsPublished)).ToListAsync(ct);
+        var library = await libraries.ForAsync(f.WorkspaceId, f.FolderId, ct);
         var catalogs = await db.FileCatalogItems.AsNoTracking().Where(c => c.FileId == f.Id)
             .Select(c => new CatalogTagDto(c.CatalogItemId, c.CatalogItem!.CatalogId, c.CatalogItem.Catalog!.Name, c.CatalogItem.Name)).ToListAsync(ct);
         var starred = await db.UserFavorites.AnyAsync(s => s.UserId == uid && s.ItemType == FavoriteItemType.File && s.ItemId == f.Id, ct);
@@ -216,7 +225,9 @@ public sealed class GetFileDetailHandler(IAppDbContext db, ICurrentUser me, IRes
             AccessFlags.From(access), f.IsDeleted,
             f.ThumbnailKey != null ? ThumbnailUrls.For(tickets, uid, f.Id) : null, f.PreviewKey != null ? ThumbnailUrls.For(tickets, uid, f.Id, large: true) : null,
             // Quarantined, or still waiting for its malware scan and uploaded by someone else: the UI shows why instead of the content.
-            await ScanGate.BlockReasonAsync(db, f, null, uid, ct) is not null);
+            await ScanGate.BlockReasonAsync(db, f, null, uid, ct) is not null,
+            f.CheckedOutBy, f.CheckedOutBy is { } co ? users.GetValueOrDefault(co) : null, f.CheckedOutAt, drafts && f.PublishedVersionId != f.CurrentVersionId,
+            library.Versioning, library.RequireCheckout, library.Name);
     }
 }
 

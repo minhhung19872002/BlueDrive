@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<Features.Access.ExpiryReminders>();
         services.AddScoped<Features.Access.GuestService>();
         services.AddScoped<Features.Storage.MoveItemsHandler>();
+        services.AddScoped<Features.Libraries.Libraries>();
         services.AddScoped<Abstractions.IResourceAccessChecker, Security.ResourceAccessChecker>();
         services.AddScoped<Features.Storage.QuotaService>();
         services.AddSingleton<Features.Office.OfficeEditingTracker>();

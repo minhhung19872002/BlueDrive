@@ -2,6 +2,8 @@ import { useState, type ReactNode } from 'react'
 import { Alert, Button, Descriptions, Drawer, Empty, Result, Skeleton, Space, Tag, Typography } from 'antd'
 import { EditOutlined, HistoryOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
+import { versionLabel } from '@/api/libraries'
+import FileLibraryBar from '@/features/libraries/FileLibraryBar'
 import { Link } from 'react-router-dom'
 import { getErrorMessage } from '@/api/errors'
 import type { AccessTarget } from '@/features/sharing/AccessDialog'
@@ -89,6 +91,7 @@ function FileInfo({ id, onManageAccess }: { id: string; onManageAccess?: InfoPan
         <Alert type="error" showIcon message={t('info.rejectedReason', { reason: f.rejectionReason })} style={{ marginBottom: 12 }} />
       )}
       <ScanAlert status={f.scanStatus} blocked={f.contentBlocked} />
+      <FileLibraryBar file={f} />
       {editing ? (
         <MetadataEditor
           fileIds={[f.id]}
@@ -125,7 +128,7 @@ function FileInfo({ id, onManageAccess }: { id: string; onManageAccess?: InfoPan
               <LocationLinks workspaceId={f.workspaceId} crumbs={f.location} />
             </Descriptions.Item>
             <Descriptions.Item label={t('info.versions')}>
-              {t('info.versionsValue', { count: f.versions.length, current: current?.versionNo ?? 1 })}{' '}
+              {t('info.versionsValue', { count: f.versions.length, current: current ? versionLabel(current) : '1' })}{' '}
               <Button type="link" size="small" icon={<HistoryOutlined />} onClick={() => setVersionsOpen(true)} style={{ padding: 0, height: 'auto' }}>
                 {t('collab.versions.history')}
               </Button>

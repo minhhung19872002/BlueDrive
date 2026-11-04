@@ -63,7 +63,8 @@ public sealed class AccessFilter(IAppDbContext db, IPermissionService rbac)
         var reviewing = Scopes(v, AccessRight.EditItems | AccessRight.ApproveItems | AccessRight.ViewDrafts);
         var reviewingSelf = SelfOnly(v, AccessRight.EditItems | AccessRight.ApproveItems | AccessRight.ViewDrafts);
         var reviewable = db.Securables.Where(s => s.OwnerUserId == v.UserId || reviewing.Contains(s.AclScopeId) || reviewingSelf.Contains(s.Id)).Select(s => s.Id);
-        return q.Where(f => visible.Contains(f.Id) && (f.ApprovalStatus == ApprovalStatus.Approved || f.CreatedBy == v.UserId || reviewable.Contains(f.Id)));
+        return q.Where(f => visible.Contains(f.Id)
+                            && ((f.ApprovalStatus == ApprovalStatus.Approved && f.PublishedVersionId != null) || f.CreatedBy == v.UserId || reviewable.Contains(f.Id)));
     }
 
     /// <summary>Workspaces (Spaces, drives) the user may open, or that hold something shared with them.</summary>

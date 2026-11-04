@@ -73,7 +73,7 @@ async function shareWith(page: Page, fileName: string, user: TestUser, level: Re
   await page.keyboard.type(user.fullName)
   await page.locator('.ant-select-dropdown:visible').getByText(user.fullName).first().click()
   await page.keyboard.press('Escape')
-  await dlg.locator('.ant-select').nth(1).click()
+  await dlg.getByRole('combobox', { name: 'Cấp quyền' }).first().click({ force: true })
   await page.locator('.ant-select-dropdown:visible').getByTitle(level).or(page.locator('.ant-select-dropdown:visible').getByText(level)).first().click()
   await dlg.getByRole('textbox', { name: /Lời nhắn/ }).fill(`Gửi ${user.fullName} (E2E)`)
   await Promise.all([

@@ -77,9 +77,10 @@ public sealed class SharingPolicy(IAppDbContext db, ISettingsService settings, I
         if (p.AnyoneLinkMaxDays <= 0) return expiresAt;
         var max = clock.GetUtcNow().UtcDateTime.AddDays(p.AnyoneLinkMaxDays);
         if (expiresAt is null) return max;
-        if (expiresAt > max.AddMinutes(1))
+        // A date picked "until that day" ends at the end of the day: within a day it is the longest life, beyond it is refused.
+        if (expiresAt > max.AddDays(1))
             throw new AppException($"Liên kết cho bất kỳ ai dùng tối đa {p.AnyoneLinkMaxDays} ngày theo chính sách chia sẻ.");
-        return expiresAt;
+        return expiresAt > max ? max : expiresAt;
     }
 
     /// <summary>

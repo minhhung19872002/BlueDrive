@@ -37,7 +37,8 @@ public sealed record DownloadUrlDto(string Url, DateTime ExpiresAt, string FileN
 /// <summary>#23/#45: issue a signed URL for viewing inline (needs View) or downloading (needs Download). Audits view/download.</summary>
 public sealed record GetDownloadUrlQuery(Guid FileId, Guid? VersionId, bool Inline) : IRequest<DownloadUrlDto>;
 
-public sealed class GetDownloadUrlHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets, IAuditLogger audit, TimeProvider clock)
+public sealed class GetDownloadUrlHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets, IAuditLogger audit, TimeProvider clock,
+    Access.IItemPermissionService engine)
     : IRequestHandler<GetDownloadUrlQuery, DownloadUrlDto>
 {
     public async Task<DownloadUrlDto> Handle(GetDownloadUrlQuery q, CancellationToken ct)
@@ -45,7 +46,13 @@ public sealed class GetDownloadUrlHandler(IAppDbContext db, ICurrentUser me, IRe
         var uid = me.RequireUserId();
         await auth.EnsureAsync(uid, ResourceType.File, q.FileId, q.Inline ? AccessLevel.View : AccessLevel.Download, ct);
         var f = await db.Files.AsNoTracking().FirstAsync(x => x.Id == q.FileId, ct);
-        var versionId = q.VersionId ?? f.CurrentVersionId!.Value;
+        // Drafts (minor versions) only for who may see them; the others get the latest published version (spec 1.4).
+        var rights = await engine.GetEffectiveAsync(uid, f.Id, ct);
+        var versionId = q.VersionId ?? Libraries.Libraries.VersionFor(f, rights) ?? throw new NotFoundException("Không tìm thấy tài liệu.");
+        var seesDrafts = Domain.Permissions.AccessRights.Has(rights, Domain.Permissions.AccessRight.ViewDrafts)
+                         || Domain.Permissions.AccessRights.Has(rights, Domain.Permissions.AccessRight.EditItems);
+        if (q.VersionId.HasValue && !seesDrafts && !await db.FileVersions.AnyAsync(x => x.Id == q.VersionId && x.IsPublished, ct))
+            throw new NotFoundException("Không tìm thấy phiên bản.");
         await ScanGate.EnsureAsync(db, f, versionId, uid, ct);
         var v = await db.FileVersions.AsNoTracking().FirstOrDefaultAsync(x => x.Id == versionId && x.FileId == f.Id, ct) ?? throw new NotFoundException("Không tìm thấy phiên bản.");
         var lifetime = TimeSpan.FromHours(q.Inline ? 4 : 1);
@@ -87,7 +94,8 @@ public sealed record ZipEntrySource(string EntryPath, Guid VersionId, DateTime M
 /// <summary>Resolves zip entries (re-checking access at download time) for the content endpoint.</summary>
 public sealed record ResolveZipEntriesQuery(Guid UserId, IReadOnlyList<ItemRef> Items) : IRequest<IReadOnlyList<ZipEntrySource>>;
 
-public sealed class ResolveZipEntriesHandler(IAppDbContext db, IResourceAuthorizationService auth) : IRequestHandler<ResolveZipEntriesQuery, IReadOnlyList<ZipEntrySource>>
+public sealed class ResolveZipEntriesHandler(IAppDbContext db, IResourceAuthorizationService auth, Access.IItemPermissionService engine)
+    : IRequestHandler<ResolveZipEntriesQuery, IReadOnlyList<ZipEntrySource>>
 {
     public async Task<IReadOnlyList<ZipEntrySource>> Handle(ResolveZipEntriesQuery q, CancellationToken ct)
     {
@@ -106,7 +114,8 @@ public sealed class ResolveZipEntriesHandler(IAppDbContext db, IResourceAuthoriz
                 if (!await auth.CanAsync(q.UserId, ResourceType.File, item.Id, AccessLevel.Download, ct)) continue;
                 var f = await db.Files.AsNoTracking().FirstAsync(x => x.Id == item.Id, ct);
                 if (await ScanGate.BlockReasonAsync(db, f, null, q.UserId, ct) is not null) continue;
-                list.Add(new ZipEntrySource(Unique(f.Name), f.CurrentVersionId!.Value, f.UpdatedAt ?? f.CreatedAt));
+                if (Libraries.Libraries.VersionFor(f, await engine.GetEffectiveAsync(q.UserId, f.Id, ct)) is { } vid)
+                    list.Add(new ZipEntrySource(Unique(f.Name), vid, f.UpdatedAt ?? f.CreatedAt));
                 continue;
             }
             if (!await auth.CanAsync(q.UserId, ResourceType.Folder, item.Id, AccessLevel.Download, ct)) continue;
@@ -124,7 +133,8 @@ public sealed class ResolveZipEntriesHandler(IAppDbContext db, IResourceAuthoriz
             {
                 // Quarantined files and files still waiting for their scan (uploaded by someone else) stay out of the zip.
                 if (!await auth.CanAsync(q.UserId, ResourceType.File, f.Id, AccessLevel.Download, ct) || await ScanGate.BlockReasonAsync(db, f, null, q.UserId, ct) is not null) continue;
-                list.Add(new ZipEntrySource(Unique($"{RelPath(f.FolderId!.Value)}/{f.Name}"), f.CurrentVersionId!.Value, f.UpdatedAt ?? f.CreatedAt));
+                if (Libraries.Libraries.VersionFor(f, await engine.GetEffectiveAsync(q.UserId, f.Id, ct)) is { } vid)
+                    list.Add(new ZipEntrySource(Unique($"{RelPath(f.FolderId!.Value)}/{f.Name}"), vid, f.UpdatedAt ?? f.CreatedAt));
             }
             if (files.Count == 0) used.Add(root.Name + "/");
         }

@@ -96,6 +96,8 @@ public class Folder : AuditableEntity, ISoftDeletable
     public bool BreakInheritance { get; set; }
     /// <summary>Sharing outside the organization for this item and what is below it (null = as above; can only be stricter).</summary>
     public ExternalSharing? ExternalSharing { get; set; }
+    /// <summary>A top folder that is a document library of its own (spec 1.4), with its own settings.</summary>
+    public bool IsLibrary { get; set; }
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }
     public Guid? DeletedBy { get; set; }
@@ -118,6 +120,11 @@ public class StoredFile : AuditableEntity, ISoftDeletable
     public MediaType MediaType { get; set; }
     public long SizeBytes { get; set; }
     public Guid? CurrentVersionId { get; set; }
+    /// <summary>Latest major (published) version: what people who may not see drafts get (spec 1.4); null = never published.</summary>
+    public Guid? PublishedVersionId { get; set; }
+    /// <summary>Checked out (spec 1.4): only this person changes it until it is checked in.</summary>
+    public Guid? CheckedOutBy { get; set; }
+    public DateTime? CheckedOutAt { get; set; }
     public string? ChecksumSha256 { get; set; }
     public string? Title { get; set; }
     public string? Description { get; set; }
@@ -154,6 +161,10 @@ public class FileVersion : Entity
     public Guid FileId { get; set; }
     public StoredFile? File { get; set; }
     public int VersionNo { get; set; }
+    /// <summary>Major.Minor label (1.0, 1.1 …); a minor version is a draft.</summary>
+    public int Major { get; set; }
+    public int Minor { get; set; }
+    public bool IsPublished { get; set; } = true;
     public string StorageKey { get; set; } = "";
     public long SizeBytes { get; set; }
     public string? Checksum { get; set; }
@@ -243,6 +254,29 @@ public class ShareLink : AuditableEntity
     public bool RequireLogin { get; set; }
     /// <summary>Anyone with the link may edit Office documents in the online editor (co-editing with signed-in users).</summary>
     public bool AllowEdit { get; set; }
+}
+
+/// <summary>
+/// Settings of a document library (spec 1.4). The Space's default library ("Tài liệu") has the id <c>PermissionProjection.LibraryOf(space)</c>;
+/// other libraries are top folders flagged <see cref="Folder.IsLibrary"/> and use the folder's id.
+/// </summary>
+public class LibrarySettings
+{
+    public Guid Id { get; set; }
+    public Guid WorkspaceId { get; set; }
+    public string Name { get; set; } = "Tài liệu";
+    public bool IsDefault { get; set; }
+    public VersioningMode Versioning { get; set; }
+    public int MajorLimit { get; set; } = 100;
+    public int MinorLimit { get; set; } = 10;
+    /// <summary>Versions older than this many days are deleted (null = kept); the current and the published version always stay.</summary>
+    public int? DeleteVersionsOlderThanDays { get; set; }
+    public bool RequireCheckout { get; set; }
+    public bool ContentApproval { get; set; }
+    /// <summary>File types allowed in this library (empty = as the system); never wider than the system.</summary>
+    public List<string> AllowedExtensions { get; set; } = [];
+    public int? MaxFileSizeMb { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
 
 /// <summary>Spec 1.1: an offer to make someone else the owner of an item of one's Drive của tôi; it takes effect when they accept.</summary>

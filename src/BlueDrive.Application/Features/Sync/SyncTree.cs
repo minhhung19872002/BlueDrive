@@ -255,14 +255,20 @@ public sealed class SyncSnapshotHandler(IAppDbContext db, ICurrentUser me, SyncA
                 if (afterId is { } a) files = files.Where(f => f.Id.CompareTo(a) > 0);
                 var batch = await files.OrderBy(f => f.Id).Take(PageSize)
                     .Select(f => new { f.Id, f.FolderId, f.Name, f.Revision, f.CurrentVersionId, f.SizeBytes, f.ChecksumSha256, f.ApprovalStatus, f.CreatedBy,
+                        f.CheckedOutBy, f.PublishedVersionId,
+                PubSize = db.FileVersions.Where(pv => pv.Id == f.PublishedVersionId).Select(pv => (long?)pv.SizeBytes).FirstOrDefault(),
+                PubSum = db.FileVersions.Where(pv => pv.Id == f.PublishedVersionId).Select(pv => pv.Checksum).FirstOrDefault(),
                         Modified = f.UpdatedAt ?? f.CreatedAt }).ToListAsync(ct);
                 if (batch.Count == 0) break;
                 foreach (var f in batch)
                 {
                     afterId = f.Id;
-                    var level = map.FileLevel(f.Id, f.FolderId, f.ApprovalStatus, f.CreatedBy);
+                    var level = map.FileLevel(f.Id, f.FolderId, f.ApprovalStatus, f.CreatedBy, f.CheckedOutBy, f.PublishedVersionId != null);
                     if (level < AccessLevel.View) continue;
-                    items.Add(access.File(map, level, f.Id, f.FolderId, f.Name, f.Revision, f.CurrentVersionId, f.SizeBytes, f.ChecksumSha256, f.Modified));
+                    // Who may not edit syncs the latest published version, not a draft (spec 1.4).
+                    var published = level < AccessLevel.Edit && f.PublishedVersionId is { } pid && pid != f.CurrentVersionId;
+                    items.Add(access.File(map, level, f.Id, f.FolderId, f.Name, f.Revision, published ? f.PublishedVersionId : f.CurrentVersionId,
+                        published ? f.PubSize ?? f.SizeBytes : f.SizeBytes, published ? f.PubSum : f.ChecksumSha256, f.Modified));
                     if (items.Count == PageSize) break;
                 }
                 if (batch.Count < PageSize && items.Count < PageSize) break;
@@ -313,6 +319,9 @@ public sealed class SyncChangesHandler(IAppDbContext db, ICurrentUser me, SyncAc
         var folderIds = rows.Where(r => r.ItemType == ChangeItemType.Folder).Select(r => r.ItemId).Distinct().ToList();
         var files = await db.Files.AsNoTracking().Where(f => fileIds.Contains(f.Id))
             .Select(f => new { f.Id, f.WorkspaceId, f.FolderId, f.Name, f.Revision, f.CurrentVersionId, f.SizeBytes, f.ChecksumSha256, f.ApprovalStatus, f.CreatedBy, f.IsDeleted,
+                f.CheckedOutBy, f.PublishedVersionId,
+                PubSize = db.FileVersions.Where(pv => pv.Id == f.PublishedVersionId).Select(pv => (long?)pv.SizeBytes).FirstOrDefault(),
+                PubSum = db.FileVersions.Where(pv => pv.Id == f.PublishedVersionId).Select(pv => pv.Checksum).FirstOrDefault(),
                 Modified = f.UpdatedAt ?? f.CreatedAt }).ToDictionaryAsync(f => f.Id, ct);
         var folders = await db.Folders.AsNoTracking().Where(f => folderIds.Contains(f.Id))
             .Select(f => new { f.Id, f.WorkspaceId, f.ParentId, f.Name, f.Revision, f.IsDeleted, Modified = f.UpdatedAt ?? f.CreatedAt }).ToDictionaryAsync(f => f.Id, ct);
@@ -340,8 +349,11 @@ public sealed class SyncChangesHandler(IAppDbContext db, ICurrentUser me, SyncAc
             SyncItemDto? item = null;
             if (map is not null && r.ItemType == ChangeItemType.File && files.TryGetValue(r.ItemId, out var f) && !f.IsDeleted)
             {
-                var level = map.FileLevel(f.Id, f.FolderId, f.ApprovalStatus, f.CreatedBy);
-                if (level >= AccessLevel.View) item = access.File(map, level, f.Id, f.FolderId, f.Name, f.Revision, f.CurrentVersionId, f.SizeBytes, f.ChecksumSha256, f.Modified);
+                var level = map.FileLevel(f.Id, f.FolderId, f.ApprovalStatus, f.CreatedBy, f.CheckedOutBy, f.PublishedVersionId != null);
+                var published = level < AccessLevel.Edit && f.PublishedVersionId is { } pid && pid != f.CurrentVersionId;
+                if (level >= AccessLevel.View)
+                    item = access.File(map, level, f.Id, f.FolderId, f.Name, f.Revision, published ? f.PublishedVersionId : f.CurrentVersionId,
+                        published ? f.PubSize ?? f.SizeBytes : f.SizeBytes, published ? f.PubSum : f.ChecksumSha256, f.Modified);
             }
             else if (map is not null && r.ItemType == ChangeItemType.Folder && folders.TryGetValue(r.ItemId, out var fo) && !fo.IsDeleted)
             {
@@ -397,12 +409,17 @@ public static class SyncItems
     {
         var f = await db.Files.AsNoTracking().Where(x => x.Id == id && !x.IsDeleted)
             .Select(x => new { x.Id, x.WorkspaceId, x.FolderId, x.Name, x.Revision, x.CurrentVersionId, x.SizeBytes, x.ChecksumSha256, x.ApprovalStatus, x.CreatedBy,
+                x.CheckedOutBy, x.PublishedVersionId,
+                PubSize = db.FileVersions.Where(pv => pv.Id == x.PublishedVersionId).Select(pv => (long?)pv.SizeBytes).FirstOrDefault(),
+                PubSum = db.FileVersions.Where(pv => pv.Id == x.PublishedVersionId).Select(pv => pv.Checksum).FirstOrDefault(),
                 Modified = x.UpdatedAt ?? x.CreatedAt }).FirstOrDefaultAsync(ct);
         if (f is not null)
         {
             var map = await access.MapAsync(f.WorkspaceId, ct);
-            var level = map?.FileLevel(f.Id, f.FolderId, f.ApprovalStatus, f.CreatedBy) ?? AccessLevel.None;
-            return level < AccessLevel.View ? null : access.File(map!, level, f.Id, f.FolderId, f.Name, f.Revision, f.CurrentVersionId, f.SizeBytes, f.ChecksumSha256, f.Modified);
+            var level = map?.FileLevel(f.Id, f.FolderId, f.ApprovalStatus, f.CreatedBy, f.CheckedOutBy, f.PublishedVersionId != null) ?? AccessLevel.None;
+            var published = level < AccessLevel.Edit && f.PublishedVersionId is { } pid && pid != f.CurrentVersionId;
+            return level < AccessLevel.View ? null : access.File(map!, level, f.Id, f.FolderId, f.Name, f.Revision, published ? f.PublishedVersionId : f.CurrentVersionId,
+                published ? f.PubSize ?? f.SizeBytes : f.SizeBytes, published ? f.PubSum : f.ChecksumSha256, f.Modified);
         }
         var fo = await db.Folders.AsNoTracking().Where(x => x.Id == id && !x.IsDeleted)
             .Select(x => new { x.Id, x.WorkspaceId, x.ParentId, x.Name, x.Revision, Modified = x.UpdatedAt ?? x.CreatedAt }).FirstOrDefaultAsync(ct);

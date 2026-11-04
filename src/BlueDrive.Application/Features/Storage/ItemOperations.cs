@@ -405,10 +405,11 @@ public sealed class CopyItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
         // The blob is shared (copy-on-write): purge deletes it only when no version references it anymore.
         var v = new FileVersion
         {
-            FileId = copy.Id, VersionNo = 1, StorageKey = current.StorageKey, SizeBytes = current.SizeBytes, Checksum = current.Checksum,
+            FileId = copy.Id, VersionNo = 1, Major = 1, Minor = 0, IsPublished = true, StorageKey = current.StorageKey, SizeBytes = current.SizeBytes, Checksum = current.Checksum,
             ChangeNote = "Bản sao", CreatedBy = uid, CreatedAt = clock.GetUtcNow().UtcDateTime, IsEncrypted = current.IsEncrypted, WrappedKey = current.WrappedKey,
         };
         copy.CurrentVersionId = v.Id;
+        copy.PublishedVersionId = v.Id;
         copy.Versions.Add(v);
         foreach (var c in src.CatalogItems) copy.CatalogItems.Add(new FileCatalogItem { FileId = copy.Id, CatalogItemId = c.CatalogItemId });
         db.Files.Add(copy);

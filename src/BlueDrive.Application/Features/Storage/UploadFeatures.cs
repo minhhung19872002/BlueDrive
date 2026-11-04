@@ -23,12 +23,12 @@ public sealed record UploadResult(Guid FileId, Guid VersionId, int VersionNo, st
 public sealed record ValidateUploadCommand(UploadMetadata Meta, long Length) : IRequest<Unit>;
 
 public sealed class ValidateUploadHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms,
-    IFileTypeInspector types, ISettingsService settings, QuotaService quota) : IRequestHandler<ValidateUploadCommand, Unit>
+    IFileTypeInspector types, ISettingsService settings, QuotaService quota, Libraries.Libraries libraries) : IRequestHandler<ValidateUploadCommand, Unit>
 {
     public async Task<Unit> Handle(ValidateUploadCommand cmd, CancellationToken ct)
     {
         var uid = me.RequireUserId();
-        await UploadRules.CheckAsync(db, uid, cmd.Meta, cmd.Length, auth, perms, types, settings, quota, ct);
+        await UploadRules.CheckAsync(db, uid, cmd.Meta, cmd.Length, auth, perms, types, settings, quota, libraries, ct);
         return Unit.Value;
     }
 }
@@ -36,7 +36,7 @@ public sealed class ValidateUploadHandler(IAppDbContext db, ICurrentUser me, IRe
 public static class UploadRules
 {
     public static async Task CheckAsync(IAppDbContext db, Guid uid, UploadMetadata meta, long length, IResourceAuthorizationService auth, IPermissionService perms,
-        IFileTypeInspector types, ISettingsService settings, QuotaService quota, CancellationToken ct)
+        IFileTypeInspector types, ISettingsService settings, QuotaService quota, Libraries.Libraries libraries, CancellationToken ct)
     {
         if (!await perms.HasAsync(uid, Perm.DocUpload, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền tải lên tư liệu.");
         var name = FileNameSanitizer.Sanitize(meta.FileName);
@@ -51,15 +51,18 @@ public static class UploadRules
         if (meta.TargetFileId is { } target)
         {
             var a = await auth.EnsureAsync(uid, ResourceType.File, target, AccessLevel.Edit, ct);
-            var f = await db.Files.AsNoTracking().Where(x => x.Id == target).Select(x => new { x.WorkspaceId, x.Extension, x.Revision }).FirstAsync(ct);
+            var f = await db.Files.AsNoTracking().FirstAsync(x => x.Id == target, ct);
             if (!string.IsNullOrWhiteSpace(meta.BaseETag) && !Sync.SyncIds.Matches(meta.BaseETag, f.Revision)) throw new PreconditionFailedException(null);
             if (!string.Equals(f.Extension, ext, StringComparison.OrdinalIgnoreCase)) throw new AppException($"Phiên bản mới phải cùng định dạng .{f.Extension} với tệp hiện tại.");
+            await libraries.EnsureMayChangeContentAsync(f, uid, ct);
+            await libraries.CheckUploadAsync(f.WorkspaceId, f.FolderId, ext, length, ct);
             await quota.EnsureAvailableAsync(f.WorkspaceId, length, ct);
             return;
         }
         await auth.EnsureCanUploadAsync(uid, meta.WorkspaceId, meta.FolderId, ct);
         if (meta.FolderId.HasValue && !await db.Folders.AnyAsync(x => x.Id == meta.FolderId && x.WorkspaceId == meta.WorkspaceId && !x.IsDeleted, ct))
             throw new NotFoundException("Không tìm thấy thư mục đích.");
+        await libraries.CheckUploadAsync(meta.WorkspaceId, meta.FolderId, ext, length, ct);
         if (meta.FailOnConflict && string.IsNullOrEmpty(meta.RelativePath) && await NameTakenAsync(db, meta.WorkspaceId, meta.FolderId, name, ct))
             throw new ConflictException($"Đã có tệp \"{name}\" trong thư mục này.");
         await quota.EnsureAvailableAsync(meta.WorkspaceId, length, ct);
@@ -77,14 +80,15 @@ public sealed record CompleteUploadCommand(string TempFilePath, UploadMetadata M
 
 public sealed class CompleteUploadHandler(
     IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IFileTypeInspector types, ISettingsService settings,
-    QuotaService quota, IFileContentService content, IBackgroundJobs jobs, IMalwareScanPolicy scan, IUserNotifier notify, IAuditLogger audit, TimeProvider clock)
+    QuotaService quota, IFileContentService content, IBackgroundJobs jobs, IMalwareScanPolicy scan, IUserNotifier notify, IAuditLogger audit, TimeProvider clock,
+    Libraries.Libraries libraries)
     : IRequestHandler<CompleteUploadCommand, UploadResult>
 {
     public async Task<UploadResult> Handle(CompleteUploadCommand cmd, CancellationToken ct)
     {
         var uid = me.RequireUserId();
         var length = new FileInfo(cmd.TempFilePath).Length;
-        await UploadRules.CheckAsync(db, uid, cmd.Meta, length, auth, perms, types, settings, quota, ct);
+        await UploadRules.CheckAsync(db, uid, cmd.Meta, length, auth, perms, types, settings, quota, libraries, ct);
 
         var name = FileNameSanitizer.Sanitize(cmd.Meta.FileName);
         var header = new byte[64];
@@ -112,20 +116,23 @@ public sealed class CompleteUploadHandler(
             var next = await db.FileVersions.Where(v => v.FileId == file.Id).MaxAsync(v => (int?)v.VersionNo, ct) ?? 0;
             version = NewVersion(file.Id, next + 1, stored, uid, now, cmd.Meta.ChangeNote);
             db.FileVersions.Add(version);
-            file.CurrentVersionId = version.Id;
+            await libraries.StampAsync(file, version, publish: false, ct);
             file.SizeBytes = stored.SizeBytes;
             file.ChecksumSha256 = stored.Sha256;
             file.ThumbnailKey = null;
             file.PreviewKey = null;
             file.ScanStatus = scan.InitialStatus(stored.SizeBytes);
             await db.SaveChangesAsync(ct);
-            await audit.LogAsync(new AuditEntry(AuditAction.Upload, ResourceType.File, file.Id, file.Name, file.WorkspaceId, new { version = version.VersionNo, size = stored.SizeBytes, newVersion = true }), ct);
+            await libraries.PruneAsync(file, ct);
+            await audit.LogAsync(new AuditEntry(AuditAction.Upload, ResourceType.File, file.Id, file.Name, file.WorkspaceId, new { version = Libraries.Libraries.Label(version), size = stored.SizeBytes, newVersion = true }), ct);
         }
         else
         {
             var folder = await FolderChain.EnsureAsync(db, cmd.Meta.WorkspaceId, cmd.Meta.FolderId, Path.GetDirectoryName(cmd.Meta.RelativePath ?? "")?.Replace('\\', '/'), ct);
             var access = folder is not null ? await auth.GetAccessAsync(uid, ResourceType.Folder, folder.Id, ct) : await auth.GetAccessAsync(uid, ResourceType.Workspace, cmd.Meta.WorkspaceId, ct);
-            var needsApproval = folder?.RequiresApproval == true && !access.CanApprove && !await perms.HasAsync(uid, Perm.DocApprove, ct);
+            // Content approval: the folder's flag, or the library's at its top (spec 1.4).
+            var approvalHere = folder?.RequiresApproval == true || (folder is null && (await libraries.ForAsync(cmd.Meta.WorkspaceId, null, ct)).ContentApproval);
+            var needsApproval = approvalHere && !access.CanApprove && !await perms.HasAsync(uid, Perm.DocApprove, ct);
             file = new StoredFile
             {
                 WorkspaceId = cmd.Meta.WorkspaceId, FolderId = folder?.Id,
@@ -139,7 +146,7 @@ public sealed class CompleteUploadHandler(
                 UploaderOrganizationId = await db.Users.Where(u => u.Id == uid).Select(u => u.OrganizationId).FirstAsync(ct),
             };
             version = NewVersion(file.Id, 1, stored, uid, now, cmd.Meta.ChangeNote ?? "Tải lên lần đầu");
-            file.CurrentVersionId = version.Id;
+            await libraries.StampAsync(file, version, publish: false, ct);
             file.Versions.Add(version);
             if (cmd.Meta.CatalogItemIds is { Count: > 0 })
                 foreach (var ci in await db.CatalogItems.Where(i => cmd.Meta.CatalogItemIds.Contains(i.Id)).Select(i => i.Id).ToListAsync(ct))

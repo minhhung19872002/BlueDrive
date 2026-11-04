@@ -24,3 +24,6 @@ public enum ExternalSharing { Off, ExistingGuests, NewAndExistingGuests, Anyone 
 public enum AccessRequestDeciders { ItemManagers, SpaceOwners }
 
 public enum OwnershipTransferStatus { Pending, Accepted, Declined, Cancelled }
+
+/// <summary>Spec 1.4: only major versions (1, 2, 3…) or major and minor (1.0, 1.1, 1.2 → "Xuất bản" 2.0).</summary>
+public enum VersioningMode { Major, MajorMinor }

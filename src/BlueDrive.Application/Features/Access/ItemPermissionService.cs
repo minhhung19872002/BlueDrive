@@ -111,7 +111,10 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
         if (space.Deleted) restrictions.Add("Không gian đã bị xóa (đang trong thùng rác hệ thống): không ai truy cập được.");
         else if (space.Locked) restrictions.Add("Không gian đang bị khóa hoặc đã lưu trữ: chỉ còn quyền đọc.");
         if (space.NoDownload) restrictions.Add("Không gian tắt tải xuống: chỉ người quản lý Space tải xuống, in, sao chép được.");
-        if (await FileFactsAsync(node.Kind, node.Id, ct) is { Approved: false }) restrictions.Add("Tệp chưa được duyệt: chỉ người tải lên, người sửa và người duyệt thấy.");
+        var facts = await FileFactsAsync(node.Kind, node.Id, ct);
+        if (facts is { Approved: false }) restrictions.Add("Tệp chưa được duyệt: chỉ người tải lên, người sửa và người duyệt thấy.");
+        if (facts is { Published: false }) restrictions.Add("Tệp mới có bản nháp: chỉ người tạo, người sửa và người được xem bản nháp thấy.");
+        if (facts?.CheckedOutBy is { } holder && holder != userId) restrictions.Add("Tệp đang được người khác check-out: chỉ đọc.");
         return new PermissionExplanation(await GetEffectiveAsync(userId, itemId, ct), scope.Name, scope.Id != node.Id, sources, restrictions);
     }
 
@@ -180,7 +183,7 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
 
     private async Task<Restrictions.FileFacts?> FileFactsAsync(SecurableKind kind, Guid id, CancellationToken ct) =>
         kind != SecurableKind.File ? null
-        : await db.Files.AsNoTracking().Where(f => f.Id == id).Select(f => new Restrictions.FileFacts(f.CreatedBy, f.ApprovalStatus == ApprovalStatus.Approved)).FirstOrDefaultAsync(ct);
+        : await db.Files.AsNoTracking().Where(f => f.Id == id).Select(f => new Restrictions.FileFacts(f.CreatedBy, f.ApprovalStatus == ApprovalStatus.Approved, f.CheckedOutBy, f.PublishedVersionId != null)).FirstOrDefaultAsync(ct);
 
 }
 
@@ -201,7 +204,9 @@ public static class Restrictions
         }
     }
 
-    public sealed record FileFacts(Guid? CreatedBy, bool Approved);
+    /// <param name="CheckedOutBy">Spec 3.4: a file checked out by someone else is read only (but for who may override a check-out).</param>
+    /// <param name="Published">Spec 1.4: a file with only drafts (minor versions) is seen by its author and by who may edit, approve or see drafts.</param>
+    public sealed record FileFacts(Guid? CreatedBy, bool Approved, Guid? CheckedOutBy = null, bool Published = true);
 
     private const AccessRight KeptWithoutDocEdit = AccessRight.AddItems | AccessRight.ApproveItems;
 
@@ -215,9 +220,11 @@ public static class Restrictions
         {
             if (rights.Has(AccessRight.EditOwnItemsOnly) && file.CreatedBy == user.UserId && user.CanEditDocs)
                 rights |= AccessRight.EditItems | AccessRight.DeleteItems | AccessRight.RenameMove;
-            if (!file.Approved && file.CreatedBy != user.UserId && !owner
+            if ((!file.Approved || !file.Published) && file.CreatedBy != user.UserId && !owner
                 && !rights.Has(AccessRight.EditItems) && !rights.Has(AccessRight.ApproveItems) && !rights.Has(AccessRight.ViewDrafts))
                 return AccessRight.None;
+            if (file.CheckedOutBy is { } holder && holder != user.UserId && !rights.Has(AccessRight.CheckOutOverride))
+                rights &= ~(AccessRight.EditItems | AccessRight.DeleteItems | AccessRight.RenameMove | AccessRight.EditOwnItemsOnly);
         }
         return locked ? rights & ~AccessRights.Writes : rights;
     }

@@ -51,6 +51,7 @@ public interface IAppDbContext
     DbSet<ShareLinkMember> ShareLinkMembers { get; }
     DbSet<Guest> Guests { get; }
     DbSet<Shortcut> Shortcuts { get; }
+    DbSet<LibrarySettings> LibrarySettings { get; }
     DbSet<OwnershipTransfer> OwnershipTransfers { get; }
     DbSet<WorkspaceGroupMember> WorkspaceGroupMembers { get; }
     DbSet<GuestOtp> GuestOtps { get; }

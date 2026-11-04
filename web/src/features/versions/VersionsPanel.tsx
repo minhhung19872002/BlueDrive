@@ -7,6 +7,7 @@ import { getDownloadUrl, startDownload } from '@/api/drive'
 import { getErrorMessage, showApiError } from '@/api/errors'
 import { qk } from '@/api/queryKeys'
 import { qkc } from '@/api/queryKeys.collab'
+import { versionLabel } from '@/api/libraries'
 import { listVersions, restoreVersion } from '@/api/versions'
 import { useFileDetail } from '@/features/drive/hooks'
 import { pickFiles, type PickedFile } from '@/features/drive/upload/filePicker'
@@ -97,7 +98,7 @@ export default function VersionsPanel({ fileId }: VersionsPanelProps) {
   const canDownload = f?.access.canDownload ?? false
 
   const restore = useApiMutation((v: FileVersion) => restoreVersion(fileId, v.id), {
-    successMessage: (r, v) => t('collab.versions.restored', { from: v.versionNo, to: r.versionNo }),
+    successMessage: (r, v) => t('collab.versions.restored', { from: versionLabel(v), to: versionLabel(r) }),
     invalidate: [qk.drive, qk.workspaces, qk.contentUrl(fileId, true)],
   })
 
@@ -117,7 +118,7 @@ export default function VersionsPanel({ fileId }: VersionsPanelProps) {
   const confirmRestore = (v: FileVersion) =>
     modal.confirm({
       title: t('collab.versions.restoreTitle'),
-      content: t('collab.versions.restoreConfirm', { no: v.versionNo }),
+      content: t('collab.versions.restoreConfirm', { no: versionLabel(v) }),
       okText: t('collab.versions.restore'),
       cancelText: t('common.cancel'),
       onOk: () => restore.mutateAsync(v).catch(() => undefined),
@@ -141,9 +142,10 @@ export default function VersionsPanel({ fileId }: VersionsPanelProps) {
           <div key={v.id} className="bd-version-item">
             <div className="bd-version-head">
               <Typography.Text strong>
-                <HistoryOutlined /> {t('collab.versions.versionNo', { no: v.versionNo })}
+                <HistoryOutlined /> {t('collab.versions.versionNo', { no: versionLabel(v) })}
               </Typography.Text>
               {v.isCurrent && <Tag color="green">{t('collab.versions.current')}</Tag>}
+              {v.isPublished === false && <Tag color="orange">{t('library.draft')}</Tag>}
               <Typography.Text type="secondary" style={{ marginLeft: 'auto' }}>
                 {formatBytes(v.sizeBytes)}
               </Typography.Text>

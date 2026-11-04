@@ -98,9 +98,10 @@ public sealed class WorkspaceAccessMap
 
     public bool FolderExists(Guid folderId) => _folders.ContainsKey(folderId);
 
-    public AccessLevel FileLevel(Guid fileId, Guid? folderId, ApprovalStatus approval, Guid? createdBy) =>
+    public AccessLevel FileLevel(Guid fileId, Guid? folderId, ApprovalStatus approval, Guid? createdBy, Guid? checkedOutBy = null, bool published = true) =>
         _fileNodes.TryGetValue(fileId, out var n)
-            ? Access.ReferencePermissionEvaluator.ToLevel(Rights(fileId, n.Scope, n.Owner, new Access.Restrictions.FileFacts(createdBy, approval == ApprovalStatus.Approved)))
+            ? Access.ReferencePermissionEvaluator.ToLevel(Rights(fileId, n.Scope, n.Owner,
+                new Access.Restrictions.FileFacts(createdBy, approval == ApprovalStatus.Approved, checkedOutBy, published)))
             : AccessLevel.None;
 
     /// <summary>Parent as seen by the user: a folder they cannot see is skipped (the item becomes top-level of the shared root).</summary>
