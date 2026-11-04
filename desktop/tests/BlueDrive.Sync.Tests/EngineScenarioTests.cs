@@ -155,6 +155,46 @@ public class EngineScenarioTests : IDisposable
     }
 
     [Fact]
+    public async Task A_newer_server_copy_waits_while_word_has_the_file_open_and_a_later_save_keeps_both()
+    {
+        // Found on prod: Word showed the old copy, BlueDrive wrote the co-edited version under it, Word's save then replaced it silently.
+        _remote.WebUpload(null, "Biên bản.docx", Content.Of("bản 1"));
+        await _a.SyncAsync();
+        _a.Fs.OpenInEditor.Add("Biên bản.docx");
+        _remote.WebUpload(null, "Biên bản.docx", Content.Of("bản 2 cùng soạn trên web"));
+        var waiting = await _a.SyncAsync();
+        waiting.WaitingForOpenFiles.Should().BeTrue();
+        waiting.Errors.Should().ContainSingle(e => e.StartsWith("Biên bản.docx: Có phiên bản mới trên BlueDrive"));
+        _a.Fs.Read("Biên bản.docx").Should().Equal(Content.Of("bản 1"), "nothing is written under the open document");
+
+        _a.Fs.UserWrite("Biên bản.docx", Content.Of("bản 1 + sửa trong Word")); // Word saves its copy
+        (await _a.SyncAsync()).WaitingForOpenFiles.Should().BeTrue("still open: neither uploaded over the web version nor renamed");
+        _remote.Tree()["Biên bản.docx"].Should().Be(Content.Hash(Content.Of("bản 2 cùng soạn trên web")));
+
+        _a.Fs.OpenInEditor.Clear(); // Word closed
+        (await _a.SyncAsync()).WaitingForOpenFiles.Should().BeFalse();
+        await _a.SyncAsync();
+        var tree = _remote.Tree();
+        tree["Biên bản.docx"].Should().Be(Content.Hash(Content.Of("bản 2 cùng soạn trên web")));
+        tree[tree.Keys.Should().ContainSingle(k => k.Contains("Bản xung đột")).Which].Should().Be(Content.Hash(Content.Of("bản 1 + sửa trong Word")));
+        Tree(_a.Fs).Should().BeEquivalentTo(tree);
+    }
+
+    [Fact]
+    public async Task A_newer_server_copy_of_a_file_closed_without_saving_comes_down_once_it_is_closed()
+    {
+        _remote.WebUpload(null, "Biên bản.docx", Content.Of("bản 1"));
+        await _a.SyncAsync();
+        _a.Fs.OpenInEditor.Add("Biên bản.docx");
+        _remote.WebUpload(null, "Biên bản.docx", Content.Of("bản 2"));
+        await _a.SyncAsync();
+        _a.Fs.OpenInEditor.Clear();
+        (await _a.SyncAsync()).Errors.Should().BeEmpty();
+        _a.Fs.Read("Biên bản.docx").Should().Equal(Content.Of("bản 2"));
+        _remote.Tree().Keys.Should().NotContain(k => k.Contains("Bản xung đột"));
+    }
+
+    [Fact]
     public async Task Deletes_go_to_the_server_trash_but_never_win_over_an_edit()
     {
         _remote.WebUpload(null, "a.txt", Content.Of("a"));

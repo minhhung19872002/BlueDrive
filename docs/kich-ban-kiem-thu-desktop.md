@@ -84,6 +84,13 @@ BlueDrive Desktop 1.0.3 → 1.0.6 (các bản sửa bên dưới). Thời gian l
     "đang đồng bộ". Nay Explorer hiện trạng thái "Lỗi đồng bộ — <lý do>" trên tệp (lý do cũng có ở Cài đặt → Vấn đề) —
     `DesktopTests.Problems_about_a_file_name_the_file_shown_as_sync_error_in_explorer`. `.xlsm`/`.docm`/`.pptm` (có macro) giữ mặc định
     không cho tải lên; quản trị viên bật trong "Định dạng tệp cho phép" nếu cần.
+11. Mở tệp bằng Word trong lúc người khác sửa trên web: khi phiên cùng soạn lưu bản mới, BlueDrive ghi bản mới xuống đĩa ngay dưới Word;
+    Word vẫn hiện bản cũ, lưu trong Word thành phiên bản mới đè nội dung của người kia (không có bản xung đột). Nay tệp đang được chương trình
+    giữ mở để ghi thì chờ tới khi đóng; nếu đã lưu thì giữ cả hai bản. Chạy lại trên prod với Word thật: lúc Word mở tệp trên đĩa không đổi; lưu
+    và đóng Word → "… (Bản xung đột - Quản trị hệ thống - LAPTOP-KGTEG72G - 2026-11-04 1524).docx" chứa phần sửa trong Word, tên gốc là bản
+    trên web — `EngineScenarioTests.A_newer_server_copy_waits_while_word_has_the_file_open_and_a_later_save_keeps_both`,
+    `PhysicalDiskTests.A_file_held_open_for_writing_like_word_does_is_seen_as_open`. Cũng từ lần này, nhấp đúp tệp Office trong BlueDrive mặc
+    định mở chế độ cùng soạn (`DesktopTests.Office_documents_open_for_co_editing_on_double_click_by_default`).
 
 ## Kết quả nghiệm thu tự động — mục 15, hai thiết bị
 

@@ -19,8 +19,14 @@ public sealed class AppSettings
     public int DownloadLimitKBps { get; set; }
     /// <summary>"Số luồng tải song song" (1–8): files downloaded at once in full sync mode; applies when the account restarts.</summary>
     public int ParallelTransfers { get; set; } = 4;
-    /// <summary>"Khi nhấp đúp file Office trong BlueDrive": false = ứng dụng mặc định, true = luôn mở chế độ cùng soạn khi có mạng (spec 13A).</summary>
-    public bool CoEditOnDoubleClick { get; set; }
+    /// <summary>
+    /// "Khi nhấp đúp file Office trong BlueDrive": true (default) = luôn mở chế độ cùng soạn khi có mạng (spec 13A), false = ứng dụng mặc định.
+    /// Co-editing by default: a document opened in Word cannot show what others type on the web meanwhile.
+    /// </summary>
+    public bool CoEditOnDoubleClick { get; set; } = true;
+    /// <summary>Settings file format: 2 = co-editing on double click became the default (files written before kept the old "false").</summary>
+    public int Version { get; set; } = CurrentVersion;
+    private const int CurrentVersion = 2;
     /// <summary>"Đồng bộ trong mạng LAN" (Sync-Phase 12): get files from / give files to BlueDrive computers nearby; applies when the account restarts.</summary>
     public bool LanSync { get; set; }
     public ProxyChoice Proxy { get; set; } = ProxyChoice.System;
@@ -46,8 +52,18 @@ public sealed class AppSettings
     public static AppSettings Load(string dir)
     {
         var path = Path.Combine(dir, "settings.json");
-        try { return File.Exists(path) ? JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), Json) ?? new() : new(); }
+        if (!File.Exists(path)) return new();
+        var text = File.ReadAllText(path);
+        AppSettings s;
+        try { s = JsonSerializer.Deserialize<AppSettings>(text, Json) ?? new(); }
         catch (JsonException) { return new(); }
+        if (!text.Contains($"\"{nameof(Version)}\"", StringComparison.Ordinal))
+        {
+            // Written by 1.0.9 or older, where the default was "Mở bằng ứng dụng mặc định": now co-editing.
+            s.CoEditOnDoubleClick = true;
+            s.Version = CurrentVersion;
+        }
+        return s;
     }
 
     public void Save(string dir)

@@ -27,6 +27,8 @@ public sealed class AgentOptions
     /// <summary>Periodic full pass (scan + change feed), also catches anything the watcher / push missed (spec 6.1: 15 minutes).</summary>
     public TimeSpan PeriodicPass { get; init; } = TimeSpan.FromMinutes(15);
     public TimeSpan MaxBackoff { get; init; } = TimeSpan.FromMinutes(30);
+    /// <summary>A newer server copy waits for a file open in a program: looked at again this often until it is closed.</summary>
+    public TimeSpan OpenFileRetry { get; init; } = TimeSpan.FromSeconds(30);
     public bool UseRecycleBin { get; init; } = true;
     /// <summary>"Số luồng tải song song" (Cài đặt → Mạng): files downloaded at once in full sync mode (1–8).</summary>
     public int ParallelTransfers { get; init; } = 4;
@@ -548,6 +550,7 @@ public sealed class SyncAgent : IAsyncDisposable
         var result = await _engine.SyncAsync(ct);
         Memory.TrimAfter(result.Operations);
         if (result.DeletesDeferred) RequestLocal(); // the deletions go up (or the mass delete question comes) once they have settled
+        if (result.WaitingForOpenFiles) lock (_gate) _retryDue = DateTime.UtcNow + _o.OpenFileRetry; // closing an unchanged file raises no event
         var problems = ShownProblems(result.Errors);
         var msg = result.MassDeletePending > 0
             ? $"Bạn vừa xóa {result.MassDeletePending} tệp. Xóa cả trên BlueDrive?"

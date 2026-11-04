@@ -132,6 +132,11 @@ public sealed class FakeLocalFileSystem(FakeClock clock) : ILocalFileSystem
         else ReadOnly.Remove(path);
     }
 
+    /// <summary>Files a program (Word…) holds open for writing.</summary>
+    public HashSet<string> OpenInEditor { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public bool IsOpenForWriting(string path) => OpenInEditor.Contains(path);
+
     public bool Exists(string path) => _nodes.ContainsKey(path);
     public bool IsFolder(string path) => _nodes.TryGetValue(path, out var n) && n.IsFolder;
     public byte[] Read(string path) => _nodes[path].Data;

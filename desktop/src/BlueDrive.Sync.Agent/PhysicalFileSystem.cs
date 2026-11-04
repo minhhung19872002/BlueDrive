@@ -216,6 +216,19 @@ public class PhysicalFileSystem(string root, bool useRecycleBin = true) : ILocal
         if (next != a) File.SetAttributes(abs, next);
     }
 
+    /// <summary>Windows: opening the file while denying other writers fails when a program has it open for writing.</summary>
+    public bool IsOpenForWriting(string path)
+    {
+        if (!OperatingSystem.IsWindows()) return false;
+        try
+        {
+            using var _ = new FileStream(Abs(path), FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+            return false;
+        }
+        catch (IOException ex) when ((ex.HResult & 0xFFFF) is 32 or 33) { return true; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
+    }
+
     private static void Writable(string abs)
     {
         if (File.Exists(abs) && File.GetAttributes(abs).HasFlag(FileAttributes.ReadOnly)) File.SetAttributes(abs, File.GetAttributes(abs) & ~FileAttributes.ReadOnly);

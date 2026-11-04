@@ -75,6 +75,12 @@ public interface ILocalFileSystem
 
     /// <summary>Read-only attribute for files the user may only view (spec 7.2); no-op where the platform has none.</summary>
     void SetReadOnly(string path, bool readOnly);
+
+    /// <summary>
+    /// Another program holds the file open for writing (Word, Excel… keep the document open while it is edited): a newer server copy must not
+    /// be written under it, the program would later save its older copy over it.
+    /// </summary>
+    bool IsOpenForWriting(string path) => false;
 }
 
 public interface IClock

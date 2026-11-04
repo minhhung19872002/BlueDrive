@@ -211,6 +211,22 @@ public sealed class DesktopTests : IDisposable
     }
 
     [Fact]
+    public void Office_documents_open_for_co_editing_on_double_click_by_default()
+    {
+        new AppSettings().CoEditOnDoubleClick.Should().BeTrue();
+        // settings.json from 1.0.9 or older: "false" was the old default, not a choice.
+        Directory.CreateDirectory(_home);
+        File.WriteAllText(Path.Combine(_home, "settings.json"), """{ "CoEditOnDoubleClick": false, "Theme": "Dark" }""");
+        var old = AppSettings.Load(_home);
+        old.CoEditOnDoubleClick.Should().BeTrue();
+        old.Theme.Should().Be(ThemeChoice.Dark);
+        // Turned off by the user since: kept off.
+        old.CoEditOnDoubleClick = false;
+        old.Save(_home);
+        AppSettings.Load(_home).CoEditOnDoubleClick.Should().BeFalse();
+    }
+
+    [Fact]
     public void Metered_network_and_low_battery_pause_unless_turned_off()
     {
         var s = new AppSettings();

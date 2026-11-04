@@ -83,6 +83,9 @@ public sealed record SyncPassResult(int Operations, int MassDeletePending, IRead
 {
     /// <summary>Local deletions seen for the first time this pass and not sent yet (<see cref="SyncEngineOptions.DeleteSettleTime"/>): run again soon.</summary>
     public bool DeletesDeferred { get; init; }
+
+    /// <summary>A newer server copy waits for a file a program holds open (<see cref="ILocalFileSystem.IsOpenForWriting"/>): run again soon.</summary>
+    public bool WaitingForOpenFiles { get; init; }
 }
 
 /// <summary>
@@ -112,6 +115,7 @@ public sealed class SyncEngine(
     /// <summary>Local deletions waiting to settle: (root, base remote id) → first seen.</summary>
     private readonly Dictionary<(string Root, string Id), DateTime> _deleteSeen = [];
     private bool _deletesDeferred;
+    private bool _waitingForOpenFiles;
     private SyncClientPolicy _policy = SyncClientPolicy.Default;
 
     /// <summary>Server sync policy (GET /sync/policy, refreshed by the agent between passes): upload / download limits, "Mở trên web" links.</summary>
@@ -491,7 +495,9 @@ public sealed class SyncEngine(
         if (state.GetAccount(RestoreKey) is not null) state.SetAccount(RestoreKey, null);
         var deferred = _deletesDeferred;
         _deletesDeferred = false;
-        return new SyncPassResult(total, pendingMass, errors.Distinct().ToList()) { DeletesDeferred = deferred };
+        var waiting = _waitingForOpenFiles;
+        _waitingForOpenFiles = false;
+        return new SyncPassResult(total, pendingMass, errors.Distinct().ToList()) { DeletesDeferred = deferred, WaitingForOpenFiles = waiting };
     }
 
     /// <summary>
@@ -1403,12 +1409,27 @@ public sealed class SyncEngine(
         return true;
     }
 
+    /// <summary>
+    /// A newer server copy is not written under a file a program holds open (Word keeps the document it shows in memory and would later save
+    /// it over the new copy): the step waits until the file is closed. If the program saved meanwhile, the next pass sees both sides changed
+    /// and keeps both (conflict copy).
+    /// </summary>
+    private void WaitWhileOpen(Ctx c, string path)
+    {
+        if (!fs.IsOpenForWriting(Abs(c, path))) return;
+        _waitingForOpenFiles = true;
+        throw new IOException(OpenFileWaits);
+    }
+
+    internal const string OpenFileWaits = "Có phiên bản mới trên BlueDrive trong lúc tệp đang mở: sẽ cập nhật khi tệp được đóng (nếu bạn đã lưu, cả hai bản đều được giữ).";
+
     private async Task<bool> DownloadOverAsync(Ctx c, Step s, CancellationToken ct)
     {
         var b = s.Base!;
         var r = s.Remote!;
         var path = BasePath(c, b);
         if (path is null || !LocalUnchanged(c, b, path)) return false;
+        WaitWhileOpen(c, path);
         if (_placeholders.OnDemand) await _placeholders.UpdatePlaceholderAsync(Abs(c, path), r, ct);
         else await WriteRemoteAsync(c, r, path, ct);
         Record(b, r, b.Name, fs.Stat(Abs(c, path)), location: false);
@@ -1613,6 +1634,7 @@ public sealed class SyncEngine(
         var l = s.LocalEntry!;
         var r = s.Remote!;
         if (!SameAsScan(c, l)) return false;
+        WaitWhileOpen(c, l.Path); // the program would go on saving its copy under the original name
         var parent = NameMapper.ParentOf(l.Path);
         var stamp = TimeZoneInfo.ConvertTimeFromUtc(clock.UtcNow, _o.TimeZone);
         var name = NameMapper.ConflictName(NameMapper.NameOf(l.Path), _o.UserDisplayName, _o.DeviceName, stamp);

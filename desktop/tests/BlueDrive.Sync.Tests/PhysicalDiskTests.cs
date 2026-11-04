@@ -77,6 +77,20 @@ public sealed class PhysicalDiskTests : IDisposable
     }
 
     [Fact]
+    public async Task A_file_held_open_for_writing_like_word_does_is_seen_as_open()
+    {
+        var fs = Disk("open");
+        await fs.WriteAtomicAsync("Biên bản.docx", async s => await s.WriteAsync("nội dung"u8.ToArray()), DateTime.UtcNow, CancellationToken.None);
+        fs.IsOpenForWriting("Biên bản.docx").Should().BeFalse();
+        using (new FileStream(fs.Abs("Biên bản.docx"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            fs.IsOpenForWriting("Biên bản.docx").Should().BeFalse("a reader (search indexer, antivirus) does not hold back a new version");
+        using (new FileStream(fs.Abs("Biên bản.docx"), FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite | FileShare.Delete))
+            fs.IsOpenForWriting("Biên bản.docx").Should().Be(OperatingSystem.IsWindows(), "Word keeps the document open for writing");
+        fs.IsOpenForWriting("Biên bản.docx").Should().BeFalse();
+        fs.IsOpenForWriting("không có.docx").Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Paths_longer_than_260_characters_work()
     {
         var fs = Disk("a");
