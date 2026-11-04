@@ -55,7 +55,7 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
             var user = await UserAsync(userId, ct);
             if (user.CanViewDocs)
             {
-                var (direct, membership) = await ScopeRightsAsync(user, node.AclScopeId, ct);
+                var (direct, membership) = await ScopeRightsAsync(user, node.AclScopeId, node.Id == node.AclScopeId, ct);
                 result = (Restrictions.Apply(user, node.OwnerUserId == userId, direct, membership, await FileFactsAsync(node.Kind, node.Id, ct), locked: false),
                     await LockedAsync(node.Root, ct));
             }
@@ -83,7 +83,8 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
         var user = await UserAsync(userId, ct);
         var now = clock.GetUtcNow().UtcDateTime;
         var rows = await db.AclEntries.AsNoTracking()
-            .Where(e => e.ScopeId == node.AclScopeId && user.Principals.Contains(e.PrincipalId) && (e.ExpiresAt == null || e.ExpiresAt > now))
+            .Where(e => e.ScopeId == node.AclScopeId && user.Principals.Contains(e.PrincipalId) && (e.ExpiresAt == null || e.ExpiresAt > now)
+                        && (e.AppliesToChildren || node.Id == node.AclScopeId))
             .Join(db.PermissionLevels, e => e.PermissionLevelId, l => l.Id, (e, l) => new { e, l.Name, l.Permissions })
             .ToListAsync(ct);
         var ids = rows.Select(r => r.e.PrincipalId).Distinct().ToList();
@@ -132,16 +133,16 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
     }
 
     /// <summary>OR of the live entries on a scope, apart: direct grants, and Space membership (the part capped by the role).</summary>
-    private async Task<(AccessRight Direct, AccessRight Membership)> ScopeRightsAsync(Restrictions.User user, Guid scopeId, CancellationToken ct)
+    private async Task<(AccessRight Direct, AccessRight Membership)> ScopeRightsAsync(Restrictions.User user, Guid scopeId, bool scopeNode, CancellationToken ct)
     {
         var aclVersion = await db.AclScopes.Where(s => s.ScopeId == scopeId).Select(s => (long?)s.AclVersion).FirstOrDefaultAsync(ct) ?? 0;
         var membershipVersion = await db.MembershipVersions.Where(v => v.UserId == user.UserId).Select(v => (long?)v.Version).FirstOrDefaultAsync(ct) ?? 0;
-        var key = ("perm-scope", user.UserId, scopeId, membershipVersion, aclVersion);
+        var key = ("perm-scope", user.UserId, scopeId, scopeNode, membershipVersion, aclVersion);
         var now = clock.GetUtcNow().UtcDateTime;
         // The answer is valid until the first of its entries runs out (checked on the application's clock).
         if (cache.TryGetValue(key, out (AccessRight Direct, AccessRight Membership, DateTime Until) hit) && now < hit.Until) return (hit.Direct, hit.Membership);
         var live = await db.AclEntries.AsNoTracking()
-            .Where(e => e.ScopeId == scopeId && user.Principals.Contains(e.PrincipalId) && (e.ExpiresAt == null || e.ExpiresAt > now))
+            .Where(e => e.ScopeId == scopeId && user.Principals.Contains(e.PrincipalId) && (e.ExpiresAt == null || e.ExpiresAt > now) && (e.AppliesToChildren || scopeNode))
             .Join(db.PermissionLevels, e => e.PermissionLevelId, l => l.Id, (e, l) => new { e.Source, e.ExpiresAt, l.Permissions })
             .ToListAsync(ct);
         var result = (live.Where(e => e.Source != AclSource.SpaceDefault).Aggregate(AccessRight.None, (m, e) => m | e.Permissions),

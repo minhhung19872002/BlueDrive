@@ -26,7 +26,10 @@ public enum AuditAction
 {
     Login, Logout, LoginFailed, Upload, Download, View, Edit, Create, Share, Unshare, Rename, Move, Copy,
     Delete, Restore, Purge, PermissionChange, ConfigChange, PasswordChange, PasswordReset, SessionRevoke,
-    UserLock, UserUnlock, Approve, Reject, VersionRestore, Comment, ShareLinkAccess, Export, Backup, Import
+    UserLock, UserUnlock, Approve, Reject, VersionRestore, Comment, ShareLinkAccess, Export, Backup, Import,
+    // Storage and permission model (PROMPT_BlueDrive_Storage_Permissions.md, section 9)
+    PermissionGranted, PermissionRevoked, PermissionLevelChanged, InheritanceBroken, InheritanceRestored, LinkCreated, LinkUsed, LinkRevoked,
+    AccessRequested, AccessRequestDecided, OwnershipTransferred, LabelChanged, HoldApplied, HoldRemoved, EmergencyAccess, GuestInvited, GuestLogin
 }
 
 public enum AlertType { BruteForce, QuotaExceeded, QuotaWarning, UnusualDownload, BackupFailed, MalwareDetected, MalwareScanFailed }

@@ -22,7 +22,7 @@ public interface IAccessModelSync
 /// resource_permissions, shares, groups, units, roles). The current model stays the source of writes until Perm-Phase 2, so this runs on a
 /// schedule and on demand; ids of derived rows are stable (<see cref="StableGuid"/>). Rules: docs/migration-permissions.md, section 4a.
 /// </summary>
-public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock)
+public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock, AclEditor editor)
 {
     public sealed record Result(int Securables, int Scopes, int Entries, int Grants, int Principals, int Memberships);
 
@@ -75,6 +75,9 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock)
     {
         var full = workspaceIds is null && userIds is null;
         var wsIds = workspaceIds ?? [];
+        // ACLs belong to the new model (AclEditor) once it exists; the current model's grants are imported only the first time
+        // (an empty acl_scopes table: a server upgraded straight from the old model).
+        var import = !await db.AclScopes.AnyAsync(ct);
         var now = clock.GetUtcNow().UtcDateTime;
         await EnsureLevelsAsync(ct);
         var levels = await db.PermissionLevels.AsNoTracking().ToDictionaryAsync(l => l.Id, l => l.Permissions, ct);
@@ -88,10 +91,13 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock)
         var files = await db.Files.AsNoTracking().Where(f => !f.IsDeleted && (full || wsIds.Contains(f.WorkspaceId)))
             .Select(f => new { f.Id, f.WorkspaceId, f.FolderId, f.Name, f.BreakInheritance }).ToListAsync(ct);
         var resourceIds = full ? null : wsIds.Concat(folders.Select(f => f.Id)).Concat(files.Select(f => f.Id)).ToHashSet();
-        var acl = full ? await db.ResourcePermissions.AsNoTracking().ToListAsync(ct)
+        var acl = !import ? [] : full ? await db.ResourcePermissions.AsNoTracking().ToListAsync(ct)
             : await db.ResourcePermissions.AsNoTracking().Where(r => resourceIds!.Contains(r.ResourceId)).ToListAsync(ct);
-        var shares = full ? await db.Shares.AsNoTracking().ToListAsync(ct)
+        var shares = !import ? [] : full ? await db.Shares.AsNoTracking().ToListAsync(ct)
             : await db.Shares.AsNoTracking().Where(r => resourceIds!.Contains(r.ResourceId)).ToListAsync(ct);
+        // Kept as they are (not imported): which nodes have their own ACL.
+        var unique = import ? [] : (await db.Securables.AsNoTracking()
+            .Where(n => n.HasUniqueAcl && (full || wsIds.Contains(n.SpaceId ?? n.PersonalDriveId ?? Guid.Empty))).Select(n => n.Id).ToListAsync(ct)).ToHashSet();
         var users = await db.Users.AsNoTracking().Select(u => new { u.Id, u.FullName, u.OrganizationId }).ToListAsync(ct);
         var orgs = await db.Organizations.AsNoTracking().Select(o => new { o.Id, o.Name, o.Path }).ToListAsync(ct);
         var groups = await db.UserGroups.AsNoTracking().Select(g => new { g.Id, g.Name }).ToListAsync(ct);
@@ -194,13 +200,13 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock)
             {
                 var parent = f.ParentId is { } pid && placed.TryGetValue(pid, out var p) ? p : library;
                 var node = Node(f.Id, SecurableKind.Folder, parent.Id, $"{parent.Path}.{Label(f.Id)}", f.Name);
-                Place(node, parent, f.BreakInheritance);
+                Place(node, parent, import ? f.BreakInheritance : unique.Contains(f.Id));
                 placed[f.Id] = node;
             }
             foreach (var f in filesByWs[w.Id])
             {
                 var parent = f.FolderId is { } pid && placed.TryGetValue(pid, out var p) ? p : library;
-                Place(Node(f.Id, SecurableKind.File, parent.Id, $"{parent.Path}.{Label(f.Id)}", f.Name), parent, f.BreakInheritance);
+                Place(Node(f.Id, SecurableKind.File, parent.Id, $"{parent.Path}.{Label(f.Id)}", f.Name), parent, import ? f.BreakInheritance : unique.Contains(f.Id));
             }
 
             void MakeScope(Securable node, List<Grant> grants)
@@ -213,6 +219,8 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock)
                     {
                         ScopeId = node.Id, PrincipalKind = g.Kind, PrincipalId = g.Principal, PermissionLevelId = g.Level, ExpiresAt = g.ExpiresAt,
                         GrantedBy = g.GrantedBy, GrantedAt = g.GrantedAt, Source = g.Source,
+                        // "Chỉ mục này" of the node's own rows (copies from above always reach further down).
+                        AppliesToChildren = g.Inherits || g.Source != AclSource.Direct || !direct.GetValueOrDefault(node.Id, []).Contains(g),
                     });
                 securables.Add(node);
             }
@@ -227,6 +235,15 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock)
                 if (!breaks && own.Count == 0 && !parentStops)
                 {
                     node.AclScopeId = parent.AclScopeId;
+                    securables.Add(node);
+                    return;
+                }
+                if (!import)
+                {
+                    // Its own ACL is the new model's: kept as it is (only its place in the tree is rebuilt).
+                    node.HasUniqueAcl = true;
+                    node.AclScopeId = node.Id;
+                    scopeGrants[node.Id] = [];
                     securables.Add(node);
                     return;
                 }
@@ -277,12 +294,33 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock)
 
         Detach();
         var own = db.Database.CurrentTransaction is null ? await db.Database.BeginTransactionAsync(ct) : null;
+        var rootIds = workspaces.Select(w => w.Id).ToList();
+        IQueryable<Securable> Nodes() => full ? db.Securables : db.Securables.Where(n => wsIds.Contains(n.SpaceId ?? n.PersonalDriveId ?? Guid.Empty));
+        if (import)
+        {
+            var nodes = Nodes().Select(n => n.Id);
+            await db.ScopeGrants.Where(g => full || nodes.Contains(g.ScopeId)).ExecuteDeleteAsync(ct);
+            await db.AclEntries.Where(e => full || nodes.Contains(e.ScopeId)).ExecuteDeleteAsync(ct);
+            await db.AclScopes.Where(a => full || nodes.Contains(a.ScopeId)).ExecuteDeleteAsync(ct);
+        }
+        else
+        {
+            // The ACLs belong to the new model: only the Space groups' entries on the roots are the projection's. Scopes of nodes that
+            // are gone (deleted, purged) go with their entries; every other ACL is kept as it is.
+            var kept = securables.Where(n => n.HasUniqueAcl).Select(n => n.Id).ToHashSet();
+            var gone = (await Nodes().Select(n => n.Id).ToListAsync(ct)).Where(id => !kept.Contains(id)).ToList();
+            await db.ScopeGrants.Where(g => gone.Contains(g.ScopeId)).ExecuteDeleteAsync(ct);
+            await db.AclEntries.Where(e => gone.Contains(e.ScopeId) || (rootIds.Contains(e.ScopeId) && e.Source == AclSource.SpaceDefault)).ExecuteDeleteAsync(ct);
+            await db.AclScopes.Where(a => gone.Contains(a.ScopeId)).ExecuteDeleteAsync(ct);
+            var existingScopes = (await db.AclScopes.AsNoTracking().Where(a => kept.Contains(a.ScopeId)).Select(a => a.ScopeId).ToListAsync(ct)).ToHashSet();
+            entries = entries.Where(e => e.Source == AclSource.SpaceDefault).ToList();
+            scopes = scopes.Where(a => !existingScopes.Contains(a.ScopeId)).ToList();
+            grants = []; // the roots' grants are rewritten after the save (their entries changed)
+            await db.AclScopes.Where(a => rootIds.Contains(a.ScopeId)).ExecuteUpdateAsync(u => u.SetProperty(a => a.AclVersion, AclVersions.Next(clock)), ct);
+        }
+        await Nodes().ExecuteDeleteAsync(ct);
         if (full)
         {
-            await db.ScopeGrants.ExecuteDeleteAsync(ct);
-            await db.AclEntries.ExecuteDeleteAsync(ct);
-            await db.AclScopes.ExecuteDeleteAsync(ct);
-            await db.Securables.ExecuteDeleteAsync(ct);
             await db.SpaceGroupMembers.ExecuteDeleteAsync(ct);
             await db.SpaceGroups.ExecuteDeleteAsync(ct);
             await db.Libraries.ExecuteDeleteAsync(ct);
@@ -293,11 +331,6 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock)
         }
         else
         {
-            var nodes = db.Securables.Where(n => wsIds.Contains(n.SpaceId ?? n.PersonalDriveId ?? Guid.Empty)).Select(n => n.Id);
-            await db.ScopeGrants.Where(g => nodes.Contains(g.ScopeId)).ExecuteDeleteAsync(ct);
-            await db.AclEntries.Where(e => nodes.Contains(e.ScopeId)).ExecuteDeleteAsync(ct);
-            await db.AclScopes.Where(a => nodes.Contains(a.ScopeId)).ExecuteDeleteAsync(ct);
-            await db.Securables.Where(n => wsIds.Contains(n.SpaceId ?? n.PersonalDriveId ?? Guid.Empty)).ExecuteDeleteAsync(ct);
             await db.SpaceGroupMembers.Where(m => oldGroups.Contains(m.SpaceGroupId)).ExecuteDeleteAsync(ct);
             await db.SpaceGroups.Where(g => wsIds.Contains(g.RootId)).ExecuteDeleteAsync(ct);
             await db.Libraries.Where(l => wsIds.Contains(l.SpaceId ?? l.PersonalDriveId ?? Guid.Empty)).ExecuteDeleteAsync(ct);
@@ -320,6 +353,8 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock)
         db.PrincipalMemberships.AddRange(memberships);
         await db.SaveChangesAsync(ct);
         await BumpMembershipVersionsAsync(affected, ct);
+        if (!import)
+            foreach (var root in rootIds) await editor.RefreshGrantsAsync(root, ct);
         Detach();
         if (own is not null)
         {

@@ -71,7 +71,7 @@ public sealed class SaveRoleHandler(IAppDbContext db, IPermissionService perms, 
 
 public sealed record DeleteRoleCommand(Guid Id) : IRequest<Unit>;
 
-public sealed class DeleteRoleHandler(IAppDbContext db, IPermissionService perms, IAuditLogger audit) : IRequestHandler<DeleteRoleCommand, Unit>
+public sealed class DeleteRoleHandler(IAppDbContext db, IPermissionService perms, IAuditLogger audit, Access.AclEditor acl) : IRequestHandler<DeleteRoleCommand, Unit>
 {
     public async Task<Unit> Handle(DeleteRoleCommand cmd, CancellationToken ct)
     {
@@ -81,6 +81,7 @@ public sealed class DeleteRoleHandler(IAppDbContext db, IPermissionService perms
         if (users > 0) throw new ConflictException($"Không thể xóa vai trò \"{role.Name}\" vì đang được gán cho {users} người dùng.");
         await db.RolePermissions.Where(p => p.RoleId == role.Id).ExecuteDeleteAsync(ct);
         await db.ResourcePermissions.Where(p => p.PrincipalType == PrincipalType.Role && p.PrincipalId == role.Id).ExecuteDeleteAsync(ct);
+        await acl.ForgetPrincipalAsync(role.Id, ct);
         db.Roles.Remove(role);
         await db.SaveChangesAsync(ct);
         perms.Invalidate();

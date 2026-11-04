@@ -123,7 +123,7 @@ public sealed class SaveWorkspaceValidator : AbstractValidator<SaveWorkspaceComm
 }
 
 public sealed class SaveWorkspaceHandler(IAppDbContext db, ICurrentUser me, IPermissionService perms, ISettingsService settings,
-    IResourceAuthorizationService auth, IAuditLogger audit, TimeProvider clock) : IRequestHandler<SaveWorkspaceCommand, Guid>
+    IResourceAuthorizationService auth, IAuditLogger audit, TimeProvider clock, Access.LegacyAclSync sync) : IRequestHandler<SaveWorkspaceCommand, Guid>
 {
     public async Task<Guid> Handle(SaveWorkspaceCommand cmd, CancellationToken ct)
     {
@@ -162,6 +162,7 @@ public sealed class SaveWorkspaceHandler(IAppDbContext db, ICurrentUser me, IPer
         if (isNew && cmd.Type == WorkspaceType.Organization && cmd.OrganizationId.HasValue)
             db.ResourcePermissions.Add(new ResourcePermission { ResourceType = ResourceType.Workspace, ResourceId = ws.Id, PrincipalType = PrincipalType.Organization, PrincipalId = cmd.OrganizationId.Value, AccessLevel = AccessLevel.Download });
         await db.SaveChangesAsync(ct);
+        if (isNew) await sync.SyncAsync(ResourceType.Workspace, ws.Id, copyOnBreak: true, uid, ct);
         await audit.LogAsync(new AuditEntry(isNew ? AuditAction.Create : AuditAction.Edit, ResourceType.Workspace, ws.Id, ws.Name, ws.Id,
             new { ws.Type, ws.OrganizationId, quotaBytes = ws.QuotaBytes, members = cmd.MemberIds }), ct);
         return ws.Id;

@@ -48,6 +48,7 @@ public sealed class ReferencePermissionEvaluator(IAppDbContext db, IPermissionSe
         foreach (var e in await db.AclEntries.AsNoTracking().Where(e => e.ScopeId == scope.Id).ToListAsync(ct))
         {
             if (!user.Principals.Contains(e.PrincipalId) || e.ExpiresAt is { } until && until <= now) continue;
+            if (!e.AppliesToChildren && scope.Id != node.Id) continue; // "chỉ mục này"
             var level = await db.PermissionLevels.AsNoTracking().FirstAsync(l => l.Id == e.PermissionLevelId, ct);
             if (e.Source == AclSource.SpaceDefault) membership |= level.Permissions;
             else direct |= level.Permissions;

@@ -36,7 +36,17 @@ public sealed class AccessFilter(IAppDbContext db, IPermissionService rbac)
     {
         if (!v.CanViewDocs) return db.Securables.Where(_ => false).Select(s => s.Id);
         var scopes = Scopes(v, AccessRight.ViewItems);
-        return db.Securables.Where(s => !s.IsDeleted && (s.OwnerUserId == v.UserId || scopes.Contains(s.AclScopeId))).Select(s => s.Id);
+        var selfOnly = SelfOnly(v, AccessRight.ViewItems);
+        return db.Securables.Where(s => !s.IsDeleted && (s.OwnerUserId == v.UserId || scopes.Contains(s.AclScopeId) || selfOnly.Contains(s.Id))).Select(s => s.Id);
+    }
+
+    /// <summary>Nodes granted "chỉ mục này" (not in scope_grants, which hold what the nodes below inherit).</summary>
+    private IQueryable<Guid> SelfOnly(Viewer v, AccessRight rights)
+    {
+        var now = DateTime.UtcNow;
+        return db.AclEntries.Where(e => !e.AppliesToChildren && v.Principals.Contains(e.PrincipalId) && (e.ExpiresAt == null || e.ExpiresAt > now))
+            .Join(db.PermissionLevels, e => e.PermissionLevelId, l => l.Id, (e, l) => new { e.ScopeId, l.Permissions })
+            .Where(x => (x.Permissions & rights) != 0).Select(x => x.ScopeId);
     }
 
     public IQueryable<Folder> Folders(IQueryable<Folder> q, Viewer v)
@@ -49,7 +59,8 @@ public sealed class AccessFilter(IAppDbContext db, IPermissionService rbac)
     {
         var visible = Visible(v);
         var reviewing = Scopes(v, AccessRight.EditItems | AccessRight.ApproveItems | AccessRight.ViewDrafts);
-        var reviewable = db.Securables.Where(s => s.OwnerUserId == v.UserId || reviewing.Contains(s.AclScopeId)).Select(s => s.Id);
+        var reviewingSelf = SelfOnly(v, AccessRight.EditItems | AccessRight.ApproveItems | AccessRight.ViewDrafts);
+        var reviewable = db.Securables.Where(s => s.OwnerUserId == v.UserId || reviewing.Contains(s.AclScopeId) || reviewingSelf.Contains(s.Id)).Select(s => s.Id);
         return q.Where(f => visible.Contains(f.Id) && (f.ApprovalStatus == ApprovalStatus.Approved || f.CreatedBy == v.UserId || reviewable.Contains(f.Id)));
     }
 

@@ -141,7 +141,7 @@ public class PermissionEngineProperties
             ScopeId = scope, PrincipalKind = PrincipalKind.Group, PrincipalId = _r.Next(3) == 0 ? Pick(_users) : Pick(_pool),
             PermissionLevelId = Pick(SystemLevels.All).Id, Source = _r.Next(2) == 0 ? AclSource.SpaceDefault : AclSource.Direct,
             ExpiresAt = _r.Next(4) switch { 0 => _clock.Now.UtcDateTime.AddMinutes(-5), 1 => _clock.Now.UtcDateTime.AddMinutes(30), _ => null },
-            GrantedAt = _clock.Now.UtcDateTime,
+            GrantedAt = _clock.Now.UtcDateTime, AppliesToChildren = _r.Next(5) != 0,
         };
 
         /// <summary>One random change; returns its description (for the failure message).</summary>

@@ -23,7 +23,7 @@ public sealed class AclEditor(IAppDbContext db, TimeProvider clock)
         var node = await db.Securables.FirstOrDefaultAsync(s => s.Id == nodeId, ct) ?? throw new NotFoundException("Không tìm thấy tư liệu.");
         if (node.HasUniqueAcl) return;
         var oldScope = node.AclScopeId;
-        var inherited = await db.AclEntries.AsNoTracking().Where(e => e.ScopeId == oldScope).ToListAsync(ct);
+        var inherited = await db.AclEntries.AsNoTracking().Where(e => e.ScopeId == oldScope && e.AppliesToChildren).ToListAsync(ct);
         if (!copy)
         {
             var managers = await db.PermissionLevels.AsNoTracking().ToListAsync(ct);
@@ -95,6 +95,17 @@ public sealed class AclEditor(IAppDbContext db, TimeProvider clock)
 
     // ------------------------------------------------------------------------------------------------ parts
 
+    /// <summary>A principal that no longer exists (a group or role deleted): its entries go, the scopes it was on get new versions.</summary>
+    public async Task ForgetPrincipalAsync(Guid principalId, CancellationToken ct)
+    {
+        var scopes = await db.AclEntries.Where(e => e.PrincipalId == principalId).Select(e => e.ScopeId).Distinct().ToListAsync(ct);
+        await db.AclEntries.Where(e => e.PrincipalId == principalId).ExecuteDeleteAsync(ct);
+        foreach (var scope in scopes) await BumpAsync(scope, ct);
+    }
+
+    /// <summary>The entries of a scope were changed directly: new version, grants rewritten.</summary>
+    public Task TouchAsync(Guid scopeId, CancellationToken ct) => BumpAsync(scopeId, ct);
+
     private IQueryable<Securable> Subtree(Securable node) =>
         db.Securables.Where(s => s.Id == node.Id || s.Path.StartsWith(node.Path + "."));
 
@@ -120,7 +131,7 @@ public sealed class AclEditor(IAppDbContext db, TimeProvider clock)
     public async Task RefreshGrantsAsync(Guid scopeId, CancellationToken ct)
     {
         var now = clock.GetUtcNow().UtcDateTime;
-        var live = await db.AclEntries.AsNoTracking().Where(e => e.ScopeId == scopeId && (e.ExpiresAt == null || e.ExpiresAt > now))
+        var live = await db.AclEntries.AsNoTracking().Where(e => e.ScopeId == scopeId && e.AppliesToChildren && (e.ExpiresAt == null || e.ExpiresAt > now))
             .Join(db.PermissionLevels, e => e.PermissionLevelId, l => l.Id, (e, l) => new { e.PrincipalId, l.Permissions }).ToListAsync(ct);
         var wanted = live.GroupBy(x => x.PrincipalId).ToDictionary(g => g.Key, g => g.Aggregate(AccessRight.None, (m, x) => m | x.Permissions));
         var rows = await db.ScopeGrants.Where(g => g.ScopeId == scopeId).ToListAsync(ct);

@@ -29,7 +29,7 @@ public sealed class CreateShareValidator : AbstractValidator<CreateShareCommand>
 }
 
 public sealed class CreateShareHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IUserNotifier notify,
-    IAuditLogger audit, TimeProvider clock) : IRequestHandler<CreateShareCommand, int>
+    IAuditLogger audit, TimeProvider clock, Access.LegacyAclSync sync) : IRequestHandler<CreateShareCommand, int>
 {
     public async Task<int> Handle(CreateShareCommand cmd, CancellationToken ct)
     {
@@ -55,6 +55,7 @@ public sealed class CreateShareHandler(IAppDbContext db, ICurrentUser me, IResou
             count++;
         }
         await db.SaveChangesAsync(ct);
+        await sync.SyncAsync(cmd.ResourceType, cmd.ResourceId, copyOnBreak: true, uid, ct);
         var recipients = (await PrincipalNames.ExpandToUsersAsync(db, cmd.Targets, ct)).Where(x => x != uid).ToList();
         var link = cmd.ResourceType == ResourceType.File ? $"/files/{cmd.ResourceId}" : "/shared";
         foreach (var r in recipients)
@@ -125,7 +126,8 @@ public sealed class ListSharesOfResourceHandler(IAppDbContext db, ICurrentUser m
 
 public sealed record DeleteShareCommand(Guid Id) : IRequest<Unit>;
 
-public sealed class DeleteShareHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IAuditLogger audit) : IRequestHandler<DeleteShareCommand, Unit>
+public sealed class DeleteShareHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IAuditLogger audit, Access.LegacyAclSync sync)
+    : IRequestHandler<DeleteShareCommand, Unit>
 {
     public async Task<Unit> Handle(DeleteShareCommand cmd, CancellationToken ct)
     {
@@ -136,6 +138,7 @@ public sealed class DeleteShareHandler(IAppDbContext db, ICurrentUser me, IResou
         if (s.SharedBy != uid && !isRecipient) await auth.EnsureAsync(uid, s.ResourceType, s.ResourceId, AccessLevel.Manage, ct);
         db.Shares.Remove(s);
         await db.SaveChangesAsync(ct);
+        await sync.SyncAsync(s.ResourceType, s.ResourceId, copyOnBreak: true, uid, ct);
         await audit.LogAsync(new AuditEntry(AuditAction.Unshare, s.ResourceType, s.ResourceId, null, null, new { shareId = s.Id, s.SharedWithType, s.SharedWithId }), ct);
         return Unit.Value;
     }

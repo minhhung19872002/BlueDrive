@@ -336,6 +336,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<AclScope>().HasKey(x => x.ScopeId);
         b.Entity<AclEntry>(e =>
         {
+            e.Property(x => x.AppliesToChildren).HasDefaultValue(true);
             e.HasIndex(x => x.ScopeId);
             e.HasIndex(x => x.PrincipalId);
             e.HasIndex(x => x.ExpiresAt);

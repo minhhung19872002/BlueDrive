@@ -141,6 +141,23 @@ export const AUDIT_ACTIONS = [
   'export',
   'backup',
   'import',
+  'permission_granted',
+  'permission_revoked',
+  'permission_level_changed',
+  'inheritance_broken',
+  'inheritance_restored',
+  'link_created',
+  'link_used',
+  'link_revoked',
+  'access_requested',
+  'access_request_decided',
+  'ownership_transferred',
+  'label_changed',
+  'hold_applied',
+  'hold_removed',
+  'emergency_access',
+  'guest_invited',
+  'guest_login',
 ] as const
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number]

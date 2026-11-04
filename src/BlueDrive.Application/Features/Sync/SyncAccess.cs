@@ -26,6 +26,8 @@ public sealed class WorkspaceAccessMap
     private readonly Dictionary<Guid, (Guid? Parent, AccessLevel Level)> _folders = [];
     private readonly Dictionary<Guid, (Guid Scope, bool Owner)> _fileNodes = [];
     private readonly Dictionary<Guid, (Domain.Permissions.AccessRight Direct, Domain.Permissions.AccessRight Membership)> _scopes = [];
+    /// <summary>"Chỉ mục này" grants: they count only for the scope's own node.</summary>
+    private readonly Dictionary<Guid, (Domain.Permissions.AccessRight Direct, Domain.Permissions.AccessRight Membership)> _selfOnly = [];
     private Access.Restrictions.User _user = null!;
     private AccessLevel _rootLevel;
 
@@ -42,7 +44,7 @@ public sealed class WorkspaceAccessMap
         var scopeIds = nodes.Select(n => n.AclScopeId).Distinct().ToList();
         var live = await db.AclEntries.AsNoTracking()
             .Where(e => scopeIds.Contains(e.ScopeId) && principals.Contains(e.PrincipalId) && (e.ExpiresAt == null || e.ExpiresAt > now))
-            .Join(db.PermissionLevels, e => e.PermissionLevelId, l => l.Id, (e, l) => new { e.ScopeId, e.Source, l.Permissions }).ToListAsync(ct);
+            .Join(db.PermissionLevels, e => e.PermissionLevelId, l => l.Id, (e, l) => new { e.ScopeId, e.Source, e.AppliesToChildren, l.Permissions }).ToListAsync(ct);
         var sharer = ws.Type == WorkspaceType.Personal
             ? await db.Users.AsNoTracking().Where(u => u.Id == ws.OwnerId).Select(u => u.FullName).FirstOrDefaultAsync(ct)
             : null;
@@ -52,7 +54,10 @@ public sealed class WorkspaceAccessMap
             WorkspaceId = ws.Id, WorkspaceType = ws.Type, WorkspaceName = ws.Name, Locked = ws.IsLocked, _user = user,
             SharerName = string.IsNullOrWhiteSpace(sharer) ? ws.Name : sharer.Trim(),
         };
-        foreach (var g in live.GroupBy(e => e.ScopeId))
+        foreach (var g in live.Where(e => !e.AppliesToChildren).GroupBy(e => e.ScopeId))
+            map._selfOnly[g.Key] = (g.Where(e => e.Source != AclSource.SpaceDefault).Aggregate(Domain.Permissions.AccessRight.None, (m, e) => m | e.Permissions),
+                g.Where(e => e.Source == AclSource.SpaceDefault).Aggregate(Domain.Permissions.AccessRight.None, (m, e) => m | e.Permissions));
+        foreach (var g in live.Where(e => e.AppliesToChildren).GroupBy(e => e.ScopeId))
             map._scopes[g.Key] = (g.Where(e => e.Source != AclSource.SpaceDefault).Aggregate(Domain.Permissions.AccessRight.None, (m, e) => m | e.Permissions),
                 g.Where(e => e.Source == AclSource.SpaceDefault).Aggregate(Domain.Permissions.AccessRight.None, (m, e) => m | e.Permissions));
 
@@ -65,10 +70,10 @@ public sealed class WorkspaceAccessMap
             switch (n.Kind)
             {
                 case SecurableKind.Space or SecurableKind.Drive:
-                    rootRights = map.Rights(n.AclScopeId, owner, null);
+                    rootRights = map.Rights(n.Id, n.AclScopeId, owner, null);
                     break;
                 case SecurableKind.Folder:
-                    map._folders[n.Id] = (n.ParentId == library ? null : n.ParentId, Access.ReferencePermissionEvaluator.ToLevel(map.Rights(n.AclScopeId, owner, null)));
+                    map._folders[n.Id] = (n.ParentId == library ? null : n.ParentId, Access.ReferencePermissionEvaluator.ToLevel(map.Rights(n.Id, n.AclScopeId, owner, null)));
                     break;
                 case SecurableKind.File:
                     map._fileNodes[n.Id] = (n.AclScopeId, owner);
@@ -82,9 +87,10 @@ public sealed class WorkspaceAccessMap
     }
 
     /// <summary>Rights before the lock restriction (callers check <see cref="Locked"/>), as the engine computes them.</summary>
-    private Domain.Permissions.AccessRight Rights(Guid scope, bool owner, Access.Restrictions.FileFacts? file)
+    private Domain.Permissions.AccessRight Rights(Guid node, Guid scope, bool owner, Access.Restrictions.FileFacts? file)
     {
         var (direct, membership) = _scopes.GetValueOrDefault(scope);
+        if (node == scope && _selfOnly.TryGetValue(scope, out var own)) { direct |= own.Direct; membership |= own.Membership; }
         return Access.Restrictions.Apply(_user, owner, direct, membership, file, locked: false);
     }
 
@@ -94,12 +100,12 @@ public sealed class WorkspaceAccessMap
 
     public AccessLevel FileLevel(Guid fileId, Guid? folderId, ApprovalStatus approval, Guid? createdBy) =>
         _fileNodes.TryGetValue(fileId, out var n)
-            ? Access.ReferencePermissionEvaluator.ToLevel(Rights(n.Scope, n.Owner, new Access.Restrictions.FileFacts(createdBy, approval == ApprovalStatus.Approved)))
+            ? Access.ReferencePermissionEvaluator.ToLevel(Rights(fileId, n.Scope, n.Owner, new Access.Restrictions.FileFacts(createdBy, approval == ApprovalStatus.Approved)))
             : AccessLevel.None;
 
     /// <summary>Parent as seen by the user: a folder they cannot see is skipped (the item becomes top-level of the shared root).</summary>
     public Guid? VisibleParent(Guid? parentId) => parentId is { } id && FolderLevel(id) >= AccessLevel.View ? id : null;
 
     public bool HasAnyAccess => _rootLevel > AccessLevel.None || _folders.Values.Any(f => f.Level > AccessLevel.None)
-                                || _fileNodes.Values.Any(n => Rights(n.Scope, n.Owner, null) != Domain.Permissions.AccessRight.None);
+                                || _fileNodes.Any(n => Rights(n.Key, n.Value.Scope, n.Value.Owner, null) != Domain.Permissions.AccessRight.None);
 }

@@ -169,7 +169,8 @@ public sealed class SetResourceAccessValidator : AbstractValidator<SetResourceAc
     }
 }
 
-public sealed class SetResourceAccessHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IMediator mediator, IAuditLogger audit)
+public sealed class SetResourceAccessHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IMediator mediator, IAuditLogger audit,
+    Access.LegacyAclSync sync)
     : IRequestHandler<SetResourceAccessCommand, Unit>
 {
     public async Task<Unit> Handle(SetResourceAccessCommand cmd, CancellationToken ct)
@@ -221,6 +222,7 @@ public sealed class SetResourceAccessHandler(IAppDbContext db, ICurrentUser me, 
                 };
         }
         await db.SaveChangesAsync(ct);
+        await sync.SyncAsync(cmd.Type, cmd.Id, cmd.CopyInheritedOnBreak, uid, ct);
         var name = cmd.Type switch
         {
             ResourceType.File => await db.Files.Where(f => f.Id == cmd.Id).Select(f => f.Name).FirstAsync(ct),

@@ -154,7 +154,8 @@ public class PermissionModelTests(ApiFactory factory)
             nodes[inB].Path.Should().Be($"{ws:N}.{library:N}.{a:N}.{b:N}.{inB:N}");
             nodes[a].HasUniqueAcl.Should().BeTrue("direct grants on A");
             nodes[b].HasUniqueAcl.Should().BeTrue("inheritance broken");
-            nodes[c].HasUniqueAcl.Should().BeTrue("A has a grant that does not reach its children");
+            nodes[c].AclScopeId.Should().Be(a, "C inherits from A; A's \"chỉ mục này\" grant is marked so it does not reach C");
+            (await db.AclEntries.AsNoTracking().SingleAsync(e => e.ScopeId == a && e.PrincipalId == outsiderId)).AppliesToChildren.Should().BeFalse();
             nodes[inB].AclScopeId.Should().Be(b);
             nodes[inC].HasUniqueAcl.Should().BeTrue("shared on its own");
 
