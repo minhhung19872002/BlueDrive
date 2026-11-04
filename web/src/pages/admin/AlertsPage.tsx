@@ -1,18 +1,20 @@
 import { useState } from 'react'
 import { App, Button, Card, Col, DatePicker, Empty, Row, Select, Space, Table, Tag, Tooltip, Typography } from 'antd'
-import { CheckOutlined, ClearOutlined, ReloadOutlined } from '@ant-design/icons'
+import { CheckOutlined, ClearOutlined, ReloadOutlined, SafetyOutlined } from '@ant-design/icons'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ColumnsType } from 'antd/es/table'
 import type { Dayjs } from 'dayjs'
 import { useTranslation } from 'react-i18next'
+import { Link, useNavigate } from 'react-router-dom'
 import { showApiError } from '@/api/errors'
 import { acknowledgeAlerts, searchAlerts } from '@/api/monitoring'
 import { qko } from '@/api/queryKeys.ops'
 import PageHeader from '@/components/PageHeader'
+import { CreateIncidentModal } from '@/features/ops/IncidentParts'
 import ReportExportButtons from '@/features/ops/ReportExportButtons'
-import { toDateParam } from '@/features/ops/utils'
+import { incidentDraftFromAlert, toDateParam } from '@/features/ops/utils'
 import { useCan } from '@/hooks/usePermissions'
-import { ALERT_SEVERITIES, ALERT_TYPES, type AlertDto, type AlertFilter, type AlertSeverity } from '@/types/ops'
+import { ALERT_SEVERITIES, ALERT_TYPES, type AlertDto, type AlertFilter, type AlertSeverity, type CreateIncident } from '@/types/ops'
 import { formatDateTime } from '@/utils/format'
 import { openPrintView } from '@/utils/print'
 
@@ -31,7 +33,11 @@ export default function AlertsPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [selected, setSelected] = useState<string[]>([])
+  const navigate = useNavigate()
+  const [incidentDraft, setIncidentDraft] = useState<CreateIncident | null>(null)
   const canEdit = can('alert.edit')
+  const canOpenIncident = can('incident.upload')
+  const canViewIncident = can('incident.view')
 
   const setFilter = (patch: Partial<AlertFilter>) => {
     setFilterState((f) => ({ ...f, ...patch }))
@@ -93,28 +99,54 @@ export default function AlertsPage() {
     {
       title: t('common.status'),
       key: 'status',
-      render: (_, r) =>
-        r.isAcknowledged ? (
+      render: (_, r) => (
+        <Space size={4} wrap>
+          {r.isAcknowledged ? (
           <Tooltip title={t('ops.alert.ackedBy', { name: r.acknowledgedByName ?? '', time: formatDateTime(r.acknowledgedAt) })}>
             <Tag color="green">{t('ops.alert.handled')}</Tag>
           </Tooltip>
         ) : (
           <Tag color="red">{t('ops.alert.open')}</Tag>
-        ),
+          )}
+          {r.incidentCode &&
+            (canViewIncident ? (
+              <Link to={`/admin/incidents?id=${r.incidentId}`}>
+                <Tag icon={<SafetyOutlined />} color="purple">
+                  {r.incidentCode}
+                </Tag>
+              </Link>
+            ) : (
+              <Tag icon={<SafetyOutlined />} color="purple">
+                {r.incidentCode}
+              </Tag>
+            ))}
+        </Space>
+      ),
     },
-    ...(canEdit
+    ...(canEdit || canOpenIncident
       ? [
           {
             title: t('common.actions'),
             key: 'actions',
             fixed: 'right' as const,
-            width: 110,
-            render: (_: unknown, r: AlertDto) =>
-              r.isAcknowledged ? null : (
-                <Button size="small" icon={<CheckOutlined />} onClick={() => acknowledge([r.id])}>
-                  {t('ops.alert.ackShort')}
-                </Button>
-              ),
+            render: (_: unknown, r: AlertDto) => (
+              <Space size={4}>
+                {canEdit && !r.isAcknowledged && (
+                  <Button size="small" icon={<CheckOutlined />} onClick={() => acknowledge([r.id])}>
+                    {t('ops.alert.ackShort')}
+                  </Button>
+                )}
+                {canOpenIncident && !r.incidentId && (
+                  <Button
+                    size="small"
+                    icon={<SafetyOutlined />}
+                    onClick={() => setIncidentDraft(incidentDraftFromAlert(r, r.typeName || t(`ops.alertType.${r.type}`)))}
+                  >
+                    {t('ops.incident.fromAlert')}
+                  </Button>
+                )}
+              </Space>
+            ),
           },
         ]
       : []),
@@ -236,6 +268,17 @@ export default function AlertsPage() {
           locale={{ emptyText: <Empty description={t('empty.alerts')} /> }}
         />
       </Card>
+      <CreateIncidentModal
+        open={!!incidentDraft}
+        draft={incidentDraft}
+        onClose={() => setIncidentDraft(null)}
+        onCreated={(created) => {
+          setIncidentDraft(null)
+          void queryClient.invalidateQueries({ queryKey: qko.alerts })
+          void queryClient.invalidateQueries({ queryKey: qko.incidents })
+          if (canViewIncident) navigate(`/admin/incidents?id=${created.id}`)
+        }}
+      />
     </>
   )
 }

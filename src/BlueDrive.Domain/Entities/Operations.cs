@@ -123,3 +123,51 @@ public class SystemLog
     public string? Source { get; set; }
     public string? Properties { get; set; }
 }
+
+/// <summary>Information-security incident record (HSMT 3.4): detection, handling, coordination and conclusion.</summary>
+public class SecurityIncident : Entity
+{
+    public string Code { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string Description { get; set; } = "";
+    public IncidentCategory Category { get; set; }
+    public IncidentSeverity Severity { get; set; }
+    public IncidentStatus Status { get; set; } = IncidentStatus.Reported;
+    public DateTime DetectedAt { get; set; }
+    public DateTime ReportedAt { get; set; }
+    public Guid ReporterId { get; set; }
+    public Guid? HandlerId { get; set; }
+    /// <summary>Monitoring alert the incident was opened from, if any.</summary>
+    public Guid? AlertId { get; set; }
+    public string? AffectedSystems { get; set; }
+    public string? Cause { get; set; }
+    public string? CoordinatingParties { get; set; }
+    public string? Remediation { get; set; }
+    public string? Conclusion { get; set; }
+    public DateTime? ResolvedAt { get; set; }
+    public DateTime? ClosedAt { get; set; }
+    public List<IncidentEvent> Events { get; set; } = [];
+}
+
+public class IncidentEvent : Entity
+{
+    public Guid IncidentId { get; set; }
+    public Guid? UserId { get; set; }
+    public string EventType { get; set; } = "";
+    public string? Note { get; set; }
+    public DateTime OccurredAt { get; set; }
+}
+
+/// <summary>Announcement shown as a banner to every signed-in user between StartsAt and EndsAt (5.2).</summary>
+public class SystemAnnouncement : Entity
+{
+    public string Title { get; set; } = "";
+    public string Content { get; set; } = "";
+    public AnnouncementLevel Level { get; set; }
+    public DateTime StartsAt { get; set; }
+    public DateTime? EndsAt { get; set; }
+    public bool IsActive { get; set; } = true;
+    public Guid? CreatedBy { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+}

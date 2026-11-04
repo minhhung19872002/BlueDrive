@@ -38,6 +38,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import IdleLogout from '@/components/IdleLogout'
 import NotificationBell from '@/components/NotificationBell'
 import AlertsMenuLabel from '@/features/ops/AlertsMenuLabel'
+import AnnouncementBanner from '@/features/ops/AnnouncementBanner'
 import PageLoading from '@/components/PageLoading'
 import StorageUsage from '@/components/StorageUsage'
 import { useMyWorkspaces } from '@/features/drive/hooks'
@@ -304,6 +305,7 @@ export default function MainLayout() {
         <Layout className="bd-main">
           <Breadcrumb className="bd-breadcrumb no-print" items={breadcrumbItems} />
           <Content className="bd-content">
+            <AnnouncementBanner />
             <Suspense fallback={<PageLoading />}>
               <Outlet />
             </Suspense>

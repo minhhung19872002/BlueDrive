@@ -1,0 +1,36 @@
+# HSMT 3.4: weekly dependency update PRs; security updates are opened as soon as an advisory is published.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 10
+    ignore:
+      # Later major versions are commercially licensed (see CLAUDE.md).
+      - dependency-name: MediatR
+        versions: [">= 13"]
+      - dependency-name: FluentAssertions
+        versions: [">= 8"]
+    groups:
+      microsoft:
+        patterns: ["Microsoft.*", "System.*", "Npgsql*"]
+  - package-ecosystem: npm
+    directory: /web
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 10
+  - package-ecosystem: npm
+    directory: /mobile
+    schedule: { interval: weekly, day: monday }
+    open-pull-requests-limit: 5
+    ignore:
+      # Expo SDK pins react-native/expo-* versions; upgrade them together with `npx expo install --fix`.
+      - dependency-name: "expo*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react-native
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+  - package-ecosystem: docker
+    directories: [/src/BlueDrive.Api, /src/BlueDrive.Worker, /web]
+    schedule: { interval: weekly, day: monday }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly, day: monday }

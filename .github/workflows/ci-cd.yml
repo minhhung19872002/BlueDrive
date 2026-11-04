@@ -1,6 +1,7 @@
 # BlueDrive CI/CD
-#   CI  (push, pull request): backend build + unit/integration tests (Testcontainers), web lint + build,
-#        mobile typecheck + lint, docker compose config, BlueDrive Desktop on macOS (sync tests + app build).
+#   CI  (push, pull request, weekly): backend build + NuGet vulnerability gate + unit/integration tests (Testcontainers),
+#        web/mobile npm audit + lint + build, Trivy scan of the api/worker/web images, docker compose config,
+#        BlueDrive Desktop on macOS (sync tests + app build). High/Critical vulnerabilities fail the run (HSMT 3.4).
 #   CD  (push to main, CI green): deploy to the VM over SSH. The deploy key is pinned on the VM to
 #        ~/apps/bluedrive-deploy.sh (command= in ~/.ssh/authorized_keys), which receives the commit SHA only.
 #   Secrets: DEPLOY_SSH_KEY (private key), DEPLOY_KNOWN_HOSTS (ssh-keyscan of the VM), DEPLOY_TARGET (user@host).
@@ -11,6 +12,9 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    # Weekly re-scan (Monday 07:00 Asia/Ho_Chi_Minh) so newly published CVEs surface without a push.
+    - cron: '0 0 * * 1'
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -48,6 +52,8 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - name: npm audit (High/Critical)
+        run: npm audit --audit-level=high
       - run: npm run lint
       - run: npm run build
 
@@ -66,6 +72,8 @@ jobs:
           cache: npm
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci --no-audit --no-fund
+      - name: npm audit (High/Critical)
+        run: npm audit --audit-level=high
       - run: npx tsc --noEmit
       - run: npx expo lint
 
@@ -82,6 +90,28 @@ jobs:
         run: dotnet test desktop/tests/BlueDrive.Sync.Tests --nologo -v q
       - name: Build the macOS app (full sync mode)
         run: dotnet publish desktop/src/BlueDrive.Desktop -f net10.0 -r osx-arm64 -c Release --self-contained -o artifacts/macos --nologo -v q
+
+  images:
+    name: Docker images (Trivy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - { name: api, dockerfile: src/BlueDrive.Api/Dockerfile }
+          - { name: worker, dockerfile: src/BlueDrive.Worker/Dockerfile }
+          - { name: web, dockerfile: web/Dockerfile }
+    env:
+      # Trivy 0.67.2 pinned by digest (the official image, not a mutable action tag).
+      TRIVY_IMAGE: aquasec/trivy:0.67.2@sha256:e2b22eac59c02003d8749f5b8d9bd073b62e30fefaef5b7c8371204e0a4b0c08
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build bluedrive/${{ matrix.image.name }}
+        run: docker build -f ${{ matrix.image.dockerfile }} -t bluedrive/${{ matrix.image.name }}:ci .
+      - name: Trivy scan (HIGH/CRITICAL with a fix available fails the build)
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/repo:ro" "$TRIVY_IMAGE" image             --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1             --ignorefile /repo/.trivyignore --no-progress bluedrive/${{ matrix.image.name }}:ci
 
   compose:
     name: Docker compose config
@@ -100,7 +130,7 @@ jobs:
 
   deploy:
     name: Deploy to VM
-    needs: [backend, web, mobile, compose]
+    needs: [backend, web, mobile, images, compose]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30

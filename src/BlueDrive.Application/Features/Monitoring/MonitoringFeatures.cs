@@ -199,7 +199,8 @@ public interface IDiskInfo
 
 // ---------- #14 alerts ----------
 public sealed record AlertDto(Guid Id, AlertType Type, string TypeName, AlertSeverity Severity, string Message, Guid? RelatedUserId, string? RelatedUserName,
-    Guid? RelatedWorkspaceId, string? RelatedWorkspaceName, bool IsAcknowledged, string? AcknowledgedByName, DateTime? AcknowledgedAt, DateTime CreatedAt);
+    Guid? RelatedWorkspaceId, string? RelatedWorkspaceName, bool IsAcknowledged, string? AcknowledgedByName, DateTime? AcknowledgedAt, DateTime CreatedAt,
+    Guid? IncidentId = null, string? IncidentCode = null);
 
 public sealed record AlertFilter
 {
@@ -226,7 +227,9 @@ public static class AlertQueries
     public static IQueryable<AlertDto> Project(IAppDbContext db, IQueryable<Alert> q) => q.Select(a => new AlertDto(a.Id, a.Type, "", a.Severity, a.Message,
         a.RelatedUserId, db.Users.Where(u => u.Id == a.RelatedUserId).Select(u => u.FullName).FirstOrDefault(), a.RelatedWorkspaceId,
         db.Workspaces.Where(w => w.Id == a.RelatedWorkspaceId).Select(w => w.Name).FirstOrDefault(), a.IsAcknowledged,
-        db.Users.Where(u => u.Id == a.AcknowledgedBy).Select(u => u.FullName).FirstOrDefault(), a.AcknowledgedAt, a.CreatedAt));
+        db.Users.Where(u => u.Id == a.AcknowledgedBy).Select(u => u.FullName).FirstOrDefault(), a.AcknowledgedAt, a.CreatedAt,
+        db.SecurityIncidents.Where(i => i.AlertId == a.Id).Select(i => (Guid?)i.Id).FirstOrDefault(),
+        db.SecurityIncidents.Where(i => i.AlertId == a.Id).Select(i => i.Code).FirstOrDefault()));
 
     public static AlertDto Named(AlertDto a) => a with { TypeName = AlertService.TypeNames.GetValueOrDefault(a.Type, a.Type.ToString()) };
 }

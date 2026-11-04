@@ -18,6 +18,14 @@ public class FoundationTests
         => TextUtil.Unaccent(input).Should().Be(expected);
 
     [Theory]
+    [InlineData("Báo cáo Đầu năm.pdf", "Bao cao Dau nam.pdf")]
+    [InlineData("menu-ngu-canh-631368.txt", "menu-ngu-canh-631368.txt")]
+    [InlineData("a\"b\\c\td😀.zip", "a_b_c_d__.zip")]
+    [InlineData("  ", "download")]
+    public void Ascii_file_name_keeps_case_and_replaces_unsafe_characters(string input, string expected)
+        => TextUtil.AsciiFileName(input).Should().Be(expected);
+
+    [Theory]
     [InlineData(OrganizationType.PhongBan, "phong_ban")]
     [InlineData(TicketPriority.KhongKhanCap, "khong_khan_cap")]
     [InlineData(AuditAction.LoginFailed, "login_failed")]

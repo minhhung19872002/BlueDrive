@@ -28,6 +28,14 @@ export const qko = {
   ticket: (id: string) => ['tickets', 'detail', id] as const,
   ticketSla: (params: object) => ['tickets', 'sla', params] as const,
 
+  incidents: ['incidents'] as const,
+  incidentList: (params: object) => ['incidents', 'list', params] as const,
+  incident: (id: string) => ['incidents', 'detail', id] as const,
+
+  announcements: ['announcements'] as const,
+  announcementList: (params: object) => ['announcements', 'list', params] as const,
+  activeAnnouncements: ['announcements', 'active'] as const,
+
   changeLogs: ['change-logs'] as const,
   changeLogList: (params: object) => ['change-logs', 'list', params] as const,
   systemInfo: ['system', 'info'] as const,

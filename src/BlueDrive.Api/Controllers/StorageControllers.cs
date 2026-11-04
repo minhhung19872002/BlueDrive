@@ -253,7 +253,7 @@ public class ContentController(IContentTicketService tickets, IFileContentServic
                 stream = await content.OpenReadAsync(key, encrypted, wrapped, HttpContext.RequestAborted);
             }
             var mime = job.Format switch { "pdf" => "application/pdf", "zip" => "application/zip", _ => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
-            Response.Headers.ContentDisposition = new ContentDispositionHeaderValue("attachment") { FileNameStar = job.ResultFileName }.ToString();
+            Response.Headers.ContentDisposition = ContentStreaming.Disposition("attachment", job.ResultFileName);
             await Results.File(stream, mime, enableRangeProcessing: stream.CanSeek).ExecuteAsync(HttpContext);
             return;
         }
@@ -267,7 +267,7 @@ public class ContentController(IContentTicketService tickets, IFileContentServic
             }
             var part = ticket.Items?.FirstOrDefault()?.Type ?? "db";
             var stream = await HttpContext.RequestServices.GetRequiredService<IBackupRunner>().OpenArtifactAsync(backup, part, HttpContext.RequestAborted);
-            Response.Headers.ContentDisposition = new ContentDispositionHeaderValue("attachment") { FileNameStar = ticket.ZipName }.ToString();
+            Response.Headers.ContentDisposition = ContentStreaming.Disposition("attachment", ticket.ZipName);
             await Results.File(stream, "application/octet-stream", enableRangeProcessing: true).ExecuteAsync(HttpContext);
             return;
         }
@@ -327,7 +327,7 @@ public class ContentController(IContentTicketService tickets, IFileContentServic
     {
         var entries = await Mediator.Send(new ResolveZipEntriesQuery(ticket.UserId, ticket.Items ?? []));
         Response.ContentType = "application/zip";
-        Response.Headers.ContentDisposition = new ContentDispositionHeaderValue("attachment") { FileNameStar = ticket.ZipName ?? "BlueDrive.zip" }.ToString();
+        Response.Headers.ContentDisposition = ContentStreaming.Disposition("attachment", ticket.ZipName ?? "BlueDrive.zip");
         HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
         await using var zip = new ZipArchive(Response.BodyWriter.AsStream(), ZipArchiveMode.Create, leaveOpen: true, System.Text.Encoding.UTF8);
         foreach (var e in entries)
@@ -346,12 +346,18 @@ public static class ContentStreaming
 {
     private static readonly HashSet<string> ActiveTypes = new(StringComparer.OrdinalIgnoreCase) { "image/svg+xml", "text/html", "application/xhtml+xml", "text/xml" };
 
+    /// <summary>Content-Disposition with the UTF-8 name in <c>filename*</c> plus an ASCII <c>filename</c> fallback for browsers that ignore <c>filename*</c>.</summary>
+    public static string Disposition(string type, string? fileName)
+    {
+        var name = string.IsNullOrWhiteSpace(fileName) ? "download" : fileName;
+        return new ContentDispositionHeaderValue(type) { FileName = $"\"{TextUtil.AsciiFileName(name)}\"", FileNameStar = name }.ToString();
+    }
+
     /// <summary>Range-enabled streaming of a (possibly encrypted) version without loading it into memory.</summary>
     public static async Task WriteFileAsync(HttpContext ctx, IFileContentService content, Domain.Entities.FileVersion version, string fileName, string mime, bool inline)
     {
         var stream = await content.OpenReadAsync(version, ctx.RequestAborted);
-        var disposition = new ContentDispositionHeaderValue(inline ? "inline" : "attachment") { FileNameStar = fileName };
-        ctx.Response.Headers.ContentDisposition = disposition.ToString();
+        ctx.Response.Headers.ContentDisposition = Disposition(inline ? "inline" : "attachment", fileName);
         ctx.Response.Headers.CacheControl = "private, max-age=3600";
         ctx.Response.Headers["X-Content-Type-Options"] = "nosniff";
         // Never let user content run scripts in our origin (SVG/HTML).

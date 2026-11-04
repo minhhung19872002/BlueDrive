@@ -7,15 +7,22 @@ using Npgsql;
 
 namespace BlueDrive.Api.Realtime;
 
-/// <summary>SignalR hub at /hubs/notifications. Each connection joins "user:{id}"; file pages join "file:{id}".</summary>
+/// <summary>SignalR hub at /hubs/notifications. Each connection joins "user:{id}" and "all"; file pages join "file:{id}".</summary>
 [Authorize]
 public sealed class NotificationHub(Application.Abstractions.IResourceAccessChecker? access = null) : Hub
 {
+    /// <summary>Every signed-in connection (system announcements).</summary>
+    public const string AllUsersGroup = Application.Features.Operations.RealtimeGroups.AllUsers;
+
     private Guid? UserId => Guid.TryParse(Context.User?.FindFirstValue("sub"), out var id) ? id : null;
 
     public override async Task OnConnectedAsync()
     {
-        if (UserId is { } uid) await Groups.AddToGroupAsync(Context.ConnectionId, $"user:{uid}");
+        if (UserId is { } uid)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"user:{uid}");
+            await Groups.AddToGroupAsync(Context.ConnectionId, AllUsersGroup);
+        }
         await base.OnConnectedAsync();
     }
 

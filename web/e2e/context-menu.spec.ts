@@ -239,7 +239,8 @@ test('ảnh mới tải lên tự hiện ảnh thu nhỏ ở chế độ lưới
   if (await tệp.isVisible().catch(() => false)) await tệp.click()
   await (await chooser).setFiles({ name, mimeType: 'image/png', buffer: png })
   // The worker renders the thumbnail a few seconds after the upload: the tile switches from the icon to it.
-  const tile = page.locator('.bd-thumb').filter({ has: page.locator('img') })
+  // Scoped to the new image's tile: text files in the folder get rendered thumbnails too.
+  const tile = page.locator(`.bd-tile[title="${name}"] .bd-thumb img`)
   await expect(tile).toHaveCount(1, { timeout: 30_000 })
 })
 

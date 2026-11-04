@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-  BlueDrive CI: build + test backend, build + lint web, validate docker compose.
+  BlueDrive CI: build + test backend, dependency vulnerability gate (High/Critical), build + lint web, validate docker compose.
 .EXAMPLE
   powershell -File scripts/ci.ps1            # full
   powershell -File scripts/ci.ps1 -SkipIntegration
@@ -10,6 +10,7 @@ param(
     [switch]$SkipWeb,
     [switch]$SkipMobile,
     [switch]$SkipDocker,
+    [switch]$SkipAudit,
     [switch]$E2E
 )
 $ErrorActionPreference = 'Stop'
@@ -23,6 +24,11 @@ function Step($name, [scriptblock]$block) {
 }
 
 Step 'dotnet build' { dotnet build BlueDrive.slnx -c Release --nologo }
+if (-not $SkipAudit) {
+    # npm audit reads package-lock.json only; skip it when the web and mobile parts are skipped (their CI jobs audit them).
+    $audit = @{ SkipNpm = ($SkipWeb -and $SkipMobile) }
+    Step 'dependency vulnerability scan (NuGet + npm, High/Critical)' { & "$PSScriptRoot/check-vulnerabilities.ps1" @audit }
+}
 Step 'unit tests' { dotnet test tests/BlueDrive.UnitTests -c Release --no-build --nologo }
 Step 'desktop sync engine tests (reconciler, scenarios, simulation)' { dotnet test desktop/tests/BlueDrive.Sync.Tests -c Release --no-build --nologo }
 if ($env:OS -eq 'Windows_NT') {

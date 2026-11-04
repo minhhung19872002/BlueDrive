@@ -31,6 +31,7 @@ Loại danh mục (loại sản phẩm truyền thông, chủ đề, chiến d�
 - **Nhật ký hoạt động**: mọi thao tác đăng nhập/đăng xuất/đăng nhập sai, tải lên/xuống, xem, sửa, chia sẻ, hủy chia sẻ, đổi tên, di chuyển, sao chép, xóa, khôi phục, xóa vĩnh viễn, đổi quyền, đổi cấu hình. Lọc theo người dùng, đơn vị, thời gian, hành động, loại tài nguyên, tên tư liệu, IP; xem chi tiết JSON. Nút *Kiểm tra toàn vẹn nhật ký* xác minh chuỗi băm (phát hiện sửa đổi trái phép). Nhật ký không thể sửa/xóa.
 - **Thống kê dung lượng**: theo tài khoản, đơn vị (cộng dồn đơn vị con), nhóm tài nguyên; tô màu khi ≥ 80% (cam) và ≥ 100% (đỏ).
 - **Cảnh báo**: đăng nhập sai nhiều lần (một tài khoản sai liên tiếp → khóa tạm tài khoản; một địa chỉ IP sai nhiều lần trên nhiều tài khoản → chặn tạm địa chỉ đó, ngưỡng và thời gian đặt ở *Cấu hình → Đăng nhập & phiên*), dung lượng vượt ngưỡng/hạn mức, tải xuống bất thường (ngưỡng tệp/giờ cấu hình được), sao lưu thất bại, phát hiện mã độc. Cảnh báo hiển thị ở chuông thông báo (thời gian thực), gửi email cho quản trị (nếu cấu hình SMTP). Chọn và bấm *Xác nhận đã xử lý*.
+- **Sự cố an toàn thông tin** (HSMT 3.4, quyền `incident.view/upload/edit/admin`): ở trang *Cảnh báo* bấm *Lập hồ sơ sự cố* để mở hồ sơ điền sẵn từ cảnh báo (cảnh báo được đánh dấu đã xử lý và hiện mã hồ sơ `SC-…`), hoặc tạo trực tiếp ở *Quản trị > Sự cố an toàn thông tin*. Trong hồ sơ: cập nhật trạng thái (Mới phát hiện → Đang điều tra → Đang ngăn chặn → Đang khắc phục → Đã khắc phục → Đã đóng), nguyên nhân, các bên phối hợp, biện pháp khắc phục, kết luận; dòng thời gian ghi mọi thay đổi. Chỉ `incident.admin` giao người xử lý, đóng và sửa hồ sơ đã đóng. Xuất hồ sơ PDF/Excel, xuất sổ theo dõi theo bộ lọc. Quy trình chi tiết, mức độ, thời hạn báo cáo cơ quan chức năng: `docs/quy-trinh-ung-pho-su-co.md`.
 - **Báo cáo**: các nút Xuất Excel/PDF chạy nền; hệ thống báo "Đang xử lý báo cáo..." và gửi thông báo khi xong; tải tại *Báo cáo của tôi*.
 
 ## 6. Phiên đăng nhập (#16–17)
@@ -80,6 +81,8 @@ Chính sách mật khẩu, ngưỡng khóa tài khoản, thời gian tự đăng
 ## 11. Nhật ký thay đổi và trạng thái hệ thống
 - *Nhật ký thay đổi hệ thống*: phiên bản đang chạy (kèm mã commit), lịch sử triển khai/nâng cấp (tự ghi), thay đổi cấu hình (tự ghi), thêm ghi nhận thủ công.
 - *Trạng thái hệ thống*: CSDL, kho lưu trữ, ONLYOFFICE, ClamAV, dịch vụ xử lý nền, dung lượng đĩa, bản sao lưu gần nhất, số job chờ/lỗi.
+- Khi thêm ghi nhận thủ công, chọn *Thông báo cho người dùng* và số ngày hiển thị (1–90) để đăng ngay nội dung thay đổi thành thông báo hệ thống.
+- *Thông báo hệ thống* (quyền `announcement.view/edit`): tiêu đề, nội dung, loại (Thông tin / Lưu ý / Bảo trì), bật/tắt, thời gian hiệu lực (để trống = ngay lập tức / không hết hạn). Thông báo đang hiệu lực hiện ở đầu mọi trang cho mọi người dùng, cập nhật thời gian thực; người dùng ẩn được, sửa thông báo thì hiện lại. Dùng để báo trước lịch bảo trì, nâng cấp hoặc sự cố đang xử lý.
 
 ## 12. Bàn giao và xóa dữ liệu
 - *Xuất toàn bộ dữ liệu*: gói ZIP gồm tệp gốc đã giải mã theo cây thư mục, `metadata.json`, `metadata.csv`, `audit-logs.csv`, `README.md` (xem `docs/data-export-format.md`).

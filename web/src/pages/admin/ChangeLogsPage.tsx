@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { App, Button, Card, Col, Empty, Form, Input, Modal, Row, Select, Space, Table, Tag, Typography } from 'antd'
+import { App, Button, Card, Checkbox, Col, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Table, Tag, Typography } from 'antd'
 import { PlusOutlined, ReloadOutlined, TagOutlined } from '@ant-design/icons'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ColumnsType } from 'antd/es/table'
@@ -26,6 +26,8 @@ interface AddForm {
   version: string
   changeType: ChangeType
   description: string
+  announce: boolean
+  announceDays: number
 }
 
 /** System change log (quality 5.2): versions, upgrades and configuration changes. */
@@ -50,7 +52,7 @@ export default function ChangeLogsPage() {
 
   const openAdd = () => {
     form.resetFields()
-    form.setFieldsValue({ version: info.data?.version ?? '', changeType: 'deploy' })
+    form.setFieldsValue({ version: info.data?.version ?? '', changeType: 'deploy', announce: false, announceDays: 3 })
     setOpen(true)
   }
 
@@ -63,13 +65,19 @@ export default function ChangeLogsPage() {
     }
     setSaving(true)
     try {
-      await addChangeLog({ version: values.version.trim(), changeType: values.changeType, description: values.description.trim() })
-      void message.success(t('ops.changeLog.added'))
+      await addChangeLog({
+        version: values.version.trim(),
+        changeType: values.changeType,
+        description: values.description.trim(),
+        announceDays: values.announce ? values.announceDays : null,
+      })
+      void message.success(t(values.announce ? 'ops.changeLog.addedAnnounced' : 'ops.changeLog.added'))
       setOpen(false)
       setPage(1)
       await queryClient.invalidateQueries({ queryKey: qko.changeLogs })
+      if (values.announce) await queryClient.invalidateQueries({ queryKey: qko.announcements })
     } catch (error) {
-      if (!applyFieldErrors(form, error, ['version', 'changeType', 'description'])) showApiError(error)
+      if (!applyFieldErrors(form, error, ['version', 'changeType', 'description', 'announceDays'])) showApiError(error)
     } finally {
       setSaving(false)
     }
@@ -202,6 +210,23 @@ export default function ChangeLogsPage() {
           >
             <Input.TextArea rows={5} maxLength={4000} showCount />
           </Form.Item>
+          <Space align="baseline" wrap>
+            <Form.Item name="announce" valuePropName="checked" style={{ marginBottom: 0 }}>
+              <Checkbox>{t('ops.changeLog.announce')}</Checkbox>
+            </Form.Item>
+            <Form.Item noStyle shouldUpdate={(a, b) => a.announce !== b.announce}>
+              {({ getFieldValue }) =>
+                getFieldValue('announce') ? (
+                  <Form.Item name="announceDays" rules={[{ required: true, message: t('ops.changeLog.announceDaysRequired') }]} style={{ marginBottom: 0 }}>
+                    <InputNumber min={1} max={90} precision={0} addonAfter={t('ops.changeLog.days')} style={{ width: 160 }} />
+                  </Form.Item>
+                ) : null
+              }
+            </Form.Item>
+          </Space>
+          <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 8, marginBottom: 0 }}>
+            {t('ops.changeLog.announceHint')}
+          </Typography.Paragraph>
         </Form>
       </Modal>
     </>

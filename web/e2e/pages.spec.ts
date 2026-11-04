@@ -26,16 +26,18 @@ const pages: { path: string; name: string; heading?: RegExp }[] = [
   { path: '/admin/audit-logs', name: 'qt-nhat-ky' },
   { path: '/admin/storage-stats', name: 'qt-thong-ke-dung-luong' },
   { path: '/admin/alerts', name: 'qt-canh-bao' },
+  { path: '/admin/incidents', name: 'qt-su-co-attt' },
   { path: '/admin/sessions', name: 'qt-phien' },
   { path: '/admin/backups', name: 'qt-sao-luu' },
   { path: '/admin/tickets', name: 'qt-ho-tro' },
   { path: '/admin/change-logs', name: 'qt-nhat-ky-thay-doi' },
+  { path: '/admin/announcements', name: 'qt-thong-bao-he-thong' },
   { path: '/admin/system-status', name: 'qt-trang-thai' },
   { path: '/admin/settings', name: 'qt-cau-hinh' },
 ]
 
 for (const p of pages) {
-  test(`trang ${p.path} hiển thị không lỗi`, async ({ page }) => {
+  test(`trang ${p.path} hiển thị không lỗi`, async ({ page }, testInfo) => {
     const errors: string[] = []
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
     page.on('console', (m) => {
@@ -46,7 +48,8 @@ for (const p of pages) {
     await page.waitForLoadState('networkidle')
     await expect(page.locator('body')).not.toContainText(/Something went wrong|Unexpected Application Error|Đã xảy ra lỗi hệ thống/)
     await expect(page.getByText('404', { exact: true })).toHaveCount(0)
-    await page.screenshot({ path: `../docs/images/${p.name}.png`, fullPage: false })
+    // Only the Chromium run refreshes the documentation screenshots.
+    if (testInfo.project.name === 'desktop') await page.screenshot({ path: `../docs/images/${p.name}.png`, fullPage: false })
     expect(errors, errors.join('\n')).toEqual([])
   })
 }

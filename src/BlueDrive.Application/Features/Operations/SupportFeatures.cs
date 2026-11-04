@@ -228,7 +228,8 @@ public sealed class ListChangeLogsHandler(IAppDbContext db) : IRequestHandler<Li
     }
 }
 
-public sealed record AddChangeLogCommand(string Version, string ChangeType, string Description) : IRequest<Guid>;
+/// <param name="AnnounceDays">When set, the entry is also shown to every user as a system announcement for that many days.</param>
+public sealed record AddChangeLogCommand(string Version, string ChangeType, string Description, int? AnnounceDays = null) : IRequest<Guid>;
 
 public sealed class AddChangeLogValidator : AbstractValidator<AddChangeLogCommand>
 {
@@ -237,10 +238,11 @@ public sealed class AddChangeLogValidator : AbstractValidator<AddChangeLogComman
         RuleFor(x => x.Version).NotEmpty().WithMessage("Vui lòng nhập phiên bản.").MaximumLength(50);
         RuleFor(x => x.ChangeType).Must(t => t is "deploy" or "config" or "feature" or "fix" or "maintenance" or "security").WithMessage("Loại thay đổi không hợp lệ.");
         RuleFor(x => x.Description).NotEmpty().WithMessage("Vui lòng mô tả thay đổi.").MaximumLength(4000);
+        RuleFor(x => x.AnnounceDays).InclusiveBetween(1, 90).When(x => x.AnnounceDays.HasValue).WithMessage("Số ngày hiển thị thông báo từ 1 đến 90.");
     }
 }
 
-public sealed class AddChangeLogHandler(IAppDbContext db, ICurrentUser me, IAuditLogger audit, TimeProvider clock) : IRequestHandler<AddChangeLogCommand, Guid>
+public sealed class AddChangeLogHandler(IAppDbContext db, ICurrentUser me, IAuditLogger audit, TimeProvider clock, ISender mediator) : IRequestHandler<AddChangeLogCommand, Guid>
 {
     public async Task<Guid> Handle(AddChangeLogCommand cmd, CancellationToken ct)
     {
@@ -248,6 +250,9 @@ public sealed class AddChangeLogHandler(IAppDbContext db, ICurrentUser me, IAudi
         db.ChangeLogs.Add(c);
         await db.SaveChangesAsync(ct);
         await audit.LogAsync(new AuditEntry(AuditAction.ConfigChange, ResourceName: $"Nhật ký thay đổi {c.Version}", Detail: new { c.ChangeType, c.Description }), ct);
+        if (cmd.AnnounceDays is { } days)
+            await mediator.Send(new SaveAnnouncementCommand(null, $"Cập nhật hệ thống phiên bản {c.Version}", c.Description,
+                c.ChangeType == "maintenance" ? AnnouncementLevel.Maintenance : AnnouncementLevel.Info, c.AppliedAt, c.AppliedAt.AddDays(days)), ct);
         return c.Id;
     }
 }

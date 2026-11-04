@@ -1,5 +1,5 @@
 import type { MediaType } from '@/types/drive'
-import type { JobStatus } from '@/types/ops'
+import type { AlertDto, AlertSeverity, AlertType, AnnouncementLevel, CreateIncident, IncidentCategory, IncidentSeverity, JobStatus } from '@/types/ops'
 import { formatBytes } from '@/utils/format'
 import './ops.css'
 
@@ -67,3 +67,27 @@ export function prettyJson(raw: string | null | undefined): string {
 export function toDateParam(d: { format: (f: string) => string } | null | undefined): string | undefined {
   return d ? d.format('YYYY-MM-DD') : undefined
 }
+
+const ALERT_INCIDENT_CATEGORY: Partial<Record<AlertType, IncidentCategory>> = {
+  malware_detected: 'malware',
+  malware_scan_failed: 'malware',
+  brute_force: 'account_compromise',
+  unusual_download: 'data_leak',
+}
+
+const ALERT_INCIDENT_SEVERITY: Record<AlertSeverity, IncidentSeverity> = { critical: 'critical', warning: 'medium', info: 'low' }
+
+/** Pre-fills an incident record (HSMT 3.4) from a monitoring alert. */
+export function incidentDraftFromAlert(alert: AlertDto, typeLabel: string): CreateIncident {
+  return {
+    title: typeLabel,
+    description: alert.message,
+    category: ALERT_INCIDENT_CATEGORY[alert.type] ?? 'other',
+    severity: ALERT_INCIDENT_SEVERITY[alert.severity],
+    detectedAt: alert.createdAt,
+    alertId: alert.id,
+  }
+}
+
+/** Banner/Tag colors of system announcement levels (quality 5.2). */
+export const ANNOUNCEMENT_LEVEL_COLORS: Record<AnnouncementLevel, string> = { info: 'blue', warning: 'orange', maintenance: 'red' }

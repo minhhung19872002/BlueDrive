@@ -45,6 +45,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
     public DbSet<TicketEvent> TicketEvents => Set<TicketEvent>();
     public DbSet<ChangeLog> ChangeLogs => Set<ChangeLog>();
+    public DbSet<SecurityIncident> SecurityIncidents => Set<SecurityIncident>();
+    public DbSet<IncidentEvent> IncidentEvents => Set<IncidentEvent>();
+    public DbSet<SystemAnnouncement> SystemAnnouncements => Set<SystemAnnouncement>();
     public DbSet<ReportJob> ReportJobs => Set<ReportJob>();
     public DbSet<SystemLog> SystemLogs => Set<SystemLog>();
     public DbSet<ChangeJournalEntry> ChangeJournal => Set<ChangeJournalEntry>();
@@ -260,6 +263,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasMany(x => x.Events).WithOne().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<ChangeLog>().HasIndex(x => x.AppliedAt);
+        b.Entity<SecurityIncident>(e =>
+        {
+            e.HasIndex(x => x.Code).IsUnique();
+            e.HasIndex(x => new { x.Status, x.ReportedAt });
+            e.HasIndex(x => x.AlertId);
+            e.HasMany(x => x.Events).WithOne().HasForeignKey(x => x.IncidentId).OnDelete(DeleteBehavior.Cascade);
+        });
+        b.Entity<SystemAnnouncement>().HasIndex(x => new { x.IsActive, x.StartsAt });
         b.Entity<ReportJob>().HasIndex(x => new { x.RequestedBy, x.CreatedAt });
         b.Entity<SystemLog>(e => { e.HasIndex(x => x.Timestamp); e.Property(x => x.Properties).HasColumnType("jsonb"); });
     }

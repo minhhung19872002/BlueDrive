@@ -83,3 +83,55 @@ public class SystemStatusController : ApiControllerBase
     [HttpGet, HasPermission(Perm.SettingsView)]
     public Task<SystemStatusDto> Get() => Mediator.Send(new GetSystemStatusQuery());
 }
+
+/// <summary>Hồ sơ sự cố an toàn thông tin (HSMT 3.4): ghi nhận, điều phối, khắc phục, kết luận, xuất hồ sơ.</summary>
+[Route("api/v1/security-incidents")]
+public class SecurityIncidentsController : ApiControllerBase
+{
+    [HttpPost("search"), HasPermission(Perm.IncidentView)]
+    public Task<PagedResult<IncidentDto>> Search([FromBody] IncidentFilter filter, [FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] string? q = null)
+        => Mediator.Send(new ListIncidentsQuery(filter) { Page = page, PageSize = pageSize, Q = q });
+
+    [HttpGet("{id:guid}"), HasPermission(Perm.IncidentView)]
+    public Task<IncidentDto> Get(Guid id) => Mediator.Send(new GetIncidentQuery(id));
+
+    /// <summary>Lập hồ sơ sự cố (có thể từ một cảnh báo: truyền alertId).</summary>
+    [HttpPost, HasPermission(Perm.IncidentCreate)]
+    public Task<IncidentDto> Create(CreateIncidentCommand cmd) => Mediator.Send(cmd);
+
+    /// <summary>Cập nhật xử lý; phân công và đóng hồ sơ cần quyền incident.admin.</summary>
+    [HttpPut("{id:guid}"), HasPermission(Perm.IncidentEdit)]
+    public Task<IncidentDto> Update(Guid id, UpdateIncidentCommand cmd) => Mediator.Send(cmd with { Id = id });
+
+    [HttpGet("{id:guid}/export"), HasPermission(Perm.IncidentView)]
+    public async Task<IActionResult> Export(Guid id, [FromQuery] string format = "pdf") => FileResult(await Mediator.Send(new ExportIncidentQuery(id, format, ExportedBy)));
+
+    [HttpPost("export"), HasPermission(Perm.IncidentView)]
+    public async Task<IActionResult> ExportList([FromBody] IncidentFilter filter, [FromQuery] string format = "xlsx")
+        => FileResult(await Mediator.Send(new ExportIncidentsQuery(filter, format, ExportedBy)));
+}
+
+/// <summary>Thông báo hệ thống hiển thị cho mọi người dùng (yêu cầu chất lượng 5.2).</summary>
+[Route("api/v1/announcements")]
+public class AnnouncementsController : ApiControllerBase
+{
+    /// <summary>Thông báo đang hiệu lực — mọi người dùng đã đăng nhập.</summary>
+    [HttpGet("active")]
+    public Task<IReadOnlyList<AnnouncementDto>> Active() => Mediator.Send(new ActiveAnnouncementsQuery());
+
+    [HttpGet, HasPermission(Perm.AnnouncementView)]
+    public Task<PagedResult<AnnouncementDto>> List([FromQuery] ListAnnouncementsQuery query) => Mediator.Send(query);
+
+    [HttpPost, HasPermission(Perm.AnnouncementEdit)]
+    public Task<AnnouncementDto> Create(SaveAnnouncementCommand cmd) => Mediator.Send(cmd with { Id = null });
+
+    [HttpPut("{id:guid}"), HasPermission(Perm.AnnouncementEdit)]
+    public Task<AnnouncementDto> Update(Guid id, SaveAnnouncementCommand cmd) => Mediator.Send(cmd with { Id = id });
+
+    [HttpDelete("{id:guid}"), HasPermission(Perm.AnnouncementEdit)]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        await Mediator.Send(new DeleteAnnouncementCommand(id));
+        return NoContent();
+    }
+}

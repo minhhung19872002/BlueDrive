@@ -30,6 +30,8 @@ public static class Perm
     public const string BackupView = "backup.view", BackupAdmin = "backup.admin";
     public const string TicketView = "ticket.view", TicketCreate = "ticket.upload", TicketEdit = "ticket.edit", TicketAdmin = "ticket.admin";
     public const string ChangeLogView = "changelog.view", ChangeLogEdit = "changelog.edit";
+    public const string IncidentView = "incident.view", IncidentCreate = "incident.upload", IncidentEdit = "incident.edit", IncidentAdmin = "incident.admin";
+    public const string AnnouncementView = "announcement.view", AnnouncementEdit = "announcement.edit";
     public const string DataExportAdmin = "dataexport.admin";
     public const string DocView = "doc.view", DocUpload = "doc.upload", DocEdit = "doc.edit", DocDelete = "doc.delete",
         DocShare = "doc.share", DocApprove = "doc.approve", DocAdmin = "doc.admin";
@@ -51,6 +53,7 @@ public static class Perm
         ("monitor", "Giám sát hệ thống", "audit", "Nhật ký hoạt động", ["view", "admin"]),
         ("monitor", "Giám sát hệ thống", "stats", "Thống kê dung lượng", ["view"]),
         ("monitor", "Giám sát hệ thống", "alert", "Cảnh báo bất thường", ["view", "edit"]),
+        ("monitor", "Giám sát hệ thống", "incident", "Sự cố an toàn thông tin", ["view", "upload", "edit", "admin"]),
         ("monitor", "Giám sát hệ thống", "session", "Phiên đăng nhập", ["view", "admin"]),
         ("monitor", "Giám sát hệ thống", "device", "Thiết bị đồng bộ (BlueDrive Desktop)", ["view", "admin"]),
         ("monitor", "Giám sát hệ thống", "dashboard", "Dashboard quản trị", ["view"]),
@@ -58,6 +61,7 @@ public static class Perm
         ("ops", "Vận hành", "backup", "Sao lưu & phục hồi", ["view", "admin"]),
         ("ops", "Vận hành", "ticket", "Hỗ trợ & sự cố", ["view", "upload", "edit", "admin"]),
         ("ops", "Vận hành", "changelog", "Nhật ký thay đổi", ["view", "edit"]),
+        ("ops", "Vận hành", "announcement", "Thông báo hệ thống", ["view", "edit"]),
         ("ops", "Vận hành", "dataexport", "Xuất toàn bộ dữ liệu", ["admin"]),
         ("storage", "Lưu trữ tư liệu", "doc", "Tư liệu (thư mục/tệp)", ["view", "upload", "edit", "delete", "share", "approve", "admin"]),
         ("storage", "Lưu trữ tư liệu", "workspace", "Nhóm tài nguyên", ["view", "upload", "edit", "delete", "admin"]),

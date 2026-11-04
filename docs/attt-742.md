@@ -56,6 +56,7 @@ Bảng dưới đây đối chiếu từng nhóm yêu cầu với cách hệ th�
 | Ghi nhật ký sự kiện | Đăng nhập/đăng xuất/sai mật khẩu, tải lên/xuống, xem, sửa, chia sẻ/hủy chia sẻ, đổi tên, di chuyển, sao chép, xóa, khôi phục, xóa vĩnh viễn, đổi quyền, đổi cấu hình, phê duyệt... (`IAuditLogger`, `AuditBehavior`). | `MonitoringTests.Every_operation_is_logged_and_filterable` |
 | Bảo vệ nhật ký | Bảng `audit_logs` chỉ ghi thêm (trigger chặn UPDATE/DELETE/TRUNCATE), chuỗi băm SHA-256 nối tiếp, có chức năng kiểm tra toàn vẹn. | `FoundationTests.Audit_log_is_append_only_and_hash_chained`, `MonitoringTests` (verify) |
 | Cảnh báo bất thường | Đăng nhập sai nhiều lần, vượt ngưỡng/hạn mức dung lượng, tải xuống bất thường, sao lưu thất bại, phát hiện mã độc → thông báo realtime, trang Cảnh báo, email. | `MonitoringTests.Unusual_downloads_raise_an_alert_that_can_be_acknowledged` |
+| Quản lý sự cố an toàn thông tin | Màn hình *Sự cố an toàn thông tin* (`/api/v1/security-incidents`, quyền `incident.*`): lập hồ sơ (kể cả từ cảnh báo), phân loại theo TT 20/2017/TT-BTTTT, giao người xử lý, theo dõi các bước điều tra → ngăn chặn → khôi phục → kết luận → đóng, dòng thời gian, xuất hồ sơ và sổ theo dõi PDF/Excel. Quy trình: `docs/quy-trinh-ung-pho-su-co.md`. | `IncidentAndAnnouncementTests.Incident_opened_from_alert_is_handled_closed_and_exported`, `Incident_endpoints_require_incident_permissions` |
 | Không lộ thông tin lỗi | ProblemDetails tiếng Việt, không trả stack trace ở môi trường production; header bảo mật (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, CSP, HSTS), ẩn header máy chủ. | `GlobalExceptionHandler`, `SecurityHeaders` |
 
 ## 7. Sao lưu, phục hồi, xóa dữ liệu
@@ -72,6 +73,7 @@ Bảng dưới đây đối chiếu từng nhóm yêu cầu với cách hệ th�
 - Chỉ mở cổng 80/443 ra ngoài; PostgreSQL, API, Worker, ONLYOFFICE, ClamAV chỉ trong mạng nội bộ Docker.
 - Giới hạn tài nguyên từng dịch vụ trong `docker-compose.yml` (phù hợp máy chủ 8 core/16 GB).
 - Cập nhật hệ thống: dựng lại image (`docker compose up -d --build`); mỗi lần triển khai được ghi tự động vào *Nhật ký thay đổi hệ thống*.
+- Quản lý lỗ hổng: CI chặn phụ thuộc NuGet/npm và image Docker (Trivy) có lỗ hổng High/Critical đã có bản vá, quét lại hằng tuần, Dependabot đề xuất cập nhật; bản lỗi không được tự động triển khai. Thời hạn vá và cách chấp nhận rủi ro: `docs/quy-trinh-ung-pho-su-co.md` mục 6.
 
 ## 9. Thiết bị đầu cuối đồng bộ (BlueDrive Desktop)
 

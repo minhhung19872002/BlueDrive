@@ -1,23 +1,29 @@
-import { isAxiosError } from 'axios'
+import { isAxiosError, type AxiosResponse } from 'axios'
 import { api } from './client'
 import { cleanParams, saveBlob } from './http'
 import { cleanBody } from './monitoring'
 import type { Paged } from '@/types/common'
 import type {
+  Announcement,
   BackupJob,
   BackupPart,
   BackupSchedule,
   ChangeLog,
   ChangeType,
+  CreateIncident,
   CreateTicket,
   DownloadUrlDto,
+  Incident,
+  IncidentFilter,
   ReportJob,
+  SaveAnnouncement,
   SlaSummary,
   SystemInfo,
   SystemStatus,
   Ticket,
   TicketFilter,
   UpdateBackupSchedule,
+  UpdateIncident,
   UpdateTicket,
   UploadResult,
 } from '@/types/ops'
@@ -104,12 +110,12 @@ function fileNameOf(disposition: string, fallback: string): string {
   return /filename\s*=\s*"?([^";]+)"?/i.exec(disposition)?.[1]?.trim() || fallback
 }
 
-/** POST /tickets/sla/export returns the file directly: save it as a blob. */
-export async function exportSlaReport(filter: TicketFilter, format: 'xlsx' | 'pdf'): Promise<void> {
+/** Saves a file returned directly by an export endpoint; a JSON error body is parsed back into ProblemDetails. */
+async function saveFileResponse(request: Promise<AxiosResponse<Blob>>, fallbackName: string): Promise<void> {
   try {
-    const res = await api.post<Blob>('/tickets/sla/export', cleanBody(filter), { params: { format }, responseType: 'blob' })
+    const res = await request
     const disposition = (res.headers['content-disposition'] as string | undefined) ?? ''
-    saveBlob(res.data, fileNameOf(disposition, `bao-cao-sla.${format}`))
+    saveBlob(res.data, fileNameOf(disposition, fallbackName))
   } catch (error) {
     if (isAxiosError(error) && error.response?.data instanceof Blob) {
       try {
@@ -120,6 +126,74 @@ export async function exportSlaReport(filter: TicketFilter, format: 'xlsx' | 'pd
     }
     throw error
   }
+}
+
+/** POST /tickets/sla/export returns the file directly: save it as a blob. */
+export function exportSlaReport(filter: TicketFilter, format: 'xlsx' | 'pdf'): Promise<void> {
+  return saveFileResponse(
+    api.post<Blob>('/tickets/sla/export', cleanBody(filter), { params: { format }, responseType: 'blob' }),
+    `bao-cao-sla.${format}`,
+  )
+}
+
+// ---------- Security incidents (3.4) ----------
+export async function searchIncidents(
+  filter: IncidentFilter,
+  params: { page: number; pageSize: number; q?: string },
+): Promise<Paged<Incident>> {
+  const { data } = await api.post<Paged<Incident>>('/security-incidents/search', cleanBody(filter), { params: cleanParams(params) })
+  return data
+}
+
+export async function getIncident(id: string): Promise<Incident> {
+  const { data } = await api.get<Incident>(`/security-incidents/${id}`)
+  return data
+}
+
+export async function createIncident(body: CreateIncident): Promise<Incident> {
+  const { data } = await api.post<Incident>('/security-incidents', body)
+  return data
+}
+
+export async function updateIncident(id: string, body: UpdateIncident): Promise<Incident> {
+  const { data } = await api.put<Incident>(`/security-incidents/${id}`, { id, ...body })
+  return data
+}
+
+/** One incident record (fields + timeline) as PDF/Excel. */
+export function exportIncident(id: string, format: 'xlsx' | 'pdf'): Promise<void> {
+  return saveFileResponse(
+    api.get<Blob>(`/security-incidents/${id}/export`, { params: { format }, responseType: 'blob' }),
+    `ho-so-su-co.${format}`,
+  )
+}
+
+/** Incident register. */
+export function exportIncidents(filter: IncidentFilter, format: 'xlsx' | 'pdf'): Promise<void> {
+  return saveFileResponse(
+    api.post<Blob>('/security-incidents/export', cleanBody(filter), { params: { format }, responseType: 'blob' }),
+    `so-theo-doi-su-co.${format}`,
+  )
+}
+
+// ---------- System announcements (5.2) ----------
+export async function getActiveAnnouncements(): Promise<Announcement[]> {
+  const { data } = await api.get<Announcement[]>('/announcements/active')
+  return data
+}
+
+export async function listAnnouncements(params: { page: number; pageSize: number; q?: string }): Promise<Paged<Announcement>> {
+  const { data } = await api.get<Paged<Announcement>>('/announcements', { params: cleanParams(params) })
+  return data
+}
+
+export async function saveAnnouncement(id: string | null, body: SaveAnnouncement): Promise<Announcement> {
+  const { data } = id ? await api.put<Announcement>(`/announcements/${id}`, body) : await api.post<Announcement>('/announcements', body)
+  return data
+}
+
+export async function deleteAnnouncement(id: string): Promise<void> {
+  await api.delete(`/announcements/${id}`)
 }
 
 /** Multipart upload of a ticket attachment into the reporter's personal workspace (root folder). */
@@ -141,7 +215,13 @@ export async function listChangeLogs(params: {
   return data
 }
 
-export async function addChangeLog(body: { version: string; changeType: ChangeType; description: string }): Promise<{ id: string }> {
+export async function addChangeLog(body: {
+  version: string
+  changeType: ChangeType
+  description: string
+  /** Also show the entry to every user as a system announcement for this many days. */
+  announceDays?: number | null
+}): Promise<{ id: string }> {
   const { data } = await api.post<{ id: string }>('/change-logs', body)
   return data
 }

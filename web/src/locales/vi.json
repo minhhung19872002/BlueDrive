@@ -53,10 +53,12 @@
     "auditLogs": "Nhật ký hoạt động",
     "storageStats": "Thống kê dung lượng",
     "alerts": "Cảnh báo",
+    "incidents": "Sự cố an toàn thông tin",
     "adminSessions": "Phiên đăng nhập",
     "backups": "Sao lưu",
     "tickets": "Hỗ trợ & sự cố",
     "changeLogs": "Nhật ký thay đổi",
+    "announcements": "Thông báo hệ thống",
     "settings": "Cấu hình hệ thống",
     "approvals": "Phê duyệt",
     "adminDevices": "Thiết bị đồng bộ"

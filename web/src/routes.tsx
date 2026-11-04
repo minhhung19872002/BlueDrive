@@ -71,6 +71,8 @@ const layoutRoutes: AppRoute[] = [
   { path: 'admin/backups', perm: 'backup.view', Component: lazy(() => import('@/pages/admin/BackupsPage')) },
   { path: 'admin/tickets', perm: 'ticket.view', Component: lazy(() => import('@/pages/admin/TicketsPage')) },
   { path: 'admin/change-logs', perm: 'changelog.view', Component: lazy(() => import('@/pages/admin/ChangeLogsPage')) },
+  { path: 'admin/incidents', perm: 'incident.view', Component: lazy(() => import('@/pages/admin/IncidentsPage')) },
+  { path: 'admin/announcements', perm: 'announcement.view', Component: lazy(() => import('@/pages/admin/AnnouncementsPage')) },
   { path: 'admin/system-status', perm: 'settings.view', Component: lazy(() => import('@/pages/admin/SystemStatusPage')) },
   { path: 'admin/settings', perm: 'settings.view', Component: lazy(() => import('@/pages/admin/SettingsPage')) },
 ]

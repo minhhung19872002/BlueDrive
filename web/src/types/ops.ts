@@ -227,6 +227,9 @@ export interface AlertDto {
   acknowledgedByName: string | null
   acknowledgedAt: string | null
   createdAt: string
+  /** Security incident record opened from this alert (3.4). */
+  incidentId: string | null
+  incidentCode: string | null
 }
 
 export interface AlertFilter {
@@ -430,4 +433,116 @@ export interface UploadResult {
   versionNo: number
   name: string
   approvalStatus: string
+}
+
+// ---------- Security incidents (3.4) ----------
+export type IncidentCategory = 'malware' | 'intrusion' | 'vulnerability' | 'data_leak' | 'denial_of_service' | 'account_compromise' | 'other'
+export const INCIDENT_CATEGORIES: IncidentCategory[] = [
+  'malware',
+  'intrusion',
+  'vulnerability',
+  'data_leak',
+  'denial_of_service',
+  'account_compromise',
+  'other',
+]
+
+export type IncidentSeverity = 'low' | 'medium' | 'high' | 'critical'
+export const INCIDENT_SEVERITIES: IncidentSeverity[] = ['low', 'medium', 'high', 'critical']
+
+export type IncidentStatus = 'reported' | 'investigating' | 'containing' | 'recovering' | 'resolved' | 'closed'
+export const INCIDENT_STATUSES: IncidentStatus[] = ['reported', 'investigating', 'containing', 'recovering', 'resolved', 'closed']
+
+export interface IncidentEvent {
+  occurredAt: string
+  eventType: string
+  note: string | null
+  userName: string | null
+}
+
+export interface Incident {
+  id: string
+  code: string
+  title: string
+  description: string
+  category: IncidentCategory
+  severity: IncidentSeverity
+  status: IncidentStatus
+  detectedAt: string
+  reportedAt: string
+  reporterId: string
+  reporterName: string
+  handlerId: string | null
+  handlerName: string | null
+  alertId: string | null
+  alertMessage: string | null
+  affectedSystems: string | null
+  cause: string | null
+  coordinatingParties: string | null
+  remediation: string | null
+  conclusion: string | null
+  resolvedAt: string | null
+  closedAt: string | null
+  events: IncidentEvent[] | null
+}
+
+export interface IncidentFilter {
+  status?: IncidentStatus | null
+  severity?: IncidentSeverity | null
+  category?: IncidentCategory | null
+  open?: boolean | null
+  from?: string | null
+  to?: string | null
+}
+
+export interface CreateIncident {
+  title: string
+  description: string
+  category: IncidentCategory
+  severity: IncidentSeverity
+  detectedAt?: string | null
+  affectedSystems?: string | null
+  alertId?: string | null
+}
+
+export interface UpdateIncident {
+  title?: string
+  description?: string
+  category?: IncidentCategory
+  severity?: IncidentSeverity
+  status?: IncidentStatus
+  handlerId?: string
+  affectedSystems?: string
+  cause?: string
+  coordinatingParties?: string
+  remediation?: string
+  conclusion?: string
+  note?: string
+}
+
+// ---------- System announcements (5.2) ----------
+export type AnnouncementLevel = 'info' | 'warning' | 'maintenance'
+export const ANNOUNCEMENT_LEVELS: AnnouncementLevel[] = ['info', 'warning', 'maintenance']
+
+export interface Announcement {
+  id: string
+  title: string
+  content: string
+  level: AnnouncementLevel
+  startsAt: string
+  endsAt: string | null
+  isActive: boolean
+  createdByName: string | null
+  createdAt: string
+  updatedAt: string | null
+  isCurrent: boolean
+}
+
+export interface SaveAnnouncement {
+  title: string
+  content: string
+  level: AnnouncementLevel
+  startsAt?: string | null
+  endsAt?: string | null
+  isActive: boolean
 }

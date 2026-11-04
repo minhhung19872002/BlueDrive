@@ -1,0 +1,3 @@
+# Trivy (CI job "images"): CVE ids accepted after review, one per line with the reason and review date.
+# Only add an entry when no fixed version exists or the vulnerable code path is unreachable,
+# and record the decision in the incident register (docs/quy-trinh-ung-pho-su-co.md, mục 6).

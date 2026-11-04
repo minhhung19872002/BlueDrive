@@ -3,15 +3,22 @@ import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr'
 import { useAuthStore } from '@/stores/auth'
 import type { NotificationDto } from '@/types/admin'
 
+export interface NotificationHubHandlers {
+  /** A personal notification for the signed-in user. */
+  notification?: (n: NotificationDto) => void
+  /** A system announcement was added, changed or removed (sent to every signed-in user). */
+  announcement?: () => void
+}
+
 /**
- * Connect to the SignalR hub /hubs/notifications while signed in and call `onNotification`
- * for each "notification" event. The token is read lazily so refreshed tokens are used on reconnect.
+ * Connect to the SignalR hub /hubs/notifications while signed in and dispatch its events to `handlers`.
+ * The token is read lazily so refreshed tokens are used on reconnect.
  */
-export function useNotificationHub(onNotification: (n: NotificationDto) => void, enabled: boolean): void {
-  const handlerRef = useRef(onNotification)
+export function useNotificationHub(handlers: NotificationHubHandlers, enabled: boolean): void {
+  const handlersRef = useRef(handlers)
   useEffect(() => {
-    handlerRef.current = onNotification
-  }, [onNotification])
+    handlersRef.current = handlers
+  }, [handlers])
 
   useEffect(() => {
     if (!enabled) return
@@ -20,7 +27,8 @@ export function useNotificationHub(onNotification: (n: NotificationDto) => void,
       .withAutomaticReconnect([0, 2_000, 10_000, 30_000, 60_000])
       .configureLogging(LogLevel.Warning)
       .build()
-    connection.on('notification', (n: NotificationDto) => handlerRef.current(n))
+    connection.on('notification', (n: NotificationDto) => handlersRef.current.notification?.(n))
+    connection.on('announcement', () => handlersRef.current.announcement?.())
     // Realtime is best effort: unread-count polling keeps the bell up to date while the hub is unreachable.
     // Automatic reconnect only covers drops after a successful start, so retry the initial start ourselves
     // (e.g. the access token was being refreshed at that moment).

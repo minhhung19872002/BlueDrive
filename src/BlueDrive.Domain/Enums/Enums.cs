@@ -50,3 +50,14 @@ public enum ChangeOp { Create, UpdateContent, UpdateMeta, Rename, Move, Delete, 
 public enum ChangeItemType { File, Folder, Workspace }
 
 public enum DeviceStatus { Active, Revoked, WipePending, Wiped }
+
+/// <summary>Information-security incident category (HSMT 3.4, TT 20/2017/TT-BTTTT).</summary>
+public enum IncidentCategory { Malware, Intrusion, Vulnerability, DataLeak, DenialOfService, AccountCompromise, Other }
+
+public enum IncidentSeverity { Low, Medium, High, Critical }
+
+/// <summary>Incident handling workflow: report → investigate → contain → recover → resolved → closed.</summary>
+public enum IncidentStatus { Reported, Investigating, Containing, Recovering, Resolved, Closed }
+
+/// <summary>System announcement banner style (5.2).</summary>
+public enum AnnouncementLevel { Info, Warning, Maintenance }

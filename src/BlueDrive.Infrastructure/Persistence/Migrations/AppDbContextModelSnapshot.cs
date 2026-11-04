@@ -758,6 +758,43 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.ToTable("folders", (string)null);
                 });
 
+            modelBuilder.Entity("BlueDrive.Domain.Entities.IncidentEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("event_type");
+
+                    b.Property<Guid>("IncidentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("incident_id");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_incident_events");
+
+                    b.HasIndex("IncidentId")
+                        .HasDatabaseName("ix_incident_events_incident_id");
+
+                    b.ToTable("incident_events", (string)null);
+                });
+
             modelBuilder.Entity("BlueDrive.Domain.Entities.Notification", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1378,6 +1415,110 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.ToTable("saved_searches", (string)null);
                 });
 
+            modelBuilder.Entity("BlueDrive.Domain.Entities.SecurityIncident", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AffectedSystems")
+                        .HasColumnType("text")
+                        .HasColumnName("affected_systems");
+
+                    b.Property<Guid?>("AlertId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("alert_id");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("category");
+
+                    b.Property<string>("Cause")
+                        .HasColumnType("text")
+                        .HasColumnName("cause");
+
+                    b.Property<DateTime?>("ClosedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("closed_at");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("code");
+
+                    b.Property<string>("Conclusion")
+                        .HasColumnType("text")
+                        .HasColumnName("conclusion");
+
+                    b.Property<string>("CoordinatingParties")
+                        .HasColumnType("text")
+                        .HasColumnName("coordinating_parties");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<DateTime>("DetectedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("detected_at");
+
+                    b.Property<Guid?>("HandlerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("handler_id");
+
+                    b.Property<string>("Remediation")
+                        .HasColumnType("text")
+                        .HasColumnName("remediation");
+
+                    b.Property<DateTime>("ReportedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reported_at");
+
+                    b.Property<Guid>("ReporterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reporter_id");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("severity");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.HasKey("Id")
+                        .HasName("pk_security_incidents");
+
+                    b.HasIndex("AlertId")
+                        .HasDatabaseName("ix_security_incidents_alert_id");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_security_incidents_code");
+
+                    b.HasIndex("Status", "ReportedAt")
+                        .HasDatabaseName("ix_security_incidents_status_reported_at");
+
+                    b.ToTable("security_incidents", (string)null);
+                });
+
             modelBuilder.Entity("BlueDrive.Domain.Entities.Share", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1868,6 +2009,62 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_devices_user_id_status");
 
                     b.ToTable("devices", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.SystemAnnouncement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<DateTime?>("EndsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ends_at");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("level");
+
+                    b.Property<DateTime>("StartsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("starts_at");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_system_announcements");
+
+                    b.HasIndex("IsActive", "StartsAt")
+                        .HasDatabaseName("ix_system_announcements_is_active_starts_at");
+
+                    b.ToTable("system_announcements", (string)null);
                 });
 
             modelBuilder.Entity("BlueDrive.Domain.Entities.SystemLog", b =>
@@ -2462,6 +2659,16 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.Navigation("Workspace");
                 });
 
+            modelBuilder.Entity("BlueDrive.Domain.Entities.IncidentEvent", b =>
+                {
+                    b.HasOne("BlueDrive.Domain.Entities.SecurityIncident", null)
+                        .WithMany("Events")
+                        .HasForeignKey("IncidentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_incident_events_security_incidents_incident_id");
+                });
+
             modelBuilder.Entity("BlueDrive.Domain.Entities.Organization", b =>
                 {
                     b.HasOne("BlueDrive.Domain.Entities.Organization", "Parent")
@@ -2653,6 +2860,11 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("BlueDrive.Domain.Entities.Role", b =>
                 {
                     b.Navigation("Permissions");
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.SecurityIncident", b =>
+                {
+                    b.Navigation("Events");
                 });
 
             modelBuilder.Entity("BlueDrive.Domain.Entities.StoredFile", b =>

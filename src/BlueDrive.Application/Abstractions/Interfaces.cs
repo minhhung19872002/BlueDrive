@@ -43,6 +43,9 @@ public interface IAppDbContext
     DbSet<SupportTicket> SupportTickets { get; }
     DbSet<TicketEvent> TicketEvents { get; }
     DbSet<ChangeLog> ChangeLogs { get; }
+    DbSet<SecurityIncident> SecurityIncidents { get; }
+    DbSet<IncidentEvent> IncidentEvents { get; }
+    DbSet<SystemAnnouncement> SystemAnnouncements { get; }
     DbSet<ReportJob> ReportJobs { get; }
     DbSet<SystemLog> SystemLogs { get; }
     DbSet<ChangeJournalEntry> ChangeJournal { get; }

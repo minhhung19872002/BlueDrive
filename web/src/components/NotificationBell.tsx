@@ -1,10 +1,11 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { App, Badge, Button, Empty, List, Popover, Space, Spin, Typography } from 'antd'
 import { BellOutlined, CheckOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { qk } from '@/api/queryKeys'
+import { qko } from '@/api/queryKeys.ops'
 import { getUnreadNotificationCount, listNotifications, markNotificationsRead } from '@/api/system'
 import { useApiMutation } from '@/hooks/useApiMutation'
 import { useNotificationHub } from '@/hooks/useNotificationHub'
@@ -48,7 +49,12 @@ export default function NotificationBell() {
     },
     [notification, queryClient],
   )
-  useNotificationHub(onPush, true)
+  // The bell owns the single hub connection; announcement changes refresh the banner (AnnouncementBanner).
+  const hubHandlers = useMemo(
+    () => ({ notification: onPush, announcement: () => void queryClient.invalidateQueries({ queryKey: qko.activeAnnouncements }) }),
+    [onPush, queryClient],
+  )
+  useNotificationHub(hubHandlers, true)
 
   const openItem = (n: NotificationDto) => {
     if (!n.isRead) markOne.mutate(n.id)

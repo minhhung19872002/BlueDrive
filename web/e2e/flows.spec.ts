@@ -46,7 +46,11 @@ test.describe.serial('Tư liệu cá nhân', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0)
 
     await openContextMenu(page, fileRow.getByText(fileName))
-    await page.getByRole('menuitem', { name: /Đánh dấu quan trọng/ }).click()
+    // Leave the page only after the star is saved (navigating away earlier could cancel the request).
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/api/v1/favorites') && r.request().method() === 'PUT' && r.ok()),
+      page.getByRole('menuitem', { name: /Đánh dấu quan trọng/ }).click(),
+    ])
     await page.goto('/starred')
     await expect(page.getByText(fileName)).toBeVisible()
   })
@@ -79,7 +83,10 @@ test.describe.serial('Tư liệu cá nhân', () => {
     await page.waitForLoadState('networkidle')
     await page.getByRole('row', { name: new RegExp(fileName) }).getByRole('checkbox').check()
     await page.keyboard.press('Delete')
-    await page.getByRole('button', { name: /Xóa|Đồng ý|OK/ }).last().click()
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/api/v1/items/delete') && r.ok()),
+      page.getByRole('button', { name: /Xóa|Đồng ý|OK/ }).last().click(),
+    ])
     await page.goto('/trash')
     const row = page.getByRole('row', { name: new RegExp(fileName) })
     await expect(row.getByRole('img', { name: 'TXT' })).toBeVisible()

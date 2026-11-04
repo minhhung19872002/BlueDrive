@@ -19,6 +19,24 @@ public static class TextUtil
         return sb.ToString().Normalize(NormalizationForm.FormC).ToLowerInvariant();
     }
 
+    /// <summary>
+    /// ASCII-only fallback for the Content-Disposition <c>filename</c> parameter ("Báo cáo Đầu năm.pdf" → "Bao cao Dau nam.pdf").
+    /// Browsers that ignore <c>filename*</c> (Safari for some responses) would otherwise save the download under the URL token.
+    /// </summary>
+    public static string AsciiFileName(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return "download";
+        var normalized = input.Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(normalized.Length);
+        foreach (var c in normalized)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.NonSpacingMark) continue;
+            var mapped = c switch { 'đ' => 'd', 'Đ' => 'D', _ => c };
+            sb.Append(mapped is >= ' ' and <= '~' && mapped is not '"' and not '\\' ? mapped : '_');
+        }
+        return sb.ToString();
+    }
+
     public static string FormatBytes(long bytes)
     {
         string[] units = ["B", "KB", "MB", "GB", "TB"];
