@@ -342,6 +342,38 @@ public class ItemAccessController : ApiControllerBase
     }
 }
 
+/// <summary>Quản trị cấp quyền (ma trận quyền × cấp quyền).</summary>
+[Route("api/v1/admin/permission-levels")]
+public class PermissionLevelAdminController : ApiControllerBase
+{
+    [HttpGet("rights"), HasPermission(Perm.RoleView)]
+    public Task<IReadOnlyList<Application.Features.Access.AccessRightDto>> Rights() => Mediator.Send(new Application.Features.Access.ListAccessRightsQuery());
+
+    [HttpPost, HasPermission(Perm.RoleEdit)]
+    public async Task<IActionResult> Create(Application.Features.Access.SavePermissionLevelCommand cmd) => Ok(new { id = await Mediator.Send(cmd with { Id = null }) });
+
+    [HttpPut("{id:guid}"), HasPermission(Perm.RoleEdit)]
+    public async Task<IActionResult> Save(Guid id, Application.Features.Access.SavePermissionLevelCommand cmd)
+    {
+        await Mediator.Send(cmd with { Id = id });
+        return NoContent();
+    }
+
+    [HttpDelete("{id:guid}"), HasPermission(Perm.RoleEdit)]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        await Mediator.Send(new Application.Features.Access.DeletePermissionLevelCommand(id));
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/reset"), HasPermission(Perm.RoleEdit)]
+    public async Task<IActionResult> Reset(Guid id)
+    {
+        await Mediator.Send(new Application.Features.Access.ResetPermissionLevelCommand(id));
+        return NoContent();
+    }
+}
+
 /// <summary>Quản trị khách bên ngoài.</summary>
 [Route("api/v1/admin/guests")]
 public class GuestsController : ApiControllerBase

@@ -1814,6 +1814,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("description");
 
+                    b.Property<bool>("IsCustomized")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_customized");
+
                     b.Property<bool>("IsSystem")
                         .HasColumnType("boolean")
                         .HasColumnName("is_system");

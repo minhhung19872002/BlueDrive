@@ -44,7 +44,8 @@ public sealed class VerifyPermissionMigrationHandler(IAppDbContext db, LegacyRes
             var type = i.Kind switch { SecurableKind.File => ResourceType.File, SecurableKind.Folder => ResourceType.Folder, _ => ResourceType.Workspace };
             var was = await old.GetAccessAsync(u.Id, type, i.Id, ct);
             // What the old model let them do: a membership level "Chỉnh sửa" under a role without doc.edit only read and downloaded.
-            var before = was.Level == AccessLevel.Edit && !was.CanEdit ? AccessLevel.Download : was.Level;
+            // A locked workspace allowed reading only (the old model reports its level and the lock apart).
+            var before = (was.Level >= AccessLevel.Edit && was.WorkspaceLocked) || (was.Level == AccessLevel.Edit && !was.CanEdit) ? AccessLevel.Download : was.Level;
             if (!contexts.TryGetValue(u.Id, out var context)) contexts[u.Id] = context = await reference.LoadUserAsync(u.Id, ct);
             var after = ReferencePermissionEvaluator.ToLevel(await reference.EvaluateAsync(context, i.Id, ct));
             if (before == after) { same++; continue; }

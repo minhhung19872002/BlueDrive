@@ -434,9 +434,17 @@ public sealed class CopyItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
 /// <summary>Moves items to the trash (soft delete). Space is released only on permanent deletion.</summary>
 public sealed record DeleteItemsCommand(IReadOnlyList<ItemRef> Items) : IRequest<int>;
 
-public sealed class DeleteItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IAuditLogger audit, TimeProvider clock)
+public sealed class DeleteItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IAuditLogger audit, TimeProvider clock,
+    Access.IItemPermissionService engine)
     : IRequestHandler<DeleteItemsCommand, int>
 {
+    /// <summary>Deleting needs the "Xóa" right itself (a level may allow editing without deleting).</summary>
+    private async Task EnsureMayDeleteAsync(Guid uid, Guid id, CancellationToken ct)
+    {
+        if (!Domain.Permissions.AccessRights.Has(await engine.GetEffectiveAsync(uid, id, ct), Domain.Permissions.AccessRight.DeleteItems))
+            throw new ForbiddenException("Cấp quyền của bạn trên mục này không cho phép xóa.");
+    }
+
     public async Task<int> Handle(DeleteItemsCommand cmd, CancellationToken ct)
     {
         var uid = me.RequireUserId();
@@ -448,6 +456,7 @@ public sealed class DeleteItemsHandler(IAppDbContext db, ICurrentUser me, IResou
             if (item.IsFile)
             {
                 await auth.EnsureAsync(uid, ResourceType.File, item.Id, AccessLevel.Edit, ct);
+                await EnsureMayDeleteAsync(uid, item.Id, ct);
                 var f = await db.Files.FirstAsync(x => x.Id == item.Id, ct);
                 f.IsDeleted = true; f.IsTrashRoot = true; f.DeletedAt = now; f.DeletedBy = uid; f.OriginalFolderId = f.FolderId;
                 await db.SaveChangesAsync(ct);
@@ -456,6 +465,7 @@ public sealed class DeleteItemsHandler(IAppDbContext db, ICurrentUser me, IResou
             else
             {
                 await auth.EnsureAsync(uid, ResourceType.Folder, item.Id, AccessLevel.Edit, ct);
+                await EnsureMayDeleteAsync(uid, item.Id, ct);
                 var folder = await db.Folders.FirstAsync(x => x.Id == item.Id, ct);
                 folder.IsDeleted = true; folder.IsTrashRoot = true; folder.DeletedAt = now; folder.DeletedBy = uid; folder.OriginalParentId = folder.ParentId;
                 await db.SaveChangesAsync(ct);

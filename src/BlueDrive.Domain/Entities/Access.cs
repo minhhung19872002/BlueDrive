@@ -129,6 +129,8 @@ public class PermissionLevel
     public string Description { get; set; } = "";
     public AccessRight Permissions { get; set; }
     public bool IsSystem { get; set; }
+    /// <summary>A system level an administrator changed: kept as they made it (not reset by BlueDrive's defaults).</summary>
+    public bool IsCustomized { get; set; }
     public int SortOrder { get; set; }
 }
 

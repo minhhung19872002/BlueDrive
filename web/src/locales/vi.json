@@ -64,6 +64,7 @@
     "accessRequests": "Yêu cầu quyền truy cập",
     "guests": "Khách bên ngoài",
     "spaceTrash": "Thùng rác Space",
+    "accessLevels": "Cấp quyền truy cập",
     "sharedByMe": "Tôi đã chia sẻ",
     "storage": "Bộ nhớ",
     "adminDevices": "Thiết bị đồng bộ"
@@ -809,6 +810,23 @@
     "total": "Dung lượng (gồm phiên bản)",
     "versions": "{{count}} phiên bản",
     "empty": "Drive của tôi chưa có tệp nào."
+  },
+  "accessLevels": {
+    "description": "Mỗi cấp quyền là một tập quyền nguyên tử; khi chia sẻ hoặc thêm thành viên Space, người dùng chọn một cấp quyền.",
+    "hint": "Sửa một cấp quyền áp dụng ngay cho mọi nơi đang dùng cấp đó. Cấp \"Chủ sở hữu / Quản lý\" luôn có toàn quyền.",
+    "new": "Cấp quyền mới",
+    "edit": "Sửa cấp quyền \"{{name}}\"",
+    "name": "Tên cấp quyền",
+    "descriptionLabel": "Mô tả",
+    "right": "Quyền",
+    "custom": "Tùy biến",
+    "customized": "Đã sửa",
+    "saved": "Đã lưu cấp quyền.",
+    "deleted": "Đã xóa cấp quyền.",
+    "deleteConfirm": "Xóa cấp quyền \"{{name}}\"?",
+    "reset": "Khôi phục mặc định",
+    "resetConfirm": "Đưa cấp \"{{name}}\" về mặc định của hệ thống?",
+    "resetDone": "Đã khôi phục cấp quyền mặc định."
   },
   "library": {
     "title": "Thư viện tài liệu",

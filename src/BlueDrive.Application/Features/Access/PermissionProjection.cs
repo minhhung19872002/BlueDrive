@@ -401,6 +401,7 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock, A
         {
             if (!existing.TryGetValue(l.Id, out var row)) db.PermissionLevels.Add(row = new PermissionLevel { Id = l.Id, IsSystem = true });
             row.Code = l.Code;
+            if (row.IsCustomized && l.Id != SystemLevels.Owner) continue; // the administrator's version of it stays
             row.Name = l.Name;
             row.Description = l.Description;
             row.Permissions = l.Permissions;

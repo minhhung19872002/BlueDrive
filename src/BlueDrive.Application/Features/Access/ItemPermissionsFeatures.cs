@@ -13,7 +13,9 @@ namespace BlueDrive.Application.Features.Access;
 
 // Sharing on the new permission model (spec 5.1, API section 10: items/{id}/permissions, inheritance, general-access).
 
-public sealed record PermissionLevelDto(Guid Id, string Code, string Name, string Description, long Rights, bool IsSystem, int SortOrder);
+/// <param name="RightNames">The rights of the level by name (the administration matrix).</param>
+public sealed record PermissionLevelDto(Guid Id, string Code, string Name, string Description, long Rights, bool IsSystem, int SortOrder,
+    IReadOnlyList<string>? RightNames = null, bool IsCustomized = false);
 
 public sealed record PrincipalTarget(PrincipalKind Kind, Guid Id);
 
@@ -32,7 +34,8 @@ public sealed class ListPermissionLevelsHandler(IAppDbContext db) : IRequestHand
 {
     public async Task<IReadOnlyList<PermissionLevelDto>> Handle(ListPermissionLevelsQuery q, CancellationToken ct) =>
         (await db.PermissionLevels.AsNoTracking().OrderBy(l => l.SortOrder).ThenBy(l => l.Name).ToListAsync(ct))
-        .Select(l => new PermissionLevelDto(l.Id, l.Code, l.Name, l.Description, (long)l.Permissions, l.IsSystem, l.SortOrder)).ToList();
+        .Select(l => new PermissionLevelDto(l.Id, l.Code, l.Name, l.Description, (long)l.Permissions, l.IsSystem, l.SortOrder,
+            AccessRights.Descriptions.Keys.Where(r => l.Permissions.Has(r)).Select(r => r.ToString()).ToList(), l.IsCustomized)).ToList();
 }
 
 /// <summary>"Người có quyền truy cập": who has access to an item and where it comes from (spec 5.1).</summary>

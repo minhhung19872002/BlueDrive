@@ -12,6 +12,32 @@ export interface PermissionLevel {
   rights: number
   isSystem: boolean
   sortOrder: number
+  rightNames?: string[]
+  isCustomized?: boolean
+}
+
+export interface AccessRightInfo {
+  name: string
+  group: string
+  description: string
+}
+
+export async function listAccessRights(): Promise<AccessRightInfo[]> {
+  const { data } = await api.get<AccessRightInfo[]>('/admin/permission-levels/rights')
+  return data
+}
+
+export async function savePermissionLevel(id: string | null, body: { name: string; description: string; rights: string[] }): Promise<void> {
+  if (id) await api.put(`/admin/permission-levels/${id}`, body)
+  else await api.post('/admin/permission-levels', body)
+}
+
+export async function deletePermissionLevel(id: string): Promise<void> {
+  await api.delete(`/admin/permission-levels/${id}`)
+}
+
+export async function resetPermissionLevel(id: string): Promise<void> {
+  await api.post(`/admin/permission-levels/${id}/reset`)
 }
 
 export interface ItemPermission {
