@@ -60,6 +60,7 @@ BlueDrive Desktop 1.0.3 → 1.0.6 (các bản sửa bên dưới). Thời gian l
 | Kéo thư mục giữa hai nhóm (`Nhóm\Nhóm truyền thông B` → `Nhóm\Nhóm truyền thông A`) | Đạt sau khi sửa | Cùng thư mục (cùng mã) chuyển sang nhóm A sau 4 s, thùng rác nhóm B trống. Kéo vào "Nhóm chỉ xem" (chỉ có quyền xem) → "Hoàn tác", thư mục về chỗ cũ, máy chủ không đổi |
 | Ghim chứng thư (chính sách `CertificatePins`) | Đạt | Mã SPKI sai → không kết nối máy chủ thật; mã đúng (`iNmwmygd…`) → tệp chờ được tải lên |
 | Xóa từ xa máy B (Quản trị → Thiết bị) | Đạt | Yêu cầu 13:34:37 → B xác nhận 13:34:40; thư mục BlueDrive và mã đăng nhập trên B bị xóa; thiết bị ở trạng thái "đã xóa" |
+| Mất mạng giữa phiên cùng soạn (ONLYOFFICE Desktop, mục 13A) | Đạt | Cắt mạng của ONLYOFFICE giữa phiên: báo "Connection is lost", khóa sửa; phiên bản 6 đã có dòng gõ trước đó; có mạng lại → "Đã thay đổi phiên bản", mở lại, gõ tiếp → phiên bản 7 đủ cả hai dòng |
 | Đồng bộ trong mạng LAN | Không dùng | Có chạy thử trên 2 máy (tìm thấy nhau qua UDP 47391, kết nối TCP được) nhưng ở chế độ "Tệp theo yêu cầu" (mặc định) tệp mở/ghim luôn tải từ máy chủ, chỉ đồng bộ đầy đủ mới lấy qua LAN. Theo quyết định ngày 04/11/2026, BlueDrive chỉ đồng bộ với máy chủ: "Đồng bộ trong mạng LAN" giữ tắt (mặc định), không bật bằng chính sách khi triển khai |
 
 **Lỗi tìm ra trên 2 máy và đã sửa** (có kiểm thử tự động, CI xanh):
