@@ -1,5 +1,6 @@
 using BlueDrive.Application.Abstractions;
 using BlueDrive.Application.Common;
+using BlueDrive.Application.Features.Retention;
 using BlueDrive.Application.Security;
 using BlueDrive.Application.Settings;
 using BlueDrive.Domain.Entities;
@@ -31,8 +32,8 @@ public sealed class ListTrashHandler(IAppDbContext db, ICurrentUser me, IResourc
         var ws = await db.Workspaces.AsNoTracking().FirstOrDefaultAsync(w => w.Id == q.WorkspaceId, ct) ?? throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
         var full = await TrashAccess.CanManageTrashAsync(auth, uid, ws.Id, ct);
         var retention = await settings.GetAsync(SettingKeys.TrashRetentionDays, 30, ct);
-        var folders = db.Folders.AsNoTracking().Where(f => f.WorkspaceId == ws.Id && f.IsTrashRoot && f.IsDeleted && (full || f.DeletedBy == uid));
-        var files = db.Files.AsNoTracking().Where(f => f.WorkspaceId == ws.Id && f.IsTrashRoot && f.IsDeleted && (full || f.DeletedBy == uid));
+        var folders = db.Folders.AsNoTracking().Where(f => f.WorkspaceId == ws.Id && f.IsTrashRoot && f.IsDeleted && f.PreservedAt == null && (full || f.DeletedBy == uid));
+        var files = db.Files.AsNoTracking().Where(f => f.WorkspaceId == ws.Id && f.IsTrashRoot && f.IsDeleted && f.PreservedAt == null && (full || f.DeletedBy == uid));
         if (!string.IsNullOrWhiteSpace(q.Q))
         {
             var term = TextUtil.Unaccent(q.Q.Trim());
@@ -79,7 +80,7 @@ public sealed class RestoreItemsHandler(IAppDbContext db, ICurrentUser me, IReso
         {
             if (item.IsFile)
             {
-                var f = await db.Files.FirstOrDefaultAsync(x => x.Id == item.Id && x.IsDeleted && x.IsTrashRoot, ct) ?? throw new NotFoundException("Không tìm thấy mục trong thùng rác.");
+                var f = await db.Files.FirstOrDefaultAsync(x => x.Id == item.Id && x.IsDeleted && x.IsTrashRoot && x.PreservedAt == null, ct) ?? throw new NotFoundException("Không tìm thấy mục trong thùng rác.");
                 await EnsureTrashRight(uid, f.WorkspaceId, f.DeletedBy, ct);
                 var parentOk = f.OriginalFolderId is null || await db.Folders.AnyAsync(x => x.Id == f.OriginalFolderId && !x.IsDeleted, ct);
                 f.FolderId = parentOk ? f.OriginalFolderId : null;
@@ -90,7 +91,7 @@ public sealed class RestoreItemsHandler(IAppDbContext db, ICurrentUser me, IReso
             }
             else
             {
-                var folder = await db.Folders.FirstOrDefaultAsync(x => x.Id == item.Id && x.IsDeleted && x.IsTrashRoot, ct) ?? throw new NotFoundException("Không tìm thấy mục trong thùng rác.");
+                var folder = await db.Folders.FirstOrDefaultAsync(x => x.Id == item.Id && x.IsDeleted && x.IsTrashRoot && x.PreservedAt == null, ct) ?? throw new NotFoundException("Không tìm thấy mục trong thùng rác.");
                 await EnsureTrashRight(uid, folder.WorkspaceId, folder.DeletedBy, ct);
                 var deletedAt = folder.DeletedAt;
                 var parent = folder.OriginalParentId is { } op ? await db.Folders.FirstOrDefaultAsync(x => x.Id == op && !x.IsDeleted, ct) : null;
@@ -132,31 +133,41 @@ public sealed class PurgeItemsHandler(IAppDbContext db, ICurrentUser me, IResour
         var uid = me.RequireUserId();
         if (!await perms.HasAsync(uid, Perm.TrashPurge, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền xóa vĩnh viễn.");
         var items = cmd.Items?.ToList() ?? [];
+        var mode = PurgeMode.Manual;
         if (cmd.EmptyWorkspaceId is { } wsId)
         {
             var full = await TrashAccess.CanManageTrashAsync(auth, uid, wsId, ct);
-            items.AddRange(await db.Files.Where(f => f.WorkspaceId == wsId && f.IsTrashRoot && f.IsDeleted && (full || f.DeletedBy == uid)).Select(f => new ItemRef("file", f.Id)).ToListAsync(ct));
-            items.AddRange(await db.Folders.Where(f => f.WorkspaceId == wsId && f.IsTrashRoot && f.IsDeleted && (full || f.DeletedBy == uid)).Select(f => new ItemRef("folder", f.Id)).ToListAsync(ct));
+            items.AddRange(await db.Files.Where(f => f.WorkspaceId == wsId && f.IsTrashRoot && f.IsDeleted && f.PreservedAt == null && (full || f.DeletedBy == uid)).Select(f => new ItemRef("file", f.Id)).ToListAsync(ct));
+            items.AddRange(await db.Folders.Where(f => f.WorkspaceId == wsId && f.IsTrashRoot && f.IsDeleted && f.PreservedAt == null && (full || f.DeletedBy == uid)).Select(f => new ItemRef("folder", f.Id)).ToListAsync(ct));
+            mode = PurgeMode.Auto;
         }
         var count = 0;
         foreach (var item in items)
         {
             var (ws, deletedBy) = item.IsFile
-                ? await db.Files.Where(f => f.Id == item.Id && f.IsDeleted && f.IsTrashRoot).Select(f => new ValueTuple<Guid, Guid?>(f.WorkspaceId, f.DeletedBy)).FirstOrDefaultAsync(ct)
-                : await db.Folders.Where(f => f.Id == item.Id && f.IsDeleted && f.IsTrashRoot).Select(f => new ValueTuple<Guid, Guid?>(f.WorkspaceId, f.DeletedBy)).FirstOrDefaultAsync(ct);
+                ? await db.Files.Where(f => f.Id == item.Id && f.IsDeleted && f.IsTrashRoot && f.PreservedAt == null).Select(f => new ValueTuple<Guid, Guid?>(f.WorkspaceId, f.DeletedBy)).FirstOrDefaultAsync(ct)
+                : await db.Folders.Where(f => f.Id == item.Id && f.IsDeleted && f.IsTrashRoot && f.PreservedAt == null).Select(f => new ValueTuple<Guid, Guid?>(f.WorkspaceId, f.DeletedBy)).FirstOrDefaultAsync(ct);
             if (ws == Guid.Empty) throw new NotFoundException("Không tìm thấy mục trong thùng rác.");
             if (deletedBy != uid && !await TrashAccess.CanManageTrashAsync(auth, uid, ws, ct)) throw new ForbiddenException("Bạn không có quyền với thùng rác của nhóm này.");
-            await purger.PurgeAsync(item, "manual", ct);
-            count++;
+            if (await purger.PurgeAsync(item, "manual", ct, mode) != PurgeOutcome.Held) count++;
         }
         return count;
     }
 }
 
-/// <summary>Physical deletion shared by the purge command and the retention job.</summary>
-public sealed class TrashPurger(IAppDbContext db, IFileContentService content, QuotaService quota, IAuditLogger audit, ILogger<TrashPurger> logger)
+/// <summary>Manual: a legal hold refuses the purge with a message; Auto (jobs, "Dọn sạch"): what is held is left as it is.</summary>
+public enum PurgeMode { Manual, Auto }
+
+public enum PurgeOutcome { Purged, Preserved, Held }
+
+/// <summary>
+/// Physical deletion shared by the purge command and the retention job. Spec 7.2–7.3: nothing under a legal hold is purged (not even by an
+/// administrator); what a retention policy still keeps goes to the preservation store instead.
+/// </summary>
+public sealed class TrashPurger(IAppDbContext db, IFileContentService content, QuotaService quota, IAuditLogger audit, ILogger<TrashPurger> logger,
+    RetentionService retention, TimeProvider clock)
 {
-    public async Task PurgeAsync(ItemRef item, string reason, CancellationToken ct)
+    public async Task<PurgeOutcome> PurgeAsync(ItemRef item, string reason, CancellationToken ct, PurgeMode mode = PurgeMode.Auto)
     {
         List<StoredFile> files;
         List<Guid> folderIds = [];
@@ -165,19 +176,45 @@ public sealed class TrashPurger(IAppDbContext db, IFileContentService content, Q
         if (item.IsFile)
         {
             files = await db.Files.Where(f => f.Id == item.Id).ToListAsync(ct);
-            if (files.Count == 0) return;
+            if (files.Count == 0) return PurgeOutcome.Purged;
             wsId = files[0].WorkspaceId;
             name = files[0].Name;
         }
         else
         {
             var root = await db.Folders.FirstOrDefaultAsync(f => f.Id == item.Id, ct);
-            if (root is null) return;
+            if (root is null) return PurgeOutcome.Purged;
             wsId = root.WorkspaceId;
             name = root.Name;
             folderIds = await db.Folders.Where(f => f.Path.StartsWith(root.Path)).Select(f => f.Id).ToListAsync(ct);
             files = await db.Files.Where(f => f.FolderId != null && folderIds.Contains(f.FolderId.Value)).ToListAsync(ct);
         }
+
+        var protections = await retention.ForFilesAsync(files.Select(f => f.Id).ToList(), ct);
+        if (protections.Values.FirstOrDefault(p => p.Held) is { } held)
+        {
+            if (mode == PurgeMode.Manual) throw new ConflictException($"Không xóa vĩnh viễn được \"{name}\": tư liệu đang bị giữ pháp lý \"{held.Hold}\".");
+            return PurgeOutcome.Held;
+        }
+        var kept = protections.Where(p => p.Value.Retained).Select(p => p.Key).ToHashSet();
+        if (kept.Count > 0)
+        {
+            var now = clock.GetUtcNow().UtcDateTime;
+            await db.Files.Where(f => kept.Contains(f.Id)).ExecuteUpdateAsync(u => u.SetProperty(f => f.PreservedAt, now), ct);
+            if (!item.IsFile) await db.Folders.Where(f => f.Id == item.Id).ExecuteUpdateAsync(u => u.SetProperty(f => f.PreservedAt, now), ct);
+            await audit.LogAsync(new AuditEntry(AuditAction.Purge, item.IsFile ? ResourceType.File : ResourceType.Folder, item.Id, name, wsId,
+                new { reason, preserved = kept.Count, policy = protections[kept.First()].PolicyName }), ct);
+            // The folders stay (the preserved files are in them); what nothing keeps goes now.
+            files = files.Where(f => !kept.Contains(f.Id)).ToList();
+            if (files.Count > 0) await DeleteAsync(item, wsId, name, files, [], reason, journal: false, ct);
+            return PurgeOutcome.Preserved;
+        }
+        await DeleteAsync(item, wsId, name, files, folderIds, reason, journal: true, ct);
+        return PurgeOutcome.Purged;
+    }
+
+    private async Task DeleteAsync(ItemRef item, Guid wsId, string name, List<StoredFile> files, List<Guid> folderIds, string reason, bool journal, CancellationToken ct)
+    {
         var fileIds = files.Select(f => f.Id).ToList();
         var versions = await db.FileVersions.Where(v => fileIds.Contains(v.FileId)).ToListAsync(ct);
         var bytes = versions.Sum(v => v.SizeBytes);
@@ -195,15 +232,21 @@ public sealed class TrashPurger(IAppDbContext db, IFileContentService content, Q
         await db.FolderColumnDefaults.Where(x => folderIds.Contains(x.FolderId)).ExecuteDeleteAsync(ct);
         await db.FileVersions.Where(v => fileIds.Contains(v.FileId)).ExecuteDeleteAsync(ct);
         await db.Files.Where(f => fileIds.Contains(f.Id)).ExecuteDeleteAsync(ct);
+        // Own ACLs kept with deleted items (to restore them) go with the items.
+        var nodeIds = fileIds.Concat(folderIds).ToList();
+        await db.ScopeGrants.Where(g => nodeIds.Contains(g.ScopeId)).ExecuteDeleteAsync(ct);
+        await db.AclEntries.Where(e => nodeIds.Contains(e.ScopeId)).ExecuteDeleteAsync(ct);
+        await db.AclScopes.Where(a => nodeIds.Contains(a.ScopeId)).ExecuteDeleteAsync(ct);
         // Shortcuts kept in the folders purged go with them (shortcuts to what is purged stay, shown as deleted).
         if (folderIds.Count > 0) await db.Shortcuts.Where(s => s.FolderId != null && folderIds.Contains(s.FolderId.Value)).ExecuteDeleteAsync(ct);
         if (folderIds.Count > 0) await db.Folders.Where(f => folderIds.Contains(f.Id)).ExecuteDeleteAsync(ct);
         // Bulk deletes bypass the change journal interceptor: record the purge of the trash root for desktop sync.
-        db.ChangeJournal.Add(new ChangeJournalEntry
-        {
-            WorkspaceId = wsId, ItemId = item.Id, ItemType = item.IsFile ? ChangeItemType.File : ChangeItemType.Folder, Op = ChangeOp.Purge, Name = name,
-            ModifiedAt = DateTime.UtcNow, OccurredAt = DateTime.UtcNow,
-        });
+        if (journal)
+            db.ChangeJournal.Add(new ChangeJournalEntry
+            {
+                WorkspaceId = wsId, ItemId = item.Id, ItemType = item.IsFile ? ChangeItemType.File : ChangeItemType.Folder, Op = ChangeOp.Purge, Name = name,
+                ModifiedAt = DateTime.UtcNow, OccurredAt = DateTime.UtcNow,
+            });
         await db.SaveChangesAsync(ct);
         await quota.AddUsageAsync(wsId, -bytes, ct);
 
@@ -238,8 +281,8 @@ public sealed class PurgeExpiredTrashHandler(IAppDbContext db, ISettingsService 
         var now = clock.GetUtcNow().UtcDateTime;
         var first = now.AddDays(-shortest);
         // Two queries: EF cannot translate Concat after projecting into a record constructor.
-        var files = await db.Files.Where(f => f.IsTrashRoot && f.IsDeleted && f.DeletedAt < first).Select(f => new { f.Id, f.WorkspaceId, f.DeletedAt }).ToListAsync(ct);
-        var folders = await db.Folders.Where(f => f.IsTrashRoot && f.IsDeleted && f.DeletedAt < first).Select(f => new { f.Id, f.WorkspaceId, f.DeletedAt }).ToListAsync(ct);
+        var files = await db.Files.Where(f => f.IsTrashRoot && f.IsDeleted && f.PreservedAt == null && f.DeletedAt < first).Select(f => new { f.Id, f.WorkspaceId, f.DeletedAt }).ToListAsync(ct);
+        var folders = await db.Folders.Where(f => f.IsTrashRoot && f.IsDeleted && f.PreservedAt == null && f.DeletedAt < first).Select(f => new { f.Id, f.WorkspaceId, f.DeletedAt }).ToListAsync(ct);
         bool Due(Guid ws, DateTime? at) => (own.TryGetValue(ws, out var d) ? d : days) is var keep && keep > 0 && at < now.AddDays(-keep);
         var items = files.Where(f => Due(f.WorkspaceId, f.DeletedAt)).Select(f => (Ref: new ItemRef("file", f.Id), f.WorkspaceId))
             .Concat(folders.Where(f => Due(f.WorkspaceId, f.DeletedAt)).Select(f => (Ref: new ItemRef("folder", f.Id), f.WorkspaceId))).ToList();

@@ -39,6 +39,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Shortcut> Shortcuts => Set<Shortcut>();
     public DbSet<LibrarySettings> LibrarySettings => Set<LibrarySettings>();
     public DbSet<SensitivityLabel> SensitivityLabels => Set<SensitivityLabel>();
+    public DbSet<RetentionPolicy> RetentionPolicies => Set<RetentionPolicy>();
+    public DbSet<LegalHold> LegalHolds => Set<LegalHold>();
     public DbSet<LibraryColumn> LibraryColumns => Set<LibraryColumn>();
     public DbSet<FileColumnValue> FileColumnValues => Set<FileColumnValue>();
     public DbSet<FolderColumnDefault> FolderColumnDefaults => Set<FolderColumnDefault>();
@@ -270,6 +272,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Name).HasMaxLength(100);
             e.Property(x => x.Color).HasMaxLength(16);
             e.Property(x => x.Description).HasMaxLength(1000);
+        });
+        b.Entity<RetentionPolicy>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.Description).HasMaxLength(1000);
+            e.HasIndex(x => new { x.ScopeKind, x.ScopeId });
+        });
+        b.Entity<LegalHold>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(200);
+            e.Property(x => x.Reason).HasMaxLength(1000);
+            e.Property(x => x.ReleaseReason).HasMaxLength(1000);
+            e.HasIndex(x => x.ReleasedAt);
         });
         b.Entity<LibraryColumn>(e =>
         {

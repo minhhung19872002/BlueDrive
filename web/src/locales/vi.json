@@ -68,7 +68,8 @@
     "sharedByMe": "Tôi đã chia sẻ",
     "storage": "Bộ nhớ",
     "adminDevices": "Thiết bị đồng bộ",
-    "labels": "Nhãn phân loại"
+    "labels": "Nhãn phân loại",
+    "retention": "Lưu giữ & giữ pháp lý"
   },
   "header": {
     "searchPlaceholder": "Tìm kiếm tài liệu, thư mục...",
@@ -1578,5 +1579,91 @@
       "watermark": "Hiện watermark khi xem",
       "blockSync": "Không đồng bộ xuống máy"
     }
+  },
+  "retention": {
+    "description": "Chính sách lưu giữ giữ tư liệu trong một thời gian; giữ pháp lý khóa xóa vĩnh viễn (kể cả quản trị) cho đến khi gỡ.",
+    "tabs": {
+      "policies": "Chính sách lưu giữ",
+      "holds": "Giữ pháp lý",
+      "preserved": "Kho lưu giữ",
+      "review": "Chờ duyệt xóa"
+    },
+    "newPolicy": "Thêm chính sách",
+    "editPolicy": "Sửa chính sách",
+    "policySaved": "Đã lưu chính sách lưu giữ",
+    "policyDeleted": "Đã xóa chính sách",
+    "deletePolicyConfirm": "Xóa chính sách \"{{name}}\"? Tư liệu đã ở kho lưu giữ vẫn ở đó cho đến khi được xử lý.",
+    "noPolicies": "Chưa có chính sách lưu giữ",
+    "name": "Tên",
+    "scope": "Phạm vi",
+    "scopeKind": "Áp dụng cho",
+    "duration": "Thời gian",
+    "yearsFrom": "{{years}} năm kể từ {{basis}}",
+    "years": "Số năm lưu giữ",
+    "basisLabel": "Tính từ",
+    "basis": {
+      "created": "ngày tạo",
+      "modified": "ngày sửa cuối"
+    },
+    "onExpiry": "Khi hết hạn",
+    "expiry": {
+      "none": "Không làm gì",
+      "review": "Đưa vào danh sách chờ xóa (có duyệt)",
+      "delete": "Tự chuyển vào thùng rác"
+    },
+    "scopeKinds": {
+      "workspace": "Một Space",
+      "library": "Một thư viện",
+      "label": "Một nhãn phân loại",
+      "catalog": "Một loại nội dung (danh mục)"
+    },
+    "space": "Space / Drive",
+    "pickSpace": "Tìm Space",
+    "library": "Thư viện",
+    "catalog": "Danh mục",
+    "catalogItem": "Giá trị danh mục",
+    "scopeRequired": "Chọn phạm vi áp dụng",
+    "newHold": "Đặt giữ pháp lý",
+    "placeHold": "Đặt giữ",
+    "holdCreated": "Đã đặt giữ pháp lý",
+    "holdReleased": "Đã gỡ giữ pháp lý",
+    "holdNotice": "Trong phạm vi giữ pháp lý, mọi tệp và phiên bản không bị xóa vĩnh viễn — kể cả bởi quản trị — cho đến khi gỡ. Thao tác được ghi nhật ký.",
+    "holdScopes": {
+      "workspace": "Một Space / Drive",
+      "folder": "Một thư mục",
+      "user": "Toàn bộ tệp của một người dùng"
+    },
+    "folder": "Thư mục",
+    "user": "Người dùng",
+    "reason": "Lý do",
+    "placedBy": "Người đặt",
+    "status": "Trạng thái",
+    "holdActive": "Đang hiệu lực",
+    "releasedAt": "Đã gỡ {{at}} bởi {{by}}",
+    "release": "Gỡ giữ",
+    "releaseTitle": "Gỡ giữ pháp lý \"{{name}}\"",
+    "releaseReason": "Lý do gỡ (bắt buộc)",
+    "showReleased": "Hiện cả giữ đã gỡ",
+    "noHolds": "Không có giữ pháp lý",
+    "preservedHint": "Tư liệu người dùng xóa vĩnh viễn trong thời gian lưu giữ được chuyển vào đây (người dùng không thấy). Hết hạn và không bị giữ thì mới xóa vĩnh viễn được.",
+    "noPreserved": "Kho lưu giữ trống",
+    "item": "Tư liệu",
+    "deleted": "Người xóa / lúc",
+    "keptBy": "Được giữ bởi",
+    "heldBy": "Giữ pháp lý \"{{name}}\"",
+    "keptUntil": "\"{{name}}\" đến {{at}}",
+    "expired": "Đã hết hạn lưu giữ",
+    "toTrash": "Trả về thùng rác",
+    "backToTrash": "Đã trả về thùng rác",
+    "purge": "Xóa vĩnh viễn",
+    "purged": "Đã xóa vĩnh viễn",
+    "purgeConfirm": "Xóa vĩnh viễn \"{{name}}\"? Không thể hoàn tác.",
+    "reviewHint": "Tệp đã hết thời gian lưu giữ theo chính sách \"chờ xóa có duyệt\". Duyệt để chuyển vào thùng rác.",
+    "approve": "Duyệt xóa",
+    "approveConfirm": "Chuyển {{count}} tệp vào thùng rác?",
+    "approved": "Đã chuyển {{count}} tệp vào thùng rác",
+    "noReview": "Không có tệp chờ duyệt xóa",
+    "policy": "Chính sách",
+    "expiredAt": "Hết hạn lúc"
   }
 }

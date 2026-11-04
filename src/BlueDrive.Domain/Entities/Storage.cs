@@ -108,6 +108,8 @@ public class Folder : AuditableEntity, ISoftDeletable
     public Guid? OriginalParentId { get; set; }
     /// <summary>True when the folder itself was deleted (not as a descendant of a deleted folder).</summary>
     public bool IsTrashRoot { get; set; }
+    /// <summary>Purged while kept by a retention policy: in the preservation store (spec 7.2), hidden from the trash.</summary>
+    public DateTime? PreservedAt { get; set; }
     /// <summary>Incremented on every change recorded in the change journal; the sync ETag.</summary>
     public long Revision { get; set; } = 1;
 }
@@ -156,6 +158,8 @@ public class StoredFile : AuditableEntity, ISoftDeletable
     public Guid? DeletedBy { get; set; }
     public Guid? OriginalFolderId { get; set; }
     public bool IsTrashRoot { get; set; }
+    /// <summary>Purged while kept by a retention policy: in the preservation store (spec 7.2), hidden from the trash.</summary>
+    public DateTime? PreservedAt { get; set; }
     /// <summary>Incremented on every change recorded in the change journal; the sync ETag.</summary>
     public long Revision { get; set; } = 1;
     public List<FileVersion> Versions { get; set; } = [];
@@ -437,4 +441,36 @@ public class SavedSearch : Entity
     public string Name { get; set; } = "";
     public string QueryJson { get; set; } = "{}";
     public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>Spec 7.2: keeps what it covers N years (from creation or last change); what is deleted meanwhile goes to the preservation store.</summary>
+public class RetentionPolicy : Entity
+{
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
+    public RetentionScope ScopeKind { get; set; }
+    /// <summary>Space, library, label or catalog item.</summary>
+    public Guid ScopeId { get; set; }
+    /// <summary>The Space of a library.</summary>
+    public Guid? WorkspaceId { get; set; }
+    public int Years { get; set; }
+    public RetentionBasis Basis { get; set; }
+    public RetentionExpiry OnExpiry { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTime CreatedAt { get; set; }
+    public Guid? CreatedBy { get; set; }
+}
+
+/// <summary>Spec 7.3: nothing it covers is purged — not even by an administrator — until it is released.</summary>
+public class LegalHold : Entity
+{
+    public string Name { get; set; } = "";
+    public string Reason { get; set; } = "";
+    public HoldScope ScopeKind { get; set; }
+    public Guid ScopeId { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public Guid? CreatedBy { get; set; }
+    public DateTime? ReleasedAt { get; set; }
+    public Guid? ReleasedBy { get; set; }
+    public string? ReleaseReason { get; set; }
 }

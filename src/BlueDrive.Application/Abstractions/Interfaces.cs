@@ -53,6 +53,8 @@ public interface IAppDbContext
     DbSet<Shortcut> Shortcuts { get; }
     DbSet<LibrarySettings> LibrarySettings { get; }
     DbSet<SensitivityLabel> SensitivityLabels { get; }
+    DbSet<RetentionPolicy> RetentionPolicies { get; }
+    DbSet<LegalHold> LegalHolds { get; }
     DbSet<LibraryColumn> LibraryColumns { get; }
     DbSet<FileColumnValue> FileColumnValues { get; }
     DbSet<FolderColumnDefault> FolderColumnDefaults { get; }

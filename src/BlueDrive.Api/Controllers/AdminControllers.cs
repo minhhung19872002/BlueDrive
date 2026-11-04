@@ -509,3 +509,68 @@ public class NotificationsController : ApiControllerBase
     [HttpPost("mark-read")]
     public async Task<IActionResult> MarkRead([FromBody] IReadOnlyList<Guid>? ids) => Ok(new { updated = await Mediator.Send(new MarkNotificationsReadCommand(ids)) });
 }
+
+/// <summary>Chính sách lưu giữ, kho lưu giữ, danh sách chờ duyệt xóa (đặc tả 7.2).</summary>
+[Route("api/v1/admin/retention")]
+public class RetentionController : ApiControllerBase
+{
+    [HttpGet("policies")]
+    public Task<IReadOnlyList<Application.Features.Retention.RetentionPolicyDto>> Policies() => Mediator.Send(new Application.Features.Retention.ListRetentionPoliciesQuery());
+
+    [HttpPost("policies")]
+    public async Task<IActionResult> Create(Application.Features.Retention.SaveRetentionPolicyCommand cmd) => Ok(new { id = await Mediator.Send(cmd with { Id = null }) });
+
+    [HttpPut("policies/{id:guid}")]
+    public async Task<IActionResult> Save(Guid id, Application.Features.Retention.SaveRetentionPolicyCommand cmd)
+    {
+        await Mediator.Send(cmd with { Id = id });
+        return NoContent();
+    }
+
+    [HttpDelete("policies/{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        await Mediator.Send(new Application.Features.Retention.DeleteRetentionPolicyCommand(id));
+        return NoContent();
+    }
+
+    [HttpGet("preserved")]
+    public Task<PagedResult<Application.Features.Retention.PreservedItemDto>> Preserved([FromQuery] Application.Features.Retention.ListPreservedQuery query) => Mediator.Send(query);
+
+    [HttpPost("preserved/release")]
+    public async Task<IActionResult> Release(Application.Features.Retention.ReleasePreservedCommand cmd) => Ok(new { released = await Mediator.Send(cmd) });
+
+    [HttpPost("preserved/purge")]
+    public async Task<IActionResult> Purge(Application.Features.Retention.PurgePreservedCommand cmd) => Ok(new { purged = await Mediator.Send(cmd) });
+
+    [HttpGet("review")]
+    public Task<IReadOnlyList<Application.Features.Retention.ReviewItemDto>> Review() => Mediator.Send(new Application.Features.Retention.ListRetentionReviewQuery());
+
+    [HttpPost("review/approve")]
+    public async Task<IActionResult> Approve(Application.Features.Retention.ApproveRetentionDeleteCommand cmd) => Ok(new { deleted = await Mediator.Send(cmd) });
+}
+
+/// <summary>Giữ pháp lý (đặc tả 7.3): không gì trong phạm vi bị xóa vĩnh viễn, kể cả bởi quản trị, cho đến khi gỡ.</summary>
+[Route("api/v1/admin/holds")]
+public class LegalHoldsController : ApiControllerBase
+{
+    [HttpGet]
+    public Task<IReadOnlyList<Application.Features.Retention.LegalHoldDto>> List([FromQuery] bool includeReleased = false) =>
+        Mediator.Send(new Application.Features.Retention.ListLegalHoldsQuery(includeReleased));
+
+    [HttpPost]
+    public async Task<IActionResult> Create(Application.Features.Retention.CreateLegalHoldCommand cmd) => Ok(new { id = await Mediator.Send(cmd) });
+
+    [HttpPost("{id:guid}/release")]
+    public async Task<IActionResult> Release(Guid id, ReleaseHoldBody body)
+    {
+        await Mediator.Send(new Application.Features.Retention.ReleaseLegalHoldCommand(id, body.Reason));
+        return NoContent();
+    }
+
+    [HttpGet("folders")]
+    public Task<IReadOnlyList<Application.Features.Retention.HoldFolderDto>> Folders([FromQuery] Guid workspaceId) =>
+        Mediator.Send(new Application.Features.Retention.ListHoldFoldersQuery(workspaceId));
+
+    public sealed record ReleaseHoldBody(string Reason);
+}

@@ -181,7 +181,8 @@ public sealed class SaveWorkspaceHandler(IAppDbContext db, ICurrentUser me, IPer
 
 public sealed record DeleteWorkspaceCommand(Guid Id) : IRequest<Unit>;
 
-public sealed class DeleteWorkspaceHandler(IAppDbContext db, ICurrentUser me, IPermissionService perms, IAuditLogger audit, TimeProvider clock) : IRequestHandler<DeleteWorkspaceCommand, Unit>
+public sealed class DeleteWorkspaceHandler(IAppDbContext db, ICurrentUser me, IPermissionService perms, IAuditLogger audit, TimeProvider clock, Retention.RetentionService retention)
+    : IRequestHandler<DeleteWorkspaceCommand, Unit>
 {
     public async Task<Unit> Handle(DeleteWorkspaceCommand cmd, CancellationToken ct)
     {
@@ -190,6 +191,8 @@ public sealed class DeleteWorkspaceHandler(IAppDbContext db, ICurrentUser me, IP
         if (ws.Type == WorkspaceType.Personal) throw new AppException("Không thể xóa không gian cá nhân.");
         if (ws.OwnerId != uid && !await perms.HasAsync(uid, Perm.WorkspaceDelete, ct)) throw new ForbiddenException("Chỉ trưởng nhóm hoặc quản trị viên được xóa nhóm tài nguyên.");
         if (ws.Status == SpaceStatus.Deleted) throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
+        // Spec 6: a Space under a retention policy or a legal hold cannot be deleted.
+        if (await retention.WorkspaceBlockAsync(ws.Id, ct) is { } block) throw new ConflictException($"Không xóa được Space: đang có {block}.");
         // To the system trash (spec 6): nobody opens it any more; administrators restore it within 93 days, then it is purged.
         ws.Status = SpaceStatus.Deleted;
         ws.StatusChangedAt = clock.GetUtcNow().UtcDateTime;

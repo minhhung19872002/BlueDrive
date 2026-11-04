@@ -41,6 +41,7 @@ public static class DependencyInjection
         services.AddSingleton<Features.Office.OfficeEditingTracker>();
         services.AddSingleton<Features.Auth.LoginIpGuard>();
         services.AddScoped<Features.Storage.TrashPurger>();
+        services.AddScoped<Features.Retention.RetentionService>();
         services.AddScoped<Features.Sync.SyncPolicyService>();
         services.AddScoped<Features.Sync.SyncAccessContext>();
         services.AddSingleton<Features.Storage.IContentTicketService, Features.Storage.ContentTicketService>();

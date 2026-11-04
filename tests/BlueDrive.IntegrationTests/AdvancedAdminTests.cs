@@ -99,4 +99,55 @@ public class AdvancedAdminTests(ApiFactory factory)
         var audit = await (await admin.PostAsJsonAsync("/api/v1/audit-logs/search?pageSize=50", new { actions = new[] { "label_changed" }, workspaceId = ws })).ReadJsonAsync();
         audit.GetProperty("items").EnumerateArray().Should().Contain(a => a.GetProperty("resourceId").GetGuid() == folder);
     }
+
+    [Fact]
+    public async Task A_hold_blocks_every_purge_and_retention_preserves_what_users_purge()
+    {
+        var admin = await factory.AdminClientAsync();
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        (await owner.GetAsync("/api/v1/admin/holds")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var labels = (await (await owner.GetAsync("/api/v1/labels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("name").GetString()!, l => l.GetProperty("id").GetGuid());
+        var ws = (await (await owner.PostAsJsonAsync("/api/v1/workspaces", new { name = "Space lưu giữ", type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var folder = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Hồ sơ vụ việc" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var inFolder = (await StorageTests.UploadAsync(owner, ws, folder, "giu.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var kept = (await StorageTests.UploadAsync(owner, ws, null, "luu.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var free = (await StorageTests.UploadAsync(owner, ws, null, "tu-do.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        (await owner.PutAsJsonAsync($"/api/v1/items/{kept}/label", new { labelId = labels["Hạn chế"] })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var hold = (await (await admin.PostAsJsonAsync("/api/v1/admin/holds", new { name = "Vụ việc A", reason = "Thanh tra", scopeKind = "folder", scopeId = folder }))
+            .ReadJsonAsync()).GetProperty("id").GetGuid();
+        var policy = (await (await admin.PostAsJsonAsync("/api/v1/admin/retention/policies", new
+        {
+            name = "Hồ sơ hạn chế 10 năm", scopeKind = "label", scopeId = labels["Hạn chế"], years = 10, basis = "created", onExpiry = "none",
+        })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        (await owner.DeleteAsync($"/api/v1/workspaces/{ws}")).StatusCode.Should().Be(HttpStatusCode.Conflict, "a hold covers a folder of the Space");
+
+        (await owner.PostAsJsonAsync("/api/v1/items/delete", new { items = new object[] { new { type = "folder", id = folder }, new { type = "file", id = kept }, new { type = "file", id = free } } }))
+            .IsSuccessStatusCode.Should().BeTrue();
+        // Held: refused, whoever asks.
+        (await owner.PostAsJsonAsync("/api/v1/trash/purge", new[] { new { type = "folder", id = folder } })).StatusCode.Should().Be(HttpStatusCode.Conflict);
+        // Retained: the user's purge works for them, the file goes to the preservation store; the other is purged for real.
+        (await owner.PostAsJsonAsync("/api/v1/trash/purge", new[] { new { type = "file", id = kept }, new { type = "file", id = free } })).IsSuccessStatusCode.Should().BeTrue();
+        var trash = await (await owner.GetAsync($"/api/v1/workspaces/{ws}/trash")).ReadJsonAsync();
+        trash.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()).Should().BeEquivalentTo([folder]);
+        var preserved = await (await admin.GetAsync("/api/v1/admin/retention/preserved?pageSize=100")).ReadJsonAsync();
+        var row = preserved.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("id").GetGuid() == kept);
+        row.GetProperty("policyName").GetString().Should().Be("Hồ sơ hạn chế 10 năm");
+        preserved.GetProperty("items").EnumerateArray().Should().NotContain(i => i.GetProperty("id").GetGuid() == free);
+        (await admin.PostAsJsonAsync("/api/v1/admin/retention/preserved/purge", new { items = new[] { new { type = "file", id = kept } } }))
+            .StatusCode.Should().Be(HttpStatusCode.Conflict, "still retained");
+
+        // Released: the folder can go; the preserved file goes back to the trash.
+        (await admin.PostAsJsonAsync($"/api/v1/admin/holds/{hold}/release", new { reason = "" })).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await admin.PostAsJsonAsync($"/api/v1/admin/holds/{hold}/release", new { reason = "Kết thúc thanh tra" })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await owner.PostAsJsonAsync("/api/v1/trash/purge", new[] { new { type = "folder", id = folder } })).IsSuccessStatusCode.Should().BeTrue();
+        (await owner.GetAsync($"/api/v1/files/{inFolder}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await admin.PostAsJsonAsync("/api/v1/admin/retention/preserved/release", new { items = new[] { new { type = "file", id = kept } } })).IsSuccessStatusCode.Should().BeTrue();
+        trash = await (await owner.GetAsync($"/api/v1/workspaces/{ws}/trash")).ReadJsonAsync();
+        trash.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()).Should().BeEquivalentTo([kept]);
+        (await admin.DeleteAsync($"/api/v1/admin/retention/policies/{policy}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        var audit = await (await admin.PostAsJsonAsync("/api/v1/audit-logs/search?pageSize=50", new { actions = new[] { "hold_applied", "hold_removed" } })).ReadJsonAsync();
+        audit.GetProperty("items").EnumerateArray().Select(a => a.GetProperty("action").GetString()).Should().Contain(["hold_applied", "hold_removed"]);
+    }
 }

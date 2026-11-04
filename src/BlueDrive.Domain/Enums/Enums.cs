@@ -64,3 +64,15 @@ public enum IncidentStatus { Reported, Investigating, Containing, Recovering, Re
 
 /// <summary>System announcement banner style (5.2).</summary>
 public enum AnnouncementLevel { Info, Warning, Maintenance }
+
+/// <summary>Spec 7.2: what a retention policy covers.</summary>
+public enum RetentionScope { Workspace, Library, Label, Catalog }
+
+/// <summary>Spec 7.2: retention counted from the creation or the last change.</summary>
+public enum RetentionBasis { Created, Modified }
+
+/// <summary>Spec 7.2: when retention ends — nothing, a review list, or deletion.</summary>
+public enum RetentionExpiry { None, Review, Delete }
+
+/// <summary>Spec 7.3: what a legal hold covers.</summary>
+public enum HoldScope { Workspace, Folder, User }

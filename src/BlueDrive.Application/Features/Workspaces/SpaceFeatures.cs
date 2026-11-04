@@ -83,7 +83,7 @@ public sealed record PurgeSpaceCommand(Guid WorkspaceId) : IRequest<Unit>;
 public sealed record PurgeExpiredSpacesCommand : IRequest<int>;
 
 public sealed class SpaceHandlers(IAppDbContext db, ICurrentUser me, IItemPermissionService engine, IPermissionService perms, IAuditLogger audit, TrashPurger purger,
-    TimeProvider clock)
+    TimeProvider clock, Retention.RetentionService retention)
     : IRequestHandler<ListSpaceTemplatesQuery, IReadOnlyList<SpaceTemplate>>, IRequestHandler<ListSpaceGroupMembersQuery, IReadOnlyList<SpaceGroupMemberDto>>,
       IRequestHandler<AddSpaceGroupMembersCommand, int>, IRequestHandler<RemoveSpaceGroupMemberCommand, Unit>, IRequestHandler<SetSpaceStatusCommand, Unit>,
       IRequestHandler<GetSpaceSettingsQuery, SpaceSettingsDto>, IRequestHandler<SetSpaceSettingsCommand, Unit>,
@@ -218,6 +218,7 @@ public sealed class SpaceHandlers(IAppDbContext db, ICurrentUser me, IItemPermis
         if (!await perms.HasAsync(me.RequireUserId(), Perm.WorkspaceAdmin, ct)) throw new ForbiddenException();
         var ws = await SpaceAsync(cmd.WorkspaceId, ct);
         if (ws.Status != SpaceStatus.Deleted) throw new AppException("Chỉ xóa vĩnh viễn được Space đang ở trong thùng rác.");
+        if (await retention.WorkspaceBlockAsync(ws.Id, ct) is { } block) throw new ConflictException($"Không xóa vĩnh viễn được Space: đang có {block}.");
         await PurgeAsync(ws, "manual", ct);
         return Unit.Value;
     }
@@ -226,8 +227,14 @@ public sealed class SpaceHandlers(IAppDbContext db, ICurrentUser me, IItemPermis
     {
         var cutoff = clock.GetUtcNow().UtcDateTime - TrashLife;
         var spaces = await db.Workspaces.Where(w => w.Status == SpaceStatus.Deleted && w.StatusChangedAt < cutoff).ToListAsync(ct);
-        foreach (var ws in spaces) await PurgeAsync(ws, "auto_93_days", ct);
-        return spaces.Count;
+        var count = 0;
+        foreach (var ws in spaces)
+            if (await retention.WorkspaceBlockAsync(ws.Id, ct) is null)
+            {
+                await PurgeAsync(ws, "auto_93_days", ct);
+                count++;
+            }
+        return count;
     }
 
     /// <summary>Everything in the Space goes for good (contents, versions, sharing), then the Space itself.</summary>

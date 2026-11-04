@@ -16,7 +16,7 @@ namespace BlueDrive.Application.Features.Libraries;
 /// Document libraries (spec 1.4): which library a place belongs to, and what its settings make of versions — major only (1, 2, 3…) or major
 /// and minor (0.1, 0.2 → "Xuất bản" 1.0): a minor version is a draft that only people allowed to see drafts get; limits of versions kept.
 /// </summary>
-public sealed class Libraries(IAppDbContext db, IFileContentService content, QuotaService quota, TimeProvider clock)
+public sealed class Libraries(IAppDbContext db, IFileContentService content, QuotaService quota, TimeProvider clock, Retention.RetentionService retention)
 {
     /// <summary>The library of a place: the top folder when it is a library of its own, otherwise the Space's default library.</summary>
     public async Task<LibrarySettings> ForAsync(Guid workspaceId, Guid? folderId, CancellationToken ct)
@@ -82,6 +82,8 @@ public sealed class Libraries(IAppDbContext db, IFileContentService content, Quo
     /// </summary>
     public async Task<int> PruneAsync(StoredFile file, CancellationToken ct)
     {
+        // Spec 7.2–7.3: versions of what is held or retained are kept.
+        if (await retention.ForFileAsync(file.Id, ct) is not null) return 0;
         var library = await ForAsync(file.WorkspaceId, file.FolderId, ct);
         var versions = await db.FileVersions.Where(v => v.FileId == file.Id).OrderByDescending(v => v.VersionNo).ToListAsync(ct);
         var keep = new HashSet<Guid> { file.CurrentVersionId ?? Guid.Empty, file.PublishedVersionId ?? Guid.Empty };
