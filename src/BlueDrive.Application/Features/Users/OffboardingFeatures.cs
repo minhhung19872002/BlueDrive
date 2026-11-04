@@ -124,7 +124,14 @@ public sealed class OffboardingHandlers(IAppDbContext db, ICurrentUser me, IPerm
         // 2. The links the user made: kept or revoked.
         var userLinks = await db.ShareLinks.Where(l => l.CreatedBy == user.Id && !l.IsRevoked && (l.ExpiresAt == null || l.ExpiresAt > now)).ToListAsync(ct);
         if (cmd.RevokeLinks)
-            foreach (var l in userLinks) await links.RevokeAsync(l, ct);
+        {
+            foreach (var l in userLinks)
+            {
+                l.IsRevoked = true;
+                await links.RevokeAsync(l, ct);
+            }
+            await db.SaveChangesAsync(ct);
+        }
         lines.Add(new("Liên kết chia sẻ", userLinks.Count == 0 ? "Không có liên kết đang hiệu lực."
             : cmd.RevokeLinks ? $"Đã thu hồi {userLinks.Count} liên kết." : $"Giữ {userLinks.Count} liên kết (vẫn hoạt động)."));
 

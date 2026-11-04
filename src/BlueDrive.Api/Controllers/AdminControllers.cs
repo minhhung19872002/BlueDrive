@@ -618,3 +618,40 @@ public class EmergencyAccessController : ApiControllerBase
         return NoContent();
     }
 }
+
+/// <summary>Báo cáo quyền truy cập (đặc tả 8.4): quản trị toàn hệ thống, Quản lý Space trong Space của mình.</summary>
+[Route("api/v1/admin/reports")]
+public class AccessReportsController : ApiControllerBase
+{
+    [HttpGet("items")]
+    public Task<IReadOnlyList<Application.Features.Access.ReportItemDto>> Items([FromQuery] Guid? workspaceId, [FromQuery] string? query) =>
+        Mediator.Send(new Application.Features.Access.SearchReportItemsQuery(workspaceId, query));
+
+    [HttpGet("{kind}")]
+    public Task<Application.Features.Access.AccessReportDto> Run(string kind, [FromQuery] Guid? workspaceId, [FromQuery] Guid? userId, [FromQuery] Guid? groupId,
+        [FromQuery] Guid? itemId, [FromQuery] int days = 30) =>
+        Mediator.Send(new Application.Features.Access.RunAccessReportQuery(kind, workspaceId, userId, groupId, itemId, days));
+
+    [HttpGet("{kind}/export")]
+    public async Task<IActionResult> Export(string kind, [FromQuery] Guid? workspaceId, [FromQuery] Guid? userId, [FromQuery] Guid? groupId, [FromQuery] Guid? itemId,
+        [FromQuery] int days = 30, [FromQuery] string format = "xlsx")
+    {
+        var file = await Mediator.Send(new Application.Features.Access.ExportAccessReportQuery(
+            new Application.Features.Access.RunAccessReportQuery(kind, workspaceId, userId, groupId, itemId, days), format));
+        return File(file.Content, file.ContentType, file.FileName);
+    }
+}
+
+/// <summary>Thao tác hàng loạt trên quyền (đặc tả 8.4).</summary>
+[Route("api/v1/admin/bulk")]
+public class BulkPermissionsController : ApiControllerBase
+{
+    [HttpPost("revoke-anyone-links")]
+    public Task<Application.Features.Access.BulkResultDto> RevokeAnyoneLinks(Application.Features.Access.BulkRevokeAnyoneLinksCommand cmd) => Mediator.Send(cmd);
+
+    [HttpPost("remove-user-permissions")]
+    public Task<Application.Features.Access.BulkResultDto> RemoveUser(Application.Features.Access.BulkRemovePrincipalCommand cmd) => Mediator.Send(cmd);
+
+    [HttpPost("delete-inactive-guests")]
+    public Task<Application.Features.Access.BulkResultDto> DeleteGuests(Application.Features.Access.BulkDeleteInactiveGuestsCommand cmd) => Mediator.Send(cmd);
+}

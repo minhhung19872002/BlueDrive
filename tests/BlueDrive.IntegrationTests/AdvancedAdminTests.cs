@@ -305,4 +305,55 @@ public class AdvancedAdminTests(ApiFactory factory)
         (await admin.PostAsync($"/api/v1/admin/emergency-access/{id}/end", null)).StatusCode.Should().Be(HttpStatusCode.NoContent);
         (await admin.GetAsync($"/api/v1/files/{file}")).IsSuccessStatusCode.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task Access_reports_explain_list_and_export_and_bulk_operations_clean_up()
+    {
+        var admin = await factory.AdminClientAsync();
+        var (owner, ownerId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (reader, readerId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = (await (await owner.PostAsJsonAsync("/api/v1/workspaces", new { name = "Space báo cáo", type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var folder = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Báo cáo riêng" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var file = (await StorageTests.UploadAsync(owner, ws, folder, "so-lieu.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+        await (await owner.PostAsJsonAsync($"/api/v1/items/{folder}/permissions", new
+        {
+            targets = new[] { new { kind = "user", id = readerId } }, levelId = levels["viewer"], notify = false, expiresAt = DateTime.UtcNow.AddDays(3),
+        })).ReadJsonAsync();
+        await (await owner.PostAsJsonAsync("/api/v1/share-links", new { resourceType = "file", resourceId = file, scope = "anyone", levelId = levels["viewer"], allowDownload = true, expiresAt = DateTime.UtcNow.AddDays(5) }))
+            .ReadJsonAsync();
+
+        // Who may read them: administrators, and the Space's managers for their Space only.
+        (await reader.GetAsync($"/api/v1/admin/reports/links")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await owner.GetAsync($"/api/v1/admin/reports/links")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await owner.GetAsync($"/api/v1/admin/reports/links?workspaceId={ws}")).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var check = await (await admin.GetAsync($"/api/v1/admin/reports/check?userId={readerId}&itemId={file}")).ReadJsonAsync();
+        check.GetProperty("summary").GetString().Should().Contain("Báo cáo riêng");
+        check.GetProperty("rows").GetArrayLength().Should().BeGreaterThan(0);
+        var access = await (await admin.GetAsync($"/api/v1/admin/reports/user-access?userId={readerId}")).ReadJsonAsync();
+        access.GetProperty("rows").EnumerateArray().Should().Contain(r => r.GetProperty("itemId").GetGuid() == folder);
+        var external = await (await owner.GetAsync($"/api/v1/admin/reports/external?workspaceId={ws}")).ReadJsonAsync();
+        external.GetProperty("rows").EnumerateArray().Should().Contain(r => r.GetProperty("itemId").GetGuid() == file);
+        var unique = await (await owner.GetAsync($"/api/v1/admin/reports/unique?workspaceId={ws}")).ReadJsonAsync();
+        unique.GetProperty("rows").EnumerateArray().Should().Contain(r => r.GetProperty("itemId").GetGuid() == folder);
+        var expiring = await (await owner.GetAsync($"/api/v1/admin/reports/expiring?workspaceId={ws}&days=7")).ReadJsonAsync();
+        expiring.GetProperty("rows").GetArrayLength().Should().Be(2, "the grant and the link end within a week");
+        var pdf = await owner.GetAsync($"/api/v1/admin/reports/links/export?workspaceId={ws}&format=pdf");
+        pdf.StatusCode.Should().Be(HttpStatusCode.OK);
+        pdf.Content.Headers.ContentType!.MediaType.Should().Be("application/pdf");
+        (await (await admin.GetAsync($"/api/v1/admin/reports/items?workspaceId={ws}&query=so-lieu")).ReadJsonAsync()).EnumerateArray()
+            .Should().Contain(i => i.GetProperty("id").GetGuid() == file);
+
+        // Bulk: the Space's "Bất kỳ ai" links go; the reader loses every grant.
+        (await owner.PostAsJsonAsync("/api/v1/admin/bulk/remove-user-permissions", new { userId = readerId })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var revoked = await (await admin.PostAsJsonAsync("/api/v1/admin/bulk/revoke-anyone-links", new { workspaceId = ws })).ReadJsonAsync();
+        revoked.GetProperty("count").GetInt32().Should().Be(1);
+        (await (await owner.GetAsync($"/api/v1/admin/reports/external?workspaceId={ws}")).ReadJsonAsync()).GetProperty("rows").GetArrayLength().Should().Be(0);
+        (await reader.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        var removed = await (await admin.PostAsJsonAsync("/api/v1/admin/bulk/remove-user-permissions", new { userId = readerId })).ReadJsonAsync();
+        removed.GetProperty("count").GetInt32().Should().BeGreaterThan(0);
+        (await reader.GetAsync($"/api/v1/files/{file}")).IsSuccessStatusCode.Should().BeFalse();
+        (await admin.PostAsJsonAsync("/api/v1/admin/bulk/delete-inactive-guests", new { days = 0 })).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
 }

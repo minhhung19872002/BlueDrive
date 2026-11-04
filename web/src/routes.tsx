@@ -58,6 +58,7 @@ const layoutRoutes: AppRoute[] = [
   { path: 'admin/dashboard', perm: 'dashboard.view', Component: lazy(() => import('@/pages/admin/AdminDashboardPage')) },
   { path: 'admin/organizations', perm: 'org.view', Component: lazy(() => import('@/pages/admin/organizations/OrganizationsPage')) },
   { path: 'admin/access-levels', perm: 'role.view', Component: lazy(() => import('@/pages/admin/AccessLevelsPage')) },
+  { path: 'admin/access-reports', Component: lazy(() => import('@/pages/admin/AccessReportsPage')) },
   { path: 'admin/offboarding', perm: 'user.admin', Component: lazy(() => import('@/pages/admin/OffboardingPage')) },
   { path: 'admin/emergency-access', perm: 'emergency.admin', Component: lazy(() => import('@/pages/admin/EmergencyAccessPage')) },
   { path: 'admin/retention', perm: 'retention.view', Component: lazy(() => import('@/pages/admin/RetentionPage')) },

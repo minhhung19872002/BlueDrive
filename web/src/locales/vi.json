@@ -71,7 +71,8 @@
     "labels": "Nhãn phân loại",
     "retention": "Lưu giữ & giữ pháp lý",
     "offboarding": "Nghỉ việc / chuyển đơn vị",
-    "emergencyAccess": "Truy cập khẩn cấp"
+    "emergencyAccess": "Truy cập khẩn cấp",
+    "accessReports": "Báo cáo quyền truy cập"
   },
   "header": {
     "searchPlaceholder": "Tìm kiếm tài liệu, thư mục...",
@@ -1742,5 +1743,48 @@
     "investigation": "Điều tra (không thông báo)",
     "investigationHint": "Cần quyền Điều tra; vẫn được ghi nhật ký.",
     "empty": "Chưa có lượt truy cập khẩn cấp nào"
+  },
+  "accessReports": {
+    "description": "Ai truy cập được gì, chia sẻ ra ngoài, liên kết, quyền riêng, quyền sắp hết hạn; xuất Excel / PDF. Quản lý Space xem được báo cáo trong Space của mình.",
+    "kinds": {
+      "check": "Kiểm tra quyền",
+      "user-access": "Người này truy cập được gì?",
+      "external": "Chia sẻ ra ngoài",
+      "links": "Liên kết",
+      "unique": "Quyền riêng",
+      "expiring": "Sắp / đã hết hạn"
+    },
+    "hints": {
+      "check": "Chọn tư liệu và người dùng (hoặc nhóm): quyền hiệu lực và giải thích từng nguồn quyền.",
+      "user-access": "Mọi Space, thư mục, tệp người dùng được cấp quyền (trực tiếp, qua nhóm, đơn vị, nhóm Space), kèm cấp quyền và nguồn.",
+      "external": "Tư liệu chia sẻ cho khách bên ngoài hoặc qua liên kết \"Bất kỳ ai\": ai chia sẻ, khi nào, hạn đến bao giờ.",
+      "links": "Mọi liên kết đang hiệu lực; đánh dấu liên kết không thời hạn. (Hệ thống không dùng mật khẩu cho liên kết.)",
+      "unique": "Thư mục, tệp đã ngắt kế thừa quyền.",
+      "expiring": "Quyền và liên kết hết hạn trong khoảng số ngày đã chọn (trước và sau hôm nay)."
+    },
+    "space": "Space",
+    "allSpaces": "Toàn hệ thống (tìm Space để lọc)",
+    "pickSpace": "Chọn Space bạn quản lý",
+    "item": "Tư liệu",
+    "searchItem": "Gõ tên tư liệu để tìm",
+    "user": "Người dùng",
+    "group": "Nhóm",
+    "pickGroup": "Chọn nhóm",
+    "days": "ngày",
+    "run": "Xem báo cáo",
+    "truncated": "Báo cáo có nhiều hơn 5.000 dòng: chỉ hiện và xuất 5.000 dòng đầu, hãy lọc theo Space.",
+    "bulk": {
+      "title": "Thao tác hàng loạt",
+      "revokeTitle": "Thu hồi toàn bộ liên kết \"Bất kỳ ai\"",
+      "revoke": "Thu hồi",
+      "revokeSpaceConfirm": "Thu hồi mọi liên kết \"Bất kỳ ai\" của Space này?",
+      "revokeAllConfirm": "Thu hồi mọi liên kết \"Bất kỳ ai\" của toàn hệ thống?",
+      "removeTitle": "Gỡ toàn bộ quyền của một người dùng / khách",
+      "remove": "Gỡ toàn bộ quyền",
+      "removeConfirm": "Gỡ mọi quyền đã cấp cho người này trên tư liệu của người khác? (Tư liệu của chính họ không đổi.)",
+      "guestsTitle": "Xóa khách không hoạt động",
+      "guests": "Xóa khách",
+      "guestsConfirm": "Xóa mọi khách không đăng nhập trong {{days}} ngày?"
+    }
   }
 }

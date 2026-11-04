@@ -77,6 +77,7 @@ export const adminNav: NavItem[] = [
   { path: '/admin/roles', labelKey: 'menu.roles', icon: SafetyCertificateOutlined, perm: 'role.view' },
   { path: '/admin/permission-matrix', labelKey: 'menu.permissionMatrix', icon: TableOutlined, perm: 'role.view' },
   { path: '/admin/access-levels', labelKey: 'menu.accessLevels', icon: SafetyCertificateOutlined, perm: 'role.view' },
+  { path: '/admin/access-reports', labelKey: 'menu.accessReports', icon: AuditOutlined, perm: 'accessreport.view' },
   { path: '/admin/offboarding', labelKey: 'menu.offboarding', icon: UserOutlined, perm: 'user.admin' },
   { path: '/admin/emergency-access', labelKey: 'menu.emergencyAccess', icon: AlertOutlined, perm: 'emergency.admin' },
   { path: '/admin/retention', labelKey: 'menu.retention', icon: SafetyOutlined, perm: 'retention.view' },
