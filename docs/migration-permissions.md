@@ -39,7 +39,7 @@ Những chỗ các bản sao quy tắc đang lệch nhau (sẽ hết khi mọi k
 ## 3. Giả định và quyết định
 
 1. **Một tenant.** Hệ thống phục vụ một đơn vị sử dụng (Trung tâm Thông tin, Chuyển đổi số và Dịch vụ dân số); `tenant_id` có trong lược đồ nhưng chỉ một giá trị.
-2. **Không mật khẩu liên kết** (quyết định ngày 04/11/2026, giống Google Drive): mục 5.3 / 16 của đặc tả nói "tùy chọn mật khẩu" — không làm. Liên kết cũ từng có mật khẩu đã chuyển sang "Hạn chế".
+2. **Không mật khẩu liên kết** (quyết định ngày 04/11/2026, xác nhận lại cùng ngày; giống Google Drive): mục 5.3 / 16 của đặc tả nói "tùy chọn mật khẩu" — không làm. Liên kết cũ từng có mật khẩu đã chuyển sang "Hạn chế".
 3. **Quản trị không tự thấy nội dung** (đặc tả 3.3). Hiện quản trị (`doc.admin`) thấy mọi tệp; sau Perm-Phase 3 chỉ thấy qua "Truy cập khẩn cấp" (Perm-Phase 7). Trong lúc chuyển tiếp, quyền cũ vẫn là nguồn chính.
 4. **Chế độ chia sẻ** mặc định `sharepoint_scope` (chia sẻ một mục trong Space tự ngắt kế thừa kiểu sao chép); `google_additive` làm theo cờ tenant.
 5. **Chuyển dữ liệu không làm mất quyền:** với mọi cặp (người dùng, mục), quyền mới ⊇ quyền cũ, trừ hai chỗ cố ý chặt hơn: quản trị (giả định 3) và "Hạn chế" thay mật khẩu (giả định 2). Script đối chiếu in danh sách khác biệt.
@@ -69,7 +69,7 @@ các nhóm không gian, `everyone`. Mỗi người dùng có `membership_version
 
 **Nhóm của không gian:** Chủ sở hữu (Quản lý), Thành viên (Biên tập), Đóng góp, Duyệt nội dung, Khách xem. Khách xem chuyển từ dữ liệu cũ
 nhận **Chỉ xem (không tải)**: thành viên vai trò Người xem trước đây không tải được, chuyển sang "Người xem" sẽ mở rộng quyền (lần đối chiếu
-trên prod ngày 04/11/2026 thấy đúng 1 cặp như vậy). Space tạo mới từ Perm-Phase 5 dùng mặc định của đặc tả: Khách xem → Người xem. Chủ cũ
+trên prod ngày 04/11/2026 thấy đúng 1 cặp như vậy; quyết định ngày 04/11/2026: giữ quyền hiện tại). Space tạo mới từ Perm-Phase 5 dùng mặc định của đặc tả: Khách xem → Người xem. Chủ cũ
 (`owner_id`) của không gian nhóm/đơn vị vào Chủ sở hữu. Drive của tôi: chủ có toàn quyền theo quy tắc chủ sở hữu.
 
 **Cấp quyền cũ → mới:** Xem → *Chỉ xem (không tải)*, Tải xuống → *Người xem*, Sửa → *Biên tập*, Quản lý → *Chủ sở hữu / Quản lý*.

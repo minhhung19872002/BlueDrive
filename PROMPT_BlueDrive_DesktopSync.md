@@ -439,7 +439,7 @@ Nhiều người cùng sửa một file Word/Excel/PowerPoint **theo thời gian
 - [ ] Xóa hơn 100 file thì app hỏi xác nhận.
 - [ ] Thu hồi thiết bị / remote wipe từ trang quản trị hoạt động; audit ghi đủ `device_id`.
 - [ ] File chỉ có quyền Xem không bị tải xuống máy.
-- [ ] Menu chuột phải "Chia sẻ…" tạo được link chia sẻ có mật khẩu.
+- [ ] Menu chuột phải "Chia sẻ…" tạo được link chia sẻ ~~có mật khẩu~~. *Đổi theo quyết định ngày 04/11/2026: bỏ mật khẩu liên kết (như Google Drive), thay bằng liên kết "Hạn chế" (phải đăng nhập và có quyền) hoặc "Bất kỳ ai có liên kết".*
 - [ ] Simulation test 10.000 chuỗi đều xanh; kill-test không mất dữ liệu.
 - [ ] Toàn bộ UI, thông báo, tài liệu bằng tiếng Việt; không còn TODO/stub.
 
