@@ -230,6 +230,16 @@ public sealed class PackagingTests : IDisposable
         Updater.IsInstalled.Should().BeFalse("a test or development build does not update itself");
     }
 
+    [Fact]
+    public void Only_a_beta_going_back_to_stable_may_install_an_older_version()
+    {
+        Updater.AllowDowngrade("stable", "1.1.0-beta.2").Should().BeTrue("beta → stable installs the stable version, even if older");
+        Updater.AllowDowngrade("osx-stable", "1.1.0-beta.2").Should().BeTrue();
+        Updater.AllowDowngrade("stable", "1.0.2").Should().BeFalse("a stable copy newer than the server's feed is kept");
+        Updater.AllowDowngrade("beta", "1.1.0-beta.2").Should().BeFalse();
+        Updater.AllowDowngrade("stable", null).Should().BeFalse();
+    }
+
     private (string Home, string Folder) Account(string name)
     {
         var home = Path.Combine(_dir, "home-" + name);

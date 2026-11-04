@@ -227,6 +227,7 @@ internal sealed class CloudProvider : IDisposable
     private static unsafe void OnCloseCompletion(CF_CALLBACK_INFO* info, CF_CALLBACK_PARAMETERS* p)
     {
         var self = From(info);
+        if (self.IsOwnProcess(info)) return; // BlueDrive's own reads and writes are known to the engine already
         var path = self.Relative(info->NormalizedPath.ToString());
         _ = Task.Run(() => self.FileClosed?.Invoke(path));
     }

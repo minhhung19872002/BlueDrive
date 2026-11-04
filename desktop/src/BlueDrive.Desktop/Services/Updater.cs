@@ -29,6 +29,13 @@ public sealed class Updater(Func<string?> server, Func<string> channel, Func<boo
 
     public static string FeedUrl(string server) => $"{server.TrimEnd('/')}/{FeedPath}/";
 
+    /// <summary>
+    /// Only switching from a beta to the stable channel may install an older version. A stable copy newer than the server's
+    /// feed (installed from a newer Setup) must stay: otherwise it would be downgraded silently when the user quits.
+    /// </summary>
+    public static bool AllowDowngrade(string osChannel, string? installedVersion) =>
+        osChannel.EndsWith("stable", StringComparison.Ordinal) && installedVersion?.Contains('-') == true;
+
     public static bool IsInstalled
     {
         get
@@ -46,8 +53,8 @@ public sealed class Updater(Func<string?> server, Func<string> channel, Func<boo
         {
             // One feed folder for every OS: Velopack channels "stable" / "beta" (Windows), "osx-stable", "linux-stable"…
             var ch = OsChannel(channel());
-            // Switching beta → stable installs the (older) stable version.
-            _mgr = new UpdateManager(new SimpleWebSource(FeedUrl(s)), new UpdateOptions { ExplicitChannel = ch, AllowVersionDowngrade = ch.EndsWith("stable", StringComparison.Ordinal) });
+            var installed = new UpdateManager(new SimpleWebSource(FeedUrl(s))).CurrentVersion?.ToString();
+            _mgr = new UpdateManager(new SimpleWebSource(FeedUrl(s)), new UpdateOptions { ExplicitChannel = ch, AllowVersionDowngrade = AllowDowngrade(ch, installed) });
             if (!_mgr.IsInstalled) return false;
             LastCheck = DateTime.Now;
             var info = await _mgr.CheckForUpdatesAsync();

@@ -643,9 +643,20 @@ public sealed class SyncEngine(
             catch (RemotePermanentException ex) when (ex.Status == 403 && step.Base is null && step.Remote is null && step.LocalEntry is { } created)
             {
                 // Created where the user may not add anything (a view-only folder, the top of "Được chia sẻ với tôi"): moved aside, not retried forever.
-                state.CompleteOperation(opId);
-                QuarantineNew(c, created, ex.Message);
-                ops++;
+                try
+                {
+                    QuarantineNew(c, created, ex.Message);
+                    state.CompleteOperation(opId);
+                    ops++;
+                }
+                catch (Exception io) when (io is IOException or UnauthorizedAccessException)
+                {
+                    // Something inside is open (a share taken back while a file is being edited): moved aside once it is closed.
+                    state.FailOperation(opId, "retry");
+                    const string why = "Tệp đang được mở hoặc bị khóa, sẽ đồng bộ khi tệp được đóng.";
+                    errors.Add($"{step.Path}: {why}");
+                    state.Log("Chờ", step.Path, why);
+                }
             }
             catch (RemotePermanentException ex)
             {
@@ -1403,6 +1414,7 @@ public sealed class SyncEngine(
         b.Name = localName;
         // Keep the base revision when the content is still to be reconciled (download next round compares hashes).
         b.RemoteRevision = s.Remote is { } known && known.Hash != b.Hash ? b.RemoteRevision : r.Revision;
+        b.LastSyncedAt = clock.UtcNow; // Windows clears "in sync" on a rename: marked again at the end of the pass
         state.SaveItem(b);
         Log("Đổi tên/di chuyển", l.Path);
         return true;
@@ -1423,6 +1435,7 @@ public sealed class SyncEngine(
         b.RemoteName = r.Name;
         b.Name = name;
         b.RemoteRevision = r.Revision;
+        b.LastSyncedAt = clock.UtcNow; // Windows clears "in sync" on a rename: marked again at the end of the pass
         state.SaveItem(b);
         Log("Đổi tên/di chuyển", to, $"Từ {from}");
         return true;

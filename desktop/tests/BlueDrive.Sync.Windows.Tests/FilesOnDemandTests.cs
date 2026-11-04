@@ -74,6 +74,47 @@ public sealed class FilesOnDemandTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Only_closing_a_changed_file_asks_for_a_sync()
+    {
+        // Windows Search / the antivirus read every file of a renamed folder: those closes must not delay the next pass.
+        _remote.WebUpload(null, "đọc.txt", Content.Of("nội dung"));
+        (await _engine.SyncAsync(CancellationToken.None)).Errors.Should().BeEmpty();
+        var file = Abs("đọc.txt");
+        File.ReadAllText(file).Should().Be("nội dung"); // hydrated by this process
+        var closed = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        _platform.FileClosed += closed.Enqueue;
+
+        static void Other(string command)
+        {
+            using var p = Process.Start(new ProcessStartInfo("cmd.exe", $"/d /c {command}") { UseShellExecute = false, CreateNoWindow = true })!;
+            p.WaitForExit();
+        }
+        Other($"type \"{file}\" > nul");
+        await Task.Delay(1500);
+        closed.Should().BeEmpty("another program only read the file");
+
+        Other($"echo thêm>> \"{file}\"");
+        await Until(() => closed.Contains("đọc.txt"), "close after a write");
+        CloudFilesPlatform.UnchangedPlaceholder(file).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Renamed_folders_show_synced_again_on_both_sides()
+    {
+        _remote.WebCreateFolder(null, "Trên web");
+        _remote.WebUpload("Trên web", "a.txt", Content.Of("a"));
+        _remote.WebCreateFolder(null, "Trên máy");
+        (await _engine.SyncAsync(CancellationToken.None)).Errors.Should().BeEmpty();
+
+        _remote.WebRename("Trên web", "Trên web (đổi tên)");       // renamed elsewhere: moved here by BlueDrive
+        Directory.Move(Abs("Trên máy"), Abs("Trên máy (đổi tên)")); // renamed here: moved on the server
+        (await _engine.SyncAsync(CancellationToken.None)).Errors.Should().BeEmpty();
+
+        CloudPlaceholders.IsInSync(Abs("Trên web (đổi tên)")).Should().BeTrue("Explorer must not keep showing \"waiting to sync\" after a rename");
+        CloudPlaceholders.IsInSync(Abs("Trên máy (đổi tên)")).Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Root_folders_and_their_folders_show_synced_in_explorer()
     {
         // As in the app: the root ("Tài liệu của tôi") is a folder of the sync root, not an item of the server.

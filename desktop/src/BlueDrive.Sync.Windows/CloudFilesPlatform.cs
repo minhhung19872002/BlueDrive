@@ -121,15 +121,24 @@ public sealed class CloudFilesPlatform : IOnDemandPlatform
 
     private void OnClosed(string rel)
     {
-        FileClosed?.Invoke(rel);
+        var full = Path.Combine(_ctx.SyncFolder, rel.Replace('/', '\\'));
+        // Only a close after a change asks for a sync: Windows Search, the antivirus and previews open and close every file of a folder
+        // that was just renamed, and each of those closes would push the next pass back (1 000 files: ~18 s instead of ~4 s).
+        if (!UnchangedPlaceholder(full)) FileClosed?.Invoke(rel);
         // Online-only workspaces: the content goes away again once the file is closed (and already on the server).
         if (!OnlineOnly(rel)) return;
-        var full = Path.Combine(_ctx.SyncFolder, rel.Replace('/', '\\'));
         try
         {
             if (File.Exists(full) && !CloudPlaceholders.IsDehydrated(full)) CloudPlaceholders.Dehydrate(full);
         }
         catch (IOException) { } // not in sync yet (edited): freed after the upload, on the next close
+    }
+
+    /// <summary>A placeholder still marked in sync was only read: writing to it clears the state. New, deleted or locked files count as changed.</summary>
+    internal static bool UnchangedPlaceholder(string full)
+    {
+        try { return File.Exists(full) && CloudPlaceholders.IsInSync(full); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
     }
 
     public Task UnregisterAsync()

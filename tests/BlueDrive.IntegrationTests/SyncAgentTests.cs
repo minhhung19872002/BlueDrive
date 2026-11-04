@@ -140,6 +140,46 @@ public sealed class SyncAgentTests(ApiFactory factory) : IDisposable
     }
 
     [Fact]
+    public async Task A_share_taken_back_while_a_file_is_open_waits_quietly_and_keeps_the_edit()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (friend, friendId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var folderId = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, parentId = (Guid?)null, name = "Hồ sơ dự án" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        await StorageTests.UploadAsync(owner, ws, folderId, "hợp đồng.txt", "bản gốc"u8.ToArray());
+        await (await owner.PostAsJsonAsync("/api/v1/shares", new { resourceType = "folder", resourceId = folderId, targets = new[] { new { type = "user", id = friendId } }, accessLevel = 3 })).ReadJsonAsync();
+
+        await using var agent = Agent(await SignInAsync(friend));
+        await agent.StartAsync();
+        var file = Directory.EnumerateFiles(Path.Combine(_tmp, "BlueDrive"), "hợp đồng.txt", SearchOption.AllDirectories);
+        await Until(() => Task.FromResult(file.Any() && agent.Status.State == AgentState.Idle), "thư mục được chia sẻ có trên máy", 30);
+        var path = file.First();
+
+        // Being edited (open, locked) when the owner takes the share back.
+        using (var open = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            open.SetLength(0);
+            open.Write("bản đã sửa"u8);
+            open.Flush();
+            var shares = await (await owner.GetAsync($"/api/v1/shares?resourceType=folder&resourceId={folderId}")).ReadJsonAsync();
+            foreach (var s in shares.EnumerateArray()) await owner.DeleteAsync($"/api/v1/shares/{s.GetProperty("id").GetGuid()}");
+            for (var i = 0; i < 3; i++)
+            {
+                agent.SyncNow();
+                await Task.Delay(1500);
+                agent.Status.State.Should().NotBe(AgentState.Error, "an open file is waited for, not reported as an error ({0})", agent.Status.Message);
+                agent.Status.Message.Should().NotContain("Access to the path", "messages are in Vietnamese");
+            }
+        }
+
+        agent.SyncNow();
+        bool Kept() => Directory.EnumerateFiles(Path.Combine(_tmp, "BlueDrive"), "hợp đồng.txt", SearchOption.AllDirectories)
+            .Any(f => f.Contains("_Không đồng bộ được", StringComparison.Ordinal) && File.ReadAllText(f) == "bản đã sửa");
+        await Until(() => Task.FromResult(Kept()), "bản đã sửa được giữ trong _Không đồng bộ được", 30);
+        File.Exists(path).Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Group_workspaces_are_under_nhom_and_nothing_else_can_live_there()
     {
         var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");

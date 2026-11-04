@@ -624,7 +624,8 @@ public sealed class SyncAgent : IAsyncDisposable
                     : $"Không thể đặt tệp/thư mục trực tiếp trong \"{container}\" (chỉ chứa thư mục các nhóm). Đã chuyển vào {IgnoreRules.NotSyncedFolder}.");
                 Activity?.Invoke("Không đồng bộ được", e.Path);
             }
-            catch (IOException) { } // open in another program: next pass
+            // Open in another program (a folder with an open file cannot be moved: access denied): next pass, without failing this one.
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
         }
     }
 
