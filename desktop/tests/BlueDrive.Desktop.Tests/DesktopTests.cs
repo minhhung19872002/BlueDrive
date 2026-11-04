@@ -129,6 +129,13 @@ public sealed class DesktopTests : IDisposable
     }
 
     [Fact]
+    public void Problems_about_a_file_name_the_file_shown_as_sync_error_in_explorer()
+    {
+        AccountSession.ProblemPath("Kiểm thử/SO_HRA-26-154.xlsm: Định dạng .xlsm chưa được phép tải lên.").Should().Be("Kiểm thử/SO_HRA-26-154.xlsm");
+        AccountSession.ProblemPath("Không kết nối được máy chủ BlueDrive.").Should().BeNull("not about one item");
+    }
+
+    [Fact]
     public void Wizard_checks_the_sync_folder()
     {
         var host = new AppHost(_home);

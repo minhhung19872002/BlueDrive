@@ -150,6 +150,10 @@ public sealed class AccountSession : IAsyncDisposable
             if (Read(db => LocalIndex.AbsPathOf(db, Config.SyncFolder, id), null) is { } path)
                 wanted[path] = $"Đang được {string.Join(", ", e.Editors.Take(3))} chỉnh sửa trực tuyến";
         foreach (var c in Conflicts()) wanted[Agent.LocalPathOf(c.RootId, c.ConflictPath)] = "Có xung đột — mở BlueDrive để chọn bản giữ lại";
+        // Refused by the server (format not allowed, out of space, no right…): the file says why instead of looking like it is still syncing.
+        foreach (var p in Agent.Status.Problems)
+            if (ProblemPath(p) is { } rel)
+                wanted.TryAdd(Locate("", rel), "Lỗi đồng bộ — " + p[(rel.Length + 2)..]);
         foreach (var (path, text) in wanted.Where(w => !_explorerStates.TryGetValue(w.Key, out var old) || old != w.Value)
                      .Concat(_explorerStates.Where(o => !wanted.ContainsKey(o.Key)).Select(o => new KeyValuePair<string, string>(o.Key, null!))))
         {
@@ -293,6 +297,13 @@ public sealed class AccountSession : IAsyncDisposable
             : new HashSet<string>(), (IReadOnlySet<string>)new HashSet<string>());
 
     /// <summary>Absolute path of an activity / conflict path (stored relative to its root, or to the sync folder).</summary>
+    /// <summary>"path: message" problems of the agent → the path (null for problems not about one item).</summary>
+    internal static string? ProblemPath(string problem)
+    {
+        var sep = problem.IndexOf(": ", StringComparison.Ordinal);
+        return sep > 0 ? problem[..sep] : null;
+    }
+
     public string Locate(string rootIdOrEmpty, string path)
     {
         if (rootIdOrEmpty.Length > 0) return Agent.LocalPathOf(rootIdOrEmpty, path);
