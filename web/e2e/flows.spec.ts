@@ -11,6 +11,14 @@ async function openMyDrive(page: Page) {
   await page.waitForLoadState('networkidle')
 }
 
+/** Narrows "Tài liệu của tôi" to one name: on a server used for a while the new item may be far down the list. */
+async function filterMyDrive(page: Page, name: string) {
+  const box = page.getByPlaceholder('Tìm trong thư mục...')
+  await box.fill(name)
+  await box.press('Enter')
+  await page.waitForLoadState('networkidle')
+}
+
 test.describe.serial('Tư liệu cá nhân', () => {
   const folder = `E2E Dân số ${stamp}`
   const fileName = `bao-cao-dan-so-${stamp}.txt`
@@ -103,6 +111,7 @@ test('tạo tài liệu Word mới và mở trình soạn thảo ONLYOFFICE', as
   // Close (top right, like SharePoint) leaves the editor for the folder listing.
   await page.getByRole('button', { name: 'Đóng' }).click()
   await expect(page).toHaveURL(/\/my-drive/)
+  await filterMyDrive(page, docName)
   const docRow = page.getByRole('row', { name: new RegExp(`${docName}\\.docx`) })
   await expect(docRow).toBeVisible()
   // Versions / discussion live in the context menu (the viewer side panel is closed by default).
@@ -119,6 +128,7 @@ test('tạo tài liệu Word mới và mở trình soạn thảo ONLYOFFICE', as
 
 test('chia sẻ qua liên kết công khai có mật khẩu', async ({ page, browser }) => {
   await openMyDrive(page)
+  await filterMyDrive(page, docName)
   const row = page.getByRole('row', { name: new RegExp(`${docName}\\.docx`) })
   await openContextMenu(page, row.getByText(`${docName}.docx`))
   await page.getByRole('menuitem', { name: /Chia sẻ$/ }).click()
@@ -149,6 +159,7 @@ test('chia sẻ qua liên kết công khai có mật khẩu', async ({ page, bro
 
 test('liên kết cho phép chỉnh sửa: người không đăng nhập nhập tên rồi cùng soạn', async ({ page, browser }) => {
   await openMyDrive(page)
+  await filterMyDrive(page, docName)
   const row = page.getByRole('row', { name: new RegExp(`${docName}\\.docx`) })
   await openContextMenu(page, row.getByText(`${docName}.docx`))
   await page.getByRole('menuitem', { name: /Chia sẻ$/ }).click()
@@ -169,7 +180,8 @@ test('liên kết cho phép chỉnh sửa: người không đăng nhập nhập 
   const pub = await anon.newPage()
   await pub.goto(path)
   const password = pub.getByPlaceholder(/mật khẩu/i)
-  if (await password.isVisible({ timeout: 5_000 }).catch(() => false)) {
+  await expect(password.or(pub.getByLabel('Họ và tên'))).toBeVisible({ timeout: 15_000 })
+  if (await password.isVisible()) {
     await password.fill('1234')
     await pub.getByRole('button', { name: /^Mở$/ }).click()
   }
