@@ -23,6 +23,8 @@ public static class DependencyInjection
         services.AddScoped<Security.IResourceAuthorizationService, Security.ResourceAuthorizationService>();
         services.AddScoped<Features.Access.PermissionProjection>();
         services.AddScoped<Features.Access.ReferencePermissionEvaluator>();
+        services.AddScoped<Features.Access.IItemPermissionService, Features.Access.ItemPermissionService>();
+        services.AddScoped<Features.Access.AclEditor>();
         services.AddScoped<Abstractions.IResourceAccessChecker, Security.ResourceAccessChecker>();
         services.AddScoped<Features.Storage.QuotaService>();
         services.AddSingleton<Features.Office.OfficeEditingTracker>();

@@ -1,7 +1,6 @@
 using BlueDrive.Domain.Common;
 using BlueDrive.Domain.Enums;
 using BlueDrive.Domain.Permissions;
-using BlueDrive.Domain.Permissions;
 
 namespace BlueDrive.Domain.Entities;
 

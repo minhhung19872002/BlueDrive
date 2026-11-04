@@ -98,6 +98,20 @@ public class PermissionModelTests(ApiFactory factory)
         report.GetProperty("pairs").GetInt32().Should().BeGreaterThan(100);
         report.GetProperty("narrower").GetArrayLength().Should().Be(0, report.GetProperty("narrower").ToString());
 
+        // Perm-Phase 2: the engine on the API, and "Kiểm tra quyền" explains where a right comes from.
+        var effective = await (await admin.GetAsync($"/api/v1/items/{inC}/effective-permissions?user={inGroupId}")).ReadJsonAsync();
+        effective.GetProperty("rights").EnumerateArray().Select(r => r.GetString()).Should().Contain("Download").And.NotContain("EditItems");
+        var why = await (await admin.GetAsync($"/api/v1/items/{inC}/explain?user={inGroupId}")).ReadJsonAsync();
+        why.GetProperty("inherited").GetBoolean().Should().BeFalse("the file was shared on its own: it has its own ACL");
+        why.GetProperty("sources").EnumerateArray().Should().Contain(x => x.GetProperty("kind").GetString() == "Qua nhóm"
+            && x.GetProperty("level").GetString() == "Người xem" && x.GetProperty("origin").GetString() == "inherited", "the group's grant was copied from A");
+        var whyFolder = await (await admin.GetAsync($"/api/v1/items/{b}/explain?user={ownerId}")).ReadJsonAsync();
+        whyFolder.GetProperty("sources").EnumerateArray().Should().Contain(x => x.GetProperty("kind").GetString() == "Thành viên Space");
+        (await owner.GetAsync($"/api/v1/items/{inC}/explain?user={inGroupId}")).StatusCode.Should().Be(System.Net.HttpStatusCode.OK, "the owner manages the item");
+        var (stranger, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        (await stranger.GetAsync($"/api/v1/items/{inC}/explain?user={inGroupId}")).StatusCode.Should().Be(System.Net.HttpStatusCode.NotFound, "no sign the item exists");
+        (await stranger.GetAsync($"/api/v1/items/{inC}/effective-permissions")).StatusCode.Should().Be(System.Net.HttpStatusCode.OK, "anyone may ask about themselves");
+
         // Rebuilding again keeps the derived ids.
         await (await admin.PostAsync("/api/v1/admin/permission-model/rebuild", null)).ReadJsonAsync();
         using (var scope = factory.Services.CreateScope())

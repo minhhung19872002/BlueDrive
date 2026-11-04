@@ -25,53 +25,32 @@ public sealed class ReferencePermissionEvaluator(IAppDbContext db, IPermissionSe
 
     public async Task<AccessRight> EvaluateAsync(UserContext user, Guid securableId, CancellationToken ct)
     {
-        var userId = user.UserId;
         var node = await db.Securables.AsNoTracking().FirstOrDefaultAsync(s => s.Id == securableId && !s.IsDeleted, ct);
         if (node is null) return AccessRight.None;
-        var root = node.SpaceId ?? node.PersonalDriveId;
-        var codes = user.Codes;
-        var docAdmin = codes.Contains(Perm.DocAdmin);
-        if (!docAdmin && !codes.Contains(Perm.DocView)) return AccessRight.None;
-        var canEditDocs = docAdmin || codes.Contains(Perm.DocEdit);
-        if (node.OwnerUserId == userId)
-            return Restrict(canEditDocs ? AccessRights.All : AccessRights.All & ~AccessRights.Writes | AccessRight.AddItems | AccessRight.ApproveItems, root, await LockedAsync(root, ct));
+        var who = Restrictions.User.From(user.UserId, user.Codes, user.Principals);
 
+        // Nearest node with its own ACL, found by walking up (never through AclScopeId).
         var scope = node;
         while (!scope.HasUniqueAcl && scope.ParentId is { } parent)
             scope = await db.Securables.AsNoTracking().FirstAsync(s => s.Id == parent, ct);
 
         var now = clock.GetUtcNow().UtcDateTime;
-        var principals = user.Principals;
-        var live = await db.AclEntries.AsNoTracking()
-            .Where(e => e.ScopeId == scope.Id && principals.Contains(e.PrincipalId) && (e.ExpiresAt == null || e.ExpiresAt > now))
-            .Join(db.PermissionLevels, e => e.PermissionLevelId, l => l.Id, (e, l) => new { e.Source, l.Permissions })
-            .ToListAsync(ct);
-
-        // Restriction kept from the current model: a system role without "doc.edit" caps what Space membership and ownership give
-        // (not direct grants), keeping upload and approval.
-        var rights = AccessRight.None;
-        foreach (var e in live)
-            rights |= e.Source == AclSource.SpaceDefault && !canEditDocs ? e.Permissions & ~AccessRights.Writes | (e.Permissions & (AccessRight.AddItems | AccessRight.ApproveItems)) : e.Permissions;
-
-        if (node.Kind == SecurableKind.File)
+        var direct = AccessRight.None;
+        var membership = AccessRight.None;
+        foreach (var e in await db.AclEntries.AsNoTracking().Where(e => e.ScopeId == scope.Id).ToListAsync(ct))
         {
-            var file = await db.Files.AsNoTracking().Where(f => f.Id == node.Id).Select(f => new { f.CreatedBy, f.ApprovalStatus }).FirstAsync(ct);
-            // "Đóng góp": edit and delete what you created.
-            if (rights.Has(AccessRight.EditOwnItemsOnly) && file.CreatedBy == userId && canEditDocs)
-                rights |= AccessRight.EditItems | AccessRight.DeleteItems | AccessRight.RenameMove;
-            // Not approved yet: only its uploader, editors and approvers see it (ViewDrafts).
-            if (file.ApprovalStatus != ApprovalStatus.Approved && file.CreatedBy != userId
-                && !rights.Has(AccessRight.EditItems) && !rights.Has(AccessRight.ApproveItems) && !rights.Has(AccessRight.ViewDrafts))
-                return AccessRight.None;
+            if (!user.Principals.Contains(e.PrincipalId) || e.ExpiresAt is { } until && until <= now) continue;
+            var level = await db.PermissionLevels.AsNoTracking().FirstAsync(l => l.Id == e.PermissionLevelId, ct);
+            if (e.Source == AclSource.SpaceDefault) membership |= level.Permissions;
+            else direct |= level.Permissions;
         }
-        return Restrict(rights, root, await LockedAsync(root, ct));
+        Restrictions.FileFacts? file = node.Kind != SecurableKind.File ? null
+            : await db.Files.AsNoTracking().Where(f => f.Id == node.Id).Select(f => new Restrictions.FileFacts(f.CreatedBy, f.ApprovalStatus == ApprovalStatus.Approved)).FirstOrDefaultAsync(ct);
+        return Restrictions.Apply(who, node.OwnerUserId == user.UserId, direct, membership, file, await LockedAsync(node.SpaceId ?? node.PersonalDriveId, ct));
     }
 
     private async Task<bool> LockedAsync(Guid? root, CancellationToken ct) =>
         root is { } id && await db.Workspaces.AnyAsync(w => w.Id == id && w.IsLocked, ct);
-
-    /// <summary>Restrictions applied after the OR (spec 3.4): a locked Space keeps only reading.</summary>
-    private static AccessRight Restrict(AccessRight rights, Guid? root, bool locked) => locked ? rights & ~AccessRights.Writes : rights;
 
     /// <summary>The current model's scale (None → Manage), for comparing the two models.</summary>
     public static AccessLevel ToLevel(AccessRight rights) =>

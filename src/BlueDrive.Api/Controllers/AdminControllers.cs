@@ -271,6 +271,19 @@ public class PermissionModelController : ApiControllerBase
         Mediator.Send(new Application.Features.Access.VerifyPermissionMigrationQuery(samples, seed));
 }
 
+/// <summary>Quyền hiệu lực và "Kiểm tra quyền" trên một mục (mô hình phân quyền mới).</summary>
+[Route("api/v1/items/{id:guid}")]
+public class ItemAccessController : ApiControllerBase
+{
+    [HttpGet("effective-permissions")]
+    public Task<Application.Features.Access.EffectivePermissionsDto> Effective(Guid id, [FromQuery] Guid? user) =>
+        Mediator.Send(new Application.Features.Access.GetEffectivePermissionsQuery(id, user));
+
+    [HttpGet("explain")]
+    public Task<Application.Features.Access.PermissionExplanation> Explain(Guid id, [FromQuery] Guid? user) =>
+        Mediator.Send(new Application.Features.Access.ExplainPermissionsQuery(id, user));
+}
+
 /// <summary>Thông báo của tôi.</summary>
 [Route("api/v1/notifications")]
 public class NotificationsController : ApiControllerBase

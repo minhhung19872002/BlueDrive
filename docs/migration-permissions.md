@@ -51,8 +51,8 @@ Những chỗ các bản sao quy tắc đang lệch nhau (sẽ hết khi mọi k
 | Phase | Dữ liệu |
 |---|---|
 | 1 | Tạo `spaces`, `personal_drives`, `libraries`, `securables`, `principals`, `principal_memberships`, `space_groups`, `permission_levels`, `acl_scopes`, `acl_entries`, `scope_grants`. Migration chiếu dữ liệu cũ; job `PermissionProjection` dựng lại khi dữ liệu cũ đổi; lệnh đối chiếu cũ ⊆ mới trên mẫu 10 000 cặp |
-| 2 | Ghi quyền vào `acl_entries`; `IPermissionService` mới thay `ResourceAuthorizationService`; cache theo `membership_version` / `acl_version` |
-| 3 | Mọi kênh lọc bằng `scope_grants` trong SQL; xóa 6 bộ lọc viết tay |
+| 2 | Bộ tính quyền `IItemPermissionService` (Get/Has/Demand/Explain; cache theo `membership_version` / `acl_version`, hết hạn theo đồng hồ ứng dụng), `AclEditor` (ngắt / khôi phục kế thừa bằng một UPDATE theo ltree, cấp / thu quyền, `scope_grants` cập nhật cùng lúc), API `items/{id}/effective-permissions`, `items/{id}/explain`; property test so với `ReferencePermissionEvaluator` |
+| 3 | Chuyển nguồn ghi sang mô hình mới (hộp thoại quyền, chia sẻ, thành viên, tạo / di chuyển / xóa mục cập nhật `securables` và ACL; thành viên nhóm / đơn vị cập nhật `principal_memberships`); mọi kênh đọc quyền qua `IItemPermissionService` và lọc bằng `scope_grants` trong SQL; xóa 6 bộ lọc viết tay và bộ chiếu định kỳ |
 | 4–10 | theo đặc tả mục 15 |
 
 ## 4a. Perm-Phase 1 — cách chiếu dữ liệu cũ sang mô hình mới
