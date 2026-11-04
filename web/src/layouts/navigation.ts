@@ -73,6 +73,7 @@ export const adminNav: NavItem[] = [
   { path: '/admin/permission-matrix', labelKey: 'menu.permissionMatrix', icon: TableOutlined, perm: 'role.view' },
   { path: '/admin/catalogs', labelKey: 'menu.catalogs', icon: AppstoreOutlined, perm: 'catalog.view' },
   { path: '/admin/workspaces', labelKey: 'menu.adminWorkspaces', icon: ClusterOutlined, perm: 'workspace.admin' },
+  { path: '/admin/space-trash', labelKey: 'menu.spaceTrash', icon: DeleteOutlined, perm: 'workspace.admin' },
   { path: '/admin/audit-logs', labelKey: 'menu.auditLogs', icon: AuditOutlined, perm: 'audit.view' },
   { path: '/admin/storage-stats', labelKey: 'menu.storageStats', icon: PieChartOutlined, perm: 'stats.view' },
   { path: '/admin/alerts', labelKey: 'menu.alerts', icon: AlertOutlined, perm: 'alert.view' },

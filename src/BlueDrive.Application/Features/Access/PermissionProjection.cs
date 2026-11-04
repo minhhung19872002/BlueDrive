@@ -86,6 +86,9 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock, A
         var workspaces = full ? await wsQuery.ToListAsync(ct) : await wsQuery.Where(w => wsIds.Contains(w.Id)).ToListAsync(ct);
         var members = full ? await db.WorkspaceMembers.AsNoTracking().ToListAsync(ct)
             : await db.WorkspaceMembers.AsNoTracking().Where(m => wsIds.Contains(m.WorkspaceId)).ToListAsync(ct);
+        // User groups and units (with their sub-units) placed in a Space's member groups.
+        var groupMembersOfSpaces = full ? await db.WorkspaceGroupMembers.AsNoTracking().ToListAsync(ct)
+            : await db.WorkspaceGroupMembers.AsNoTracking().Where(m => wsIds.Contains(m.WorkspaceId)).ToListAsync(ct);
         var folders = await db.Folders.AsNoTracking().Where(f => !f.IsDeleted && (full || wsIds.Contains(f.WorkspaceId)))
             .Select(f => new { f.Id, f.WorkspaceId, f.ParentId, f.Name, f.Path, f.BreakInheritance }).ToListAsync(ct);
         var files = await db.Files.AsNoTracking().Where(f => !f.IsDeleted && (full || wsIds.Contains(f.WorkspaceId)))
@@ -174,6 +177,9 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock, A
             if (!personal) memberGroups.Add((w.OwnerId, SpaceGroupKind.Owners));
             foreach (var (userId, kind) in memberGroups.Distinct())
                 spaceGroupMembers.Add(new SpaceGroupMember { SpaceGroupId = GroupOf(w.Id, kind), PrincipalId = userId });
+            if (!personal)
+                foreach (var g in groupMembersOfSpaces.Where(m => m.WorkspaceId == w.Id))
+                    spaceGroupMembers.Add(new SpaceGroupMember { SpaceGroupId = GroupOf(w.Id, GroupFor(g.MemberRole)), PrincipalId = g.PrincipalId });
             principals.AddRange(DefaultGroups.Select(g => new Principal
             {
                 Id = GroupOf(w.Id, g.Kind), Kind = PrincipalKind.SpaceGroup, RefId = w.Id, DisplayName = $"{g.Name} — {w.Name}",
@@ -260,10 +266,14 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock, A
         var oldGroups = full ? [] : await db.SpaceGroups.AsNoTracking().Where(g => wsIds.Contains(g.RootId)).Select(g => g.Id).ToListAsync(ct);
         var otherSpaceGroupMembers = full ? []
             : await db.SpaceGroupMembers.AsNoTracking().Where(m => !oldGroups.Contains(m.SpaceGroupId)).ToListAsync(ct);
-        var affected = full ? users.Select(u => u.Id).ToHashSet()
-            : (userIds ?? []).Concat(spaceGroupMembers.Select(m => m.PrincipalId))
+        var memberPrincipals = full ? []
+            : spaceGroupMembers.Select(m => m.PrincipalId)
                 .Concat(await db.SpaceGroupMembers.AsNoTracking().Where(m => oldGroups.Contains(m.SpaceGroupId)).Select(m => m.PrincipalId).ToListAsync(ct))
-                .ToHashSet();
+                .Distinct().ToList();
+        // A group or a unit among them stands for the people in it (as flattened before this change).
+        var behindGroups = full ? [] : await db.PrincipalMemberships.AsNoTracking().Where(m => memberPrincipals.Contains(m.PrincipalId)).Select(m => m.UserId).ToListAsync(ct);
+        var affected = full ? users.Select(u => u.Id).ToHashSet()
+            : (userIds ?? []).Concat(memberPrincipals).Concat(behindGroups).ToHashSet();
         var groupsOf = groupMembers.ToLookup(m => m.UserId, m => m.GroupId);
         var parentsOfGroup = nesting.ToLookup(n => n.ChildGroupId, n => n.ParentGroupId);
         var spaceGroupsOf = spaceGroupMembers.Concat(otherSpaceGroupMembers).ToLookup(m => m.PrincipalId, m => m.SpaceGroupId);

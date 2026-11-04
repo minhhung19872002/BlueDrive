@@ -11,7 +11,8 @@ using Microsoft.EntityFrameworkCore;
 namespace BlueDrive.Application.Features.Workspaces;
 
 public sealed record WorkspaceDto(Guid Id, string Name, string? Description, WorkspaceType Type, Guid? OrganizationId, string? OrganizationName,
-    Guid OwnerId, string OwnerName, long QuotaBytes, long UsedBytes, bool IsLocked, WorkspaceMemberRole? MyRole, int MemberCount, DateTime CreatedAt);
+    Guid OwnerId, string OwnerName, long QuotaBytes, long UsedBytes, bool IsLocked, WorkspaceMemberRole? MyRole, int MemberCount, DateTime CreatedAt,
+    SpaceStatus Status = SpaceStatus.Active, Guid? CoverFileId = null);
 
 public sealed record WorkspaceMemberDto(Guid UserId, string Username, string FullName, string? OrganizationName, WorkspaceMemberRole MemberRole, DateTime AddedAt);
 
@@ -20,7 +21,7 @@ public static class WorkspaceQueries
     public static IQueryable<WorkspaceDto> Project(IAppDbContext db, IQueryable<Workspace> q, Guid userId) => q.Select(w => new WorkspaceDto(
         w.Id, w.Name, w.Description, w.Type, w.OrganizationId, w.Organization != null ? w.Organization.Name : null, w.OwnerId, w.Owner!.FullName,
         w.QuotaBytes, w.UsedBytes, w.IsLocked, w.Members.Where(m => m.UserId == userId).Select(m => (WorkspaceMemberRole?)m.MemberRole).FirstOrDefault(),
-        w.Members.Count, w.CreatedAt));
+        w.Members.Count, w.CreatedAt, w.Status, w.CoverFileId));
 
     /// <summary>
     /// Workspaces whose root the user may see on the new permission model: their Drive của tôi, Spaces they are a member of (Space groups),
@@ -32,7 +33,8 @@ public static class WorkspaceQueries
         var scopes = db.ScopeGrants.Where(g => principals.Contains(g.PrincipalId) && (g.Permissions & Domain.Permissions.AccessRight.ViewItems) != 0).Select(g => g.ScopeId);
         var roots = db.Securables.Where(s => (s.Kind == SecurableKind.Space || s.Kind == SecurableKind.Drive) && !s.IsDeleted
                                              && (s.OwnerUserId == userId || scopes.Contains(s.AclScopeId))).Select(s => s.Id);
-        return db.Workspaces.AsNoTracking().Where(w => roots.Contains(w.Id));
+        // A deleted Space (system trash) is nobody's to open.
+        return db.Workspaces.AsNoTracking().Where(w => roots.Contains(w.Id) && w.Status != SpaceStatus.Deleted);
     }
 }
 
@@ -58,7 +60,8 @@ public static class WorkspaceManagement
     }
 }
 
-public sealed record ListMyWorkspacesQuery(WorkspaceType? Type) : IRequest<IReadOnlyList<WorkspaceDto>>;
+/// <param name="IncludeArchived">Archived Spaces are hidden from the default list (spec 6) but can be listed.</param>
+public sealed record ListMyWorkspacesQuery(WorkspaceType? Type, bool IncludeArchived = false) : IRequest<IReadOnlyList<WorkspaceDto>>;
 
 public sealed class ListMyWorkspacesHandler(IAppDbContext db, ICurrentUser me, IPermissionService perms)
     : IRequestHandler<ListMyWorkspacesQuery, IReadOnlyList<WorkspaceDto>>
@@ -71,6 +74,7 @@ public sealed class ListMyWorkspacesHandler(IAppDbContext db, ICurrentUser me, I
         var seesGroups = await perms.HasAsync(uid, Perm.WorkspaceView, ct);
         query = query.Where(w => w.Type == WorkspaceType.Personal ? w.OwnerId == uid : seesGroups);
         if (q.Type.HasValue) query = query.Where(w => w.Type == q.Type);
+        if (!q.IncludeArchived) query = query.Where(w => w.Status == SpaceStatus.Active);
         return await WorkspaceQueries.Project(db, query.OrderBy(w => w.Type).ThenBy(w => w.Name), uid).ToListAsync(ct);
     }
 }
@@ -82,7 +86,7 @@ public sealed class ListAllWorkspacesHandler(IAppDbContext db, ICurrentUser me) 
 {
     public Task<PagedResult<WorkspaceDto>> Handle(ListAllWorkspacesQuery q, CancellationToken ct)
     {
-        var query = db.Workspaces.AsNoTracking().Where(w => q.Type.HasValue ? w.Type == q.Type : w.Type != WorkspaceType.Personal);
+        var query = db.Workspaces.AsNoTracking().Where(w => (q.Type.HasValue ? w.Type == q.Type : w.Type != WorkspaceType.Personal) && w.Status != SpaceStatus.Deleted);
         if (q.OrganizationId.HasValue) query = query.Where(w => w.OrganizationId == q.OrganizationId);
         if (q.IsLocked.HasValue) query = query.Where(w => w.IsLocked == q.IsLocked);
         if (!string.IsNullOrWhiteSpace(q.Q))
@@ -103,12 +107,14 @@ public sealed class GetWorkspaceHandler(IAppDbContext db, ICurrentUser me, IReso
     {
         var uid = me.RequireUserId();
         await auth.EnsureAsync(uid, ResourceType.Workspace, q.Id, AccessLevel.View, ct);
-        return await WorkspaceQueries.Project(db, db.Workspaces.AsNoTracking().Where(w => w.Id == q.Id), uid).FirstAsync(ct);
+        return await WorkspaceQueries.Project(db, db.Workspaces.AsNoTracking().Where(w => w.Id == q.Id && w.Status != SpaceStatus.Deleted), uid).FirstOrDefaultAsync(ct)
+               ?? throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
     }
 }
 
+/// <param name="Template">On creation: Space template (blank, department, project, campaign) whose folders are made at once.</param>
 public sealed record SaveWorkspaceCommand(Guid? Id, string Name, string? Description, WorkspaceType Type, Guid? OrganizationId, double? QuotaGb,
-    IReadOnlyList<Guid>? MemberIds, WorkspaceMemberRole MemberRole = WorkspaceMemberRole.Editor) : IRequest<Guid>;
+    IReadOnlyList<Guid>? MemberIds, WorkspaceMemberRole MemberRole = WorkspaceMemberRole.Editor, string? Template = null) : IRequest<Guid>;
 
 public sealed class SaveWorkspaceValidator : AbstractValidator<SaveWorkspaceCommand>
 {
@@ -119,6 +125,7 @@ public sealed class SaveWorkspaceValidator : AbstractValidator<SaveWorkspaceComm
         RuleFor(x => x.OrganizationId).NotNull().When(x => x.Type == WorkspaceType.Organization).WithMessage("Nhóm tài nguyên của đơn vị phải chọn đơn vị.");
         RuleFor(x => x.QuotaGb).InclusiveBetween(0, 100_000).When(x => x.QuotaGb.HasValue).WithMessage("Dung lượng không hợp lệ.");
         RuleFor(x => x.MemberRole).Must(r => r != WorkspaceMemberRole.Owner).WithMessage("Không thể thêm thành viên với vai trò trưởng nhóm.");
+        RuleFor(x => x.Template).Must(t => t is null || SpaceTemplates.Find(t) is not null).WithMessage("Mẫu Space không hợp lệ.");
     }
 }
 
@@ -138,11 +145,14 @@ public sealed class SaveWorkspaceHandler(IAppDbContext db, ICurrentUser me, IPer
             ws = new Workspace { OwnerId = uid, Type = cmd.Type, QuotaBytes = (long)((isAdmin && cmd.QuotaGb.HasValue ? cmd.QuotaGb.Value : defaultGb) * WorkspaceProvisioning.Gb) };
             ws.Members.Add(new WorkspaceMember { WorkspaceId = ws.Id, UserId = uid, MemberRole = WorkspaceMemberRole.Owner, AddedAt = clock.GetUtcNow().UtcDateTime });
             db.Workspaces.Add(ws);
+            if (SpaceTemplates.Find(cmd.Template) is { } template) SpaceTemplates.Apply(db, ws, template);
         }
         else
         {
-            ws = await db.Workspaces.Include(w => w.Members).FirstOrDefaultAsync(w => w.Id == cmd.Id, ct) ?? throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
+            ws = await db.Workspaces.Include(w => w.Members).FirstOrDefaultAsync(w => w.Id == cmd.Id && w.Status != SpaceStatus.Deleted, ct)
+                 ?? throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
             if (ws.Type == WorkspaceType.Personal) throw new AppException("Không gian cá nhân không chỉnh sửa tại đây.");
+            if (ws.Status == SpaceStatus.Archived) throw new AppException("Space đã lưu trữ: chỉ đọc. Hãy đưa Space hoạt động lại trước khi sửa.", 423);
             await WorkspaceManagement.EnsureCanChangeAsync(db, auth, perms, uid, ws, ct);
             WorkspaceManagement.EnsureNotLocked(ws);
             if (cmd.QuotaGb.HasValue && isAdmin) ws.QuotaBytes = (long)(cmd.QuotaGb.Value * WorkspaceProvisioning.Gb);
@@ -171,7 +181,7 @@ public sealed class SaveWorkspaceHandler(IAppDbContext db, ICurrentUser me, IPer
 
 public sealed record DeleteWorkspaceCommand(Guid Id) : IRequest<Unit>;
 
-public sealed class DeleteWorkspaceHandler(IAppDbContext db, ICurrentUser me, IPermissionService perms, IAuditLogger audit) : IRequestHandler<DeleteWorkspaceCommand, Unit>
+public sealed class DeleteWorkspaceHandler(IAppDbContext db, ICurrentUser me, IPermissionService perms, IAuditLogger audit, TimeProvider clock) : IRequestHandler<DeleteWorkspaceCommand, Unit>
 {
     public async Task<Unit> Handle(DeleteWorkspaceCommand cmd, CancellationToken ct)
     {
@@ -179,14 +189,12 @@ public sealed class DeleteWorkspaceHandler(IAppDbContext db, ICurrentUser me, IP
         var ws = await db.Workspaces.FirstOrDefaultAsync(w => w.Id == cmd.Id, ct) ?? throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
         if (ws.Type == WorkspaceType.Personal) throw new AppException("Không thể xóa không gian cá nhân.");
         if (ws.OwnerId != uid && !await perms.HasAsync(uid, Perm.WorkspaceDelete, ct)) throw new ForbiddenException("Chỉ trưởng nhóm hoặc quản trị viên được xóa nhóm tài nguyên.");
-        if (await db.Files.AnyAsync(f => f.WorkspaceId == ws.Id, ct))
-            throw new ConflictException("Nhóm tài nguyên còn tư liệu (kể cả trong thùng rác). Hãy xóa vĩnh viễn hoặc di chuyển tư liệu trước khi xóa nhóm.");
-        await db.ResourcePermissions.Where(p => p.ResourceType == ResourceType.Workspace && p.ResourceId == ws.Id).ExecuteDeleteAsync(ct);
-        await db.WorkspaceMembers.Where(m => m.WorkspaceId == ws.Id).ExecuteDeleteAsync(ct);
-        await db.Folders.Where(f => f.WorkspaceId == ws.Id).ExecuteDeleteAsync(ct);
-        db.Workspaces.Remove(ws);
+        if (ws.Status == SpaceStatus.Deleted) throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
+        // To the system trash (spec 6): nobody opens it any more; administrators restore it within 93 days, then it is purged.
+        ws.Status = SpaceStatus.Deleted;
+        ws.StatusChangedAt = clock.GetUtcNow().UtcDateTime;
         await db.SaveChangesAsync(ct);
-        await audit.LogAsync(new AuditEntry(AuditAction.Delete, ResourceType.Workspace, ws.Id, ws.Name, ws.Id), ct);
+        await audit.LogAsync(new AuditEntry(AuditAction.Delete, ResourceType.Workspace, ws.Id, ws.Name, ws.Id, new { trashDays = SpaceHandlers.TrashLife.TotalDays }), ct);
         return Unit.Value;
     }
 }

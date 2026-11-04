@@ -52,6 +52,7 @@ const layoutRoutes: AppRoute[] = [
 
   { path: 'admin/dashboard', perm: 'dashboard.view', Component: lazy(() => import('@/pages/admin/AdminDashboardPage')) },
   { path: 'admin/organizations', perm: 'org.view', Component: lazy(() => import('@/pages/admin/organizations/OrganizationsPage')) },
+  { path: 'admin/space-trash', perm: 'workspace.admin', Component: lazy(() => import('@/pages/admin/SpaceTrashPage')) },
   { path: 'admin/guests', perm: 'user.view', Component: lazy(() => import('@/pages/admin/GuestsPage')) },
   { path: 'admin/users', perm: 'user.view', Component: lazy(() => import('@/pages/admin/users/UsersPage')) },
   { path: 'admin/user-groups', perm: 'usergroup.view', Component: lazy(() => import('@/pages/admin/userGroups/UserGroupsPage')) },

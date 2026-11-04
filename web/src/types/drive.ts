@@ -242,6 +242,9 @@ export interface Workspace {
   myRole: WorkspaceMemberRole | null
   memberCount: number
   createdAt: string
+  /** Spec 6: archived = read only, hidden from the default list. */
+  status?: 'active' | 'archived' | 'deleted'
+  coverFileId?: string | null
 }
 
 export interface WorkspaceMember {
@@ -261,6 +264,8 @@ export interface SaveWorkspaceRequest {
   quotaGb?: number | null
   memberIds?: string[] | null
   memberRole?: WorkspaceMemberRole
+  /** Space template on creation (blank, department, project, campaign). */
+  template?: string | null
 }
 
 export interface AllWorkspacesFilter {

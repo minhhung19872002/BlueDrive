@@ -140,6 +140,14 @@ public sealed class AccessModelInterceptor(IServiceProvider services) : SaveChan
             _users.Add(e.Entity.UserId);
         }
 
+        foreach (var e in ctx.ChangeTracker.Entries<WorkspaceGroupMember>().Where(x => x.State is EntityState.Added or EntityState.Modified or EntityState.Deleted).ToList())
+        {
+            _workspaces.Add(e.Entity.WorkspaceId);
+            // The people of a group or unit (removed now or just added) get their memberships recomputed.
+            foreach (var u in await ctx.Set<PrincipalMembership>().AsNoTracking().Where(m => m.PrincipalId == e.Entity.PrincipalId).Select(m => m.UserId).ToListAsync(ct))
+                _users.Add(u);
+        }
+
         foreach (var e in ctx.ChangeTracker.Entries<UserGroupMember>().Where(x => x.State is EntityState.Added or EntityState.Deleted).ToList()) _users.Add(e.Entity.UserId);
         foreach (var e in ctx.ChangeTracker.Entries<UserRole>().Where(x => x.State is EntityState.Added or EntityState.Deleted).ToList()) _users.Add(e.Entity.UserId);
         foreach (var e in ctx.ChangeTracker.Entries<User>().ToList())

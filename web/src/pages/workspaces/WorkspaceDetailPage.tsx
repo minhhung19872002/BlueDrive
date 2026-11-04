@@ -11,7 +11,7 @@ import FileExplorer from '@/features/drive/explorer/FileExplorer'
 import { useFolderSearchParam } from '@/features/drive/useFolderSearchParam'
 import { useOfficeNewExtensions } from '@/features/office/useOfficeNewMenu'
 import WorkspaceActivityTab from '@/features/workspaces/WorkspaceActivityTab'
-import WorkspaceSharingTab from '@/features/workspaces/WorkspaceSharingTab'
+import WorkspaceSettingsTab from '@/features/workspaces/WorkspaceSettingsTab'
 import WorkspaceSummaryTab from '@/features/workspaces/WorkspaceSummaryTab'
 import { ROLE_COLORS } from '@/features/workspaces/roles'
 import WorkspaceFormModal from '@/features/workspaces/WorkspaceFormModal'
@@ -132,13 +132,13 @@ export default function WorkspaceDetailPage() {
               { key: 'files', label: <span><FolderOutlined /> {t('collab.workspaceTabs.files')}</span> },
               { key: 'summary', label: <span><BarChartOutlined /> {t('collab.workspaceTabs.summary')}</span> },
               { key: 'activity', label: <span><HistoryOutlined /> {t('collab.workspaceTabs.activity')}</span> },
-              { key: 'sharing', label: <span><ShareAltOutlined /> {t('spaceSharing.tab')}</span> },
+              { key: 'sharing', label: <span><ShareAltOutlined /> {t('spaceSettings.tab')}</span> },
             ]}
           />
           {tab === 'files' && explorer}
           {tab === 'summary' && <WorkspaceSummaryTab workspaceId={id} />}
           {tab === 'activity' && <WorkspaceActivityTab workspaceId={id} />}
-          {tab === 'sharing' && <WorkspaceSharingTab workspaceId={id} />}
+          {tab === 'sharing' && w && <WorkspaceSettingsTab workspaceId={id} name={w.name} />}
         </>
       ) : (
         explorer

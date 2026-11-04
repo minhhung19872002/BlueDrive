@@ -7,11 +7,12 @@ using Microsoft.EntityFrameworkCore;
 namespace BlueDrive.Application.Security;
 
 /// <summary>Effective access of a user on one resource, with the reason (for the "who has access" panel and tests).</summary>
-public sealed record ResourceAccess(AccessLevel Level, bool CanUpload, bool CanApprove, bool WorkspaceLocked, string Source)
+/// <param name="NoDownload">Rights at this level but without downloading (a Space with downloads off, spec 6).</param>
+public sealed record ResourceAccess(AccessLevel Level, bool CanUpload, bool CanApprove, bool WorkspaceLocked, string Source, bool NoDownload = false)
 {
     public static readonly ResourceAccess None = new(AccessLevel.None, false, false, false, "none");
     public bool CanView => Level >= AccessLevel.View;
-    public bool CanDownload => Level >= AccessLevel.Download;
+    public bool CanDownload => Level >= AccessLevel.Download && !NoDownload;
     public bool CanEdit => Level >= AccessLevel.Edit && !WorkspaceLocked;
     public bool CanManage => Level >= AccessLevel.Manage && !WorkspaceLocked;
 }
@@ -101,7 +102,7 @@ public sealed class LegacyResourceAuthorizationService(IAppDbContext db, IPermis
         if (!a.CanView) throw new NotFoundException(type == ResourceType.Folder ? "Không tìm thấy thư mục hoặc bạn không có quyền truy cập." : "Không tìm thấy tài liệu hoặc bạn không có quyền truy cập.");
         if (level >= AccessLevel.Edit && a.WorkspaceLocked && a.Level >= level)
             throw new AppException("Nhóm tài nguyên đang bị khóa, chỉ cho phép xem.", 423);
-        var ok = level switch { AccessLevel.Manage => a.CanManage, AccessLevel.Edit => a.CanEdit, _ => a.Level >= level };
+        var ok = level switch { AccessLevel.Manage => a.CanManage, AccessLevel.Edit => a.CanEdit, AccessLevel.Download => a.CanDownload, _ => a.Level >= level };
         if (!ok) throw new ForbiddenException(level switch
         {
             AccessLevel.Download => "Bạn không có quyền tải xuống tài liệu này.",
@@ -282,7 +283,7 @@ public sealed class ModelResourceAuthorizationService(Features.Access.IItemPermi
         var level = Features.Access.ReferencePermissionEvaluator.ToLevel(rights);
         if (level == AccessLevel.None) return ResourceAccess.None;
         return new ResourceAccess(level, !locked && (rights & Domain.Permissions.AccessRight.AddItems) != 0,
-            (rights & Domain.Permissions.AccessRight.ApproveItems) != 0, locked, "model");
+            (rights & Domain.Permissions.AccessRight.ApproveItems) != 0, locked, "model", NoDownload: (rights & Domain.Permissions.AccessRight.Download) == 0);
     }
 
     public async Task<bool> CanAsync(Guid userId, ResourceType type, Guid resourceId, AccessLevel level, CancellationToken ct = default)
@@ -297,7 +298,7 @@ public sealed class ModelResourceAuthorizationService(Features.Access.IItemPermi
         if (!a.CanView) throw new NotFoundException(type == ResourceType.Folder ? "Không tìm thấy thư mục hoặc bạn không có quyền truy cập." : "Không tìm thấy tài liệu hoặc bạn không có quyền truy cập.");
         if (level >= AccessLevel.Edit && a.WorkspaceLocked && a.Level >= level)
             throw new AppException("Nhóm tài nguyên đang bị khóa, chỉ cho phép xem.", 423);
-        var ok = level switch { AccessLevel.Manage => a.CanManage, AccessLevel.Edit => a.CanEdit, _ => a.Level >= level };
+        var ok = level switch { AccessLevel.Manage => a.CanManage, AccessLevel.Edit => a.CanEdit, AccessLevel.Download => a.CanDownload, _ => a.Level >= level };
         if (!ok) throw new ForbiddenException(level switch
         {
             AccessLevel.Download => "Bạn không có quyền tải xuống tài liệu này.",

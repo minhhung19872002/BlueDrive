@@ -1,8 +1,9 @@
 import { Form, Input, InputNumber, Modal, Radio, Select, TreeSelect } from 'antd'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { applyFieldErrors } from '@/api/formErrors'
 import { qk } from '@/api/queryKeys'
-import { createWorkspace, updateWorkspace } from '@/api/workspaces'
+import { createWorkspace, listSpaceTemplates, updateWorkspace } from '@/api/workspaces'
 import { useApiMutation } from '@/hooks/useApiMutation'
 import { useOrgTree } from '@/hooks/useLookups'
 import { useCan } from '@/hooks/usePermissions'
@@ -20,6 +21,7 @@ interface FormValues {
   quotaGb?: number | null
   memberIds?: string[]
   memberRole: WorkspaceMemberRole
+  template?: string
 }
 
 /** Create (#28) or edit a group / organization workspace. */
@@ -38,6 +40,8 @@ export default function WorkspaceFormModal({
   const orgs = useOrgTree(false)
   const [form] = Form.useForm<FormValues>()
   const type = Form.useWatch('type', form)
+  const template = Form.useWatch('template', form)
+  const templates = useQuery({ queryKey: ['space-templates'], queryFn: listSpaceTemplates, enabled: !workspace, staleTime: 60 * 60_000 })
 
   const save = useApiMutation(
     (body: SaveWorkspaceRequest) => (workspace ? updateWorkspace(workspace.id, body) : createWorkspace(body)),
@@ -133,6 +137,9 @@ export default function WorkspaceFormModal({
         )}
         {!workspace && (
           <>
+            <Form.Item name="template" label={t('workspace.template')} extra={templates.data?.find((x) => x.code === template)?.description}>
+              <Select allowClear placeholder={t('workspace.templateBlank')} options={(templates.data ?? []).map((x) => ({ value: x.code, label: x.name }))} />
+            </Form.Item>
             <Form.Item name="memberIds" label={t('workspace.initialMembers')}>
               <UserPicker />
             </Form.Item>

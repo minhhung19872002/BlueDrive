@@ -37,7 +37,9 @@ public sealed class AccessFilter(IAppDbContext db, IPermissionService rbac)
         if (!v.CanViewDocs) return db.Securables.Where(_ => false).Select(s => s.Id);
         var scopes = Scopes(v, AccessRight.ViewItems);
         var selfOnly = SelfOnly(v, AccessRight.ViewItems);
-        return db.Securables.Where(s => !s.IsDeleted && (s.OwnerUserId == v.UserId || scopes.Contains(s.AclScopeId) || selfOnly.Contains(s.Id))).Select(s => s.Id);
+        var deleted = db.Workspaces.Where(w => w.Status == SpaceStatus.Deleted).Select(w => w.Id);
+        return db.Securables.Where(s => !s.IsDeleted && !deleted.Contains(s.SpaceId ?? s.PersonalDriveId ?? Guid.Empty)
+                                        && (s.OwnerUserId == v.UserId || scopes.Contains(s.AclScopeId) || selfOnly.Contains(s.Id))).Select(s => s.Id);
     }
 
     /// <summary>Nodes granted "chỉ mục này" (not in scope_grants, which hold what the nodes below inherit).</summary>

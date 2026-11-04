@@ -141,7 +141,8 @@ public sealed class ListSyncRootsHandler(IAppDbContext db, ICurrentUser me, IRes
         await policy.EnsureAllowedAsync(uid, ct);
         var p = await policy.GetAsync(ct);
         var query = await Workspaces.WorkspaceQueries.AccessibleAsync(db, uid, ct);
-        var list = await query.Where(w => w.Type != WorkspaceType.Personal || w.OwnerId == uid).OrderBy(w => w.Type).ThenBy(w => w.Name).ToListAsync(ct);
+        var list = await query.Where(w => (w.Type != WorkspaceType.Personal || w.OwnerId == uid) && (w.Type == WorkspaceType.Personal || w.AllowSync))
+            .OrderBy(w => w.Type).ThenBy(w => w.Name).ToListAsync(ct);
         var roots = new List<SyncRootDto>();
         foreach (var w in list)
         {
@@ -182,7 +183,8 @@ public sealed class SyncSnapshotHandler(IAppDbContext db, ICurrentUser me, SyncA
         if (q.RootId == SyncIds.SharedRoot)
         {
             var roots = (await Workspaces.WorkspaceQueries.AccessibleAsync(db, uid, ct)).Select(w => w.Id);
-            workspaces = (await access.SharedWorkspacesAsync(await roots.ToListAsync(ct), ct)).OrderBy(x => x).ToList();
+            var noSync = await db.Workspaces.Where(w => !w.AllowSync && w.Type != WorkspaceType.Personal).Select(w => w.Id).ToListAsync(ct);
+            workspaces = (await access.SharedWorkspacesAsync(await roots.ToListAsync(ct), ct)).Where(x => !noSync.Contains(x)).OrderBy(x => x).ToList();
         }
         else if (SyncIds.TryParseRoot(q.RootId, out var wsId))
         {

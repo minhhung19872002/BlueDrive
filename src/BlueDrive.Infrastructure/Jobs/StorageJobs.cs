@@ -59,6 +59,8 @@ public sealed class TrashRetentionJob(ISender mediator, ILogger<TrashRetentionJo
     {
         var n = await mediator.Send(new PurgeExpiredTrashCommand(), ct);
         if (n > 0) logger.LogInformation("Đã xóa vĩnh viễn {Count} mục hết hạn lưu trong thùng rác", n);
+        var spaces = await mediator.Send(new Application.Features.Workspaces.PurgeExpiredSpacesCommand(), ct);
+        if (spaces > 0) logger.LogInformation("Đã xóa vĩnh viễn {Count} Space quá 93 ngày trong thùng rác hệ thống", spaces);
     }
 }
 

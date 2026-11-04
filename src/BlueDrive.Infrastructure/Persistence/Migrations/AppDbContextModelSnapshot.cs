@@ -3197,9 +3197,25 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(40)")
                         .HasColumnName("access_request_deciders");
 
+                    b.Property<bool>("ActivityForMembers")
+                        .HasColumnType("boolean")
+                        .HasColumnName("activity_for_members");
+
+                    b.Property<bool>("AllowDownload")
+                        .HasColumnType("boolean")
+                        .HasColumnName("allow_download");
+
                     b.Property<bool>("AllowItemSharing")
                         .HasColumnType("boolean")
                         .HasColumnName("allow_item_sharing");
+
+                    b.Property<bool>("AllowSync")
+                        .HasColumnType("boolean")
+                        .HasColumnName("allow_sync");
+
+                    b.Property<Guid?>("CoverFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cover_file_id");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -3243,6 +3259,24 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("quota_bytes");
 
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("StatusChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("status_changed_at");
+
+                    b.Property<string>("Template")
+                        .HasColumnType("text")
+                        .HasColumnName("template");
+
+                    b.Property<int?>("TrashRetentionDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("trash_retention_days");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasMaxLength(40)
@@ -3271,6 +3305,41 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_workspaces_owner_id_type");
 
                     b.ToTable("workspaces", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.WorkspaceGroupMember", b =>
+                {
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.Property<Guid>("PrincipalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("principal_id");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("added_at");
+
+                    b.Property<string>("MemberRole")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("member_role");
+
+                    b.Property<string>("PrincipalKind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("principal_kind");
+
+                    b.HasKey("WorkspaceId", "PrincipalId")
+                        .HasName("pk_workspace_group_members");
+
+                    b.HasIndex("PrincipalId")
+                        .HasDatabaseName("ix_workspace_group_members_principal_id");
+
+                    b.ToTable("workspace_group_members", (string)null);
                 });
 
             modelBuilder.Entity("BlueDrive.Domain.Entities.WorkspaceMember", b =>

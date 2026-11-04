@@ -227,13 +227,19 @@ public sealed class PurgeExpiredTrashHandler(IAppDbContext db, ISettingsService 
     public async Task<int> Handle(PurgeExpiredTrashCommand cmd, CancellationToken ct)
     {
         var days = await settings.GetAsync(SettingKeys.TrashRetentionDays, 30, ct);
-        if (days <= 0) return 0;
-        var cutoff = clock.GetUtcNow().UtcDateTime.AddDays(-days);
+        // A Space may set its own number of days (spec 6); the system's applies elsewhere (0 = kept).
+        var own = await db.Workspaces.Where(w => w.TrashRetentionDays != null).ToDictionaryAsync(w => w.Id, w => w.TrashRetentionDays!.Value, ct);
+        var shortest = own.Values.Append(days > 0 ? days : int.MaxValue).Min();
+        if (shortest == int.MaxValue) return 0;
+        var now = clock.GetUtcNow().UtcDateTime;
+        var first = now.AddDays(-shortest);
         // Two queries: EF cannot translate Concat after projecting into a record constructor.
-        var fileIds = await db.Files.Where(f => f.IsTrashRoot && f.IsDeleted && f.DeletedAt < cutoff).Select(f => f.Id).ToListAsync(ct);
-        var folderIds = await db.Folders.Where(f => f.IsTrashRoot && f.IsDeleted && f.DeletedAt < cutoff).Select(f => f.Id).ToListAsync(ct);
-        var items = fileIds.Select(id => new ItemRef("file", id)).Concat(folderIds.Select(id => new ItemRef("folder", id))).ToList();
-        foreach (var i in items) await purger.PurgeAsync(i, $"auto_retention_{days}_days", ct);
+        var files = await db.Files.Where(f => f.IsTrashRoot && f.IsDeleted && f.DeletedAt < first).Select(f => new { f.Id, f.WorkspaceId, f.DeletedAt }).ToListAsync(ct);
+        var folders = await db.Folders.Where(f => f.IsTrashRoot && f.IsDeleted && f.DeletedAt < first).Select(f => new { f.Id, f.WorkspaceId, f.DeletedAt }).ToListAsync(ct);
+        bool Due(Guid ws, DateTime? at) => (own.TryGetValue(ws, out var d) ? d : days) is var keep && keep > 0 && at < now.AddDays(-keep);
+        var items = files.Where(f => Due(f.WorkspaceId, f.DeletedAt)).Select(f => (Ref: new ItemRef("file", f.Id), f.WorkspaceId))
+            .Concat(folders.Where(f => Due(f.WorkspaceId, f.DeletedAt)).Select(f => (Ref: new ItemRef("folder", f.Id), f.WorkspaceId))).ToList();
+        foreach (var i in items) await purger.PurgeAsync(i.Ref, $"auto_retention_{(own.TryGetValue(i.WorkspaceId, out var d) ? d : days)}_days", ct);
         return items.Count;
     }
 }

@@ -44,6 +44,31 @@ public class Workspace : AuditableEntity
     /// <summary>Single files and folders may be shared (given their own permissions).</summary>
     public bool AllowItemSharing { get; set; } = true;
     public AccessRequestDeciders AccessRequestDeciders { get; set; }
+    /// <summary>Spec 6: active → archived (read only, hidden from the default list, still found by search) → deleted (system trash, 93 days).</summary>
+    public SpaceStatus Status { get; set; }
+    public DateTime? StatusChangedAt { get; set; }
+    /// <summary>Cover image: an image file of the Space.</summary>
+    public Guid? CoverFileId { get; set; }
+    /// <summary>Template the Space was created from (blank, department, project, campaign).</summary>
+    public string? Template { get; set; }
+    /// <summary>People who do not manage the Space may download / print / copy.</summary>
+    public bool AllowDownload { get; set; } = true;
+    /// <summary>The Space may be synced to computers (BlueDrive Desktop).</summary>
+    public bool AllowSync { get; set; } = true;
+    /// <summary>Days items stay in the Space's trash (null = as the system).</summary>
+    public int? TrashRetentionDays { get; set; }
+    /// <summary>Members see the Activity tab (otherwise only who manages the Space).</summary>
+    public bool ActivityForMembers { get; set; } = true;
+}
+
+/// <summary>A user group or a unit (with its sub-units) in one of the Space's member groups (spec 6 "Thành viên").</summary>
+public class WorkspaceGroupMember
+{
+    public Guid WorkspaceId { get; set; }
+    public PrincipalKind PrincipalKind { get; set; }
+    public Guid PrincipalId { get; set; }
+    public WorkspaceMemberRole MemberRole { get; set; }
+    public DateTime AddedAt { get; set; }
 }
 
 public class WorkspaceMember

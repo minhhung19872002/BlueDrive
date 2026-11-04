@@ -24,7 +24,62 @@ public class WorkspacesController : ApiControllerBase
 {
     /// <summary>Các không gian của tôi (cá nhân + nhóm/đơn vị tham gia).</summary>
     [HttpGet]
-    public Task<IReadOnlyList<WorkspaceDto>> Mine([FromQuery] WorkspaceType? type) => Mediator.Send(new ListMyWorkspacesQuery(type));
+    public Task<IReadOnlyList<WorkspaceDto>> Mine([FromQuery] WorkspaceType? type, [FromQuery] bool includeArchived = false) =>
+        Mediator.Send(new ListMyWorkspacesQuery(type, includeArchived));
+
+    /// <summary>Mẫu Space (trống, phòng ban, dự án, chiến dịch truyền thông).</summary>
+    [HttpGet("templates")]
+    public Task<IReadOnlyList<SpaceTemplate>> Templates() => Mediator.Send(new ListSpaceTemplatesQuery());
+
+    /// <summary>Nhóm người dùng / đơn vị là thành viên Space.</summary>
+    [HttpGet("{id:guid}/group-members")]
+    public Task<IReadOnlyList<SpaceGroupMemberDto>> GroupMembers(Guid id) => Mediator.Send(new ListSpaceGroupMembersQuery(id));
+
+    [HttpPost("{id:guid}/group-members")]
+    public async Task<IActionResult> AddGroupMembers(Guid id, AddSpaceGroupMembersCommand cmd) => Ok(new { count = await Mediator.Send(cmd with { WorkspaceId = id }) });
+
+    [HttpDelete("{id:guid}/group-members/{principalId:guid}")]
+    public async Task<IActionResult> RemoveGroupMember(Guid id, Guid principalId)
+    {
+        await Mediator.Send(new RemoveSpaceGroupMemberCommand(id, principalId));
+        return NoContent();
+    }
+
+    /// <summary>Lưu trữ (chỉ đọc) / hoạt động lại.</summary>
+    [HttpPut("{id:guid}/status")]
+    public async Task<IActionResult> Status(Guid id, SetSpaceStatusCommand cmd)
+    {
+        await Mediator.Send(cmd with { WorkspaceId = id });
+        return NoContent();
+    }
+
+    [HttpGet("{id:guid}/settings")]
+    public Task<SpaceSettingsDto> Settings(Guid id) => Mediator.Send(new GetSpaceSettingsQuery(id));
+
+    [HttpPut("{id:guid}/settings")]
+    public async Task<IActionResult> SetSettings(Guid id, SetSpaceSettingsCommand cmd)
+    {
+        await Mediator.Send(cmd with { WorkspaceId = id });
+        return NoContent();
+    }
+
+    /// <summary>Thùng rác Space của hệ thống (Space đã xóa, giữ 93 ngày).</summary>
+    [HttpGet("trash"), HasPermission(Perm.WorkspaceAdmin)]
+    public Task<IReadOnlyList<DeletedSpaceDto>> Trash() => Mediator.Send(new ListDeletedSpacesQuery());
+
+    [HttpPost("trash/{id:guid}/restore"), HasPermission(Perm.WorkspaceAdmin)]
+    public async Task<IActionResult> RestoreSpace(Guid id)
+    {
+        await Mediator.Send(new RestoreSpaceCommand(id));
+        return NoContent();
+    }
+
+    [HttpDelete("trash/{id:guid}"), HasPermission(Perm.WorkspaceAdmin)]
+    public async Task<IActionResult> PurgeSpace(Guid id)
+    {
+        await Mediator.Send(new PurgeSpaceCommand(id));
+        return NoContent();
+    }
 
     /// <summary>Toàn bộ nhóm tài nguyên (màn hình Cấu hình nhóm tài nguyên).</summary>
     [HttpGet("all"), HasPermission(Perm.WorkspaceAdmin)]

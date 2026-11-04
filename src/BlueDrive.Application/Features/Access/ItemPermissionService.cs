@@ -37,6 +37,15 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
 {
     private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(5);
     private readonly Dictionary<(Guid, Guid), (AccessRight, bool)> _request = [];
+    private readonly Dictionary<Guid, SpaceState> _spaces = [];
+
+    /// <summary>The Space's state, once per request.</summary>
+    private async Task<SpaceState> SpaceAsync(Guid? root, CancellationToken ct)
+    {
+        if (root is not { } id) return SpaceState.None;
+        if (!_spaces.TryGetValue(id, out var state)) _spaces[id] = state = await SpaceState.LoadAsync(db, id, ct);
+        return state;
+    }
 
     public async Task<AccessRight> GetEffectiveAsync(Guid userId, Guid itemId, CancellationToken ct = default)
     {
@@ -56,8 +65,9 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
             if (user.CanViewDocs)
             {
                 var (direct, membership) = await ScopeRightsAsync(user, node.AclScopeId, node.Id == node.AclScopeId, ct);
-                result = (Restrictions.Apply(user, node.OwnerUserId == userId, direct, membership, await FileFactsAsync(node.Kind, node.Id, ct), locked: false),
-                    await LockedAsync(node.Root, ct));
+                var state = await SpaceAsync(node.Root, ct);
+                result = (state.Apply(Restrictions.Apply(user, node.OwnerUserId == userId, direct, membership, await FileFactsAsync(node.Kind, node.Id, ct), locked: false)),
+                    state.Locked);
             }
         }
         _request[(userId, itemId)] = result;
@@ -97,7 +107,10 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
         var restrictions = new List<string>();
         if (!user.CanViewDocs) restrictions.Add("Vai trò hệ thống không có quyền xem tư liệu.");
         if (!user.CanEditDocs) restrictions.Add("Vai trò hệ thống không có quyền sửa tư liệu: quyền ghi có được qua thành viên Space bị bỏ (trừ thêm mới, phê duyệt).");
-        if (await LockedAsync(node.SpaceId ?? node.PersonalDriveId, ct)) restrictions.Add("Không gian đang bị khóa: chỉ còn quyền đọc.");
+        var space = await SpaceState.LoadAsync(db, node.SpaceId ?? node.PersonalDriveId, ct);
+        if (space.Deleted) restrictions.Add("Không gian đã bị xóa (đang trong thùng rác hệ thống): không ai truy cập được.");
+        else if (space.Locked) restrictions.Add("Không gian đang bị khóa hoặc đã lưu trữ: chỉ còn quyền đọc.");
+        if (space.NoDownload) restrictions.Add("Không gian tắt tải xuống: chỉ người quản lý Space tải xuống, in, sao chép được.");
         if (await FileFactsAsync(node.Kind, node.Id, ct) is { Approved: false }) restrictions.Add("Tệp chưa được duyệt: chỉ người tải lên, người sửa và người duyệt thấy.");
         return new PermissionExplanation(await GetEffectiveAsync(userId, itemId, ct), scope.Name, scope.Id != node.Id, sources, restrictions);
     }
@@ -169,7 +182,6 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
         kind != SecurableKind.File ? null
         : await db.Files.AsNoTracking().Where(f => f.Id == id).Select(f => new Restrictions.FileFacts(f.CreatedBy, f.ApprovalStatus == ApprovalStatus.Approved)).FirstOrDefaultAsync(ct);
 
-    private async Task<bool> LockedAsync(Guid? root, CancellationToken ct) => root is { } id && await db.Workspaces.AnyAsync(w => w.Id == id && w.IsLocked, ct);
 }
 
 /// <summary>
