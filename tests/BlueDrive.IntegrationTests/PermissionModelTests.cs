@@ -84,8 +84,7 @@ public class PermissionModelTests(ApiFactory factory)
             (await R(inGroupId, inC)).Has(AccessRight.Download).Should().BeTrue("the group's grant on A reaches C");
             (await R(sharedId, inC)).Has(AccessRight.Download).Should().BeTrue();
             (await R(sharedId, c)).Should().Be(AccessRight.None, "sharing a file gives nothing on its folder");
-            (await R(viewerId, inC)).Should().Be(AccessRight.ViewItems | AccessRight.OpenItems | AccessRight.Download | AccessRight.Print
-                                                 | AccessRight.CopyContent | AccessRight.ViewVersions, "Khách xem → Người xem");
+            (await R(viewerId, inC)).Should().Be(AccessRight.ViewItems | AccessRight.OpenItems, "old viewer members could not download: Chỉ xem (không tải)");
 
             // scope_grants agree with the entries (used to trim queries in SQL from Perm-Phase 3 on).
             var groupGrant = await db.ScopeGrants.AsNoTracking().SingleAsync(g => g.ScopeId == a && g.PrincipalId == group);

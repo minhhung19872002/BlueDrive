@@ -45,7 +45,9 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock)
         (SpaceGroupKind.Members, "Thành viên", SystemLevels.Editor),
         (SpaceGroupKind.Contributors, "Đóng góp", SystemLevels.Contributor),
         (SpaceGroupKind.Approvers, "Duyệt nội dung", SystemLevels.Approver),
-        (SpaceGroupKind.Visitors, "Khách xem", SystemLevels.Viewer),
+        // Old "Người xem" members could view but not download: projected as "Chỉ xem (không tải)" so nobody gains a right. Spaces
+        // created in the new model (Perm-Phase 5) give their visitors the spec's default, "Người xem".
+        (SpaceGroupKind.Visitors, "Khách xem", SystemLevels.ViewOnly),
     ];
 
     public static string Label(Guid id) => id.ToString("N");

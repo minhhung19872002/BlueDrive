@@ -67,7 +67,9 @@ Những chỗ các bản sao quy tắc đang lệch nhau (sẽ hết khi mọi k
 các nhóm (kể cả nhóm cha khi lồng nhau), vai trò, đơn vị của mình (đúng đơn vị), "đơn vị và đơn vị con" của mình và mọi đơn vị cha,
 các nhóm không gian, `everyone`. Mỗi người dùng có `membership_version`.
 
-**Nhóm của không gian:** Chủ sở hữu (Quản lý), Thành viên (Biên tập), Đóng góp, Duyệt nội dung, Khách xem (Người xem). Chủ cũ
+**Nhóm của không gian:** Chủ sở hữu (Quản lý), Thành viên (Biên tập), Đóng góp, Duyệt nội dung, Khách xem. Khách xem chuyển từ dữ liệu cũ
+nhận **Chỉ xem (không tải)**: thành viên vai trò Người xem trước đây không tải được, chuyển sang "Người xem" sẽ mở rộng quyền (lần đối chiếu
+trên prod ngày 04/11/2026 thấy đúng 1 cặp như vậy). Space tạo mới từ Perm-Phase 5 dùng mặc định của đặc tả: Khách xem → Người xem. Chủ cũ
 (`owner_id`) của không gian nhóm/đơn vị vào Chủ sở hữu. Drive của tôi: chủ có toàn quyền theo quy tắc chủ sở hữu.
 
 **Cấp quyền cũ → mới:** Xem → *Chỉ xem (không tải)*, Tải xuống → *Người xem*, Sửa → *Biên tập*, Quản lý → *Chủ sở hữu / Quản lý*.
