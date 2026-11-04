@@ -110,6 +110,25 @@ public sealed class DesktopTests : IDisposable
     }
 
     [Fact]
+    public async Task Wizard_sign_in_can_be_started_again_after_the_browser_tab_was_closed()
+    {
+        var opened = new List<Uri>();
+        var vm = new WizardViewModel(new AppHost(_home), "https://bluedrive.example") { OpenBrowser = opened.Add };
+        var first = vm.SignInCommand.ExecuteAsync(null);
+        vm.SignInCommand.CanExecute(null).Should().BeTrue("the user closed the browser tab: pressing again opens it again");
+        var second = vm.SignInCommand.ExecuteAsync(null);
+        await first; // given up for the new attempt, without reporting anything
+        opened.Should().HaveCount(2);
+        vm.Busy.Should().BeTrue("the second attempt is still waiting");
+        vm.Error.Should().BeNull();
+
+        vm.BackCommand.Execute(null); // "Quay lại" gives the waiting sign-in up
+        await second;
+        vm.Busy.Should().BeFalse();
+        vm.Error.Should().Be("Đã hủy đăng nhập.");
+    }
+
+    [Fact]
     public void Wizard_checks_the_sync_folder()
     {
         var host = new AppHost(_home);

@@ -28,6 +28,8 @@ public partial class WizardViewModel : ObservableObject
     private readonly AppHost _host;
     private readonly Guid _accountId = Guid.NewGuid();
     private CancellationTokenSource? _signIn;
+    /// <summary>Opens the sign-in page (default: the system browser; tests capture the address).</summary>
+    internal Action<Uri>? OpenBrowser { get; init; }
     private DeviceTokens? _tokens;
     private HttpRemoteStore.UserInfo? _me;
     private bool _finished;
@@ -86,6 +88,7 @@ public partial class WizardViewModel : ObservableObject
     private void Back()
     {
         Error = null;
+        _signIn?.Cancel(); // a browser sign-in still waiting is given up
         if (CanBack) Step--;
     }
 
@@ -139,17 +142,24 @@ public partial class WizardViewModel : ObservableObject
         finally { Busy = false; }
     }
 
-    [RelayCommand]
+    /// <summary>
+    /// Can be pressed again while waiting (browser tab closed without "Cho phép"): the waiting sign-in is given up and the browser opens
+    /// once more — otherwise the button stayed disabled for the 10 minutes of the wait.
+    /// </summary>
+    [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task SignInAsync()
     {
         if (ServerUri is not { } server) return;
+        _signIn?.Cancel();
+        var attempt = _signIn = new CancellationTokenSource();
         Error = null;
         Busy = true;
-        _signIn = new CancellationTokenSource();
         try
         {
             var auth = new DesktopAuthenticator(server);
-            _tokens = await auth.SignInAsync(DeviceInfo.Current(_host.AppVersion), null, TimeSpan.FromMinutes(10), _signIn.Token);
+            var tokens = await auth.SignInAsync(DeviceInfo.Current(_host.AppVersion), OpenBrowser, TimeSpan.FromMinutes(10), attempt.Token);
+            if (attempt != _signIn) return; // replaced by a newer attempt
+            _tokens = tokens;
             var store = _host.Store.Tokens(_accountId);
             store.Save(_tokens);
             using var http = BlueDriveHttp.Create(server, store, auth);
@@ -162,11 +172,15 @@ public partial class WizardViewModel : ObservableObject
             }
             SignedIn = $"Đã đăng nhập: {_me.FullName} ({_me.Username})";
         }
+        catch (OperationCanceledException) when (attempt != _signIn) { } // replaced by a newer attempt: it reports
         catch (OperationCanceledException) { Error = "Đã hủy đăng nhập."; }
         catch (TimeoutException) { Error = "Hết thời gian chờ đăng nhập. Hãy thử lại."; }
         catch (SignInRequiredException ex) { Error = ex.Message; }
         catch (Exception ex) when (ex is Sync.Core.RemoteTransientException or HttpRequestException) { Error = "Không kết nối được máy chủ BlueDrive."; }
-        finally { Busy = false; }
+        finally
+        {
+            if (attempt == _signIn) Busy = false;
+        }
     }
 
     /// <summary>Spec 7.2: "%USERPROFILE%\BlueDrive - &lt;Tên đơn vị&gt;" (plain "BlueDrive" when the server tells no organisation; another account adds the server).</summary>

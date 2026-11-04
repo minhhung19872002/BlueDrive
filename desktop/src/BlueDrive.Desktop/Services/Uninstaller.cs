@@ -33,6 +33,11 @@ public static class Uninstaller
             try { RemoveAccount(acc, deleteFiles); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or COMException) { Log.Warning(ex, "Gỡ tài khoản {Account}", acc.Username); }
         }
+        // Tokens, state, settings right away: Velopack stops this hook after 30 s, and the ONLYOFFICE steps below may wait for a question
+        // or an elevation prompt (the logs folder is in use by this process: removed with the rest when possible).
+        foreach (var dir in Directory.Exists(baseDir) ? Directory.EnumerateDirectories(baseDir) : [])
+            if (!string.Equals(Path.GetFileName(dir), "logs", StringComparison.OrdinalIgnoreCase)) TryRun(() => Directory.Delete(dir, true), dir);
+        foreach (var file in Directory.Exists(baseDir) ? Directory.EnumerateFiles(baseDir) : []) TryRun(() => File.Delete(file), file);
         if (registry)
         {
             TryRun(ExplorerMenu.Unregister, "menu chuột phải");
@@ -52,11 +57,6 @@ public static class Uninstaller
                 ooRemoved = OnlyOfficeSetup.Uninstall(editorsExe);
             providerRemoved = OnlyOfficeService.RemoveProvider(editorsExe, allowElevation: true);
         }
-
-        // Tokens, state, settings (the logs folder is in use by this process: removed with the rest when possible).
-        foreach (var dir in Directory.Exists(baseDir) ? Directory.EnumerateDirectories(baseDir) : [])
-            if (!string.Equals(Path.GetFileName(dir), "logs", StringComparison.OrdinalIgnoreCase)) TryRun(() => Directory.Delete(dir, true), dir);
-        foreach (var file in Directory.Exists(baseDir) ? Directory.EnumerateFiles(baseDir) : []) TryRun(() => File.Delete(file), file);
         Log.Information("Đã gỡ BlueDrive Desktop: {Count} tài khoản, xóa tệp: {Delete}, provider ONLYOFFICE: {Provider}", accounts.Count, deleteFiles, providerRemoved);
         return new(accounts.Count, deleteFiles, providerRemoved, ooRemoved);
     }

@@ -77,7 +77,8 @@ public sealed class PackagingTests : IDisposable
         var asked = 0;
         var r = Uninstaller.Run(home, (_, def) =>
         {
-            asked++;
+            // Velopack stops the hook after 30 s: by the ONLYOFFICE question (which may wait), the tokens are already gone.
+            if (++asked == 2) Directory.EnumerateFileSystemEntries(home).Should().BeEmpty("tokens, state and settings are removed first");
             return def;
         }, editors, registry: false);
         asked.Should().Be(2, "keep files? and remove ONLYOFFICE? (default: keep)");
