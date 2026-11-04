@@ -156,6 +156,8 @@ public class AclEntry
     public Guid? AdditiveTargetId { get; set; }
     /// <summary>False: "chỉ mục này" — the grant is for the scope's own node, not for the nodes below that inherit from it.</summary>
     public bool AppliesToChildren { get; set; } = true;
+    /// <summary>Note sent with the grant ("Gửi thông báo kèm lời nhắn"), shown in "Được chia sẻ với tôi".</summary>
+    public string? Message { get; set; }
 }
 
 /// <summary>Flattened ACL used to trim queries in SQL: per scope and principal, the OR of the rights of its live entries.</summary>

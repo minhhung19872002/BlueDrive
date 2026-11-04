@@ -337,6 +337,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<AclEntry>(e =>
         {
             e.Property(x => x.AppliesToChildren).HasDefaultValue(true);
+            e.Property(x => x.Message).HasMaxLength(1000);
             e.HasIndex(x => x.ScopeId);
             e.HasIndex(x => x.PrincipalId);
             e.HasIndex(x => x.ExpiresAt);

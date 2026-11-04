@@ -27,13 +27,13 @@ public sealed class LegacyAclSync(IAppDbContext db, AclEditor editor, TimeProvid
         var acl = await db.ResourcePermissions.AsNoTracking().Where(a => a.ResourceType == type && a.ResourceId == id).ToListAsync(ct);
         var shares = await db.Shares.AsNoTracking().Where(s => s.ResourceType == type && s.ResourceId == id).ToListAsync(ct);
         var now = clock.GetUtcNow().UtcDateTime;
-        var desired = acl.Select(a => (P: Map(a.PrincipalType, a.PrincipalId), Level: PermissionProjection.LevelOf(a.AccessLevel), a.ExpiresAt, By: a.CreatedBy, Children: a.Inherit))
-            .Concat(shares.Select(s => (P: Map(s.SharedWithType, s.SharedWithId), Level: PermissionProjection.LevelOf(s.AccessLevel), ExpiresAt: (DateTime?)null, By: (Guid?)s.SharedBy, Children: true)))
+        var desired = acl.Select(a => (P: Map(a.PrincipalType, a.PrincipalId), Level: PermissionProjection.LevelOf(a.AccessLevel), a.ExpiresAt, By: a.CreatedBy, Children: a.Inherit, Message: (string?)null))
+            .Concat(shares.Select(s => (P: Map(s.SharedWithType, s.SharedWithId), Level: PermissionProjection.LevelOf(s.AccessLevel), ExpiresAt: (DateTime?)null, By: (Guid?)s.SharedBy, Children: true, s.Message)))
             .Where(d => d.P is not null)
             .Select(d => new AclEntry
             {
                 ScopeId = id, PrincipalKind = d.P!.Value.Kind, PrincipalId = d.P!.Value.Id, PermissionLevelId = d.Level, ExpiresAt = d.ExpiresAt,
-                GrantedBy = d.By, GrantedAt = now, Source = AclSource.Direct, AppliesToChildren = d.Children,
+                GrantedBy = d.By, GrantedAt = now, Source = AclSource.Direct, AppliesToChildren = d.Children, Message = d.Message,
             }).ToList();
 
         var root = type == ResourceType.Workspace;

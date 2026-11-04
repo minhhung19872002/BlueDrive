@@ -282,6 +282,60 @@ public class ItemAccessController : ApiControllerBase
     [HttpGet("explain")]
     public Task<Application.Features.Access.PermissionExplanation> Explain(Guid id, [FromQuery] Guid? user) =>
         Mediator.Send(new Application.Features.Access.ExplainPermissionsQuery(id, user));
+
+    /// <summary>Người có quyền truy cập (kèm nguồn quyền).</summary>
+    [HttpGet("permissions")]
+    public Task<Application.Features.Access.ItemPermissionsDto> Permissions(Guid id) => Mediator.Send(new Application.Features.Access.GetItemPermissionsQuery(id));
+
+    /// <summary>Cấp quyền cho người, nhóm hoặc đơn vị.</summary>
+    [HttpPost("permissions")]
+    public async Task<IActionResult> Grant(Guid id, Application.Features.Access.GrantItemPermissionCommand cmd) =>
+        Ok(new { granted = await Mediator.Send(cmd with { ItemId = id }) });
+
+    [HttpPatch("permissions/{entryId:guid}")]
+    public async Task<IActionResult> UpdatePermission(Guid id, Guid entryId, Application.Features.Access.UpdateItemPermissionCommand cmd)
+    {
+        await Mediator.Send(cmd with { ItemId = id, EntryId = entryId });
+        return NoContent();
+    }
+
+    [HttpDelete("permissions/{entryId:guid}")]
+    public async Task<IActionResult> RevokePermission(Guid id, Guid entryId)
+    {
+        await Mediator.Send(new Application.Features.Access.RevokeItemPermissionCommand(id, entryId));
+        return NoContent();
+    }
+
+    /// <summary>Ngắt kế thừa (copy = sao chép quyền hiện tại).</summary>
+    [HttpPost("inheritance")]
+    public async Task<IActionResult> BreakInheritance(Guid id, [FromQuery] bool copy = true)
+    {
+        await Mediator.Send(new Application.Features.Access.SetInheritanceCommand(id, Inherit: false, Copy: copy));
+        return NoContent();
+    }
+
+    /// <summary>Khôi phục kế thừa (recursive = cả các mục con có quyền riêng).</summary>
+    [HttpDelete("inheritance")]
+    public async Task<IActionResult> RestoreInheritance(Guid id, [FromQuery] bool recursive = false)
+    {
+        await Mediator.Send(new Application.Features.Access.SetInheritanceCommand(id, Inherit: true, Recursive: recursive));
+        return NoContent();
+    }
+
+    [HttpPut("general-access")]
+    public async Task<IActionResult> GeneralAccess(Guid id, Application.Features.Access.SetGeneralAccessCommand cmd)
+    {
+        await Mediator.Send(cmd with { ItemId = id });
+        return NoContent();
+    }
+}
+
+/// <summary>Cấp quyền (Permission Level).</summary>
+[Route("api/v1/permission-levels")]
+public class PermissionLevelsController : ApiControllerBase
+{
+    [HttpGet]
+    public Task<IReadOnlyList<Application.Features.Access.PermissionLevelDto>> List() => Mediator.Send(new Application.Features.Access.ListPermissionLevelsQuery());
 }
 
 /// <summary>Thông báo của tôi.</summary>

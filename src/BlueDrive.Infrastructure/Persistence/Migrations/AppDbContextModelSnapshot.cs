@@ -60,6 +60,11 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_additive");
 
+                    b.Property<string>("Message")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("message");
+
                     b.Property<Guid>("PermissionLevelId")
                         .HasColumnType("uuid")
                         .HasColumnName("permission_level_id");

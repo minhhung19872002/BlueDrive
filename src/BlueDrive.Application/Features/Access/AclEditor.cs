@@ -70,14 +70,15 @@ public sealed class AclEditor(IAppDbContext db, TimeProvider clock)
     /// Grants a level to a principal on the node. Like SharePoint ("sharepoint_scope" mode), a node without its own ACL first breaks
     /// inheritance, copying the inherited entries.
     /// </summary>
-    public async Task<AclEntry> GrantAsync(Guid nodeId, PrincipalKind kind, Guid principalId, Guid levelId, DateTime? expiresAt, Guid? by, CancellationToken ct)
+    public async Task<AclEntry> GrantAsync(Guid nodeId, PrincipalKind kind, Guid principalId, Guid levelId, DateTime? expiresAt, Guid? by, CancellationToken ct,
+        string? message = null)
     {
         var node = await db.Securables.FirstOrDefaultAsync(s => s.Id == nodeId, ct) ?? throw new NotFoundException("Không tìm thấy tư liệu.");
         if (!node.HasUniqueAcl) await BreakInheritanceAsync(nodeId, copy: true, by, ct);
         var entry = new AclEntry
         {
             ScopeId = nodeId, PrincipalKind = kind, PrincipalId = principalId, PermissionLevelId = levelId, ExpiresAt = expiresAt,
-            GrantedBy = by, GrantedAt = clock.GetUtcNow().UtcDateTime, Source = AclSource.Direct,
+            GrantedBy = by, GrantedAt = clock.GetUtcNow().UtcDateTime, Source = AclSource.Direct, Message = message,
         };
         db.AclEntries.Add(entry);
         await db.SaveChangesAsync(ct);

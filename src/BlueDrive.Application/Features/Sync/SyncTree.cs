@@ -91,16 +91,14 @@ public sealed class SyncAccessContext(IAppDbContext db, IResourceAuthorizationSe
     public async Task<List<Guid>> SharedWorkspacesAsync(IEnumerable<Guid> rootWorkspaces, CancellationToken ct)
     {
         var p = _principals!;
-        var principals = p.GroupIds.Concat(p.OrganizationIds).Concat(p.RoleIds).Append(p.UserId).ToList();
         var roots = rootWorkspaces.ToList();
         var now = clock.GetUtcNow().UtcDateTime;
-        var viaShares = db.Shares.Where(s => principals.Contains(s.SharedWithId))
-            .SelectMany(s => db.Folders.Where(f => s.ResourceType == ResourceType.Folder && f.Id == s.ResourceId && !f.IsDeleted).Select(f => f.WorkspaceId)
-                .Concat(db.Files.Where(f => s.ResourceType == ResourceType.File && f.Id == s.ResourceId && !f.IsDeleted).Select(f => f.WorkspaceId)));
-        var viaAcl = db.ResourcePermissions.Where(a => principals.Contains(a.PrincipalId) && (a.ExpiresAt == null || a.ExpiresAt > now))
-            .SelectMany(a => db.Folders.Where(f => a.ResourceType == ResourceType.Folder && f.Id == a.ResourceId && !f.IsDeleted).Select(f => f.WorkspaceId)
-                .Concat(db.Files.Where(f => a.ResourceType == ResourceType.File && f.Id == a.ResourceId && !f.IsDeleted).Select(f => f.WorkspaceId)));
-        var ids = await viaShares.Concat(viaAcl).Distinct().ToListAsync(ct);
+        // Workspaces holding an item granted to the user directly (new permission model), outside their own roots.
+        var principals = await db.PrincipalMemberships.Where(m => m.UserId == p.UserId).Select(m => m.PrincipalId).ToListAsync(ct);
+        var ids = await db.AclEntries.Where(e => e.Source == AclSource.Direct && principals.Contains(e.PrincipalId) && (e.ExpiresAt == null || e.ExpiresAt > now))
+            .Join(db.Securables.Where(n => !n.IsDeleted && (n.Kind == SecurableKind.Folder || n.Kind == SecurableKind.File)), e => e.ScopeId, n => n.Id,
+                (e, n) => n.SpaceId ?? n.PersonalDriveId ?? Guid.Empty)
+            .Distinct().ToListAsync(ct);
         return ids.Except(roots).ToList();
     }
 
