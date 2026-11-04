@@ -142,8 +142,8 @@ async function openLinkTab(page: Page) {
 
 /** Picks an option of an AntD select found by its form label. */
 async function choose(page: Page, label: string, option: string) {
-  await page.getByRole('dialog').getByLabel(label).click()
-  await page.locator('.ant-select-item-option', { hasText: option }).click()
+  await page.getByRole('dialog').locator('.ant-form-item', { hasText: label }).locator('.ant-select-selector').click()
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option', { hasText: option }).click()
 }
 
 async function saveLink(page: Page) {
