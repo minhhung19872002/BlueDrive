@@ -138,3 +138,13 @@ export async function completeUpload(tusId: string, meta: UploadMetadata): Promi
   const { data } = await api.post<UploadResult>(`/uploads/${encodeURIComponent(tusId)}/complete`, meta)
   return data
 }
+
+/** Spec 1.2: a shortcut to a file or folder (in Drive của tôi unless a place is given). */
+export async function createShortcut(targetId: string, workspaceId?: string, folderId?: string | null): Promise<{ id: string }> {
+  const { data } = await api.post<{ id: string }>('/shortcuts', { targetId, workspaceId, folderId })
+  return data
+}
+
+export async function deleteShortcut(id: string): Promise<void> {
+  await api.delete(`/shortcuts/${id}`)
+}

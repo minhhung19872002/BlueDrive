@@ -239,6 +239,7 @@ public sealed class SpaceHandlers(IAppDbContext db, ICurrentUser me, IItemPermis
         await db.ResourcePermissions.Where(p => p.ResourceType == ResourceType.Workspace && p.ResourceId == ws.Id).ExecuteDeleteAsync(ct);
         await db.WorkspaceMembers.Where(m => m.WorkspaceId == ws.Id).ExecuteDeleteAsync(ct);
         await db.WorkspaceGroupMembers.Where(m => m.WorkspaceId == ws.Id).ExecuteDeleteAsync(ct);
+        await db.Shortcuts.Where(s => s.WorkspaceId == ws.Id).ExecuteDeleteAsync(ct);
         await db.Folders.Where(f => f.WorkspaceId == ws.Id).ExecuteDeleteAsync(ct);
         // Bulk: purging updated the Space's usage behind the tracked row.
         db.ChangeTracker.Clear();

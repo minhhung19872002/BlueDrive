@@ -193,6 +193,8 @@ public sealed class TrashPurger(IAppDbContext db, IFileContentService content, Q
         await db.FileCatalogItems.Where(x => fileIds.Contains(x.FileId)).ExecuteDeleteAsync(ct);
         await db.FileVersions.Where(v => fileIds.Contains(v.FileId)).ExecuteDeleteAsync(ct);
         await db.Files.Where(f => fileIds.Contains(f.Id)).ExecuteDeleteAsync(ct);
+        // Shortcuts kept in the folders purged go with them (shortcuts to what is purged stay, shown as deleted).
+        if (folderIds.Count > 0) await db.Shortcuts.Where(s => s.FolderId != null && folderIds.Contains(s.FolderId.Value)).ExecuteDeleteAsync(ct);
         if (folderIds.Count > 0) await db.Folders.Where(f => folderIds.Contains(f.Id)).ExecuteDeleteAsync(ct);
         // Bulk deletes bypass the change journal interceptor: record the purge of the trash root for desktop sync.
         db.ChangeJournal.Add(new ChangeJournalEntry

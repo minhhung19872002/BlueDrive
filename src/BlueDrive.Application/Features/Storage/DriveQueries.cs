@@ -11,7 +11,8 @@ namespace BlueDrive.Application.Features.Storage;
 public sealed record DriveItemDto(
     Guid Id, string Type, string Name, Guid WorkspaceId, Guid? ParentId, long SizeBytes, MediaType? MediaType, string? Extension, string? MimeType,
     DateTime CreatedAt, DateTime? UpdatedAt, Guid? CreatedBy, string? CreatedByName, bool IsStarred, bool HasThumbnail, ApprovalStatus? ApprovalStatus,
-    int? VersionNo, string? Title, IReadOnlyList<string>? Tags, string? WorkspaceName = null, string? ThumbnailUrl = null);
+    int? VersionNo, string? Title, IReadOnlyList<string>? Tags, string? WorkspaceName = null, string? ThumbnailUrl = null,
+    Guid? ShortcutId = null, string? ShortcutState = null);
 
 /// <summary>Adds short-lived signed thumbnail URLs (usable in &lt;img src&gt;) to listing items.</summary>
 public static class ThumbnailUrls
@@ -79,7 +80,8 @@ public static class DriveProjection
 /// <summary>Folder contents: sub-folders first, then files; server-side paging across both (#18, #44).</summary>
 public sealed record ListItemsQuery(Guid WorkspaceId, Guid? FolderId, MediaType? MediaType) : PageQuery, IRequest<PagedResult<DriveItemDto>>;
 
-public sealed class ListItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets, Access.AccessFilter filter)
+public sealed class ListItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets, Access.AccessFilter filter,
+    Access.IItemPermissionService engine)
     : IRequestHandler<ListItemsQuery, PagedResult<DriveItemDto>>
 {
     public async Task<PagedResult<DriveItemDto>> Handle(ListItemsQuery q, CancellationToken ct)
@@ -111,20 +113,26 @@ public sealed class ListItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
             folders = folders.Where(_ => false);
         }
 
+        // Shortcuts of the folder first (spec 1.2), for who may see the folder; not when filtering by name or type.
+        var shortcuts = access.CanView && string.IsNullOrWhiteSpace(q.Q) && !q.MediaType.HasValue
+            ? await ShortcutListing.RowsAsync(db, engine, uid, q.WorkspaceId, q.FolderId, ct) : [];
         var folderCount = await folders.CountAsync(ct);
         var fileCount = await files.CountAsync(ct);
         var skip = (q.SafePage - 1) * q.SafePageSize;
         var take = q.SafePageSize;
         var items = new List<DriveItemDto>(take);
-        if (skip < folderCount)
+        items.AddRange(shortcuts.Skip(skip).Take(take));
+        skip = Math.Max(0, skip - shortcuts.Count);
+        take -= items.Count;
+        if (take > 0 && skip < folderCount)
             items.AddRange(await DriveProjection.Folders(db, DriveProjection.SortFolders(folders, q.Sort).Skip(skip).Take(take), uid).ToListAsync(ct));
-        var remaining = take - items.Count;
+        var remaining = (q.SafePageSize - items.Count);
         if (remaining > 0)
         {
             var fileSkip = Math.Max(0, skip - folderCount);
             items.AddRange(await DriveProjection.Files(db, DriveProjection.SortFiles(files, q.Sort).Skip(fileSkip).Take(remaining), uid).ToListAsync(ct));
         }
-        return new PagedResult<DriveItemDto>(ThumbnailUrls.Apply(items, tickets, uid), folderCount + fileCount, q.SafePage, q.SafePageSize);
+        return new PagedResult<DriveItemDto>(ThumbnailUrls.Apply(items, tickets, uid), shortcuts.Count + folderCount + fileCount, q.SafePage, q.SafePageSize);
     }
 }
 

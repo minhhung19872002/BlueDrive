@@ -243,6 +243,20 @@ public class ShareLink : AuditableEntity
     public bool AllowEdit { get; set; }
 }
 
+/// <summary>Spec 1.2: a shortcut to a file or folder in a drive or a Space folder. It carries no rights; deleting it leaves the target.</summary>
+public class Shortcut : Entity
+{
+    public Guid WorkspaceId { get; set; }
+    public Guid? FolderId { get; set; }
+    public Guid TargetId { get; set; }
+    /// <summary>file or folder.</summary>
+    public string TargetType { get; set; } = "file";
+    /// <summary>Name of the target when the shortcut was made (shown to who may no longer see the target).</summary>
+    public string Name { get; set; } = "";
+    public Guid CreatedBy { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
 /// <summary>A person a link works for: listed ("Người cụ thể") or who opened an organization link — member of the link principal.</summary>
 public class ShareLinkMember
 {

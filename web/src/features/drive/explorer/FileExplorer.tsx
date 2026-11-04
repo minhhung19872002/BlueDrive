@@ -187,13 +187,15 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
     transfer.mutate({ mode: clipboard.mode === 'cut' ? 'move' : 'copy', refs, target })
   }
 
-  const copyToClipboard = (targets: DriveItem[]) => {
+  const copyToClipboard = (selection: DriveItem[]) => {
+    const targets = selection.filter((i) => !i.shortcutId)
     if (targets.length === 0) return
     setClipboard({ mode: 'copy', items: targets.map(toRef) })
     void getMessage().info(t('drive.copiedToClipboard', { count: targets.length }))
   }
 
-  const cutToClipboard = (targets: DriveItem[]) => {
+  const cutToClipboard = (selection: DriveItem[]) => {
+    const targets = selection.filter((i) => !i.shortcutId)
     if (targets.length === 0) return
     if (!canMove) {
       void getMessage().warning(t('drive.noEditRights'))
@@ -204,7 +206,8 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
   }
 
   /** "Cắt" / "Sao chép" / "Dán vào" appended to an item's context menu (same rules as Ctrl+X / Ctrl+C / Ctrl+V). */
-  const clipboardMenuItems = (targets: DriveItem[]): NonNullable<MenuProps['items']> => {
+  const clipboardMenuItems = (selection: DriveItem[]): NonNullable<MenuProps['items']> => {
+    const targets = selection.filter((i) => !i.shortcutId)
     if (targets.length === 0) return []
     const folder = targets.length === 1 && targets[0].type === 'folder' ? targets[0] : null
     return [
@@ -306,7 +309,7 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
     const key = itemKey(item)
     const isFolder = item.type === 'folder'
     return {
-      draggable: canMove && !isMobile,
+      draggable: canMove && !isMobile && !item.shortcutId,
       onDragStart: (e) => {
         const dragged = selected.has(key) ? selectedItems : [item]
         if (!selected.has(key)) setSelected(new Set([key]))

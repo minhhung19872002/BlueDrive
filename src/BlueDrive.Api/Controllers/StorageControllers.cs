@@ -18,6 +18,23 @@ using tusdotnet.Stores;
 
 namespace BlueDrive.Api.Controllers;
 
+/// <summary>Lối tắt tới tệp / thư mục (không mang quyền).</summary>
+[Route("api/v1/shortcuts")]
+public class ShortcutsController : ApiControllerBase
+{
+    /// <summary>Thêm lối tắt (mặc định vào Drive của tôi; hoặc vào thư mục có quyền thêm).</summary>
+    [HttpPost]
+    public async Task<IActionResult> Create(CreateShortcutCommand cmd) => Ok(new { id = await Mediator.Send(cmd) });
+
+    /// <summary>Xóa lối tắt (đích vẫn còn).</summary>
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        await Mediator.Send(new DeleteShortcutCommand(id));
+        return NoContent();
+    }
+}
+
 /// <summary>Nhóm tài nguyên/không gian lưu trữ (HSMT #28, #57–60).</summary>
 [Route("api/v1/workspaces")]
 public class WorkspacesController : ApiControllerBase

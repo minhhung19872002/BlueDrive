@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import type { DriveItem } from '@/types/drive'
 import { formatBytes, formatDateTime } from '@/utils/format'
 import FileTypeIcon from '../components/FileTypeIcon'
+import ShortcutTag from '../components/ShortcutTag'
 import { APPROVAL_COLORS, itemKey } from '../utils'
 import type { ItemViewProps } from './types'
 import FitDropdown from '../components/FitDropdown'
@@ -51,6 +52,7 @@ export default function ItemListView(props: ItemListViewProps) {
             <Typography.Text ellipsis className="bd-item-name" title={item.name}>
               {item.name}
             </Typography.Text>
+            <ShortcutTag item={item} />
             {item.isStarred && <StarFilled style={{ color: '#faad14', flex: 'none' }} />}
             {item.approvalStatus && item.approvalStatus !== 'approved' && (
               <Tag color={APPROVAL_COLORS[item.approvalStatus]} style={{ flex: 'none', marginInlineEnd: 0 }}>

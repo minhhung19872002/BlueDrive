@@ -40,6 +40,7 @@ const layoutRoutes: AppRoute[] = [
   { path: 'workspaces/:id', Component: lazy(() => import('@/pages/workspaces/WorkspaceDetailPage')) },
   { path: 'files/:id', Component: lazy(() => import('@/pages/drive/FileViewerPage')) },
   { path: 'files/:id/edit', Component: lazy(() => import('@/pages/drive/OfficeEditorPage')) },
+  { path: 'request-access/:id', Component: lazy(() => import('@/pages/drive/RequestAccessPage')) },
   { path: 'renew/:kind/:id', Component: lazy(() => import('@/pages/drive/RenewPage')) },
   { path: 'access-requests', Component: lazy(() => import('@/pages/drive/AccessRequestsPage')) },
   { path: 'approvals', perm: 'doc.approve', Component: lazy(() => import('@/pages/drive/ApprovalsPage')) },

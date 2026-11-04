@@ -869,6 +869,21 @@
     "decidersSpaceOwners": "Chỉ Quản lý Space",
     "saved": "Đã lưu chính sách chia sẻ."
   },
+  "shortcut": {
+    "tag": "Lối tắt",
+    "deleted": "Lối tắt (đích đã bị xóa)",
+    "state": {
+      "ok": "Lối tắt: mở là mở tư liệu gốc với quyền của bạn trên tư liệu đó.",
+      "no_access": "Bạn chưa có quyền với tư liệu gốc: mở lối tắt để yêu cầu quyền.",
+      "deleted": "Tư liệu gốc đã bị xóa."
+    },
+    "add": "Thêm lối tắt vào Drive của tôi",
+    "added": "Đã thêm lối tắt vào Drive của tôi.",
+    "remove": "Xóa lối tắt",
+    "removed": "Đã xóa lối tắt (tư liệu gốc không đổi).",
+    "requestAccess": "Yêu cầu quyền truy cập",
+    "targetDeleted": "Tư liệu gốc của lối tắt đã bị xóa."
+  },
   "renew": {
     "title": "Gia hạn quyền truy cập",
     "item": "Tư liệu",
@@ -929,7 +944,8 @@
     "send": "Gửi yêu cầu",
     "sent": "Đã gửi yêu cầu quyền truy cập.",
     "pending": "Yêu cầu của bạn đang chờ duyệt. Bạn sẽ nhận thông báo khi có kết quả.",
-    "home": "Về trang chủ"
+    "home": "Về trang chủ",
+    "gone": "Tư liệu không còn tồn tại"
   },
   "sharing": {
     "title": "Chia sẻ \"{{name}}\"",

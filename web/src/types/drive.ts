@@ -44,6 +44,10 @@ export interface DriveItem {
   id: string
   type: ItemType
   name: string
+  /** A shortcut row (spec 1.2): id / type are the target's; this is the shortcut's own id. */
+  shortcutId?: string | null
+  /** ok, no_access (open shows "Bạn cần quyền truy cập"), deleted. */
+  shortcutState?: 'ok' | 'no_access' | 'deleted' | null
   workspaceId: string
   parentId: string | null
   sizeBytes: number

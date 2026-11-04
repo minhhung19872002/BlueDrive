@@ -2249,6 +2249,57 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.ToTable("share_link_members", (string)null);
                 });
 
+            modelBuilder.Entity("BlueDrive.Domain.Entities.Shortcut", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("FolderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("folder_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_id");
+
+                    b.Property<string>("TargetType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("target_type");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_shortcuts");
+
+                    b.HasIndex("TargetId")
+                        .HasDatabaseName("ix_shortcuts_target_id");
+
+                    b.HasIndex("WorkspaceId", "FolderId")
+                        .HasDatabaseName("ix_shortcuts_workspace_id_folder_id");
+
+                    b.ToTable("shortcuts", (string)null);
+                });
+
             modelBuilder.Entity("BlueDrive.Domain.Entities.Space", b =>
                 {
                     b.Property<Guid>("Id")

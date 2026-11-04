@@ -110,4 +110,46 @@ public class SpaceTests(ApiFactory factory)
         usage.First().GetProperty("item").GetProperty("id").GetGuid().Should().Be(big);
         usage.Select(u => u.GetProperty("totalBytes").GetInt64()).Should().BeInDescendingOrder();
     }
+
+    [Fact]
+    public async Task Shortcuts_carry_no_rights_and_outlive_nothing_but_themselves()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (friend, friendId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ownerWs = await StorageTests.PersonalWorkspaceAsync(owner);
+        var friendWs = await StorageTests.PersonalWorkspaceAsync(friend);
+        var file = (await StorageTests.UploadAsync(owner, ownerWs, null, "ke-hoach-chung.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+
+        // Nothing to make a shortcut to before it is shared.
+        (await friend.PostAsJsonAsync("/api/v1/shortcuts", new { targetId = file })).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        var grant = await (await owner.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { new { kind = "user", id = friendId } }, levelId = levels["viewer"], notify = false })).ReadJsonAsync();
+        grant.GetProperty("granted").GetInt32().Should().Be(1);
+        var shortcut = (await (await friend.PostAsJsonAsync("/api/v1/shortcuts", new { targetId = file })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        (await friend.PostAsJsonAsync("/api/v1/shortcuts", new { targetId = file })).StatusCode.Should().Be(HttpStatusCode.Conflict);
+        // Nobody adds a shortcut into someone else's drive.
+        (await owner.PostAsJsonAsync("/api/v1/shortcuts", new { targetId = file, workspaceId = friendWs })).IsSuccessStatusCode.Should().BeFalse();
+
+        async Task<JsonElement> Row() => (await (await friend.GetAsync($"/api/v1/workspaces/{friendWs}/items")).ReadJsonAsync()).GetProperty("items").EnumerateArray()
+            .Single(i => i.TryGetProperty("shortcutId", out var s) && s.ValueKind == JsonValueKind.String && s.GetGuid() == shortcut);
+        var row = await Row();
+        row.GetProperty("id").GetGuid().Should().Be(file);
+        row.GetProperty("shortcutState").GetString().Should().Be("ok");
+
+        // Access taken back: the shortcut stays, but opens nothing.
+        var entry = (await (await owner.GetAsync($"/api/v1/items/{file}/permissions")).ReadJsonAsync()).GetProperty("entries").EnumerateArray()
+            .Single(e => e.GetProperty("principalId").GetGuid() == friendId).GetProperty("id").GetGuid();
+        (await owner.DeleteAsync($"/api/v1/items/{file}/permissions/{entry}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await Row()).GetProperty("shortcutState").GetString().Should().Be("no_access");
+        (await friend.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        // The target deleted: shown as deleted; removing the shortcut leaves the target alone.
+        (await owner.PostAsJsonAsync("/api/v1/items/delete", new { items = new[] { new { type = "file", id = file } } })).IsSuccessStatusCode.Should().BeTrue();
+        (await Row()).GetProperty("shortcutState").GetString().Should().Be("deleted");
+        (await friend.DeleteAsync($"/api/v1/shortcuts/{shortcut}")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await (await friend.GetAsync($"/api/v1/workspaces/{friendWs}/items")).ReadJsonAsync()).GetProperty("items").EnumerateArray()
+            .Where(i => i.TryGetProperty("shortcutId", out var s) && s.ValueKind == JsonValueKind.String).Should().BeEmpty();
+        (await owner.PostAsJsonAsync("/api/v1/trash/restore", new { items = new[] { new { type = "file", id = file } } })).IsSuccessStatusCode.Should().BeTrue();
+        (await owner.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
 }

@@ -3,6 +3,7 @@ import { MoreOutlined, StarFilled } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { formatBytes } from '@/utils/format'
 import FileTypeIcon from '../components/FileTypeIcon'
+import ShortcutTag from '../components/ShortcutTag'
 import Thumbnail from '../components/Thumbnail'
 import { APPROVAL_COLORS, itemKey } from '../utils'
 import type { ItemViewProps } from './types'
@@ -58,6 +59,7 @@ export default function ItemGridView(props: ItemViewProps) {
                     {item.isStarred && <StarFilled style={{ color: '#faad14', marginInlineEnd: 4 }} />}
                     {item.name}
                   </Typography.Text>
+                  <ShortcutTag item={item} />
                 </span>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                   {item.type === 'folder' ? t('info.folder') : formatBytes(item.sizeBytes)}
