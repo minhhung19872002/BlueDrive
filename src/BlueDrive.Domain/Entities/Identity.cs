@@ -46,8 +46,30 @@ public class User : AuditableEntity
     public long UsedBytes { get; set; }
     /// <summary>Bumped on "revoke all access" so outstanding access tokens become invalid.</summary>
     public int SecurityStamp { get; set; }
+    /// <summary>Guest from outside (spec 2): invited by email, signs in with a one-time code, sees only what is shared with them.</summary>
+    public bool IsGuest { get; set; }
     public List<UserRole> UserRoles { get; set; } = [];
     public List<UserGroupMember> GroupMemberships { get; set; } = [];
+}
+
+/// <summary>Guest account details (spec 9 "guests"): who invited them, until when the account lives (pushed on every sign-in).</summary>
+public class Guest
+{
+    public Guid UserId { get; set; }
+    public Guid? InvitedBy { get; set; }
+    public DateTime InvitedAt { get; set; }
+    public DateTime ExpiresAt { get; set; }
+}
+
+/// <summary>One-time sign-in code sent by email to a guest (only its hash is kept).</summary>
+public class GuestOtp : Entity
+{
+    public Guid UserId { get; set; }
+    public string CodeHash { get; set; } = "";
+    public DateTime CreatedAt { get; set; }
+    public DateTime ExpiresAt { get; set; }
+    public int Attempts { get; set; }
+    public DateTime? UsedAt { get; set; }
 }
 
 public class PasswordHistory : Entity

@@ -46,6 +46,8 @@ public sealed class SyncPolicyService(IAppDbContext db, ISettingsService setting
     {
         if (!await settings.GetAsync(SettingKeys.SyncEnabled, true, ct))
             throw new ForbiddenException("Đồng bộ bằng BlueDrive Desktop đang bị tắt. Vui lòng liên hệ quản trị viên.");
+        if (await db.Users.AnyAsync(u => u.Id == userId && u.IsGuest, ct))
+            throw new ForbiddenException("Tài khoản khách không dùng được BlueDrive Desktop.");
         var roles = await settings.GetAsync(SettingKeys.SyncAllowedRoles, Array.Empty<string>(), ct);
         if (roles.Length > 0)
         {

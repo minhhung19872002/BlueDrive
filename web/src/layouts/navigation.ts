@@ -58,12 +58,16 @@ export const mainNav: NavItem[] = [
 ]
 
 /** Key of the "Nhóm của tôi" submenu (children: every group workspace + the overview page). */
+/** What a guest from outside sees: only what is shared with them (spec 2). */
+export const GUEST_NAV = ['/shared', '/recent', '/search', '/access-requests']
+
 export const WORKSPACES_MENU_KEY = 'workspaces-menu'
 
 export const adminNav: NavItem[] = [
   { path: '/admin/dashboard', labelKey: 'menu.adminDashboard', icon: DashboardOutlined, perm: 'dashboard.view' },
   { path: '/admin/organizations', labelKey: 'menu.organizations', icon: ApartmentOutlined, perm: 'org.view' },
   { path: '/admin/users', labelKey: 'menu.users', icon: UserOutlined, perm: 'user.view' },
+  { path: '/admin/guests', labelKey: 'menu.guests', icon: UserOutlined, perm: 'user.view' },
   { path: '/admin/user-groups', labelKey: 'menu.userGroups', icon: UsergroupAddOutlined, perm: 'usergroup.view' },
   { path: '/admin/roles', labelKey: 'menu.roles', icon: SafetyCertificateOutlined, perm: 'role.view' },
   { path: '/admin/permission-matrix', labelKey: 'menu.permissionMatrix', icon: TableOutlined, perm: 'role.view' },

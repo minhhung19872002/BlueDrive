@@ -16,6 +16,8 @@ export interface AuthUser {
   usedBytes: number
   lastLoginAt: string | null
   personalWorkspaceId: string | null
+  /** Guest from outside: sees only what is shared with them. */
+  isGuest?: boolean
 }
 
 export interface LoginRequest {

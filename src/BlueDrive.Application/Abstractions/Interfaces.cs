@@ -49,6 +49,8 @@ public interface IAppDbContext
     DbSet<Share> Shares { get; }
     DbSet<ShareLink> ShareLinks { get; }
     DbSet<ShareLinkMember> ShareLinkMembers { get; }
+    DbSet<Guest> Guests { get; }
+    DbSet<GuestOtp> GuestOtps { get; }
     DbSet<Comment> Comments { get; }
     DbSet<Notification> Notifications { get; }
     DbSet<SavedSearch> SavedSearches { get; }

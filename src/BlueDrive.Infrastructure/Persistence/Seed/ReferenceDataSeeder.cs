@@ -57,6 +57,7 @@ public sealed class ReferenceDataSeeder(
             (Perm.Roles.Editor, "Biên tập/Tải lên", "Tải lên, biên tập, chia sẻ tư liệu"),
             (Perm.Roles.Approver, "Phê duyệt", "Phê duyệt tư liệu trước khi công bố"),
             (Perm.Roles.Viewer, "Chỉ xem", "Chỉ xem và tìm kiếm tư liệu đã được phê duyệt"),
+            (Perm.Roles.Guest, "Khách bên ngoài", "Khách được mời qua email; chỉ làm việc trên tư liệu được chia sẻ trực tiếp"),
         ];
         foreach (var (code, name, desc) in roles)
         {

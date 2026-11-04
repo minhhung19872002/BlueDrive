@@ -52,6 +52,8 @@ export interface PrincipalTarget {
 
 export interface GrantRequest {
   targets: PrincipalTarget[]
+  /** People by email: internal users, or guests from outside (invited if new). */
+  emails?: string[]
   levelId: string
   expiresAt: string | null
   notify: boolean
@@ -210,4 +212,29 @@ export async function extendRenewal(kind: 'permission' | 'link', id: string, day
 
 export async function requestRenewal(entryId: string): Promise<void> {
   await api.post(`/renewals/permission/${entryId}/request`)
+}
+
+export interface Guest {
+  id: string
+  email: string
+  name: string
+  invitedByName: string | null
+  invitedAt: string
+  lastLoginAt: string | null
+  expiresAt: string
+  isActive: boolean
+  sharedItems: number
+}
+
+export async function listGuests(query: string): Promise<Guest[]> {
+  const { data } = await api.get<Guest[]>('/admin/guests', { params: { query: query || undefined } })
+  return data
+}
+
+export async function setGuestActive(id: string, value: boolean): Promise<void> {
+  await api.post(`/admin/guests/${id}/active`, null, { params: { value } })
+}
+
+export async function deleteGuest(id: string): Promise<void> {
+  await api.delete(`/admin/guests/${id}`)
 }

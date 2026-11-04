@@ -98,7 +98,7 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock, A
         // Kept as they are (not imported): which nodes have their own ACL.
         var unique = import ? [] : (await db.Securables.AsNoTracking()
             .Where(n => n.HasUniqueAcl && (full || wsIds.Contains(n.SpaceId ?? n.PersonalDriveId ?? Guid.Empty))).Select(n => n.Id).ToListAsync(ct)).ToHashSet();
-        var users = await db.Users.AsNoTracking().Select(u => new { u.Id, u.FullName, u.OrganizationId }).ToListAsync(ct);
+        var users = await db.Users.AsNoTracking().Select(u => new { u.Id, u.FullName, u.OrganizationId, u.IsGuest }).ToListAsync(ct);
         var orgs = await db.Organizations.AsNoTracking().Select(o => new { o.Id, o.Name, o.Path }).ToListAsync(ct);
         var groups = await db.UserGroups.AsNoTracking().Select(g => new { g.Id, g.Name }).ToListAsync(ct);
         var groupMembers = await db.UserGroupMembers.AsNoTracking().Select(m => new { m.GroupId, m.UserId }).ToListAsync(ct);
@@ -114,7 +114,7 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock, A
         {
             new() { Id = StableGuid.Everyone, Kind = PrincipalKind.Everyone, DisplayName = "Mọi người trong đơn vị" },
         };
-        principals.AddRange(users.Select(u => new Principal { Id = u.Id, Kind = PrincipalKind.User, RefId = u.Id, DisplayName = u.FullName }));
+        principals.AddRange(users.Select(u => new Principal { Id = u.Id, Kind = u.IsGuest ? PrincipalKind.Guest : PrincipalKind.User, RefId = u.Id, DisplayName = u.FullName }));
         principals.AddRange(groups.Select(g => new Principal { Id = g.Id, Kind = PrincipalKind.Group, RefId = g.Id, DisplayName = g.Name }));
         principals.AddRange(roles.Select(r => new Principal { Id = r.Id, Kind = PrincipalKind.Role, RefId = r.Id, DisplayName = r.Name }));
         foreach (var o in orgs)
@@ -271,6 +271,12 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock, A
         var memberships = new List<PrincipalMembership>();
         foreach (var u in users.Where(u => affected.Contains(u.Id)))
         {
+            if (u.IsGuest)
+            {
+                // Guests see only what is shared with them directly (spec 2): not "Mọi người trong đơn vị", no unit, no role.
+                memberships.Add(new PrincipalMembership { UserId = u.Id, PrincipalId = u.Id });
+                continue;
+            }
             var set = new HashSet<Guid> { u.Id, StableGuid.Everyone };
             foreach (var g in Closure(groupsOf[u.Id], parentsOfGroup)) set.Add(g);
             foreach (var r in rolesOf[u.Id]) set.Add(r);

@@ -340,4 +340,70 @@ public class SharingModelTests(ApiFactory factory)
         await Run();
         (await Notes(guest)).Should().Contain(n => n.GetProperty("title").GetString()!.Contains("đã hết hạn"));
     }
+
+    [Fact]
+    public async Task Guest_invited_by_email_signs_in_with_a_code_and_sees_only_what_is_shared()
+    {
+        var admin = await factory.AdminClientAsync();
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var mail = factory.Services.GetRequiredService<FakeEmailSender>();
+        var address = $"khach{Guid.NewGuid():N}"[..14] + "@doitac.vn";
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var file = (await StorageTests.UploadAsync(owner, ws, null, "cho-khach.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var hidden = (await StorageTests.UploadAsync(owner, ws, null, "noi-bo.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+
+        // Shared by email: a guest is invited (an email with the sign-in page).
+        (await owner.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = Array.Empty<object>(), emails = new[] { address.ToUpperInvariant() }, levelId = levels["viewer"] }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        mail.Sent.Should().Contain(m => m.To == address && m.Body.Contains("/guest-login?email="));
+        // Everyone in the unit is not the guest.
+        (await owner.PutAsJsonAsync($"/api/v1/items/{hidden}/general-access", new { mode = "organization", levelId = levels["viewer"] })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        // No password sign-in; the code is sent only to an invited guest, and a wrong code does not open.
+        var anon = factory.CreateClient();
+        (await anon.PostAsJsonAsync("/api/v1/auth/login", new { username = "guest:" + address, password = "Bat-ky@123" })).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var before = mail.Sent.Count;
+        (await anon.PostAsJsonAsync("/api/v1/auth/guest/code", new { email = "nobody@doitac.vn" })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        mail.Sent.Count.Should().Be(before, "no code for someone not invited (and the same answer)");
+        (await anon.PostAsJsonAsync("/api/v1/auth/guest/code", new { email = address })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var code = System.Text.RegularExpressions.Regex.Match(mail.Sent.Last(m => m.To == address && m.Subject.Contains("Mã đăng nhập")).Body, @">(\d{6})<").Groups[1].Value;
+        code.Should().HaveLength(6);
+        (await anon.PostAsJsonAsync("/api/v1/auth/guest/verify", new { email = address, code = code == "000000" ? "111111" : "000000" })).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        var signedIn = await (await anon.PostAsJsonAsync("/api/v1/auth/guest/verify", new { email = address, code })).ReadJsonAsync();
+        signedIn.GetProperty("user").GetProperty("isGuest").GetBoolean().Should().BeTrue();
+        signedIn.GetProperty("user").GetProperty("personalWorkspaceId").ValueKind.Should().Be(JsonValueKind.Null);
+        var guest = factory.CreateClient().WithToken(signedIn.GetProperty("accessToken").GetString()!);
+        (await anon.PostAsJsonAsync("/api/v1/auth/guest/verify", new { email = address, code })).StatusCode.Should().Be(HttpStatusCode.Unauthorized, "a code works once");
+
+        // Only what is shared directly; no looking people up, no sharing on.
+        (await guest.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await guest.GetAsync($"/api/v1/files/{hidden}")).StatusCode.Should().Be(HttpStatusCode.NotFound, "\"Mọi người trong đơn vị\" is not for guests");
+        (await guest.GetAsync("/api/v1/users/lookup?q=a")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await guest.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = Array.Empty<object>(), emails = new[] { "ban@doitac.vn" }, levelId = levels["viewer"] }))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await (await guest.GetAsync("/api/v1/shares/with-me")).ReadJsonAsync()).GetProperty("items").EnumerateArray()
+            .Should().Contain(i => i.GetProperty("item").GetProperty("id").GetGuid() == file);
+        var entries = (await (await owner.GetAsync($"/api/v1/items/{file}/permissions")).ReadJsonAsync()).GetProperty("entries").EnumerateArray().ToList();
+        entries.Should().Contain(e => e.GetProperty("principalKind").GetString() == "guest");
+
+        // A Space that allows only existing guests: an existing guest yes, a new one no.
+        var space = (await (await owner.PostAsJsonAsync("/api/v1/workspaces", new { name = "Space khách", type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var inSpace = (await StorageTests.UploadAsync(owner, space, null, "trong-space.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        (await owner.PutAsJsonAsync($"/api/v1/workspaces/{space}/sharing-policy", new { external = "existing_guests", membersShareOutside = true, allowItemSharing = true, accessRequestDeciders = "item_managers" }))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await owner.PostAsJsonAsync($"/api/v1/items/{inSpace}/permissions", new { targets = Array.Empty<object>(), emails = new[] { "moi@doitac.vn" }, levelId = levels["viewer"] }))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await owner.PostAsJsonAsync($"/api/v1/items/{inSpace}/permissions", new { targets = Array.Empty<object>(), emails = new[] { address }, levelId = levels["viewer"] }))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // The administrator sees the guest and disables them: their session ends and no code is sent any more.
+        var row = (await (await admin.GetAsync($"/api/v1/admin/guests?query={address}")).ReadJsonAsync()).EnumerateArray().Single();
+        row.GetProperty("sharedItems").GetInt32().Should().BeGreaterThanOrEqualTo(2);
+        (await admin.PostAsync($"/api/v1/admin/guests/{row.GetProperty("id").GetGuid()}/active?value=false", null)).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await guest.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        before = mail.Sent.Count;
+        await anon.PostAsJsonAsync("/api/v1/auth/guest/code", new { email = address });
+        mail.Sent.Count.Should().Be(before);
+    }
 }

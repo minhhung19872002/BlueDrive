@@ -342,6 +342,28 @@ public class ItemAccessController : ApiControllerBase
     }
 }
 
+/// <summary>Quản trị khách bên ngoài.</summary>
+[Route("api/v1/admin/guests")]
+public class GuestsController : ApiControllerBase
+{
+    [HttpGet, HasPermission(Perm.UserView)]
+    public Task<IReadOnlyList<Application.Features.Access.GuestDto>> List([FromQuery] string? query) => Mediator.Send(new Application.Features.Access.ListGuestsQuery(query));
+
+    [HttpPost("{id:guid}/active"), HasPermission(Perm.UserEdit)]
+    public async Task<IActionResult> SetActive(Guid id, [FromQuery] bool value)
+    {
+        await Mediator.Send(new Application.Features.Access.SetGuestActiveCommand(id, value));
+        return NoContent();
+    }
+
+    [HttpDelete("{id:guid}"), HasPermission(Perm.UserDelete)]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        await Mediator.Send(new Application.Features.Access.DeleteGuestCommand(id));
+        return NoContent();
+    }
+}
+
 /// <summary>Gia hạn quyền / liên kết sắp hết hạn (kind = permission | link).</summary>
 [Route("api/v1/renewals/{kind:regex(^(permission|link)$)}/{id:guid}")]
 public class RenewalsController : ApiControllerBase

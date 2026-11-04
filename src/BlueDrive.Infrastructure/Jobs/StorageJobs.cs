@@ -108,7 +108,7 @@ public sealed class PermissionProjectionJob(Application.Features.Access.Permissi
 /// scopes with an entry expired in the last 15 minutes get their grants rewritten (the engine itself checks expiry on every call).
 /// </summary>
 public sealed class AclExpiryJob(IAppDbContext db, Application.Features.Access.AclEditor editor, Application.Features.Access.ExpiryReminders reminders,
-    TimeProvider clock, ILogger<AclExpiryJob> logger)
+    Application.Features.Access.GuestService guests, TimeProvider clock, ILogger<AclExpiryJob> logger)
 {
     [AutomaticRetry(Attempts = 1)]
     [DisableConcurrentExecution(300)]
@@ -126,6 +126,9 @@ public sealed class AclExpiryJob(IAppDbContext db, Application.Features.Access.A
         // "Sắp hết hạn" 3 days ahead and "đã hết hạn" (spec 5.5).
         var notices = await reminders.RunAsync(ct);
         if (notices > 0) logger.LogInformation("Đã gửi {Count} thông báo hạn quyền / liên kết", notices);
+        // Guest accounts not used for N days end (spec 2).
+        var ended = await guests.ExpireAsync(ct);
+        if (ended > 0) logger.LogInformation("Đã vô hiệu hóa {Count} tài khoản khách không dùng", ended);
         return scopes.Count;
     }
 }

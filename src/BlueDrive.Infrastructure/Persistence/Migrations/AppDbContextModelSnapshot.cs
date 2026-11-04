@@ -952,6 +952,76 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.ToTable("group_nestings", (string)null);
                 });
 
+            modelBuilder.Entity("BlueDrive.Domain.Entities.Guest", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTime>("InvitedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("invited_at");
+
+                    b.Property<Guid?>("InvitedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invited_by");
+
+                    b.HasKey("UserId")
+                        .HasName("pk_guests");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_guests_expires_at");
+
+                    b.ToTable("guests", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.GuestOtp", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("code_hash");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_guest_otps");
+
+                    b.HasIndex("UserId", "CreatedAt")
+                        .HasDatabaseName("ix_guest_otps_user_id_created_at");
+
+                    b.ToTable("guest_otps", (string)null);
+                });
+
             modelBuilder.Entity("BlueDrive.Domain.Entities.IncidentEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2859,6 +2929,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
+
+                    b.Property<bool>("IsGuest")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_guest");
 
                     b.Property<bool>("IsLocked")
                         .HasColumnType("boolean")

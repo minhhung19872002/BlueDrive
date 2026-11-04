@@ -12,7 +12,7 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import type { ColumnsType } from 'antd/es/table'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { getGroupDashboard, getPersonalDashboard } from '@/api/dashboards'
 import { getErrorMessage } from '@/api/errors'
@@ -300,7 +300,13 @@ function GroupSection({ data, loading }: { data: GroupDashboard | undefined; loa
 }
 
 /** Home: personal dashboard (#63–66) + group dashboard (#67–70). */
+/** A guest from outside has no drive or Spaces: their start page is what is shared with them. */
 export default function HomePage() {
+  const guest = useAuthStore((s) => s.user?.isGuest)
+  return guest ? <Navigate to="/shared" replace /> : <HomeContent />
+}
+
+function HomeContent() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)

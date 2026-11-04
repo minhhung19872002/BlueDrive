@@ -103,14 +103,16 @@ public static class PrincipalDisplay
 }
 
 /// <summary>Grants a level to people, groups or units on an item; optionally until a date, with a notification (spec 5.1).</summary>
-public sealed record GrantItemPermissionCommand(Guid ItemId, IReadOnlyList<PrincipalTarget> Targets, Guid LevelId, DateTime? ExpiresAt, bool Notify = true, string? Message = null)
-    : IRequest<int>;
+/// <param name="Emails">People by email: an internal user with that email, or a guest from outside (invited if new; spec 2, 5.4).</param>
+public sealed record GrantItemPermissionCommand(Guid ItemId, IReadOnlyList<PrincipalTarget> Targets, Guid LevelId, DateTime? ExpiresAt, bool Notify = true, string? Message = null,
+    IReadOnlyList<string>? Emails = null) : IRequest<int>;
 
 public sealed class GrantItemPermissionValidator : AbstractValidator<GrantItemPermissionCommand>
 {
     public GrantItemPermissionValidator()
     {
-        RuleFor(x => x.Targets).NotEmpty().WithMessage("Vui lòng chọn người, nhóm hoặc đơn vị.");
+        RuleFor(x => x).Must(x => x.Targets.Count > 0 || x.Emails is { Count: > 0 }).WithMessage("Vui lòng chọn người, nhóm, đơn vị hoặc nhập email.");
+        RuleFor(x => x.Emails!.Count).LessThanOrEqualTo(50).When(x => x.Emails is not null).WithMessage("Tối đa 50 email mỗi lần.");
         RuleFor(x => x.ExpiresAt).Must(d => d is null || d > DateTime.UtcNow).WithMessage("Ngày hết hạn phải ở tương lai.");
         RuleFor(x => x.Message).MaximumLength(1000);
     }
@@ -137,21 +139,31 @@ internal static class GrantRules
 }
 
 public sealed class GrantItemPermissionHandler(IAppDbContext db, ICurrentUser me, IItemPermissionService engine, IPermissionService rbac, AclEditor editor,
-    IUserNotifier notify, IAuditLogger audit, SharingPolicy policy) : IRequestHandler<GrantItemPermissionCommand, int>
+    IUserNotifier notify, IAuditLogger audit, SharingPolicy policy, GuestService guests) : IRequestHandler<GrantItemPermissionCommand, int>
 {
     public async Task<int> Handle(GrantItemPermissionCommand cmd, CancellationToken ct)
     {
         var uid = me.RequireUserId();
         var (_, level) = await GrantRules.CheckAsync(db, engine, rbac, uid, cmd.ItemId, cmd.LevelId, ct);
         var node = await db.Securables.AsNoTracking().FirstAsync(s => s.Id == cmd.ItemId, ct);
-        await policy.EnsureCanShareAsync(uid, cmd.ItemId, cmd.Targets.Where(t => !(t.Kind == PrincipalKind.User && t.Id == uid)).Select(t => (t.Kind, t.Id)).ToList(),
-            breaksInheritance: true, ct);
-        var count = 0;
-        foreach (var t in cmd.Targets.Distinct())
+        // People by email: internal users, or guests from outside (the policy of every tier decides; new guests are invited).
+        var byEmail = new List<(Guid Id, bool IsGuest)>();
+        foreach (var address in (cmd.Emails ?? []).Select(GuestService.Normalize).Distinct())
         {
-            if (t.Kind is not (PrincipalKind.User or PrincipalKind.Group or PrincipalKind.OrgUnit or PrincipalKind.OrgUnitTree))
-                throw new AppException("Chỉ cấp quyền cho người dùng, nhóm hoặc đơn vị.");
-            if (!await db.Principals.AnyAsync(p => p.Id == t.Id && p.Kind == t.Kind, ct)) throw new NotFoundException("Không tìm thấy người, nhóm hoặc đơn vị được chọn.");
+            var (id, isGuest, _) = await guests.ResolveAsync(address, cmd.ItemId, uid, ct);
+            byEmail.Add((id, isGuest));
+        }
+        var emailTargets = byEmail.Select(x => new PrincipalTarget(x.IsGuest ? PrincipalKind.Guest : PrincipalKind.User, x.Id)).ToList();
+        var targets = cmd.Targets.Concat(emailTargets).Distinct().ToList();
+        await policy.EnsureCanShareAsync(uid, cmd.ItemId, targets.Where(t => !(t.Kind == PrincipalKind.User && t.Id == uid))
+            .Select(t => (t.Kind == PrincipalKind.Guest ? PrincipalKind.User : t.Kind, t.Id)).ToList(), breaksInheritance: true, ct);
+        var count = 0;
+        foreach (var t in targets)
+        {
+            if (t.Kind is not (PrincipalKind.User or PrincipalKind.Group or PrincipalKind.OrgUnit or PrincipalKind.OrgUnitTree or PrincipalKind.Guest))
+                throw new AppException("Chỉ cấp quyền cho người dùng, khách, nhóm hoặc đơn vị.");
+            if (!emailTargets.Contains(t) && !await db.Principals.AnyAsync(p => p.Id == t.Id && p.Kind == t.Kind, ct))
+                throw new NotFoundException("Không tìm thấy người, nhóm hoặc đơn vị được chọn.");
             if (t.Kind == PrincipalKind.User && t.Id == uid) continue;
             // One direct grant per principal on the item: a new grant replaces the level and the date.
             var existing = await db.AclEntries.FirstOrDefaultAsync(e => e.ScopeId == cmd.ItemId && e.PrincipalId == t.Id && e.Source == AclSource.Direct, ct);
@@ -171,16 +183,18 @@ public sealed class GrantItemPermissionHandler(IAppDbContext db, ICurrentUser me
             }
             count++;
         }
+        var sharer = await db.Users.Where(u => u.Id == uid).Select(u => u.FullName).FirstAsync(ct);
+        var link = node.Kind == SecurableKind.File ? $"/files/{node.Id}" : "/shared";
         if (cmd.Notify)
         {
-            var sharer = await db.Users.Where(u => u.Id == uid).Select(u => u.FullName).FirstAsync(ct);
-            var recipients = await RecipientsAsync(db, cmd.Targets, uid, ct);
-            var link = node.Kind == SecurableKind.File ? $"/files/{node.Id}" : "/shared";
+            var recipients = (await RecipientsAsync(db, cmd.Targets, uid, ct)).Concat(byEmail.Select(x => x.Id)).Where(x => x != uid).Distinct();
             foreach (var r in recipients)
                 await notify.NotifyUserAsync(r, "share", $"{sharer} đã chia sẻ \"{node.Name}\" với bạn ({level.Name})", cmd.Message, link, ct);
         }
+        // A guest always gets the email: it is how they find the item and sign in.
+        foreach (var g in byEmail.Where(x => x.IsGuest)) await guests.SendInvitationAsync(g.Id, sharer, node.Name, link, cmd.Message, ct);
         await audit.LogAsync(new AuditEntry(AuditAction.PermissionGranted, Kind(node.Kind), node.Id, node.Name, node.SpaceId ?? node.PersonalDriveId,
-            new { targets = cmd.Targets, level = level.Code, cmd.ExpiresAt }), ct);
+            new { targets, level = level.Code, cmd.ExpiresAt, guests = byEmail.Count(x => x.IsGuest) }), ct);
         return count;
     }
 

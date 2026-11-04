@@ -46,6 +46,10 @@ public static class SettingKeys
     public const string ShareLinkAllowEdit = "share.link_allow_edit";
     public const string ShareExternal = "share.external";
     public const string ShareAnyoneLinkMaxDays = "share.anyone_link_max_days";
+    public const string GuestEnabled = "guest.enabled";
+    public const string GuestAllowedDomains = "guest.allowed_domains";
+    public const string GuestBlockedDomains = "guest.blocked_domains";
+    public const string GuestInactiveDays = "guest.inactive_days";
 
     public static readonly string[] DefaultAllowedExtensions =
     [
@@ -80,6 +84,10 @@ public static class SettingKeys
         new(UploadAllowedExtensions, DefaultAllowedExtensions, "Lưu trữ", "Định dạng tệp cho phép", "tags"),
         new(ShareExternal, "anyone", "Chia sẻ", "Chia sẻ ra ngoài (tầng hệ thống; Space, thư mục, tệp chỉ đặt chặt hơn)", "external"),
         new(ShareAnyoneLinkMaxDays, 30, "Chia sẻ", "Thời hạn tối đa của liên kết cho bất kỳ ai (ngày, 0 = không giới hạn)", "number"),
+        new(GuestEnabled, true, "Khách bên ngoài", "Cho phép mời khách bên ngoài qua email (đăng nhập bằng mã gửi email)", "boolean"),
+        new(GuestAllowedDomains, Array.Empty<string>(), "Khách bên ngoài", "Chỉ mời được email thuộc các tên miền (để trống = mọi tên miền)", "tags"),
+        new(GuestBlockedDomains, Array.Empty<string>(), "Khách bên ngoài", "Không mời email thuộc các tên miền", "tags"),
+        new(GuestInactiveDays, 90, "Khách bên ngoài", "Tài khoản khách tự hết hạn sau số ngày không dùng", "number"),
         new(ShareLinkAllowEdit, true, "Chia sẻ", "Cho phép liên kết chia sẻ cho người không đăng nhập chỉnh sửa tài liệu (Word, Excel, PowerPoint)", "boolean"),
         new(DownloadUnusualPerHour, 200, "Giám sát", "Ngưỡng tải xuống bất thường (tệp/giờ)", "number"),
         new(AlertEmailAdmins, true, "Giám sát", "Gửi email cảnh báo cho quản trị viên", "boolean"),

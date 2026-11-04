@@ -14,6 +14,7 @@ const PrintStorageStatsPage = lazy(() => import('@/pages/print/PrintStorageStats
 const PrintAlertsPage = lazy(() => import('@/pages/print/PrintAlertsPage'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 const PublicSharePage = lazy(() => import('@/pages/public/PublicSharePage'))
+const GuestLoginPage = lazy(() => import('@/pages/GuestLoginPage'))
 const ConnectAuthorizePage = lazy(() => import('@/pages/ConnectAuthorizePage'))
 const OoDesktopEntryPage = lazy(() => import('@/pages/office/OoDesktopPages').then((m) => ({ default: m.OoDesktopEntryPage })))
 const OoDesktopOpenPage = lazy(() => import('@/pages/office/OoDesktopPages').then((m) => ({ default: m.OoDesktopOpenPage })))
@@ -51,6 +52,7 @@ const layoutRoutes: AppRoute[] = [
 
   { path: 'admin/dashboard', perm: 'dashboard.view', Component: lazy(() => import('@/pages/admin/AdminDashboardPage')) },
   { path: 'admin/organizations', perm: 'org.view', Component: lazy(() => import('@/pages/admin/organizations/OrganizationsPage')) },
+  { path: 'admin/guests', perm: 'user.view', Component: lazy(() => import('@/pages/admin/GuestsPage')) },
   { path: 'admin/users', perm: 'user.view', Component: lazy(() => import('@/pages/admin/users/UsersPage')) },
   { path: 'admin/user-groups', perm: 'usergroup.view', Component: lazy(() => import('@/pages/admin/userGroups/UserGroupsPage')) },
   { path: 'admin/roles', perm: 'role.view', Component: lazy(() => import('@/pages/admin/roles/RolesPage')) },
@@ -90,6 +92,7 @@ export default function AppRoutes() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         {/* Public share links: anonymous, outside the authenticated layout. */}
         <Route path="/s/:token" element={<PublicSharePage />} />
+        <Route path="/guest-login" element={<GuestLoginPage />} />
         {/* ONLYOFFICE Desktop Editors provider: entry page (signed in), ticket sign-in from BlueDrive Desktop, logout. */}
         <Route
           path="/oo-desktop"

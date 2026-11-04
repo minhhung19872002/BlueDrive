@@ -35,6 +35,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Share> Shares => Set<Share>();
     public DbSet<ShareLink> ShareLinks => Set<ShareLink>();
     public DbSet<ShareLinkMember> ShareLinkMembers => Set<ShareLinkMember>();
+    public DbSet<Guest> Guests => Set<Guest>();
+    public DbSet<GuestOtp> GuestOtps => Set<GuestOtp>();
     public DbSet<FileText> FileTexts => Set<FileText>();
     public DbSet<Space> Spaces => Set<Space>();
     public DbSet<PersonalDrive> PersonalDrives => Set<PersonalDrive>();
@@ -245,6 +247,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         });
         b.Entity<ShareLink>(e => { e.HasIndex(x => x.TokenHash).IsUnique(); e.Property(x => x.TokenHash).HasMaxLength(64); e.HasIndex(x => new { x.ResourceType, x.ResourceId }); });
         b.Entity<ShareLinkMember>(e => { e.HasKey(x => new { x.LinkId, x.UserId }); e.HasIndex(x => x.UserId); });
+        b.Entity<Guest>(e => { e.HasKey(x => x.UserId); e.HasIndex(x => x.ExpiresAt); });
+        b.Entity<GuestOtp>(e => { e.HasIndex(x => new { x.UserId, x.CreatedAt }); e.Property(x => x.CodeHash).HasMaxLength(64); });
         ConfigureAccessModel(b);
         b.Entity<FileText>(e =>
         {

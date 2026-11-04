@@ -62,6 +62,7 @@
     "settings": "Cấu hình hệ thống",
     "approvals": "Phê duyệt",
     "accessRequests": "Yêu cầu quyền truy cập",
+    "guests": "Khách bên ngoài",
     "adminDevices": "Thiết bị đồng bộ"
   },
   "header": {
@@ -824,6 +825,38 @@
     "requested": "Đã gửi đề nghị gia hạn",
     "notFound": "Không tìm thấy quyền hoặc liên kết cần gia hạn"
   },
+  "guestLogin": {
+    "title": "Đăng nhập cho khách bên ngoài",
+    "subtitle": "Nhập email đã được mời. BlueDrive gửi mã gồm 6 chữ số tới email đó, không cần mật khẩu.",
+    "email": "Email",
+    "sendCode": "Gửi mã đăng nhập",
+    "sent": "Nếu {{email}} đã được mời, mã đăng nhập vừa được gửi tới email này (hiệu lực 10 phút).",
+    "code": "Mã đăng nhập",
+    "codeInvalid": "Mã gồm 6 chữ số.",
+    "resend": "Gửi lại mã",
+    "internal": "Cán bộ trong đơn vị? Đăng nhập bằng tài khoản",
+    "link": "Khách bên ngoài? Đăng nhập bằng mã email"
+  },
+  "guests": {
+    "description": "Khách được mời qua email khi chia sẻ; đăng nhập bằng mã gửi email, chỉ thấy tư liệu được chia sẻ trực tiếp. Tài khoản tự hết hạn khi lâu không dùng.",
+    "search": "Tìm theo email",
+    "email": "Email",
+    "invitedBy": "Người mời",
+    "invitedAt": "Ngày mời",
+    "lastLogin": "Đăng nhập gần nhất",
+    "never": "Chưa đăng nhập",
+    "expiresAt": "Hết hạn tài khoản",
+    "items": "Số quyền được cấp",
+    "status": "Trạng thái",
+    "active": "Đang hoạt động",
+    "inactive": "Vô hiệu hóa",
+    "disable": "Vô hiệu hóa",
+    "enable": "Kích hoạt lại",
+    "remove": "Xóa khách",
+    "removeConfirm": "Xóa khách {{email}} và gỡ mọi quyền đã cấp cho khách này?",
+    "saved": "Đã cập nhật khách.",
+    "removed": "Đã xóa khách và gỡ quyền."
+  },
   "requestAccess": {
     "title": "Bạn cần quyền truy cập",
     "subtitle": "Bạn chưa có quyền mở mục này. Gửi yêu cầu để người quản lý cấp quyền.",
@@ -876,7 +909,8 @@
       "external": "Chia sẻ ra ngoài",
       "externalInherit": "Theo cấp trên",
       "externalEffective": "Đang áp dụng: {{level}} (theo {{source}}). Tầng chặt nhất thắng.",
-      "externalSaved": "Đã lưu chính sách chia sẻ ra ngoài."
+      "externalSaved": "Đã lưu chính sách chia sẻ ra ngoài.",
+      "emailPlaceholder": "Hoặc nhập email (người trong đơn vị hoặc khách bên ngoài), cách nhau bằng dấu phẩy"
     },
     "tabLink": "Chia sẻ qua liên kết",
     "noPermission": "Vai trò của bạn không có quyền chia sẻ tư liệu.",

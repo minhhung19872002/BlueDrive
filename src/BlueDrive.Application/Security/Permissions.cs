@@ -87,7 +87,7 @@ public static class Perm
     /// <summary>System role codes (not deletable).</summary>
     public static class Roles
     {
-        public const string Admin = "quan_tri", Editor = "bien_tap", Approver = "phe_duyet", Viewer = "chi_xem";
+        public const string Admin = "quan_tri", Editor = "bien_tap", Approver = "phe_duyet", Viewer = "chi_xem", Guest = "khach";
     }
 
     public static IReadOnlyDictionary<string, string[]> DefaultRolePermissions { get; } = new Dictionary<string, string[]>
@@ -97,5 +97,7 @@ public static class Perm
             SearchView, CatalogView, TicketCreate],
         [Roles.Approver] = [DocView, DocApprove, DocShare, WorkspaceView, TrashView, TrashRestore, SearchView, CatalogView, TicketCreate],
         [Roles.Viewer] = [DocView, WorkspaceView, SearchView, CatalogView, TicketCreate],
+        // Guests work only on what is shared with them; what they may do there comes from the level they were given (never sharing).
+        [Roles.Guest] = [DocView, DocUpload, DocEdit, SearchView],
     };
 }

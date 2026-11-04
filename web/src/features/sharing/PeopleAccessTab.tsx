@@ -79,6 +79,7 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
   const defaultLevel = offered.find((l) => l.code === 'viewer')?.id
 
   const [targets, setTargets] = useState<PrincipalValue[]>([])
+  const [emails, setEmails] = useState<string[]>([])
   const [levelId, setLevelId] = useState<string | undefined>()
   const [expires, setExpires] = useState<Dayjs | null>(null)
   const [notify, setNotify] = useState(true)
@@ -89,6 +90,7 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
     () =>
       grantItemPermission(itemId, {
         targets: targets.map(toTarget),
+        emails,
         levelId: (levelId ?? defaultLevel)!,
         expiresAt: expires ? expires.endOf('day').toISOString() : null,
         notify,
@@ -99,6 +101,7 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
       successMessage: t('sharing.people.shared'),
       onSuccess: () => {
         setTargets([])
+        setEmails([])
         setExpires(null)
         setMessage('')
       },
@@ -133,7 +136,20 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
       {a.canShare && (
         <Space direction="vertical" style={{ width: '100%' }}>
           <PrincipalSelect multiple types={['user', 'group', 'organization']} value={targets} onChange={setTargets} placeholder={t('sharing.people.addPlaceholder')} />
-          {targets.length > 0 && (
+          {(policy.data?.external ?? 'off') !== 'off' && (
+            <Select
+              mode="tags"
+              style={{ width: '100%' }}
+              value={emails}
+              onChange={(v: string[]) => setEmails(v.map((x) => x.trim()).filter(Boolean))}
+              tokenSeparators={[',', ';', ' ']}
+              open={false}
+              suffixIcon={null}
+              placeholder={t('sharing.people.emailPlaceholder')}
+              aria-label={t('sharing.people.emailPlaceholder')}
+            />
+          )}
+          {(targets.length > 0 || emails.length > 0) && (
             <>
               <Space wrap style={{ width: '100%' }}>
                 <Select style={{ minWidth: 220 }} value={levelId ?? defaultLevel} onChange={setLevelId} options={levelOptions} aria-label={t('sharing.people.level')} />
