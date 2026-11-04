@@ -41,7 +41,7 @@ BlueDrive là hệ thống lưu trữ, tìm kiếm, khai thác và chia sẻ s�
 
 ## 4. Xem và soạn thảo tài liệu (#21, #26–27, #41–43)
 
-- Mở tệp: ảnh (phóng to, xoay), video/âm thanh (tua tự do), PDF, văn bản. Tài liệu Office: bấm **Mở bằng trình soạn thảo** để sửa trực tuyến; **nhiều người có thể cùng soạn thảo** một tài liệu, thấy thay đổi của nhau theo thời gian thực. Mỗi lần lưu tạo một phiên bản mới.
+- Mở tệp: ảnh (phóng to, xoay), video/âm thanh (tua tự do), PDF, văn bản. Tài liệu Office: bấm **Mở bằng trình soạn thảo** để sửa trực tuyến; **nhiều người có thể cùng soạn thảo** một tài liệu, thấy thay đổi của nhau theo thời gian thực. Mỗi lần lưu tạo một phiên bản mới. Người được cấp *Người nhận xét* mở tài liệu ở chế độ chỉ bình luận; người *Chỉ xem* (hoặc tệp có nhãn yêu cầu) thấy hình mờ ghi tên, tài khoản và thời gian, không tải xuống, in hay sao chép được — trên web, ứng dụng điện thoại và trình soạn thảo. Tệp *Chỉ xem* không được đồng bộ xuống máy tính bằng BlueDrive Desktop.
 - Tab **Phiên bản**: số phiên bản, người sửa, thời gian, dung lượng, ghi chú; xem/tải phiên bản cũ; **Khôi phục** một phiên bản cũ (tạo phiên bản mới); **Tải lên phiên bản mới**.
 - Tab **Thảo luận**: bình luận, trả lời, **@nhắc tên** đồng nghiệp (người được nhắc nhận thông báo), đính kèm tệp, sửa/xóa bình luận của mình. Chỉ người có quyền xem tài liệu mới thấy thảo luận.
 

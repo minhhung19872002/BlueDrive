@@ -7,6 +7,7 @@ using BlueDrive.Application.Settings;
 using BlueDrive.Domain.Entities;
 using BlueDrive.Domain.Enums;
 using FluentValidation;
+using BlueDrive.Domain.Permissions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -18,7 +19,7 @@ public sealed record GetOfficeConfigQuery(Guid FileId, bool ForceView = false, b
 
 public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth,
     IOfficeEditorProvider office, IContentTicketService tickets, IAuditLogger audit, TimeProvider clock, Access.IItemPermissionService engine, Libraries.Libraries libraries,
-    Storage.QuotaService quota)
+    Storage.QuotaService quota, Access.Labels labels, IPermissionService perms)
     : IRequestHandler<GetOfficeConfigQuery, OfficeEditorConfig>
 {
     public async Task<OfficeEditorConfig> Handle(GetOfficeConfigQuery q, CancellationToken ct)
@@ -28,20 +29,27 @@ public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IR
         var f = await db.Files.AsNoTracking().FirstAsync(x => x.Id == q.FileId, ct);
         if (!office.CanView(f.Extension)) throw new AppException($"Định dạng .{f.Extension} không hỗ trợ mở bằng trình soạn thảo trực tuyến.");
         // People who may not see drafts read the latest published version (spec 1.4).
-        var versionId = Libraries.Libraries.VersionFor(f, await engine.GetEffectiveAsync(uid, f.Id, ct)) ?? throw new NotFoundException("Không tìm thấy tài liệu.");
+        var rights = await engine.GetEffectiveAsync(uid, f.Id, ct);
+        var versionId = Libraries.Libraries.VersionFor(f, rights) ?? throw new NotFoundException("Không tìm thấy tài liệu.");
         await ScanGate.EnsureAsync(db, f, versionId, uid, ct);
         // The item's own rights decide (like rename / new version): a "Chỉ xem" role shared "Chỉnh sửa" edits that document. A library that
         // requires a check-out opens for editing only to who checked it out.
         var mayChange = true;
         try { await libraries.EnsureMayChangeContentAsync(f, uid, ct); }
         catch (AppException) { mayChange = false; }
-        var canEdit = !q.ForceView && access.CanEdit && office.CanEdit(f.Extension) && mayChange && versionId == f.CurrentVersionId
-                      && !await quota.IsFullAsync(f.WorkspaceId, ct); // spec 8.2: no new versions when full
+        var full = await quota.IsFullAsync(f.WorkspaceId, ct); // spec 8.2: no new versions when full
+        var canEdit = !q.ForceView && access.CanEdit && office.CanEdit(f.Extension) && mayChange && versionId == f.CurrentVersionId && !full;
+        // Comments are saved into the document (a new version): a role that may not change documents only views.
+        var canComment = !q.ForceView && !canEdit && rights.Has(Domain.Permissions.AccessRight.Comment) && versionId == f.CurrentVersionId && !full
+                         && await perms.HasAsync(uid, Perm.DocEdit, ct);
+        // Spec 11.9: "Chỉ xem" or a label asking for it — a watermark, and no download, print or copy.
+        var watermark = !access.CanDownload || (await labels.ForAsync(f.Id, ct))?.Label.Watermark == true;
         var name = await db.Users.Where(u => u.Id == uid).Select(u => u.FullName).FirstAsync(ct);
         var docTicket = tickets.Issue(new ContentTicket(uid, "file", f.Id, versionId, true, null, null), TimeSpan.FromHours(24));
         var config = office.BuildConfig(new OfficeEditorRequest(f.Id, versionId, f.Name, f.Extension,
             $"{office.CallbackBaseUrl}/api/v1/content/{Uri.EscapeDataString(docTicket)}", $"{office.CallbackBaseUrl}/api/office/callback/{f.Id}",
-            canEdit, access.CanDownload, uid, name, false, q.Mobile));
+            canEdit, access.CanDownload && !watermark, uid, name, false, q.Mobile, null, canComment,
+            rights.Has(Domain.Permissions.AccessRight.Print) && !watermark, rights.Has(Domain.Permissions.AccessRight.CopyContent) && !watermark)) with { Watermark = watermark };
         await RecentTracker.TouchAsync(db, uid, f.Id, canEdit ? "edit" : "view", clock.GetUtcNow().UtcDateTime, ct);
         await audit.LogAsync(new AuditEntry(AuditAction.View, ResourceType.File, f.Id, f.Name, f.WorkspaceId, new { office = config.Mode }), ct);
         return config;

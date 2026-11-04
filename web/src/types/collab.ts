@@ -10,8 +10,10 @@ export interface OfficeEditorConfig {
   provider: string
   apiScriptUrl: string
   config: Record<string, unknown>
-  /** "edit" | "view" */
+  /** "edit" | "comment" | "view" */
   mode: string
+  /** Spec 11.9: lay the viewer's name, account and time over the editor. */
+  watermark?: boolean
 }
 
 export interface CreateDocumentRequest {

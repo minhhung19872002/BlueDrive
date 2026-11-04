@@ -356,4 +356,34 @@ public class AdvancedAdminTests(ApiFactory factory)
         (await reader.GetAsync($"/api/v1/files/{file}")).IsSuccessStatusCode.Should().BeFalse();
         (await admin.PostAsJsonAsync("/api/v1/admin/bulk/delete-inactive-guests", new { days = 0 })).StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
+
+    [Fact]
+    public async Task Office_opens_to_edit_comment_or_view_with_a_watermark_by_rights()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (commenter, commenterId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (viewer, viewerId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var create = await (await owner.PostAsJsonAsync("/api/v1/office/new", new { workspaceId = ws, folderId = (Guid?)null, kind = "docx", name = "Biên bản" })).ReadJsonAsync();
+        var file = create.GetProperty("fileId").GetGuid();
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+        await (await owner.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { new { kind = "user", id = commenterId } }, levelId = levels["commenter"], notify = false })).ReadJsonAsync();
+        await (await owner.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { new { kind = "user", id = viewerId } }, levelId = levels["view_only"], notify = false })).ReadJsonAsync();
+
+        var mine = await (await owner.GetAsync($"/api/v1/office/config/{file}")).ReadJsonAsync();
+        mine.GetProperty("mode").GetString().Should().Be("edit");
+        mine.GetProperty("watermark").GetBoolean().Should().BeFalse();
+        var comments = await (await commenter.GetAsync($"/api/v1/office/config/{file}")).ReadJsonAsync();
+        comments.GetProperty("mode").GetString().Should().Be("comment");
+        var perms = comments.GetProperty("config").GetProperty("document").GetProperty("permissions");
+        perms.GetProperty("edit").GetBoolean().Should().BeFalse();
+        perms.GetProperty("comment").GetBoolean().Should().BeTrue();
+        var views = await (await viewer.GetAsync($"/api/v1/office/config/{file}")).ReadJsonAsync();
+        views.GetProperty("mode").GetString().Should().Be("view");
+        views.GetProperty("watermark").GetBoolean().Should().BeTrue();
+        var vp = views.GetProperty("config").GetProperty("document").GetProperty("permissions");
+        vp.GetProperty("download").GetBoolean().Should().BeFalse();
+        vp.GetProperty("print").GetBoolean().Should().BeFalse();
+        vp.GetProperty("copy").GetBoolean().Should().BeFalse();
+    }
 }

@@ -365,7 +365,8 @@ public sealed class SyncChangesHandler(IAppDbContext db, ICurrentUser me, SyncAc
                 // The person's / group's folder in "Được chia sẻ với tôi" comes first (the client may not have it yet).
                 if (item.ParentId == SyncIds.SharerFolder(r.WorkspaceId) && sharerFolders.Add(r.WorkspaceId))
                     changes.Add(new SyncChangeDto(r.Seq, "update_meta", "folder", item.ParentId.Value, r.WorkspaceId, SyncAccessContext.SharerFolder(map!), r.OccurredAt, null));
-                changes.Add(Bare(Op(r.Op)) with { Item = item });
+                // Spec 4.4: a permission change that makes the item visible is "access_granted" (older clients treat it as an upsert).
+                changes.Add(Bare(r.Op == ChangeOp.PermissionChanged ? "access_granted" : Op(r.Op)) with { Item = item });
             }
             else if (r.Op is ChangeOp.PermissionChanged or ChangeOp.UpdateMeta
                      && (inScope || r.PrincipalId is { } who && access.Concerns(who))) // the last share taken back: only the person concerned is told

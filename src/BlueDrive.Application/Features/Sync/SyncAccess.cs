@@ -118,12 +118,17 @@ public sealed class WorkspaceAccessMap
 
     public bool FolderExists(Guid folderId) => _folders.ContainsKey(folderId);
 
-    /// <summary>A file whose label forbids syncing to computers (spec 7.1) is not part of the synced tree.</summary>
-    public AccessLevel FileLevel(Guid fileId, Guid? folderId, ApprovalStatus approval, Guid? createdBy, Guid? checkedOutBy = null, bool published = true) =>
-        _fileNodes.TryGetValue(fileId, out var n) && _labels.GetValueOrDefault(fileId) is not { BlockSync: true }
-            ? Access.ReferencePermissionEvaluator.ToLevel(Rights(fileId, n.Scope, n.Owner,
-                new Access.Restrictions.FileFacts(createdBy, approval == ApprovalStatus.Approved, checkedOutBy, published)))
-            : AccessLevel.None;
+    /// <summary>
+    /// A file whose label forbids syncing to computers (spec 7.1), or that one may only view ("Chỉ xem": no download, spec 11), is not part of
+    /// the synced tree.
+    /// </summary>
+    public AccessLevel FileLevel(Guid fileId, Guid? folderId, ApprovalStatus approval, Guid? createdBy, Guid? checkedOutBy = null, bool published = true)
+    {
+        if (!_fileNodes.TryGetValue(fileId, out var n) || _labels.GetValueOrDefault(fileId) is { BlockSync: true }) return AccessLevel.None;
+        var level = Access.ReferencePermissionEvaluator.ToLevel(Rights(fileId, n.Scope, n.Owner,
+            new Access.Restrictions.FileFacts(createdBy, approval == ApprovalStatus.Approved, checkedOutBy, published)));
+        return level >= AccessLevel.Download ? level : AccessLevel.None;
+    }
 
     /// <summary>Parent as seen by the user: a folder they cannot see is skipped (the item becomes top-level of the shared root).</summary>
     public Guid? VisibleParent(Guid? parentId) => parentId is { } id && FolderLevel(id) >= AccessLevel.View ? id : null;

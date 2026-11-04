@@ -164,7 +164,7 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
             {
                 "delete" or "purge" => RemoteChangeKind.Delete,
                 "access_revoked" => RemoteChangeKind.AccessRevoked,
-                "permission_changed" => RemoteChangeKind.PermissionChanged,
+                "permission_changed" or "access_granted" => RemoteChangeKind.PermissionChanged,
                 _ => RemoteChangeKind.Upsert,
             };
             // An upsert whose item is gone (deleted later in the journal, or no longer visible) carries no item: treat as delete.
