@@ -89,6 +89,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     Task<int> IAppDbContext.SaveChangesAsync(CancellationToken ct) => SaveChangesAsync(ct);
 
+    /// <summary>Always on (also for contexts made by hand, as in tests): writes that can change rights end cached permission decisions.</summary>
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
+        optionsBuilder.AddInterceptors(PermissionGenerationInterceptor.Instance, PermissionGenerationInterceptor.Transactions);
+
     protected override void ConfigureConventions(ModelConfigurationBuilder builder)
     {
         // Persist every domain enum as a snake_case string ("PhongBan" -> "phong_ban").

@@ -233,6 +233,8 @@ public sealed class RestoreRunner(IOptions<BackupOptions> backupOptions, IOption
         // pg_restore recreates the extensions (ltree, unaccent…) with new type ids: connections and Npgsql's type cache must forget the old ones.
         Npgsql.NpgsqlConnection.ClearAllPools();
         await using (var connection = await dataSource.OpenConnectionAsync(ct)) await connection.ReloadTypesAsync(ct);
+        // The whole database changed outside EF: no cached permission decision may survive it.
+        Application.Features.Access.PermissionGeneration.Bump();
 
         foreach (var (dir, m) in chain)
         {

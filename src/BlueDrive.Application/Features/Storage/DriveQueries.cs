@@ -138,7 +138,8 @@ public sealed class ListItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
 
 public sealed record GetFolderInfoQuery(Guid WorkspaceId, Guid? FolderId) : IRequest<FolderInfoDto>;
 
-public sealed class GetFolderInfoHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth) : IRequestHandler<GetFolderInfoQuery, FolderInfoDto>
+public sealed class GetFolderInfoHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, Access.AccessFilter filter)
+    : IRequestHandler<GetFolderInfoQuery, FolderInfoDto>
 {
     public async Task<FolderInfoDto> Handle(GetFolderInfoQuery q, CancellationToken ct)
     {
@@ -148,10 +149,14 @@ public sealed class GetFolderInfoHandler(IAppDbContext db, ICurrentUser me, IRes
         if (q.FolderId is not { } fid)
         {
             var a = await auth.GetAccessAsync(uid, ResourceType.Workspace, ws.Id, ct);
+            // Spec 4.4 (no leaking existence): the root's name only to who may open it or holds something shared inside it.
+            if (a.Level < AccessLevel.View && !await filter.Workspaces(await filter.ForAsync(uid, ct)).ContainsAsync(ws.Id, ct))
+                throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
             return new FolderInfoDto(null, wsName, ws.Id, wsName, ws.Type, null, false, false, [new BreadcrumbItem(null, wsName)], AccessFlags.From(a));
         }
         var folder = await db.Folders.AsNoTracking().FirstOrDefaultAsync(f => f.Id == fid && f.WorkspaceId == ws.Id && !f.IsDeleted, ct) ?? throw new NotFoundException("Không tìm thấy thư mục.");
         var access = await auth.GetAccessAsync(uid, ResourceType.Folder, fid, ct);
+        if (access.Level < AccessLevel.View) throw new NotFoundException("Không tìm thấy thư mục.");
         var crumbs = await FileLocation.BuildAsync(db, ws, folder, uid, ct, auth);
         return new FolderInfoDto(folder.Id, folder.Name, ws.Id, wsName, ws.Type, folder.ParentId, folder.RequiresApproval, folder.BreakInheritance, crumbs, AccessFlags.From(access));
     }

@@ -36,6 +36,11 @@ public interface IItemPermissionService
 public sealed class ItemPermissionService(IAppDbContext db, IPermissionService rbac, IMemoryCache cache, TimeProvider clock, Labels labels) : IItemPermissionService
 {
     private static readonly TimeSpan CacheFor = TimeSpan.FromMinutes(5);
+    /// <summary>
+    /// How long a whole decision stays in memory (L0, keyed by user and item, stamped with <see cref="PermissionGeneration"/>): writes of
+    /// this process end it at once; this bounds how long a change made by another process (the Worker) can take to be seen.
+    /// </summary>
+    private static readonly TimeSpan DecisionFor = TimeSpan.FromSeconds(10);
     private readonly Dictionary<(Guid, Guid), (AccessRight, bool)> _request = [];
     private readonly Dictionary<Guid, SpaceState> _spaces = [];
 
@@ -56,6 +61,14 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
     public async Task<(AccessRight Rights, bool Locked)> GetWithLockAsync(Guid userId, Guid itemId, CancellationToken ct = default)
     {
         if (_request.TryGetValue((userId, itemId), out var known)) return known;
+        // L0: the same decision, made since the last write that could change it (and not past an entry's expiry).
+        var generation = PermissionGeneration.Current;
+        var now = clock.GetUtcNow().UtcDateTime;
+        var decisionKey = ("perm-decision", userId, itemId);
+        var decisions = db.Database.IsRelational();
+        if (decisions && cache.TryGetValue(decisionKey, out (long Generation, (AccessRight, bool) Result, DateTime Until) d) && d.Generation == generation && now < d.Until)
+            return _request[(userId, itemId)] = d.Result;
+        var until = now + DecisionFor;
         var node = await db.Securables.AsNoTracking().Where(s => s.Id == itemId && !s.IsDeleted)
             .Select(s => new { s.Id, s.Kind, s.AclScopeId, s.OwnerUserId, Root = s.SpaceId ?? s.PersonalDriveId, Space = s.SpaceId != null }).FirstOrDefaultAsync(ct);
         var result = (AccessRight.None, false);
@@ -64,7 +77,8 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
             var user = await UserAsync(userId, ct);
             if (user.CanViewDocs)
             {
-                var (direct, membership) = await ScopeRightsAsync(user, node.AclScopeId, node.Id == node.AclScopeId, ct);
+                var (direct, membership, entriesUntil) = await ScopeRightsAsync(user, node.AclScopeId, node.Id == node.AclScopeId, ct);
+                if (entriesUntil < until) until = entriesUntil;
                 var state = await SpaceAsync(node.Root, ct);
                 var rights = state.Apply(Restrictions.Apply(user, node.OwnerUserId == userId, direct, membership, await FileFactsAsync(node.Kind, node.Id, ct), locked: false));
                 var label = node.Kind is SecurableKind.File or SecurableKind.Folder ? (await labels.ForAsync(node.Id, ct))?.Label : null;
@@ -72,6 +86,7 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
             }
         }
         _request[(userId, itemId)] = result;
+        if (decisions) cache.Set(decisionKey, (generation, result, until), new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = DecisionFor });
         return result;
     }
 
@@ -150,14 +165,14 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
     }
 
     /// <summary>OR of the live entries on a scope, apart: direct grants, and Space membership (the part capped by the role).</summary>
-    private async Task<(AccessRight Direct, AccessRight Membership)> ScopeRightsAsync(Restrictions.User user, Guid scopeId, bool scopeNode, CancellationToken ct)
+    private async Task<(AccessRight Direct, AccessRight Membership, DateTime Until)> ScopeRightsAsync(Restrictions.User user, Guid scopeId, bool scopeNode, CancellationToken ct)
     {
         var aclVersion = await db.AclScopes.Where(s => s.ScopeId == scopeId).Select(s => (long?)s.AclVersion).FirstOrDefaultAsync(ct) ?? 0;
         var membershipVersion = await db.MembershipVersions.Where(v => v.UserId == user.UserId).Select(v => (long?)v.Version).FirstOrDefaultAsync(ct) ?? 0;
         var key = ("perm-scope", user.UserId, scopeId, scopeNode, membershipVersion, aclVersion);
         var now = clock.GetUtcNow().UtcDateTime;
         // The answer is valid until the first of its entries runs out (checked on the application's clock).
-        if (cache.TryGetValue(key, out (AccessRight Direct, AccessRight Membership, DateTime Until) hit) && now < hit.Until) return (hit.Direct, hit.Membership);
+        if (cache.TryGetValue(key, out (AccessRight Direct, AccessRight Membership, DateTime Until) hit) && now < hit.Until) return hit;
         var live = await db.AclEntries.AsNoTracking()
             .Where(e => e.ScopeId == scopeId && user.Principals.Contains(e.PrincipalId) && (e.ExpiresAt == null || e.ExpiresAt > now) && (e.AppliesToChildren || scopeNode))
             .Join(db.PermissionLevels, e => e.PermissionLevelId, l => l.Id, (e, l) => new { e.Source, e.ExpiresAt, l.Permissions })
@@ -167,7 +182,7 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
         // An entry running out ends the cached answer with it.
         var until = live.Where(e => e.ExpiresAt is not null).Select(e => e.ExpiresAt!.Value).DefaultIfEmpty(now + CacheFor).Min();
         cache.Set(key, (result.Item1, result.Item2, until), new MemoryCacheEntryOptions { AbsoluteExpirationRelativeToNow = CacheFor });
-        return result;
+        return (result.Item1, result.Item2, until);
     }
 
     /// <summary>

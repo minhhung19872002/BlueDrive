@@ -55,7 +55,15 @@ Những chỗ các bản sao quy tắc đang lệch nhau (sẽ hết khi mọi k
 | 1 | Tạo `spaces`, `personal_drives`, `libraries`, `securables`, `principals`, `principal_memberships`, `space_groups`, `permission_levels`, `acl_scopes`, `acl_entries`, `scope_grants`. Migration chiếu dữ liệu cũ; job `PermissionProjection` dựng lại khi dữ liệu cũ đổi; lệnh đối chiếu cũ ⊆ mới trên mẫu 10 000 cặp |
 | 2 | Bộ tính quyền `IItemPermissionService` (Get/Has/Demand/Explain; cache theo `membership_version` / `acl_version`, hết hạn theo đồng hồ ứng dụng), `AclEditor` (ngắt / khôi phục kế thừa bằng một UPDATE theo ltree, cấp / thu quyền, `scope_grants` cập nhật cùng lúc), API `items/{id}/effective-permissions`, `items/{id}/explain`; property test so với `ReferencePermissionEvaluator` |
 | 3 | Chuyển nguồn ghi sang mô hình mới (hộp thoại quyền, chia sẻ, thành viên, tạo / di chuyển / xóa mục cập nhật `securables` và ACL; thành viên nhóm / đơn vị cập nhật `principal_memberships`); mọi kênh đọc quyền qua `IItemPermissionService` và lọc bằng `scope_grants` trong SQL; xóa 6 bộ lọc viết tay và bộ chiếu định kỳ |
-| 4–10 | theo đặc tả mục 15 |
+| 4 | Chia sẻ: hộp thoại chung, 4 loại liên kết (token băm), quyền truy cập chung, quyền có hạn + nhắc, yêu cầu truy cập, khách mời bằng email (mã một lần), chính sách chia sẻ nhiều tầng |
+| 5 | Space: mẫu, nhóm thành viên (nhóm / đơn vị), trạng thái hoạt động / lưu trữ / xóa (thùng rác hệ thống 93 ngày), cài đặt, trang chủ, "Quyền của Space"; Tôi đã chia sẻ, Bộ nhớ; lối tắt; chuyển quyền sở hữu (người nhận chấp nhận); quy tắc di chuyển Drive ↔ Space kèm xem trước quyền thay đổi |
+| 6 | Thư viện: phiên bản chính / phụ, check-out, phê duyệt, định dạng cho phép; cột thông tin, dạng xem, sửa nhanh, mẫu |
+| 7 | Cấp quyền tùy biến; nhãn phân loại + watermark; lưu giữ (kho lưu giữ) và giữ pháp lý; thùng rác 2 tầng giữ quyền cũ, tạo lại thư mục cha; dung lượng 3 tầng + cảnh báo; nghỉ việc / chuyển đơn vị; truy cập khẩn cấp |
+| 8 | Báo cáo quyền (kiểm tra quyền, người này truy cập được gì, chia sẻ ra ngoài, liên kết, quyền riêng, sắp hết hạn) xuất Excel / PDF; thao tác hàng loạt |
+| 9 | Desktop sync (Chỉ xem không đồng bộ, `access_granted` / `access_revoked`), ONLYOFFICE (sửa / nhận xét / xem, watermark), mobile (watermark). Không có kênh WebDAV |
+| 10 | L0 cache quyết định (`PermissionGeneration`), benchmark (`perf-permissions.md`), test bảo mật, E2E, tài liệu (`permissions-model.md`, `permission-matrix.md`, `sharing-policies.md`) |
+
+Tất cả các phase đã hoàn thành ngày 05/11/2026; chi tiết từng chức năng và test kiểm chứng ở `traceability.md` (dòng Perm-Phase 1–10).
 
 ## 4a. Perm-Phase 1 — cách chiếu dữ liệu cũ sang mô hình mới
 

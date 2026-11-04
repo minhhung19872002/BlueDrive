@@ -49,6 +49,10 @@ public sealed class ListTrashHandler(IAppDbContext db, ICurrentUser me, IResourc
         if (second && !await TrashAccess.CanManageSecondStageAsync(perms, engine, uid, ws.Id, ct))
             throw new ForbiddenException("Chỉ Quản lý Space và quản trị xem được thùng rác tầng 2.");
         var full = second || await TrashAccess.CanManageTrashAsync(auth, uid, ws.Id, ct);
+        // Not even an empty list for a Space / Drive one has nothing to do with (its existence stays hidden).
+        if (!full && (await auth.GetAccessAsync(uid, ResourceType.Workspace, ws.Id, ct)).Level < AccessLevel.View
+            && !await db.Files.AnyAsync(f => f.WorkspaceId == ws.Id && f.DeletedBy == uid, ct) && !await db.Folders.AnyAsync(f => f.WorkspaceId == ws.Id && f.DeletedBy == uid, ct))
+            throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
         var retention = ws.TrashRetentionDays ?? await settings.GetAsync(SettingKeys.TrashRetentionDays, SettingKeys.DefaultTrashDays, ct);
         var folders = db.Folders.AsNoTracking().Where(f => f.WorkspaceId == ws.Id && f.IsTrashRoot && f.IsDeleted && f.PreservedAt == null
             && (f.SecondStageAt != null) == second && (full || f.DeletedBy == uid));
