@@ -180,6 +180,44 @@ public sealed class SyncAgentTests(ApiFactory factory) : IDisposable
     }
 
     [Fact]
+    public async Task A_folder_dragged_to_another_group_is_moved_there_on_the_server()
+    {
+        var (user, userId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (other, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        async Task<Guid> Group(HttpClient c, string name) =>
+            (await (await c.PostAsJsonAsync("/api/v1/workspaces", new { name, type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var a = await Group(user, "Nhóm A");
+        var b = await Group(user, "Nhóm B");
+        var viewOnly = await Group(other, "Nhóm chỉ xem");
+        (await other.PostAsJsonAsync($"/api/v1/workspaces/{viewOnly}/members", new { userIds = new[] { userId }, role = "viewer" })).EnsureSuccessStatusCode();
+        var folderId = (await (await user.PostAsJsonAsync("/api/v1/folders", new { workspaceId = a, parentId = (Guid?)null, name = "Chiến dịch" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        await StorageTests.UploadAsync(user, a, folderId, "kế hoạch.txt", "kế hoạch"u8.ToArray());
+
+        await using var agent = Agent(await SignInAsync(user));
+        await agent.StartAsync();
+        var groups = Path.Combine(_tmp, "BlueDrive", "Nhóm");
+        await Until(() => Task.FromResult(File.Exists(Path.Combine(groups, "Nhóm A", "Chiến dịch", "kế hoạch.txt")) && agent.Status.State == AgentState.Idle), "thư mục trong Nhóm A", 30);
+
+        async Task<List<(string Name, Guid Id)>> Items(Guid ws) => (await (await user.GetAsync($"/api/v1/workspaces/{ws}/items?pageSize=50")).ReadJsonAsync())
+            .GetProperty("items").EnumerateArray().Select(i => (i.GetProperty("name").GetString()!, i.GetProperty("id").GetGuid())).ToList();
+
+        // Explorer drag & drop from "Nhóm A" to "Nhóm B": the same folder on the server, nothing uploaded again or put in the trash.
+        Directory.Move(Path.Combine(groups, "Nhóm A", "Chiến dịch"), Path.Combine(groups, "Nhóm B", "Chiến dịch"));
+        agent.SyncNow();
+        await Until(async () => (await Items(b)).Contains(("Chiến dịch", folderId)) && agent.Status.State == AgentState.Idle, "cùng thư mục, nay ở Nhóm B", 30);
+        (await Items(a)).Should().BeEmpty();
+        var trash = await (await user.GetAsync($"/api/v1/workspaces/{a}/trash")).ReadJsonAsync();
+        trash.GetProperty("total").GetInt32().Should().Be(0, "moved, not copied and deleted");
+
+        // Into a group where the user may only look: put back, still in "Nhóm B" on the server.
+        Directory.Move(Path.Combine(groups, "Nhóm B", "Chiến dịch"), Path.Combine(groups, "Nhóm chỉ xem", "Chiến dịch"));
+        agent.SyncNow();
+        await Until(() => Task.FromResult(Directory.Exists(Path.Combine(groups, "Nhóm B", "Chiến dịch")) && agent.Status.State == AgentState.Idle), "thư mục trả về Nhóm B", 30);
+        (await Items(b)).Should().Contain(("Chiến dịch", folderId));
+        File.ReadAllText(Path.Combine(groups, "Nhóm B", "Chiến dịch", "kế hoạch.txt")).Should().Be("kế hoạch");
+    }
+
+    [Fact]
     public async Task Group_workspaces_are_under_nhom_and_nothing_else_can_live_there()
     {
         var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");

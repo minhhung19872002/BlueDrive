@@ -314,6 +314,34 @@ public class SyncTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task A_device_hears_at_once_when_its_user_is_added_to_a_workspace()
+    {
+        // Found on two real computers: a new group or share only showed up at the next periodic pass (up to 15 min).
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (member, memberId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = (await (await owner.PostAsJsonAsync("/api/v1/workspaces", new { name = "Nhóm mới " + Guid.NewGuid().ToString("N")[..6], type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var device = await DeviceAsync(member);
+        var received = new TaskCompletionSource<JsonElement>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var hub = new HubConnectionBuilder()
+            .WithUrl(new Uri(factory.Server.BaseAddress, "/hubs/sync"), o =>
+            {
+                o.HttpMessageHandlerFactory = _ => factory.Server.CreateHandler();
+                o.AccessTokenProvider = () => Task.FromResult<string?>(device.AccessToken);
+                o.Transports = Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling;
+            }).Build();
+        hub.On<JsonElement>("changes_available", e =>
+        {
+            if (e.GetProperty("workspaceId").GetGuid() == ws) received.TrySetResult(e);
+        });
+        await hub.StartAsync(); // connected before being a member: not in that workspace's group
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        (await owner.PostAsJsonAsync($"/api/v1/workspaces/{ws}/members", new { userIds = new[] { memberId }, role = "editor" })).EnsureSuccessStatusCode();
+        await received.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
     public async Task Remote_wipe_is_signed_with_the_device_secret_and_ends_the_device()
     {
         var (user, _, _) = await factory.CreateUserClientAsync("bien_tap");

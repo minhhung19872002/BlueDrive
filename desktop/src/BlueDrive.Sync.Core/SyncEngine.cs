@@ -308,6 +308,96 @@ public sealed class SyncEngine(
         }
     }
 
+    /// <summary>
+    /// Spec "Move giữa các root": an item dragged from one root to another on the computer ("Nhóm\A" → "Nhóm\B") is moved on the server — the same
+    /// item, with its versions, shares and comments — instead of being uploaded again there and deleted here (the rounds work one root at a
+    /// time and would see a new item and a deleted one). Refused by the server (no right to add in the destination) → put back where it was.
+    /// </summary>
+    private async Task MoveAcrossRootsAsync(List<RootState> roots, CancellationToken ct)
+    {
+        roots = roots.Where(r => r.LocalPath.Length > 0).ToList();
+        if (roots.Count < 2) return;
+        // Where each file / folder is on the disk now, by file id.
+        var now = new Dictionary<string, (RootState Root, LocalEntry Entry)>();
+        foreach (var r in roots)
+            foreach (var e in fs.Scan(r.LocalPath))
+            {
+                var rel = Rel(r.LocalPath, e.Path);
+                if (!string.IsNullOrEmpty(e.FileId) && !IsExcludedPath(rel)) now.TryAdd(e.FileId, (r, e with { Path = rel }));
+            }
+        var items = roots.ToDictionary(r => r.RootId, r => state.Items(r.RootId));
+        foreach (var from in roots)
+        {
+            var byRemote = items[from.RootId].ToDictionary(i => i.RemoteId);
+            foreach (var b in items[from.RootId].ToList())
+            {
+                if (b.LocalFileId is not { } fid || !now.TryGetValue(fid, out var at) || at.Root.RootId == from.RootId) continue;
+                if (items[at.Root.RootId].Any(t => t.LocalFileId == fid)) continue; // already known there
+                // Inside a folder that moved with it: the folder's move carries it.
+                if (b.ParentRemoteId is { } p && byRemote.TryGetValue(p, out var pb) && pb.LocalFileId is { } pf && now.TryGetValue(pf, out var pat) && pat.Root.RootId == at.Root.RootId) continue;
+                var oldPath = PathIn(byRemote, b);
+                if (oldPath is null || fs.Stat(NameMapper.Combine(from.LocalPath, oldPath)) is not null) continue; // still there: a copy, not a move
+                var parentPath = NameMapper.ParentOf(at.Entry.Path);
+                string? parentId = null;
+                if (parentPath is not null)
+                {
+                    var targetByRemote = items[at.Root.RootId].ToDictionary(i => i.RemoteId);
+                    if (items[at.Root.RootId].FirstOrDefault(t => t.IsFolder && string.Equals(PathIn(targetByRemote, t), parentPath, StringComparison.OrdinalIgnoreCase)) is not { } parent)
+                        continue; // into a folder not on the server yet: uploaded there and deleted here, as before
+                    parentId = parent.RemoteId;
+                }
+                var name = NameMapper.NameOf(at.Entry.Path);
+                var remoteName = name == NameMapper.ToLocal(b.RemoteName) ? b.RemoteName : name;
+                RemoteItem moved;
+                try { moved = await remote.MoveAsync(b.RemoteId, b.RemoteRevision, at.Root.RootId, parentId, remoteName, ct); }
+                catch (RemotePermanentException ex)
+                {
+                    // Not allowed there (view-only group…): the item goes back, nothing is uploaded or deleted.
+                    try
+                    {
+                        fs.Move(NameMapper.Combine(at.Root.LocalPath, at.Entry.Path), NameMapper.Combine(from.LocalPath, oldPath));
+                        Log("Hoàn tác", NameMapper.Combine(at.Root.LocalPath, at.Entry.Path), $"Không chuyển được sang đây ({ex.Message}), trả về {NameMapper.Combine(from.LocalPath, oldPath)}");
+                    }
+                    catch (Exception io) when (io is IOException or UnauthorizedAccessException) { } // open: the rounds handle it
+                    continue;
+                }
+                catch (Exception ex) when (ex is RemotePreconditionFailedException or RemoteNameConflictException or RemoteNotFoundException) { continue; } // the rounds sort it out
+
+                // The same item now belongs to the other root: its base rows and server copies (with everything inside) follow.
+                var tree = state.RemoteTree(from.RootId);
+                var subtree = Subtree(tree, b.RemoteId).ToHashSet();
+                var moving = items[from.RootId].Where(i => subtree.Contains(i.RemoteId)).ToList();
+                state.MoveItemsToRoot(moving.Select(i => i.LocalId), at.Root.RootId);
+                foreach (var id in subtree) state.UpsertRemote(at.Root.RootId, id == moved.Id ? moved : tree[id]);
+                if (!tree.ContainsKey(moved.Id)) state.UpsertRemote(at.Root.RootId, moved);
+                b.RootId = at.Root.RootId;
+                b.ParentRemoteId = moved.ParentId;
+                b.Name = name;
+                b.RemoteName = moved.Name;
+                b.RemoteRevision = moved.Revision;
+                b.LastSyncedAt = clock.UtcNow;
+                state.SaveItem(b);
+                items[from.RootId].RemoveAll(moving.Contains);
+                items[at.Root.RootId].AddRange(moving);
+                Log("Đổi tên/di chuyển", NameMapper.Combine(at.Root.LocalPath, at.Entry.Path), $"Từ {NameMapper.Combine(from.LocalPath, oldPath)}");
+            }
+        }
+    }
+
+    /// <summary>Path of a base item inside its root (null when a parent is missing).</summary>
+    private static string? PathIn(Dictionary<string, BaseItem> byRemote, BaseItem b)
+    {
+        var parts = new List<string> { b.Name };
+        for (var (cur, guard) = (b.ParentRemoteId, 0); cur is not null && guard < 256; guard++)
+        {
+            if (!byRemote.TryGetValue(cur, out var p)) return null;
+            parts.Add(p.Name);
+            cur = p.ParentRemoteId;
+        }
+        parts.Reverse();
+        return string.Join('/', parts);
+    }
+
     private void RemoveSubtree(string rootId, string id)
     {
         var ids = Subtree(state.RemoteTree(rootId), id).ToList();
@@ -371,6 +461,7 @@ public sealed class SyncEngine(
         var total = 0;
         var errors = new List<string>();
         var pendingMass = 0;
+        await MoveAcrossRootsAsync(state.Roots().Where(r => r.Enabled).ToList(), ct);
         foreach (var root in state.Roots().Where(r => r.Enabled))
         {
             fs.CreateDirectory(root.LocalPath);

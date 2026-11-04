@@ -224,6 +224,14 @@ public sealed class SyncStateDb : IDisposable
 
     public void DeleteItem(long localId) => _db.Execute("DELETE FROM items WHERE local_id = @localId", new { localId });
 
+    /// <summary>Items moved on the server to another root (workspace): their base rows follow.</summary>
+    public void MoveItemsToRoot(IEnumerable<long> localIds, string rootId)
+    {
+        using var tx = _db.BeginTransaction();
+        foreach (var id in localIds) _db.Execute("UPDATE items SET root_id = @rootId WHERE local_id = @id", new { rootId, id }, tx);
+        tx.Commit();
+    }
+
     // ---------------------------------------------------------------- operation queue
 
     public long Enqueue(string rootId, string type, string itemKey, string? payload) => _db.ExecuteScalar<long>("""

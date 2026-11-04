@@ -541,8 +541,11 @@ public sealed class HttpRemoteStore : IRemoteStore, IRemoteRangeReader
         if (_virtual.ContainsKey(itemId)) throw SharerFolderFixed(itemId);
         var current = await TryGetAsync(itemId, ct) ?? throw new RemoteNotFoundException(itemId);
         if (current.Revision != revision) throw new RemotePreconditionFailedException(current);
-        // Renamed where it is (its parent may be a person's folder in "Được chia sẻ với tôi"): same workspace.
-        var targetWs = newParentId == current.ParentId && _workspaceOf.TryGetValue(itemId, out var here) ? here : WorkspaceFor(rootId, newParentId);
+        // Renamed where it is (its parent may be a person's folder in "Được chia sẻ với tôi"): same workspace — unless the destination root is
+        // another workspace (dragged from "Nhóm\A" to the top of "Nhóm\B": both parents are null).
+        var otherWorkspace = rootId.StartsWith("ws:", StringComparison.Ordinal) && Guid.TryParse(rootId[3..], out var rootWs)
+                             && _workspaceOf.TryGetValue(itemId, out var current0) && current0 != rootWs;
+        var targetWs = newParentId == current.ParentId && !otherWorkspace && _workspaceOf.TryGetValue(itemId, out var here) ? here : WorkspaceFor(rootId, newParentId);
         var ifMatch = $"\"{revision}\"";
         var ops = new List<object>();
         var renamed = !string.Equals(current.Name, newName, StringComparison.Ordinal);
