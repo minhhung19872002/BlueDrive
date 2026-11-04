@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { App, Button, Space, Tabs, Tag, Typography } from 'antd'
-import { BarChartOutlined, EditOutlined, FolderOutlined, HistoryOutlined, HomeOutlined, LockOutlined, SafetyOutlined, ShareAltOutlined, TeamOutlined, UnlockOutlined } from '@ant-design/icons'
+import { BarChartOutlined, EditOutlined, FolderOutlined, HistoryOutlined, HomeOutlined, LockOutlined, SafetyOutlined, ShareAltOutlined, TableOutlined, TeamOutlined, UnlockOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useParams, useSearchParams } from 'react-router-dom'
@@ -11,6 +11,7 @@ import FileExplorer from '@/features/drive/explorer/FileExplorer'
 import { useFolderSearchParam } from '@/features/drive/useFolderSearchParam'
 import { useOfficeNewExtensions } from '@/features/office/useOfficeNewMenu'
 import WorkspaceActivityTab from '@/features/workspaces/WorkspaceActivityTab'
+import LibraryViewTab from '@/features/libraries/LibraryViewTab'
 import WorkspaceHomeTab from '@/features/workspaces/WorkspaceHomeTab'
 import WorkspacePermissionsTab from '@/features/workspaces/WorkspacePermissionsTab'
 import WorkspaceSettingsTab from '@/features/workspaces/WorkspaceSettingsTab'
@@ -35,7 +36,7 @@ export default function WorkspaceDetailPage() {
   const officeItems = useOfficeNewExtensions()
   const [search, setSearch] = useSearchParams()
   const tabParam = search.get('tab')
-  const tab = tabParam && ['home', 'summary', 'activity', 'sharing', 'permissions'].includes(tabParam) ? tabParam : 'files'
+  const tab = tabParam && ['home', 'library', 'summary', 'activity', 'sharing', 'permissions'].includes(tabParam) ? tabParam : 'files'
   // A user who only received a shared folder may not read the workspace itself: the explorer still works.
   const ws = useQuery({ queryKey: qk.workspace(id), queryFn: () => getWorkspace(id), retry: 0, enabled: !!id })
   const w = ws.data
@@ -133,6 +134,7 @@ export default function WorkspaceDetailPage() {
             items={[
               { key: 'home', label: <span><HomeOutlined /> {t('spaceHome.tab')}</span> },
               { key: 'files', label: <span><FolderOutlined /> {t('collab.workspaceTabs.files')}</span> },
+              { key: 'library', label: <span><TableOutlined /> {t('library.tab')}</span> },
               { key: 'summary', label: <span><BarChartOutlined /> {t('collab.workspaceTabs.summary')}</span> },
               { key: 'activity', label: <span><HistoryOutlined /> {t('collab.workspaceTabs.activity')}</span> },
               { key: 'sharing', label: <span><ShareAltOutlined /> {t('spaceSettings.tab')}</span> },
@@ -143,6 +145,7 @@ export default function WorkspaceDetailPage() {
           {tab === 'summary' && <WorkspaceSummaryTab workspaceId={id} />}
           {tab === 'activity' && <WorkspaceActivityTab workspaceId={id} />}
           {tab === 'home' && <WorkspaceHomeTab workspaceId={id} />}
+          {tab === 'library' && <LibraryViewTab workspaceId={id} />}
           {tab === 'permissions' && <WorkspacePermissionsTab workspaceId={id} />}
           {tab === 'sharing' && w && <WorkspaceSettingsTab workspaceId={id} name={w.name} />}
         </>

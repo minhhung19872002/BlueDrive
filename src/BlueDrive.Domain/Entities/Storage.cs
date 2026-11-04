@@ -279,6 +279,76 @@ public class LibrarySettings
     public DateTime CreatedAt { get; set; }
 }
 
+/// <summary>A metadata column of a library (spec 1.4): type, required, default, unique, validation.</summary>
+public class LibraryColumn : Entity
+{
+    public Guid LibraryId { get; set; }
+    public Guid WorkspaceId { get; set; }
+    public string Name { get; set; } = "";
+    /// <summary>Stable key used in views and the API (latin, lower case).</summary>
+    public string Key { get; set; } = "";
+    public ColumnType Type { get; set; }
+    public bool Required { get; set; }
+    public bool Unique { get; set; }
+    /// <summary>Default value as JSON (string, number, true/false, array).</summary>
+    public string? DefaultValue { get; set; }
+    /// <summary>Text: a regular expression; Number: "min..max".</summary>
+    public string? Validation { get; set; }
+    public string? ValidationMessage { get; set; }
+    public List<string> Choices { get; set; } = [];
+    /// <summary>Type Catalog: the shared catalog whose items are offered.</summary>
+    public Guid? CatalogId { get; set; }
+    public int SortOrder { get; set; }
+}
+
+/// <summary>A file's value in a column; the typed copies serve sorting and filtering.</summary>
+public class FileColumnValue
+{
+    public Guid FileId { get; set; }
+    public Guid ColumnId { get; set; }
+    /// <summary>The value as JSON.</summary>
+    public string Value { get; set; } = "null";
+    public string? TextValue { get; set; }
+    public decimal? NumberValue { get; set; }
+    public DateTime? DateValue { get; set; }
+}
+
+/// <summary>A column's default for what is added in a folder (and below it) — spec 1.4 "giá trị mặc định theo thư mục".</summary>
+public class FolderColumnDefault
+{
+    public Guid FolderId { get; set; }
+    public Guid ColumnId { get; set; }
+    public string Value { get; set; } = "null";
+}
+
+/// <summary>A view of a library (spec 1.4): columns, sort, filters, grouping, flat; public (owner null) or personal.</summary>
+public class LibraryView : Entity
+{
+    public Guid LibraryId { get; set; }
+    public Guid WorkspaceId { get; set; }
+    public string Name { get; set; } = "";
+    public Guid? OwnerUserId { get; set; }
+    public List<string> Columns { get; set; } = [];
+    public string? SortBy { get; set; }
+    public bool SortDescending { get; set; }
+    /// <summary>JSON list of { column, op, value } (op: eq, ne, contains, gt, lt, empty, notempty).</summary>
+    public string Filters { get; set; } = "[]";
+    public string? GroupBy { get; set; }
+    public bool Flat { get; set; }
+    public bool IsDefault { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
+/// <summary>A document template offered by "Mới" in a library (spec 1.4): a file of the Space copied when used.</summary>
+public class LibraryTemplate : Entity
+{
+    public Guid LibraryId { get; set; }
+    public Guid WorkspaceId { get; set; }
+    public string Name { get; set; } = "";
+    public Guid FileId { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
 /// <summary>Spec 1.1: an offer to make someone else the owner of an item of one's Drive của tôi; it takes effect when they accept.</summary>
 public class OwnershipTransfer : Entity
 {

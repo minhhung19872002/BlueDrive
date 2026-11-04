@@ -3,6 +3,7 @@ import { Alert, Button, Descriptions, Drawer, Empty, Result, Skeleton, Space, Ta
 import { EditOutlined, HistoryOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { versionLabel } from '@/api/libraries'
+import FileColumnsEditor from '@/features/libraries/FileColumnsEditor'
 import FileLibraryBar from '@/features/libraries/FileLibraryBar'
 import { Link } from 'react-router-dom'
 import { getErrorMessage } from '@/api/errors'
@@ -164,6 +165,7 @@ function FileInfo({ id, onManageAccess }: { id: string; onManageAccess?: InfoPan
               <span style={{ whiteSpace: 'pre-wrap' }}>{f.description || '—'}</span>
             </Descriptions.Item>
           </Descriptions>
+          <FileColumnsEditor fileId={f.id} canEdit={f.access.canEdit} />
           {f.access.canEdit && !f.access.workspaceLocked && (
             <Button icon={<EditOutlined />} onClick={() => setEditing(true)} block>
               {t('info.editMetadata')}

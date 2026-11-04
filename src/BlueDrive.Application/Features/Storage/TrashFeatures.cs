@@ -191,6 +191,8 @@ public sealed class TrashPurger(IAppDbContext db, IFileContentService content, Q
         await db.ShareLinks.Where(x => fileIds.Contains(x.ResourceId) || folderIds.Contains(x.ResourceId)).ExecuteDeleteAsync(ct);
         await db.ResourcePermissions.Where(x => fileIds.Contains(x.ResourceId) || folderIds.Contains(x.ResourceId)).ExecuteDeleteAsync(ct);
         await db.FileCatalogItems.Where(x => fileIds.Contains(x.FileId)).ExecuteDeleteAsync(ct);
+        await db.FileColumnValues.Where(x => fileIds.Contains(x.FileId)).ExecuteDeleteAsync(ct);
+        await db.FolderColumnDefaults.Where(x => folderIds.Contains(x.FolderId)).ExecuteDeleteAsync(ct);
         await db.FileVersions.Where(v => fileIds.Contains(v.FileId)).ExecuteDeleteAsync(ct);
         await db.Files.Where(f => fileIds.Contains(f.Id)).ExecuteDeleteAsync(ct);
         // Shortcuts kept in the folders purged go with them (shortcuts to what is purged stay, shown as deleted).

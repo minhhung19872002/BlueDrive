@@ -49,6 +49,93 @@ public class LibrariesController : ApiControllerBase
     }
 
     public sealed record CheckInBody(string? Note, bool Publish = false);
+
+    // ---- columns
+    [HttpGet("workspaces/{id:guid}/libraries/{libraryId:guid}/columns")]
+    public Task<IReadOnlyList<Application.Features.Libraries.LibraryColumnDto>> Columns(Guid id, Guid libraryId) => Mediator.Send(new Application.Features.Libraries.ListColumnsQuery(id, libraryId));
+
+    [HttpPost("workspaces/{id:guid}/libraries/{libraryId:guid}/columns")]
+    public async Task<IActionResult> AddColumn(Guid id, Guid libraryId, Application.Features.Libraries.SaveColumnCommand cmd) =>
+        Ok(new { id = await Mediator.Send(cmd with { WorkspaceId = id, LibraryId = libraryId, Id = null }) });
+
+    [HttpPut("workspaces/{id:guid}/libraries/{libraryId:guid}/columns/{columnId:guid}")]
+    public async Task<IActionResult> SaveColumn(Guid id, Guid libraryId, Guid columnId, Application.Features.Libraries.SaveColumnCommand cmd)
+    {
+        await Mediator.Send(cmd with { WorkspaceId = id, LibraryId = libraryId, Id = columnId });
+        return NoContent();
+    }
+
+    [HttpDelete("workspaces/{id:guid}/libraries/{libraryId:guid}/columns/{columnId:guid}")]
+    public async Task<IActionResult> DeleteColumn(Guid id, Guid libraryId, Guid columnId)
+    {
+        await Mediator.Send(new Application.Features.Libraries.DeleteColumnCommand(id, libraryId, columnId));
+        return NoContent();
+    }
+
+    /// <summary>Giá trị các cột thông tin của tệp.</summary>
+    [HttpGet("files/{id:guid}/columns")]
+    public Task<IReadOnlyList<Application.Features.Libraries.FileColumnDto>> FileColumns(Guid id) => Mediator.Send(new Application.Features.Libraries.GetFileColumnsQuery(id));
+
+    /// <summary>Sửa giá trị cột của một hoặc nhiều tệp (lưới sửa nhanh).</summary>
+    [HttpPut("files/columns")]
+    public async Task<IActionResult> SetFileColumns(Application.Features.Libraries.SetFileColumnsCommand cmd) => Ok(new { updated = await Mediator.Send(cmd) });
+
+    [HttpGet("folders/{id:guid}/column-defaults")]
+    public Task<IReadOnlyDictionary<string, System.Text.Json.JsonElement?>> FolderDefaults(Guid id) => Mediator.Send(new Application.Features.Libraries.GetFolderDefaultsQuery(id));
+
+    [HttpPut("folders/{id:guid}/column-defaults")]
+    public async Task<IActionResult> SetFolderDefaults(Guid id, Application.Features.Libraries.SetFolderDefaultsCommand cmd)
+    {
+        await Mediator.Send(cmd with { FolderId = id });
+        return NoContent();
+    }
+
+    // ---- views
+    [HttpGet("workspaces/{id:guid}/libraries/{libraryId:guid}/views")]
+    public Task<IReadOnlyList<Application.Features.Libraries.LibraryViewDto>> Views(Guid id, Guid libraryId) => Mediator.Send(new Application.Features.Libraries.ListViewsQuery(id, libraryId));
+
+    [HttpPost("workspaces/{id:guid}/libraries/{libraryId:guid}/views")]
+    public async Task<IActionResult> AddView(Guid id, Guid libraryId, Application.Features.Libraries.SaveViewCommand cmd) =>
+        Ok(new { id = await Mediator.Send(cmd with { WorkspaceId = id, LibraryId = libraryId, Id = null }) });
+
+    [HttpPut("workspaces/{id:guid}/libraries/{libraryId:guid}/views/{viewId:guid}")]
+    public async Task<IActionResult> SaveView(Guid id, Guid libraryId, Guid viewId, Application.Features.Libraries.SaveViewCommand cmd)
+    {
+        await Mediator.Send(cmd with { WorkspaceId = id, LibraryId = libraryId, Id = viewId });
+        return NoContent();
+    }
+
+    [HttpDelete("workspaces/{id:guid}/libraries/{libraryId:guid}/views/{viewId:guid}")]
+    public async Task<IActionResult> DeleteView(Guid id, Guid libraryId, Guid viewId)
+    {
+        await Mediator.Send(new Application.Features.Libraries.DeleteViewCommand(id, libraryId, viewId));
+        return NoContent();
+    }
+
+    /// <summary>Nội dung thư viện theo một dạng xem (cột, lọc, sắp xếp, nhóm, phẳng), đã lọc theo quyền.</summary>
+    [HttpGet("workspaces/{id:guid}/libraries/{libraryId:guid}/items")]
+    public Task<Application.Features.Libraries.LibraryPageDto> Items(Guid id, Guid libraryId, [FromQuery] Application.Features.Libraries.QueryLibraryQuery query) =>
+        Mediator.Send(query with { WorkspaceId = id, LibraryId = libraryId });
+
+    // ---- templates
+    [HttpGet("workspaces/{id:guid}/libraries/{libraryId:guid}/templates")]
+    public Task<IReadOnlyList<Application.Features.Libraries.LibraryTemplateDto>> Templates(Guid id, Guid libraryId) => Mediator.Send(new Application.Features.Libraries.ListTemplatesQuery(id, libraryId));
+
+    [HttpPost("workspaces/{id:guid}/libraries/{libraryId:guid}/templates")]
+    public async Task<IActionResult> AddTemplate(Guid id, Guid libraryId, Application.Features.Libraries.AddTemplateCommand cmd) =>
+        Ok(new { id = await Mediator.Send(cmd with { WorkspaceId = id, LibraryId = libraryId }) });
+
+    [HttpDelete("workspaces/{id:guid}/libraries/{libraryId:guid}/templates/{templateId:guid}")]
+    public async Task<IActionResult> DeleteTemplate(Guid id, Guid libraryId, Guid templateId)
+    {
+        await Mediator.Send(new Application.Features.Libraries.DeleteTemplateCommand(id, libraryId, templateId));
+        return NoContent();
+    }
+
+    /// <summary>"Mới" theo mẫu: bản sao của mẫu trong thư mục.</summary>
+    [HttpPost("workspaces/{id:guid}/libraries/{libraryId:guid}/templates/{templateId:guid}/create")]
+    public async Task<IActionResult> FromTemplate(Guid id, Guid libraryId, Guid templateId, Application.Features.Libraries.CreateFromTemplateCommand cmd) =>
+        Ok(new { fileId = await Mediator.Send(cmd with { WorkspaceId = id, LibraryId = libraryId, TemplateId = templateId }) });
 }
 
 /// <summary>Chuyển quyền sở hữu tư liệu trong Drive của tôi (người nhận chấp nhận).</summary>

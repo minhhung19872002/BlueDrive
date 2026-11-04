@@ -52,6 +52,11 @@ public interface IAppDbContext
     DbSet<Guest> Guests { get; }
     DbSet<Shortcut> Shortcuts { get; }
     DbSet<LibrarySettings> LibrarySettings { get; }
+    DbSet<LibraryColumn> LibraryColumns { get; }
+    DbSet<FileColumnValue> FileColumnValues { get; }
+    DbSet<FolderColumnDefault> FolderColumnDefaults { get; }
+    DbSet<LibraryView> LibraryViews { get; }
+    DbSet<LibraryTemplate> LibraryTemplates { get; }
     DbSet<OwnershipTransfer> OwnershipTransfers { get; }
     DbSet<WorkspaceGroupMember> WorkspaceGroupMembers { get; }
     DbSet<GuestOtp> GuestOtps { get; }

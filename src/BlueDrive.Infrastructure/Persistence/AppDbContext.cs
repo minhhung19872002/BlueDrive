@@ -38,6 +38,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Guest> Guests => Set<Guest>();
     public DbSet<Shortcut> Shortcuts => Set<Shortcut>();
     public DbSet<LibrarySettings> LibrarySettings => Set<LibrarySettings>();
+    public DbSet<LibraryColumn> LibraryColumns => Set<LibraryColumn>();
+    public DbSet<FileColumnValue> FileColumnValues => Set<FileColumnValue>();
+    public DbSet<FolderColumnDefault> FolderColumnDefaults => Set<FolderColumnDefault>();
+    public DbSet<LibraryView> LibraryViews => Set<LibraryView>();
+    public DbSet<LibraryTemplate> LibraryTemplates => Set<LibraryTemplate>();
     public DbSet<OwnershipTransfer> OwnershipTransfers => Set<OwnershipTransfer>();
     public DbSet<WorkspaceGroupMember> WorkspaceGroupMembers => Set<WorkspaceGroupMember>();
     public DbSet<GuestOtp> GuestOtps => Set<GuestOtp>();
@@ -256,6 +261,37 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.ToTable("library_settings");
             e.HasIndex(x => x.WorkspaceId);
+            e.Property(x => x.Name).HasMaxLength(255);
+        });
+        b.Entity<LibraryColumn>(e =>
+        {
+            e.HasIndex(x => new { x.LibraryId, x.Key }).IsUnique();
+            e.Property(x => x.Name).HasMaxLength(255);
+            e.Property(x => x.Key).HasMaxLength(64);
+            e.Property(x => x.Validation).HasMaxLength(500);
+            e.Property(x => x.ValidationMessage).HasMaxLength(500);
+        });
+        b.Entity<FileColumnValue>(e =>
+        {
+            e.HasKey(x => new { x.FileId, x.ColumnId });
+            e.HasIndex(x => new { x.ColumnId, x.TextValue });
+            e.Property(x => x.Value).HasColumnType("jsonb");
+            e.Property(x => x.TextValue).HasMaxLength(2000);
+        });
+        b.Entity<FolderColumnDefault>(e =>
+        {
+            e.HasKey(x => new { x.FolderId, x.ColumnId });
+            e.Property(x => x.Value).HasColumnType("jsonb");
+        });
+        b.Entity<LibraryView>(e =>
+        {
+            e.HasIndex(x => new { x.LibraryId, x.OwnerUserId });
+            e.Property(x => x.Name).HasMaxLength(255);
+            e.Property(x => x.Filters).HasColumnType("jsonb");
+        });
+        b.Entity<LibraryTemplate>(e =>
+        {
+            e.HasIndex(x => x.LibraryId);
             e.Property(x => x.Name).HasMaxLength(255);
         });
         b.Entity<OwnershipTransfer>(e =>

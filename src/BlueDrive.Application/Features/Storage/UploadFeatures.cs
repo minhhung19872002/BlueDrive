@@ -153,6 +153,7 @@ public sealed class CompleteUploadHandler(
                     file.CatalogItems.Add(new FileCatalogItem { FileId = file.Id, CatalogItemId = ci });
             db.Files.Add(file);
             await db.SaveChangesAsync(ct);
+            await libraries.ApplyDefaultsAsync(file, ct);
             await audit.LogAsync(new AuditEntry(AuditAction.Upload, ResourceType.File, file.Id, file.Name, file.WorkspaceId,
                 new { size = stored.SizeBytes, folder = folder?.Id, relativePath = cmd.Meta.RelativePath, approval = file.ApprovalStatus }), ct);
             if (needsApproval) await notify.NotifyPermissionAsync(Perm.DocApprove, "approval", $"Tư liệu \"{file.Name}\" chờ phê duyệt", null, "/approvals", ct);

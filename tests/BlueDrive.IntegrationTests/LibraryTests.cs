@@ -74,6 +74,68 @@ public class LibraryTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Columns_views_quick_edit_and_templates()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (member, memberId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = (await (await owner.PostAsJsonAsync("/api/v1/workspaces", new { name = "Space cột", type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        await (await owner.PostAsJsonAsync($"/api/v1/workspaces/{ws}/members", new { userIds = new[] { memberId }, role = "editor" })).ReadJsonAsync();
+        var lib = (await (await owner.GetAsync($"/api/v1/workspaces/{ws}/libraries")).ReadJsonAsync()).EnumerateArray().Single().GetProperty("id").GetGuid();
+        var cols = $"/api/v1/workspaces/{ws}/libraries/{lib}/columns";
+
+        (await member.PostAsJsonAsync(cols, new { name = "Số hiệu", type = "text" })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        await (await owner.PostAsJsonAsync(cols, new { name = "Số hiệu", type = "text", required = true, unique = true, validation = "^[0-9]+/[A-Z]+$", validationMessage = "Số hiệu dạng 12/QĐ" })).ReadJsonAsync();
+        await (await owner.PostAsJsonAsync(cols, new { name = "Lĩnh vực", type = "choice", choices = new[] { "Dân số", "Sức khỏe" }, defaultValue = "Dân số" })).ReadJsonAsync();
+        await (await owner.PostAsJsonAsync(cols, new { name = "Kinh phí", type = "number", validation = "0..1000000000" })).ReadJsonAsync();
+        var keys = (await (await owner.GetAsync(cols)).ReadJsonAsync()).EnumerateArray().Select(c => c.GetProperty("key").GetString()).ToList();
+        keys.Should().Equal("so_hieu", "linh_vuc", "kinh_phi");
+
+        var folder = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Quyết định" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        (await owner.PutAsJsonAsync($"/api/v1/folders/{folder}/column-defaults", new { values = new { linh_vuc = "Sức khỏe" } })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var a = (await StorageTests.UploadAsync(member, ws, null, "a.png", Png(1))).GetProperty("fileId").GetGuid();
+        var b = (await StorageTests.UploadAsync(member, ws, folder, "b.png", Png(2))).GetProperty("fileId").GetGuid();
+        // Defaults: the column's at the top, the folder's inside it.
+        string? Value(JsonElement cs, string key) => cs.EnumerateArray().Single(c => c.GetProperty("column").GetProperty("key").GetString() == key).GetProperty("value") is { ValueKind: not JsonValueKind.Null } v ? v.ToString() : null;
+        Value(await (await member.GetAsync($"/api/v1/files/{a}/columns")).ReadJsonAsync(), "linh_vuc").Should().Be("Dân số");
+        Value(await (await member.GetAsync($"/api/v1/files/{b}/columns")).ReadJsonAsync(), "linh_vuc").Should().Be("Sức khỏe");
+
+        // Values are checked: format, choices, numbers, required, unique; several files at once (quick-edit grid).
+        (await member.PutAsJsonAsync("/api/v1/files/columns", new { fileIds = new[] { a }, values = new { so_hieu = "sai" } })).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await member.PutAsJsonAsync("/api/v1/files/columns", new { fileIds = new[] { a }, values = new { linh_vuc = "Khác" } })).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await member.PutAsJsonAsync("/api/v1/files/columns", new { fileIds = new[] { a }, values = new { kinh_phi = -5 } })).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await member.PutAsJsonAsync("/api/v1/files/columns", new { fileIds = new[] { a }, values = new { so_hieu = (string?)null } })).StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await member.PutAsJsonAsync("/api/v1/files/columns", new { fileIds = new[] { a }, values = new { so_hieu = "12/QD", kinh_phi = 5000000 } })).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await member.PutAsJsonAsync("/api/v1/files/columns", new { fileIds = new[] { b }, values = new { so_hieu = "12/QD" } })).StatusCode.Should().Be(HttpStatusCode.Conflict);
+        (await member.PutAsJsonAsync("/api/v1/files/columns", new { fileIds = new[] { b }, values = new { so_hieu = "13/QD", kinh_phi = 200 } })).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await member.PutAsJsonAsync("/api/v1/files/columns", new { fileIds = new[] { a, b }, values = new { linh_vuc = "Sức khỏe" } }))
+            .IsSuccessStatusCode.Should().BeTrue();
+
+        // A public view: flat, filtered, sorted by a number, grouped; only who manages the library makes public views; anyone a personal one.
+        var views = $"/api/v1/workspaces/{ws}/libraries/{lib}/views";
+        var body = new { name = "Theo kinh phí", isPublic = true, columns = new[] { "name", "so_hieu", "kinh_phi" }, sortBy = "kinh_phi", sortDescending = true,
+            filters = new[] { new { column = "kinh_phi", op = "gt", value = (object)100 } }, groupBy = "linh_vuc", flat = true, isDefault = true };
+        (await member.PostAsJsonAsync(views, body)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var view = (await (await owner.PostAsJsonAsync(views, body)).ReadJsonAsync()).GetProperty("id").GetGuid();
+        (await member.PostAsJsonAsync(views, new { name = "Của tôi", isPublic = false, columns = new[] { "name" }, flat = false })).StatusCode.Should().Be(HttpStatusCode.OK);
+        var page = await (await member.GetAsync($"/api/v1/workspaces/{ws}/libraries/{lib}/items")).ReadJsonAsync();
+        page.GetProperty("view").GetProperty("id").GetGuid().Should().Be(view, "the default view");
+        var rows = page.GetProperty("items").EnumerateArray().ToList();
+        rows.Select(r => r.GetProperty("item").GetProperty("id").GetGuid()).Should().Equal(a, b);
+        rows.Should().OnlyContain(r => r.GetProperty("group").GetString() == "Sức khỏe");
+        rows[0].GetProperty("values").GetProperty("so_hieu").GetString().Should().Be("12/QD");
+        (await (await owner.GetAsync(views)).ReadJsonAsync()).EnumerateArray().Should().ContainSingle("the member's own view is theirs");
+
+        // A template for "Mới": a copy in the folder, with the folder's defaults.
+        var tpl = (await (await owner.PostAsJsonAsync($"/api/v1/workspaces/{ws}/libraries/{lib}/templates", new { fileId = a, name = "Mẫu quyết định" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var made = (await (await member.PostAsJsonAsync($"/api/v1/workspaces/{ws}/libraries/{lib}/templates/{tpl}/create", new { folderId = folder, name = "QĐ mới" })).ReadJsonAsync())
+            .GetProperty("fileId").GetGuid();
+        var madeDetail = await (await member.GetAsync($"/api/v1/files/{made}")).ReadJsonAsync();
+        madeDetail.GetProperty("name").GetString().Should().Be("QĐ mới.png");
+        madeDetail.GetProperty("folderId").GetGuid().Should().Be(folder);
+        Value(await (await member.GetAsync($"/api/v1/files/{made}/columns")).ReadJsonAsync(), "linh_vuc").Should().Be("Sức khỏe");
+    }
+
+    [Fact]
     public async Task Check_out_keeps_others_from_changing_and_a_library_of_its_own_has_its_rules()
     {
         var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");

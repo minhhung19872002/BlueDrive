@@ -4,6 +4,7 @@ import { PlusOutlined, SettingOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { createLibrary, listLibraries, saveLibrary, type Library } from '@/api/libraries'
+import LibraryColumnsPanel from './LibraryColumnsPanel'
 import { useApiMutation } from '@/hooks/useApiMutation'
 
 type SettingsForm = Omit<Library, 'id' | 'workspaceId' | 'isDefault' | 'folderId' | 'canManage'>
@@ -120,6 +121,7 @@ export default function LibrarySettingsCard({ workspaceId, canCreate }: { worksp
               <InputNumber min={1} max={1000000} precision={0} addonAfter="MB" placeholder={t('library.asSystem')} />
             </Form.Item>
           </Form>
+          <LibraryColumnsPanel workspaceId={workspaceId} libraryId={editing.id} />
         </Modal>
       )}
       {creating && (

@@ -124,6 +124,31 @@ public sealed class Libraries(IAppDbContext db, IFileContentService content, Quo
             throw new AppException($"Thư viện \"{library.Name}\" chỉ nhận tệp tối đa {mb} MB.", 413);
     }
 
+    /// <summary>
+    /// Default column values of a new file (spec 1.4): the nearest folder's default (up to the library's top), otherwise the column's own.
+    /// Only for columns the file has no value in yet.
+    /// </summary>
+    public async Task ApplyDefaultsAsync(StoredFile file, CancellationToken ct)
+    {
+        var library = await ForAsync(file.WorkspaceId, file.FolderId, ct);
+        var columns = await db.LibraryColumns.AsNoTracking().Where(c => c.LibraryId == library.Id).ToListAsync(ct);
+        if (columns.Count == 0) return;
+        var chain = new List<Guid>();
+        if (file.FolderId is { } fid && await db.Folders.AsNoTracking().Where(f => f.Id == fid).Select(f => f.Path).FirstOrDefaultAsync(ct) is { } path)
+            chain = LegacyResourceAuthorizationService.PathIds(path).AsEnumerable().Reverse().ToList();
+        var byFolder = chain.Count == 0 ? [] : await db.FolderColumnDefaults.AsNoTracking().Where(d => chain.Contains(d.FolderId)).ToListAsync(ct);
+        var have = (await db.FileColumnValues.Where(v => v.FileId == file.Id).Select(v => v.ColumnId).ToListAsync(ct)).ToHashSet();
+        foreach (var c in columns.Where(c => !have.Contains(c.Id)))
+        {
+            var json = chain.Select(f => byFolder.FirstOrDefault(d => d.FolderId == f && d.ColumnId == c.Id)?.Value).FirstOrDefault(v => v is not null) ?? c.DefaultValue;
+            if (json is null || json == "null") continue;
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var (value, text, number, date) = ColumnValues.Normalize(new LibraryColumn { Name = c.Name, Type = c.Type, Choices = c.Choices }, doc.RootElement);
+            db.FileColumnValues.Add(new FileColumnValue { FileId = file.Id, ColumnId = c.Id, Value = value, TextValue = text, NumberValue = number, DateValue = date });
+        }
+        await db.SaveChangesAsync(ct);
+    }
+
     /// <summary>Content of a file may change only when checked out by the person changing it, if the library requires it (spec 1.4).</summary>
     public async Task EnsureMayChangeContentAsync(StoredFile file, Guid uid, CancellationToken ct)
     {

@@ -376,7 +376,7 @@ public class RenewalsController : ApiControllerBase
         Mediator.Send(cmd with { Kind = kind, Id = id });
 
     [HttpPost("request")]
-    public async Task<IActionResult> Request(string kind, Guid id)
+    public async Task<IActionResult> RequestRenewal(string kind, Guid id)
     {
         if (kind != "permission") return NotFound();
         return Ok(new { id = await Mediator.Send(new Application.Features.Access.RequestRenewalCommand(id)) });
