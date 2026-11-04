@@ -2,6 +2,7 @@ import { api } from './client'
 import { cleanParams } from './http'
 import type {
   AllWorkspacesFilter,
+  DriveItem,
   SaveWorkspaceRequest,
   SetPersonalQuotaRequest,
   Workspace,
@@ -154,4 +155,39 @@ export async function restoreSpace(id: string): Promise<void> {
 
 export async function purgeSpace(id: string): Promise<void> {
   await api.delete(`/workspaces/trash/${id}`)
+}
+
+export interface SpaceHome {
+  id: string
+  name: string
+  description: string | null
+  coverUrl: string | null
+  memberCount: number
+  members: { name: string; role: WorkspaceMemberRole; isGroup: boolean }[]
+  recentFiles: DriveItem[]
+  usedBytes: number
+  quotaBytes: number
+  libraries: { id: string; name: string; isDefault: boolean }[]
+  uniqueScopes: number
+  canManage: boolean
+}
+
+export async function getSpaceHome(id: string): Promise<SpaceHome> {
+  const { data } = await api.get<SpaceHome>(`/workspaces/${id}/home`)
+  return data
+}
+
+export interface UniqueScope {
+  id: string
+  name: string
+  kind: 'folder' | 'file'
+  location: string
+  entries: number
+  direct: string[]
+  links: number
+}
+
+export async function listUniqueScopes(id: string): Promise<UniqueScope[]> {
+  const { data } = await api.get<UniqueScope[]>(`/workspaces/${id}/unique-scopes`)
+  return data
 }

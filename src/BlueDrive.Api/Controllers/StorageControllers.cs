@@ -93,6 +93,14 @@ public class WorkspacesController : ApiControllerBase
         return NoContent();
     }
 
+    /// <summary>Trang chủ Space: mô tả, ảnh bìa, thành viên, tài liệu gần đây, dung lượng, thư viện.</summary>
+    [HttpGet("{id:guid}/home")]
+    public Task<SpaceHomeDto> Home(Guid id) => Mediator.Send(new GetSpaceHomeQuery(id));
+
+    /// <summary>Quyền của Space: các thư mục, tệp có quyền riêng.</summary>
+    [HttpGet("{id:guid}/unique-scopes")]
+    public Task<IReadOnlyList<UniqueScopeDto>> UniqueScopes(Guid id) => Mediator.Send(new ListUniqueScopesQuery(id));
+
     [HttpGet("{id:guid}/settings")]
     public Task<SpaceSettingsDto> Settings(Guid id) => Mediator.Send(new GetSpaceSettingsQuery(id));
 

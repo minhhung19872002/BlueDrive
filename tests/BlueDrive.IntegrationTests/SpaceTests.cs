@@ -194,6 +194,42 @@ public class SpaceTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Space_home_and_the_page_of_items_with_their_own_permissions()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (member, memberId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (guestUser, guestUserId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = (await (await owner.PostAsJsonAsync("/api/v1/workspaces", new { name = "Space trang chủ", description = "Không gian thử", type = "group", template = "project" })).ReadJsonAsync())
+            .GetProperty("id").GetGuid();
+        await (await owner.PostAsJsonAsync($"/api/v1/workspaces/{ws}/members", new { userIds = new[] { memberId }, role = "editor" })).ReadJsonAsync();
+        var folder = (await (await owner.GetAsync($"/api/v1/workspaces/{ws}/items")).ReadJsonAsync()).GetProperty("items").EnumerateArray()
+            .First(i => i.GetProperty("name").GetString() == "Kế hoạch").GetProperty("id").GetGuid();
+        var file = (await StorageTests.UploadAsync(owner, ws, folder, "lich.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+        await (await owner.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { new { kind = "user", id = guestUserId } }, levelId = levels["viewer"], notify = false })).ReadJsonAsync();
+
+        var home = await (await member.GetAsync($"/api/v1/workspaces/{ws}/home")).ReadJsonAsync();
+        home.GetProperty("description").GetString().Should().Be("Không gian thử");
+        home.GetProperty("memberCount").GetInt32().Should().Be(2);
+        home.GetProperty("recentFiles").EnumerateArray().Should().Contain(f => f.GetProperty("id").GetGuid() == file);
+        home.GetProperty("libraries").EnumerateArray().Should().ContainSingle(l => l.GetProperty("isDefault").GetBoolean());
+        home.GetProperty("uniqueScopes").GetInt32().Should().Be(1);
+        home.GetProperty("canManage").GetBoolean().Should().BeFalse();
+        (await guestUser.GetAsync($"/api/v1/workspaces/{ws}/home")).StatusCode.Should().Be(HttpStatusCode.NotFound, "only the file is shared with them");
+
+        // Only who manages permissions sees the page; restoring inheritance takes the item off it.
+        (await member.GetAsync($"/api/v1/workspaces/{ws}/unique-scopes")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var scopes = (await (await owner.GetAsync($"/api/v1/workspaces/{ws}/unique-scopes")).ReadJsonAsync()).EnumerateArray().ToList();
+        var row = scopes.Single();
+        row.GetProperty("id").GetGuid().Should().Be(file);
+        row.GetProperty("location").GetString().Should().Be("Kế hoạch");
+        row.GetProperty("direct").EnumerateArray().Should().ContainSingle();
+        (await owner.DeleteAsync($"/api/v1/items/{file}/inheritance?recursive=false")).StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await (await owner.GetAsync($"/api/v1/workspaces/{ws}/unique-scopes")).ReadJsonAsync()).EnumerateArray().Should().BeEmpty();
+        (await guestUser.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Shortcuts_carry_no_rights_and_outlive_nothing_but_themselves()
     {
         var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");

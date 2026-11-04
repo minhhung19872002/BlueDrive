@@ -810,6 +810,28 @@
     "versions": "{{count}} phiên bản",
     "empty": "Drive của tôi chưa có tệp nào."
   },
+  "spaceHome": {
+    "tab": "Trang chủ",
+    "cover": "Ảnh bìa Space",
+    "noDescription": "Chưa có mô tả.",
+    "recent": "Tài liệu gần đây",
+    "noRecent": "Chưa có tài liệu.",
+    "usage": "Dung lượng",
+    "members": "Thành viên ({{count}})",
+    "libraries": "Thư viện",
+    "activity": "Hoạt động gần đây"
+  },
+  "spacePermissions": {
+    "tab": "Quyền của Space",
+    "hint": "Các thư mục, tệp trong Space có quyền riêng (không kế thừa hoàn toàn từ Space). Khôi phục kế thừa để mục đó dùng lại quyền của thư mục cha.",
+    "none": "Mọi thư mục, tệp đều kế thừa quyền của Space.",
+    "item": "Thư mục / tệp",
+    "kind": { "folder": "Thư mục", "file": "Tệp" },
+    "location": "Vị trí",
+    "direct": "Được cấp trực tiếp",
+    "view": "Xem quyền",
+    "restoreConfirm": "Khôi phục kế thừa cho \"{{name}}\"? Các quyền cấp riêng trên mục này sẽ bị gỡ."
+  },
   "spaceSettings": {
     "tab": "Cài đặt",
     "groupsTitle": "Nhóm và đơn vị là thành viên",
