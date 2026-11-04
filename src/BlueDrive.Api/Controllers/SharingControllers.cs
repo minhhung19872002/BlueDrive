@@ -54,6 +54,10 @@ public class SharesController : ApiControllerBase
     [HttpGet("~/api/v1/storage/usage")]
     public Task<PagedResult<StorageItemDto>> Storage([FromQuery] ListStorageQuery query) => Mediator.Send(query);
 
+    /// <summary>Xóa phiên bản cũ của một tệp (giữ phiên bản hiện tại và bản đã xuất bản).</summary>
+    [HttpPost("~/api/v1/files/{id:guid}/versions/prune")]
+    public Task<PruneOldVersionsResult> PruneVersions(Guid id) => Mediator.Send(new PruneOldVersionsCommand(id));
+
     [HttpGet("with-me/sharers")]
     public Task<IReadOnlyList<UserLookupDto>> Sharers() => Mediator.Send(new ListSharersQuery());
 }

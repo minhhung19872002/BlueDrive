@@ -1649,6 +1649,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
+                    b.Property<double?>("DefaultQuotaGb")
+                        .HasColumnType("double precision")
+                        .HasColumnName("default_quota_gb");
+
                     b.Property<string>("Email")
                         .HasColumnType("text")
                         .HasColumnName("email");
@@ -2311,6 +2315,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
+
+                    b.Property<double?>("DefaultQuotaGb")
+                        .HasColumnType("double precision")
+                        .HasColumnName("default_quota_gb");
 
                     b.Property<string>("Description")
                         .HasColumnType("text")

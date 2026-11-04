@@ -17,7 +17,8 @@ namespace BlueDrive.Application.Features.Office;
 public sealed record GetOfficeConfigQuery(Guid FileId, bool ForceView = false, bool Mobile = false) : IRequest<OfficeEditorConfig>;
 
 public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth,
-    IOfficeEditorProvider office, IContentTicketService tickets, IAuditLogger audit, TimeProvider clock, Access.IItemPermissionService engine, Libraries.Libraries libraries)
+    IOfficeEditorProvider office, IContentTicketService tickets, IAuditLogger audit, TimeProvider clock, Access.IItemPermissionService engine, Libraries.Libraries libraries,
+    Storage.QuotaService quota)
     : IRequestHandler<GetOfficeConfigQuery, OfficeEditorConfig>
 {
     public async Task<OfficeEditorConfig> Handle(GetOfficeConfigQuery q, CancellationToken ct)
@@ -34,7 +35,8 @@ public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IR
         var mayChange = true;
         try { await libraries.EnsureMayChangeContentAsync(f, uid, ct); }
         catch (AppException) { mayChange = false; }
-        var canEdit = !q.ForceView && access.CanEdit && office.CanEdit(f.Extension) && mayChange && versionId == f.CurrentVersionId;
+        var canEdit = !q.ForceView && access.CanEdit && office.CanEdit(f.Extension) && mayChange && versionId == f.CurrentVersionId
+                      && !await quota.IsFullAsync(f.WorkspaceId, ct); // spec 8.2: no new versions when full
         var name = await db.Users.Where(u => u.Id == uid).Select(u => u.FullName).FirstAsync(ct);
         var docTicket = tickets.Issue(new ContentTicket(uid, "file", f.Id, versionId, true, null, null), TimeSpan.FromHours(24));
         var config = office.BuildConfig(new OfficeEditorRequest(f.Id, versionId, f.Name, f.Extension,

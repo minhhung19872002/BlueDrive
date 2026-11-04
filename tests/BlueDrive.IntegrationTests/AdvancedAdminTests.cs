@@ -192,4 +192,52 @@ public class AdvancedAdminTests(ApiFactory factory)
         (await reader.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK, "the grant came back with the file");
         (await reader.GetAsync($"/api/v1/files/{file}/download-url")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
+
+    [Fact]
+    public async Task Quotas_default_by_unit_warn_the_owner_block_when_full_and_old_versions_can_be_cleared()
+    {
+        var admin = await factory.AdminClientAsync();
+        const double Gb = 1024d * 1024 * 1024;
+        // A unit's default for its new users.
+        var org = (await (await admin.PostAsJsonAsync("/api/v1/organizations", new { code = "Q" + Guid.NewGuid().ToString("N")[..8], name = "Phòng thử dung lượng", type = "phong_ban", sortOrder = 0 }))
+            .ReadJsonAsync()).GetProperty("id").GetGuid();
+        (await admin.PutAsJsonAsync("/api/v1/quotas/personal", new { organizationId = org, includeSubOrganizations = true, quotaGb = 3, setAsDefault = true })).EnsureSuccessStatusCode();
+        var username = "q" + Guid.NewGuid().ToString("N")[..10];
+        var created = await (await admin.PostAsJsonAsync("/api/v1/users", new
+        {
+            username, fullName = "Người dùng " + username, email = $"{username}@example.gov.vn", isActive = true, organizationId = org, password = "Init@Pass123",
+        })).ReadJsonAsync();
+        (await (await admin.GetAsync($"/api/v1/users/{created.GetProperty("id").GetGuid()}")).ReadJsonAsync()).GetProperty("quotaBytes").GetInt64().Should().Be((long)(3 * Gb));
+
+        // A Drive the size of 4 versions: ~50 % and ~75 % tell nothing, 100 % tells the owner; uploads and new versions stop.
+        var (c, userId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(c);
+        var png = StorageTests.Png;
+        (await admin.PutAsJsonAsync("/api/v1/quotas/personal", new { userIds = new[] { userId }, quotaGb = (png.Length * 4 + 6.5) / Gb })).EnsureSuccessStatusCode();
+        var file = (await StorageTests.UploadAsync(c, ws, null, "dung-luong.png", png)).GetProperty("fileId").GetGuid();
+        await StorageTests.UploadAsync(c, ws, null, "dung-luong.png", png.Concat(new byte[] { 1 }).ToArray(), target: file);
+        (await (await c.GetAsync("/api/v1/notifications")).ReadJsonAsync()).GetProperty("items").EnumerateArray()
+            .Should().NotContain(n => n.GetProperty("type").GetString() == "quota");
+        await StorageTests.UploadAsync(c, ws, null, "dung-luong.png", png.Concat(new byte[] { 2 }).ToArray(), target: file);
+        await StorageTests.UploadAsync(c, ws, null, "dung-luong.png", png.Concat(new byte[] { 3 }).ToArray(), target: file);
+        (await (await c.GetAsync("/api/v1/notifications")).ReadJsonAsync()).GetProperty("items").EnumerateArray()
+            .Should().Contain(n => n.GetProperty("type").GetString() == "quota");
+        var form = new MultipartFormDataContent { { new ByteArrayContent(png), "file", "them.png" }, { new StringContent(ws.ToString()), "workspaceId" } };
+        (await c.PostAsync("/api/v1/files/upload", form)).StatusCode.Should().Be(HttpStatusCode.RequestEntityTooLarge);
+
+        // "Bộ nhớ" shows what old versions take; clearing them gives the space back.
+        var row = (await (await c.GetAsync("/api/v1/storage/usage")).ReadJsonAsync()).GetProperty("items").EnumerateArray()
+            .Single(i => i.GetProperty("item").GetProperty("id").GetGuid() == file);
+        row.GetProperty("versions").GetInt32().Should().Be(4);
+        row.GetProperty("oldVersionBytes").GetInt64().Should().BeGreaterThan(0);
+        var pruned = await (await c.PostAsync($"/api/v1/files/{file}/versions/prune", null)).ReadJsonAsync();
+        pruned.GetProperty("deleted").GetInt32().Should().Be(3);
+        var current = (await (await c.GetAsync($"/api/v1/files/{file}")).ReadJsonAsync()).GetProperty("sizeBytes").GetInt64();
+        (await (await c.GetAsync("/api/v1/auth/me")).ReadJsonAsync()).GetProperty("usedBytes").GetInt64().Should().Be(current, "only the current version is left");
+        (await StorageTests.UploadAsync(c, ws, null, "them.png", png)).GetProperty("fileId").GetGuid().Should().NotBeEmpty();
+
+        // Someone else's Drive is not theirs to look at.
+        var (other, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        (await other.GetAsync($"/api/v1/storage/usage?workspaceId={ws}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
 }

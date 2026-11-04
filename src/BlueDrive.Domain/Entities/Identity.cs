@@ -18,6 +18,8 @@ public class Organization : AuditableEntity
     public bool IsActive { get; set; } = true;
     /// <summary>Materialized path of ids, e.g. "/{root}/{child}/".</summary>
     public string Path { get; set; } = "/";
+    /// <summary>Spec 8.2: Drive quota of new users of the unit (and its sub-units without one), GB.</summary>
+    public double? DefaultQuotaGb { get; set; }
 }
 
 public class User : AuditableEntity
@@ -101,6 +103,8 @@ public class Role : AuditableEntity
     public string Name { get; set; } = "";
     public string? Description { get; set; }
     public bool IsSystem { get; set; }
+    /// <summary>Spec 8.2: Drive quota of new users holding the role (the largest of their roles wins over the unit's), GB.</summary>
+    public double? DefaultQuotaGb { get; set; }
     public List<RolePermission> Permissions { get; set; } = [];
 }
 

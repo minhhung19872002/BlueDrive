@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace BlueDrive.Application.Features.Storage;
 
 /// <summary>Quota accounting. Usage counts every stored version (trash included) and is released only on purge.</summary>
-public sealed class QuotaService(IAppDbContext db, ISettingsService settings, IAlertService alerts)
+public sealed class QuotaService(IAppDbContext db, ISettingsService settings, IAlertService alerts, IUserNotifier notifier)
 {
     public async Task EnsureAvailableAsync(Guid workspaceId, long additionalBytes, CancellationToken ct)
     {
@@ -22,7 +22,38 @@ public sealed class QuotaService(IAppDbContext db, ISettingsService settings, IA
                 $"Không đủ dung lượng: {(ws.Type == WorkspaceType.Personal ? "dung lượng cá nhân" : $"nhóm \"{ws.Name}\"")} còn trống {TextUtil.FormatBytes(free)}, " +
                 $"cần {TextUtil.FormatBytes(additionalBytes)}. Vui lòng dọn thùng rác hoặc liên hệ quản trị viên để tăng hạn mức.", 413);
         }
+        // Spec 8.2: the system's storage above every Space and Drive.
+        var tenant = await TenantQuotaBytesAsync(ct);
+        if (tenant > 0)
+        {
+            var used = await db.Workspaces.SumAsync(w => w.UsedBytes, ct);
+            if (used + additionalBytes > tenant)
+                throw new AppException($"Hệ thống đã dùng hết dung lượng chung ({TextUtil.FormatBytes(used)}/{TextUtil.FormatBytes(tenant)}). Vui lòng liên hệ quản trị viên.", 413);
+        }
     }
+
+    private async Task<long> TenantQuotaBytesAsync(CancellationToken ct) => (long)(await settings.GetAsync(SettingKeys.QuotaTenantGb, 0.0, ct) * 1024L * 1024 * 1024);
+
+    /// <summary>Spec 8.2: full — no uploads, no new versions (viewing and downloading stay).</summary>
+    public async Task<bool> IsFullAsync(Guid workspaceId, CancellationToken ct)
+    {
+        try
+        {
+            await EnsureAvailableAsync(workspaceId, 1, ct);
+            return false;
+        }
+        catch (AppException e) when (e.StatusCode == 413) { return true; }
+    }
+
+    /// <summary>The thresholds told about (the first one is set by the administrator, 80 % by default).</summary>
+    private async Task<int[]> ThresholdsAsync(CancellationToken ct)
+    {
+        var first = await settings.GetAsync(SettingKeys.QuotaWarningPercent, 80, ct);
+        return new[] { 100, 90, first }.Where(t => t is > 0 and <= 100).Distinct().OrderDescending().ToArray();
+    }
+
+    private static int? Crossed(int[] thresholds, long before, long after, long quota) =>
+        thresholds.Where(t => before * 100 < t * quota && after * 100 >= t * quota).Select(t => (int?)t).FirstOrDefault();
 
     /// <summary>Atomically adjusts usage of the workspace (and of the owner for personal workspaces), then checks thresholds.</summary>
     public async Task AddUsageAsync(Guid workspaceId, long delta, CancellationToken ct)
@@ -33,19 +64,27 @@ public sealed class QuotaService(IAppDbContext db, ISettingsService settings, IA
         var ws = await db.Workspaces.AsNoTracking().Where(w => w.Id == workspaceId).Select(w => new { w.Type, w.OwnerId, w.UsedBytes, w.QuotaBytes, w.Name }).FirstAsync(ct);
         if (ws.Type == WorkspaceType.Personal)
             await db.Users.Where(u => u.Id == ws.OwnerId).ExecuteUpdateAsync(s => s.SetProperty(u => u.UsedBytes, ws.UsedBytes), ct);
-        if (delta > 0 && ws.QuotaBytes > 0)
+        if (delta <= 0) return;
+        var thresholds = await ThresholdsAsync(ct);
+        if (ws.QuotaBytes > 0 && Crossed(thresholds, ws.UsedBytes - delta, ws.UsedBytes, ws.QuotaBytes) is { } hit)
         {
-            var percent = await settings.GetAsync(SettingKeys.QuotaWarningPercent, 90, ct);
-            var ratio = (double)ws.UsedBytes / ws.QuotaBytes * 100;
-            var label = ws.Type == WorkspaceType.Personal ? $"Dung lượng cá nhân \"{ws.Name}\"" : $"Nhóm tài nguyên \"{ws.Name}\"";
-            if (ratio >= 100)
-                await alerts.RaiseAsync(AlertType.QuotaExceeded, AlertSeverity.Critical,
-                    $"{label} đã dùng {ratio:0.#}% hạn mức ({TextUtil.FormatBytes(ws.UsedBytes)}/{TextUtil.FormatBytes(ws.QuotaBytes)}).",
-                    ws.Type == WorkspaceType.Personal ? ws.OwnerId : null, workspaceId, ct: ct);
-            else if (ratio >= percent)
-                await alerts.RaiseAsync(AlertType.QuotaWarning, AlertSeverity.Warning,
-                    $"{label} đã dùng {ratio:0.#}% hạn mức (ngưỡng cảnh báo {percent}%).",
-                    ws.Type == WorkspaceType.Personal ? ws.OwnerId : null, workspaceId, ct: ct);
+            var personal = ws.Type == WorkspaceType.Personal;
+            var label = personal ? $"Dung lượng cá nhân \"{ws.Name}\"" : $"Space \"{ws.Name}\"";
+            var text = $"{label} đã dùng {(double)ws.UsedBytes / ws.QuotaBytes * 100:0.#}% hạn mức ({TextUtil.FormatBytes(ws.UsedBytes)}/{TextUtil.FormatBytes(ws.QuotaBytes)})."
+                       + (hit >= 100 ? " Không tải lên và tạo phiên bản mới được nữa (vẫn xem, tải xuống được)." : "");
+            await alerts.RaiseAsync(hit >= 100 ? AlertType.QuotaExceeded : AlertType.QuotaWarning, hit >= 100 ? AlertSeverity.Critical : AlertSeverity.Warning,
+                text, personal ? ws.OwnerId : null, workspaceId, ct: ct);
+            // The owner of the Drive / of the Space is told too, with where to free space.
+            await notifier.NotifyUserAsync(ws.OwnerId, "quota", hit >= 100 ? "Đã hết dung lượng" : $"Dung lượng đã dùng {hit}%", text,
+                personal ? "/storage" : $"/storage?workspaceId={workspaceId}", ct);
+        }
+        var tenant = await TenantQuotaBytesAsync(ct);
+        if (tenant > 0)
+        {
+            var used = await db.Workspaces.SumAsync(w => w.UsedBytes, ct);
+            if (Crossed(thresholds, used - delta, used, tenant) is { } t)
+                await alerts.RaiseAsync(t >= 100 ? AlertType.QuotaExceeded : AlertType.QuotaWarning, t >= 100 ? AlertSeverity.Critical : AlertSeverity.Warning,
+                    $"Toàn hệ thống đã dùng {(double)used / tenant * 100:0.#}% dung lượng ({TextUtil.FormatBytes(used)}/{TextUtil.FormatBytes(tenant)}).", ct: ct);
         }
     }
 }

@@ -121,9 +121,17 @@ export interface StorageItem {
   item: DriveItem
   totalBytes: number
   versions: number
+  /** Versions other than the current and the published one (what "Xóa phiên bản cũ" frees). */
+  oldVersionBytes: number
 }
 
-export async function listStorageUsage(params: PageParams): Promise<Paged<StorageItem>> {
-  const { data } = await api.get<Paged<StorageItem>>('/storage/usage', { params })
+/** My Drive, or a Space I manage (spec 8.2). */
+export async function listStorageUsage(params: PageParams, workspaceId?: string | null): Promise<Paged<StorageItem>> {
+  const { data } = await api.get<Paged<StorageItem>>('/storage/usage', { params: { ...params, workspaceId: workspaceId ?? undefined } })
+  return data
+}
+
+export async function pruneOldVersions(fileId: string): Promise<{ deleted: number; freedBytes: number }> {
+  const { data } = await api.post<{ deleted: number; freedBytes: number }>(`/files/${fileId}/versions/prune`)
   return data
 }

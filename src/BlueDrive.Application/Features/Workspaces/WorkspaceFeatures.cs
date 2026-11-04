@@ -330,28 +330,37 @@ public sealed class SetWorkspaceQuotaHandler(IAppDbContext db, IAuditLogger audi
 }
 
 /// <summary>#59: set the personal quota of one user, or of every user of a unit (optionally including sub-units).</summary>
-public sealed record SetPersonalQuotaCommand(IReadOnlyList<Guid>? UserIds, Guid? OrganizationId, bool IncludeSubOrganizations, double QuotaGb) : IRequest<int>;
+public sealed record SetPersonalQuotaCommand(IReadOnlyList<Guid>? UserIds, Guid? OrganizationId, bool IncludeSubOrganizations, double QuotaGb,
+    Guid? RoleId = null, bool SetAsDefault = false) : IRequest<int>;
 
 public sealed class SetPersonalQuotaHandler(IAppDbContext db, IAuditLogger audit) : IRequestHandler<SetPersonalQuotaCommand, int>
 {
     public async Task<int> Handle(SetPersonalQuotaCommand cmd, CancellationToken ct)
     {
         if (cmd.QuotaGb < 0) throw new AppException("Dung lượng không hợp lệ.");
-        if (cmd.UserIds is not { Count: > 0 } && cmd.OrganizationId is null) throw new AppException("Vui lòng chọn người dùng hoặc đơn vị.");
+        if (cmd.UserIds is not { Count: > 0 } && cmd.OrganizationId is null && cmd.RoleId is null) throw new AppException("Vui lòng chọn người dùng, đơn vị hoặc vai trò.");
         var bytes = (long)(cmd.QuotaGb * WorkspaceProvisioning.Gb);
         var users = db.Users.AsQueryable();
         if (cmd.UserIds is { Count: > 0 }) users = users.Where(u => cmd.UserIds.Contains(u.Id));
+        else if (cmd.RoleId is { } roleId)
+        {
+            if (!await db.Roles.AnyAsync(r => r.Id == roleId, ct)) throw new NotFoundException("Không tìm thấy vai trò.");
+            users = users.Where(u => u.UserRoles.Any(r => r.RoleId == roleId));
+            if (cmd.SetAsDefault) await db.Roles.Where(r => r.Id == roleId).ExecuteUpdateAsync(s => s.SetProperty(r => r.DefaultQuotaGb, cmd.QuotaGb), ct);
+        }
         else if (cmd.IncludeSubOrganizations)
         {
             var path = await db.Organizations.Where(o => o.Id == cmd.OrganizationId).Select(o => o.Path).FirstOrDefaultAsync(ct) ?? throw new NotFoundException("Không tìm thấy đơn vị.");
             users = users.Where(u => u.Organization != null && u.Organization.Path.StartsWith(path));
         }
         else users = users.Where(u => u.OrganizationId == cmd.OrganizationId);
+        if (cmd.SetAsDefault && cmd.RoleId is null && cmd.UserIds is not { Count: > 0 } && cmd.OrganizationId is { } org)
+            await db.Organizations.Where(o => o.Id == org).ExecuteUpdateAsync(s => s.SetProperty(o => o.DefaultQuotaGb, cmd.QuotaGb), ct);
         var ids = await users.Select(u => u.Id).ToListAsync(ct);
         await db.Users.Where(u => ids.Contains(u.Id)).ExecuteUpdateAsync(s => s.SetProperty(u => u.QuotaBytes, bytes), ct);
         await db.Workspaces.Where(w => w.Type == WorkspaceType.Personal && ids.Contains(w.OwnerId)).ExecuteUpdateAsync(s => s.SetProperty(w => w.QuotaBytes, bytes), ct);
         await audit.LogAsync(new AuditEntry(AuditAction.ConfigChange, ResourceName: "Cấu hình dung lượng cá nhân",
-            Detail: new { cmd.OrganizationId, cmd.IncludeSubOrganizations, users = ids.Count, quotaBytes = bytes }), ct);
+            Detail: new { cmd.OrganizationId, cmd.IncludeSubOrganizations, cmd.RoleId, cmd.SetAsDefault, users = ids.Count, quotaBytes = bytes }), ct);
         return ids.Count;
     }
 }

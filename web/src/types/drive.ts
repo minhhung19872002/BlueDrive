@@ -304,8 +304,12 @@ export interface AllWorkspacesFilter {
 export interface SetPersonalQuotaRequest {
   userIds?: string[] | null
   organizationId?: string | null
+  /** Spec 8.2: every user holding the role. */
+  roleId?: string | null
   includeSubOrganizations: boolean
   quotaGb: number
+  /** Keep it as the default quota of new users of the unit / role. */
+  setAsDefault?: boolean
 }
 
 /** Upload / create target inside a workspace. folderId null = workspace root. */

@@ -16,13 +16,21 @@ public sealed record SharedByMeDto(DriveItemDto Item, int People, int Links, Dat
 public sealed record ListSharedByMeQuery : PageQuery, IRequest<PagedResult<SharedByMeDto>>;
 
 /// <param name="TotalBytes">With every kept version (what counts against the quota).</param>
-public sealed record StorageItemDto(DriveItemDto Item, long TotalBytes, int Versions);
+public sealed record StorageItemDto(DriveItemDto Item, long TotalBytes, int Versions, long OldVersionBytes);
 
-/// <summary>"Bộ nhớ": the files of my drive by the space they take, largest first.</summary>
-public sealed record ListStorageQuery : PageQuery, IRequest<PagedResult<StorageItemDto>>;
+/// <summary>"Bộ nhớ" (spec 8.2): the files of my drive — or of a Space I manage — by the space they take, largest first.</summary>
+public sealed record ListStorageQuery(Guid? WorkspaceId = null) : PageQuery, IRequest<PagedResult<StorageItemDto>>;
 
-public sealed class ViewHandlers(IAppDbContext db, ICurrentUser me, IContentTicketService tickets, Access.AccessFilter filter, TimeProvider clock)
-    : IRequestHandler<ListSharedByMeQuery, PagedResult<SharedByMeDto>>, IRequestHandler<ListStorageQuery, PagedResult<StorageItemDto>>
+/// <summary>"Xóa phiên bản cũ": every version but the current and the published one goes (not while retained or held); the space comes back.</summary>
+public sealed record PruneOldVersionsCommand(Guid FileId) : IRequest<PruneOldVersionsResult>;
+
+public sealed record PruneOldVersionsResult(int Deleted, long FreedBytes);
+
+public sealed class ViewHandlers(IAppDbContext db, ICurrentUser me, IContentTicketService tickets, Access.AccessFilter filter, TimeProvider clock,
+    IPermissionService perms, Access.IItemPermissionService engine, Retention.RetentionService retention, IFileContentService content, Storage.QuotaService quota,
+    IAuditLogger audit)
+    : IRequestHandler<ListSharedByMeQuery, PagedResult<SharedByMeDto>>, IRequestHandler<ListStorageQuery, PagedResult<StorageItemDto>>,
+      IRequestHandler<PruneOldVersionsCommand, PruneOldVersionsResult>
 {
     public async Task<PagedResult<SharedByMeDto>> Handle(ListSharedByMeQuery q, CancellationToken ct)
     {
@@ -59,16 +67,49 @@ public sealed class ViewHandlers(IAppDbContext db, ICurrentUser me, IContentTick
     public async Task<PagedResult<StorageItemDto>> Handle(ListStorageQuery q, CancellationToken ct)
     {
         var uid = me.RequireUserId();
-        var drive = await db.Workspaces.AsNoTracking().Where(w => w.OwnerId == uid && w.Type == WorkspaceType.Personal).Select(w => (Guid?)w.Id).FirstOrDefaultAsync(ct);
+        Guid? drive;
+        if (q.WorkspaceId is { } wsId)
+        {
+            if (!await perms.HasAsync(uid, Security.Perm.WorkspaceAdmin, ct)
+                && !Domain.Permissions.AccessRights.Has(await engine.GetEffectiveAsync(uid, wsId, ct), Domain.Permissions.AccessRight.ManageSpace))
+                throw new ForbiddenException("Chỉ Quản lý Space xem được bộ nhớ của Space.");
+            drive = wsId;
+        }
+        else drive = await db.Workspaces.AsNoTracking().Where(w => w.OwnerId == uid && w.Type == WorkspaceType.Personal).Select(w => (Guid?)w.Id).FirstOrDefaultAsync(ct);
         if (drive is null) return new PagedResult<StorageItemDto>([], 0, q.SafePage, q.SafePageSize);
         var sizes = db.Files.AsNoTracking().Where(f => f.WorkspaceId == drive && !f.IsDeleted)
-            .Select(f => new { f.Id, Total = db.FileVersions.Where(v => v.FileId == f.Id).Sum(v => (long?)v.SizeBytes) ?? f.SizeBytes, Versions = db.FileVersions.Count(v => v.FileId == f.Id) });
+            .Select(f => new
+            {
+                f.Id,
+                Total = db.FileVersions.Where(v => v.FileId == f.Id).Sum(v => (long?)v.SizeBytes) ?? f.SizeBytes,
+                Versions = db.FileVersions.Count(v => v.FileId == f.Id),
+                Old = db.FileVersions.Where(v => v.FileId == f.Id && v.Id != f.CurrentVersionId && v.Id != f.PublishedVersionId).Sum(v => (long?)v.SizeBytes) ?? 0,
+            });
         var total = await sizes.CountAsync(ct);
         var page = await sizes.OrderByDescending(x => x.Total).ThenBy(x => x.Id).Skip((q.SafePage - 1) * q.SafePageSize).Take(q.SafePageSize).ToListAsync(ct);
         var ids = page.Select(p => p.Id).ToList();
         var items = ThumbnailUrls.Apply(await DriveProjection.Files(db, db.Files.AsNoTracking().Where(f => ids.Contains(f.Id)), uid).ToListAsync(ct), tickets, uid)
             .ToDictionary(i => i.Id);
-        return new PagedResult<StorageItemDto>(page.Where(p => items.ContainsKey(p.Id)).Select(p => new StorageItemDto(items[p.Id], p.Total, p.Versions)).ToList(),
+        return new PagedResult<StorageItemDto>(page.Where(p => items.ContainsKey(p.Id)).Select(p => new StorageItemDto(items[p.Id], p.Total, p.Versions, p.Old)).ToList(),
             total, q.SafePage, q.SafePageSize);
+    }
+
+    public async Task<PruneOldVersionsResult> Handle(PruneOldVersionsCommand cmd, CancellationToken ct)
+    {
+        var uid = me.RequireUserId();
+        await engine.DemandAsync(uid, cmd.FileId, Domain.Permissions.AccessRight.EditItems, ct);
+        var file = await db.Files.FirstOrDefaultAsync(f => f.Id == cmd.FileId && !f.IsDeleted, ct) ?? throw new NotFoundException("Không tìm thấy tệp.");
+        if (await retention.ForFileAsync(file.Id, ct) is { } p)
+            throw new ConflictException(p.Held ? $"Tệp đang bị giữ pháp lý \"{p.Hold}\": không xóa được phiên bản nào." : $"Tệp đang được lưu giữ theo \"{p.PolicyName}\": phiên bản cũ được giữ lại.");
+        var old = await db.FileVersions.Where(v => v.FileId == file.Id && v.Id != file.CurrentVersionId && v.Id != file.PublishedVersionId).ToListAsync(ct);
+        if (old.Count == 0) return new PruneOldVersionsResult(0, 0);
+        db.FileVersions.RemoveRange(old);
+        await db.SaveChangesAsync(ct);
+        foreach (var key in old.Select(v => v.StorageKey).Distinct())
+            if (!await db.FileVersions.AnyAsync(v => v.StorageKey == key, ct)) await content.DeleteAsync(key, ct);
+        var bytes = old.Sum(v => v.SizeBytes);
+        await quota.AddUsageAsync(file.WorkspaceId, -bytes, ct);
+        await audit.LogAsync(new AuditEntry(AuditAction.Purge, ResourceType.File, file.Id, file.Name, file.WorkspaceId, new { oldVersions = old.Count, bytes }), ct);
+        return new PruneOldVersionsResult(old.Count, bytes);
     }
 }

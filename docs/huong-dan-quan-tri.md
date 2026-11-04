@@ -50,7 +50,8 @@ Loại danh mục (loại sản phẩm truyền thông, chủ đề, chiến d�
 
 ## 7. Nhóm tài nguyên và dung lượng (#57–60)
 - *Quản trị > Nhóm tài nguyên*: danh sách tất cả nhóm, mức sử dụng; đặt hạn mức nhóm; khóa/mở khóa (khóa = chỉ xem, không ghi).
-- *Cấu hình dung lượng cá nhân*: đặt dung lượng cho người dùng cụ thể hoặc cả đơn vị (có/không gồm đơn vị con). Mặc định cho tài khoản/nhóm mới đặt ở *Cấu hình hệ thống*.
+- *Cấu hình dung lượng cá nhân*: đặt dung lượng cho người dùng cụ thể, cả đơn vị (có/không gồm đơn vị con) hoặc theo vai trò; tích *Đặt làm dung lượng mặc định* để người dùng mới của đơn vị / vai trò đó nhận mức này (vai trò ưu tiên hơn đơn vị, rồi đến mặc định ở *Cấu hình hệ thống*).
+- Dung lượng 3 tầng: **toàn hệ thống** (*Cấu hình hệ thống → Dung lượng toàn hệ thống*, 0 = không giới hạn) → **Space** → **Drive của từng người**. Cảnh báo ở 80% (cấu hình được), 90% và 100% cho chủ Drive / chủ Space (thông báo) và quản trị (cảnh báo bất thường). Khi đầy: không tải lên, không tạo phiên bản mới (trình soạn thảo trực tuyến mở chế độ chỉ xem), vẫn xem và tải xuống được. Người dùng và Quản lý Space dọn chỗ ở trang **Bộ nhớ** (*Xóa phiên bản cũ*).
 - Dung lượng chỉ được trả lại khi tệp bị **xóa vĩnh viễn** (cả hai tầng thùng rác tính vào dung lượng của Drive/Space). Thùng rác 2 tầng tự xóa vĩnh viễn sau 93 ngày kể từ lúc xóa (cấu hình được; Space có thể đặt riêng), trừ mục đang lưu giữ hoặc giữ pháp lý. Quản trị (quyền *Quản trị nhóm tài nguyên*) xem và khôi phục được thùng rác tầng 2 của mọi Space.
 
 ## 8. Cấu hình hệ thống

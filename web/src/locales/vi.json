@@ -811,6 +811,11 @@
     "unlimited": "không giới hạn",
     "total": "Dung lượng (gồm phiên bản)",
     "versions": "{{count}} phiên bản",
+    "oldVersions": "Phiên bản cũ",
+    "prune": "Xóa phiên bản cũ",
+    "pruneConfirm": "Xóa các phiên bản cũ của \"{{name}}\" (giải phóng {{size}})? Phiên bản hiện tại và bản đã xuất bản được giữ lại.",
+    "pruned": "Đã xóa {{count}} phiên bản cũ, giải phóng {{size}}.",
+    "place": "Bộ nhớ của",
     "empty": "Drive của tôi chưa có tệp nào."
   },
   "accessLevels": {
@@ -1454,6 +1459,10 @@
     "applyTo": "Áp dụng cho",
     "applyUsers": "Người dùng được chọn",
     "applyOrganization": "Người dùng theo đơn vị",
+    "applyRole": "Theo vai trò",
+    "role": "Vai trò",
+    "roleRequired": "Chọn vai trò",
+    "setAsDefault": "Đặt làm dung lượng mặc định cho người dùng mới của đơn vị / vai trò này",
     "users": "Người dùng",
     "usersRequired": "Vui lòng chọn người dùng.",
     "personalQuota": "Dung lượng cá nhân",
