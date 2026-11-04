@@ -2,7 +2,7 @@
 #   docker build -f web/Dockerfile -t bluedrive/web .
 
 # ---------- Build stage ----------
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 
 COPY web/package.json web/package-lock.json ./
