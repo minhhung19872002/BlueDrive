@@ -50,7 +50,7 @@ function LocationLinks({ workspaceId, crumbs }: { workspaceId: string; crumbs: B
       {crumbs.map((c, i) => (
         <span key={c.id ?? 'root'}>
           {i > 0 && ' / '}
-          <Link to={folderUrl(workspaceId, c.id, personal)}>{c.name}</Link>
+          <Link to={c.shared ? '/shared' : folderUrl(workspaceId, c.id, personal)}>{c.name}</Link>
         </span>
       ))}
     </span>

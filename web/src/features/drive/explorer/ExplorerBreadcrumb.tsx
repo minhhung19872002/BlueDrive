@@ -1,6 +1,7 @@
 import type { DragEvent } from 'react'
 import { Breadcrumb, Skeleton } from 'antd'
-import { HomeOutlined } from '@ant-design/icons'
+import { HomeOutlined, ShareAltOutlined } from '@ant-design/icons'
+import { useNavigate } from 'react-router-dom'
 import type { BreadcrumbItem } from '@/types/drive'
 
 interface ExplorerBreadcrumbProps {
@@ -12,6 +13,7 @@ interface ExplorerBreadcrumbProps {
 
 /** Path of the current folder (from folder-info); every ancestor is clickable and a drop target. */
 export default function ExplorerBreadcrumb({ crumbs, onNavigate, onDropOn }: ExplorerBreadcrumbProps) {
+  const navigate = useNavigate()
   if (!crumbs) return <Skeleton.Input active size="small" style={{ width: 240 }} />
   return (
     <Breadcrumb
@@ -20,7 +22,7 @@ export default function ExplorerBreadcrumb({ crumbs, onNavigate, onDropOn }: Exp
         const last = i === crumbs.length - 1
         const label = (
           <span>
-            {i === 0 && <HomeOutlined style={{ marginInlineEnd: 4 }} />}
+            {i === 0 && (c.shared ? <ShareAltOutlined style={{ marginInlineEnd: 4 }} /> : <HomeOutlined style={{ marginInlineEnd: 4 }} />)}
             {c.name}
           </span>
         )
@@ -33,7 +35,8 @@ export default function ExplorerBreadcrumb({ crumbs, onNavigate, onDropOn }: Exp
               href="#"
               onClick={(e) => {
                 e.preventDefault()
-                onNavigate(c.id)
+                if (c.shared) navigate('/shared')
+                else onNavigate(c.id)
               }}
               onDragOver={(e) => {
                 if (onDropOn) {

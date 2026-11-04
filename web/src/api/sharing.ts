@@ -1,7 +1,7 @@
 import { api } from './client'
 import { cleanParams } from './http'
 import type { UserLookupDto } from '@/types/admin'
-import type { ApprovalStatus } from '@/types/drive'
+import type { ApprovalStatus, DriveItem } from '@/types/drive'
 import type { Paged, PageParams } from '@/types/common'
 import {
   toAccessLevel,
@@ -103,4 +103,27 @@ export async function rejectFile(fileId: string, reason: string): Promise<void> 
 
 export async function submitForApproval(fileId: string): Promise<void> {
   await api.post(`/approvals/${fileId}/submit`)
+}
+
+export interface SharedByMe {
+  item: DriveItem
+  people: number
+  links: number
+  lastSharedAt: string
+}
+
+export async function listSharedByMe(params: PageParams & { q?: string }): Promise<Paged<SharedByMe>> {
+  const { data } = await api.get<Paged<SharedByMe>>('/shares/by-me', { params })
+  return data
+}
+
+export interface StorageItem {
+  item: DriveItem
+  totalBytes: number
+  versions: number
+}
+
+export async function listStorageUsage(params: PageParams): Promise<Paged<StorageItem>> {
+  const { data } = await api.get<Paged<StorageItem>>('/storage/usage', { params })
+  return data
 }

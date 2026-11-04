@@ -46,6 +46,14 @@ public class SharesController : ApiControllerBase
     [HttpGet("with-me")]
     public Task<PagedResult<SharedItemDto>> WithMe([FromQuery] ListSharedWithMeQuery query) => Mediator.Send(query);
 
+    /// <summary>Tôi đã chia sẻ (người được cấp quyền và liên kết còn hiệu lực).</summary>
+    [HttpGet("by-me")]
+    public Task<PagedResult<SharedByMeDto>> ByMe([FromQuery] ListSharedByMeQuery query) => Mediator.Send(query);
+
+    /// <summary>Bộ nhớ: tệp trong Drive của tôi theo dung lượng (kể cả các phiên bản), lớn nhất trước.</summary>
+    [HttpGet("~/api/v1/storage/usage")]
+    public Task<PagedResult<StorageItemDto>> Storage([FromQuery] ListStorageQuery query) => Mediator.Send(query);
+
     [HttpGet("with-me/sharers")]
     public Task<IReadOnlyList<UserLookupDto>> Sharers() => Mediator.Send(new ListSharersQuery());
 }

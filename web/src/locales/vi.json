@@ -64,6 +64,8 @@
     "accessRequests": "Yêu cầu quyền truy cập",
     "guests": "Khách bên ngoài",
     "spaceTrash": "Thùng rác Space",
+    "sharedByMe": "Tôi đã chia sẻ",
+    "storage": "Bộ nhớ",
     "adminDevices": "Thiết bị đồng bộ"
   },
   "header": {
@@ -684,6 +686,8 @@
     "sharedHint": "Tư liệu đồng nghiệp chia sẻ với bạn, với nhóm hoặc đơn vị của bạn.",
     "sharedSearch": "Tìm theo tên...",
     "sharedBy": "Người chia sẻ",
+    "groupBySharer": "Nhóm theo người chia sẻ",
+    "unknownSharer": "(không rõ)",
     "sharedAt": "Ngày chia sẻ",
     "fromDate": "Từ ngày",
     "toDate": "Đến ngày"
@@ -791,6 +795,20 @@
     "existing_guests": "Chỉ khách đã có trong hệ thống",
     "new_and_existing_guests": "Khách mới và khách đã có",
     "anyone": "Bất kỳ ai (liên kết ẩn danh)"
+  },
+  "sharedByMe": {
+    "description": "Tư liệu bạn đã cấp quyền cho người khác hoặc tạo liên kết còn hiệu lực.",
+    "with": "Chia sẻ với",
+    "people": "{{count}} người/nhóm",
+    "links": "{{count}} liên kết",
+    "empty": "Bạn chưa chia sẻ tư liệu nào."
+  },
+  "storagePage": {
+    "description": "Đã dùng {{used}} / {{quota}}. Tệp trong Drive của tôi theo dung lượng, kể cả các phiên bản được giữ.",
+    "unlimited": "không giới hạn",
+    "total": "Dung lượng (gồm phiên bản)",
+    "versions": "{{count}} phiên bản",
+    "empty": "Drive của tôi chưa có tệp nào."
   },
   "spaceSettings": {
     "tab": "Cài đặt",

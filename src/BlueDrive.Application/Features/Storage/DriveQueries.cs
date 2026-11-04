@@ -23,7 +23,8 @@ public static class ThumbnailUrls
         => items.Select(i => i.HasThumbnail && i.Type == "file" ? i with { ThumbnailUrl = For(tickets, userId, i.Id) } : i).ToList();
 }
 
-public sealed record BreadcrumbItem(Guid? Id, string Name);
+/// <param name="Shared">The "Được chia sẻ với tôi" entry standing for the levels above that the user may not see.</param>
+public sealed record BreadcrumbItem(Guid? Id, string Name, bool Shared = false);
 
 public sealed record AccessFlags(bool CanView, bool CanDownload, bool CanEdit, bool CanUpload, bool CanManage, bool CanApprove, bool WorkspaceLocked)
 {
@@ -143,10 +144,7 @@ public sealed class GetFolderInfoHandler(IAppDbContext db, ICurrentUser me, IRes
         }
         var folder = await db.Folders.AsNoTracking().FirstOrDefaultAsync(f => f.Id == fid && f.WorkspaceId == ws.Id && !f.IsDeleted, ct) ?? throw new NotFoundException("Không tìm thấy thư mục.");
         var access = await auth.GetAccessAsync(uid, ResourceType.Folder, fid, ct);
-        var ids = LegacyResourceAuthorizationService.PathIds(folder.Path);
-        var names = await db.Folders.AsNoTracking().Where(f => ids.Contains(f.Id)).ToDictionaryAsync(f => f.Id, f => f.Name, ct);
-        var crumbs = new List<BreadcrumbItem> { new(null, wsName) };
-        crumbs.AddRange(ids.AsEnumerable().Reverse().Where(names.ContainsKey).Select(id => new BreadcrumbItem(id, names[id])));
+        var crumbs = await FileLocation.BuildAsync(db, ws, folder, uid, ct, auth);
         return new FolderInfoDto(folder.Id, folder.Name, ws.Id, wsName, ws.Type, folder.ParentId, folder.RequiresApproval, folder.BreakInheritance, crumbs, AccessFlags.From(access));
     }
 }
@@ -193,7 +191,7 @@ public sealed class GetFileDetailHandler(IAppDbContext db, ICurrentUser me, IRes
         var uid = me.RequireUserId();
         var access = await auth.EnsureAsync(uid, ResourceType.File, q.Id, AccessLevel.View, ct);
         var f = await db.Files.AsNoTracking().Include(x => x.Workspace).Include(x => x.Folder).FirstAsync(x => x.Id == q.Id, ct);
-        var location = await FileLocation.BuildAsync(db, f.Workspace!, f.Folder, uid, ct);
+        var location = await FileLocation.BuildAsync(db, f.Workspace!, f.Folder, uid, ct, auth);
         var userIds = new[] { f.CreatedBy, f.UpdatedBy }.Where(x => x.HasValue).Select(x => x!.Value).ToList();
         var users = await db.Users.AsNoTracking().Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName, ct);
         var versions = await db.FileVersions.AsNoTracking().Where(v => v.FileId == f.Id).OrderByDescending(v => v.VersionNo)
@@ -216,15 +214,25 @@ public sealed class GetFileDetailHandler(IAppDbContext db, ICurrentUser me, IRes
 
 public static class FileLocation
 {
-    public static async Task<List<BreadcrumbItem>> BuildAsync(IAppDbContext db, Workspace ws, Folder? folder, Guid userId, CancellationToken ct)
+    /// <summary>
+    /// Path of a folder or file. With <paramref name="auth"/> it starts at the highest level the user may see (spec 1.3): the names of the Space
+    /// and folders above something shared with them are not shown, an "Được chia sẻ với tôi" entry stands for them.
+    /// </summary>
+    public static async Task<List<BreadcrumbItem>> BuildAsync(IAppDbContext db, Workspace ws, Folder? folder, Guid userId, CancellationToken ct,
+        IResourceAuthorizationService? auth = null)
     {
         var wsName = ws.Type == WorkspaceType.Personal ? (ws.OwnerId == userId ? "Tài liệu của tôi" : ws.Name) : ws.Name;
         var list = new List<BreadcrumbItem> { new(null, wsName) };
-        if (folder is null) return list;
-        var ids = LegacyResourceAuthorizationService.PathIds(folder.Path);
-        var names = await db.Folders.AsNoTracking().Where(f => ids.Contains(f.Id)).ToDictionaryAsync(f => f.Id, f => f.Name, ct);
-        list.AddRange(ids.AsEnumerable().Reverse().Where(names.ContainsKey).Select(id => new BreadcrumbItem(id, names[id])));
-        return list;
+        if (folder is not null)
+        {
+            var ids = LegacyResourceAuthorizationService.PathIds(folder.Path);
+            var names = await db.Folders.AsNoTracking().Where(f => ids.Contains(f.Id)).ToDictionaryAsync(f => f.Id, f => f.Name, ct);
+            list.AddRange(ids.AsEnumerable().Reverse().Where(names.ContainsKey).Select(id => new BreadcrumbItem(id, names[id])));
+        }
+        if (auth is null || await auth.CanAsync(userId, ResourceType.Workspace, ws.Id, AccessLevel.View, ct)) return list;
+        var first = 1;
+        while (first < list.Count && !await auth.CanAsync(userId, ResourceType.Folder, list[first].Id!.Value, AccessLevel.View, ct)) first++;
+        return [new BreadcrumbItem(null, "Được chia sẻ với tôi", Shared: true), .. list.Skip(first)];
     }
 
     public static string ToText(IEnumerable<BreadcrumbItem> crumbs) => string.Join(" / ", crumbs.Select(c => c.Name));

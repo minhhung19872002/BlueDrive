@@ -31,6 +31,8 @@ interface AppRoute {
 const layoutRoutes: AppRoute[] = [
   { path: 'my-drive', Component: lazy(() => import('@/pages/drive/MyDrivePage')) },
   { path: 'shared', Component: lazy(() => import('@/pages/drive/SharedPage')) },
+  { path: 'shared-by-me', Component: lazy(() => import('@/pages/drive/SharedByMePage')) },
+  { path: 'storage', Component: lazy(() => import('@/pages/drive/StoragePage')) },
   { path: 'recent', Component: lazy(() => import('@/pages/drive/RecentPage')) },
   { path: 'starred', Component: lazy(() => import('@/pages/drive/StarredPage')) },
   { path: 'trash', Component: lazy(() => import('@/pages/drive/TrashPage')) },

@@ -66,6 +66,8 @@ export interface DriveItem {
 }
 
 export interface BreadcrumbItem {
+  /** "Được chia sẻ với tôi": stands for the levels above that the user may not see. */
+  shared?: boolean
   id: string | null
   name: string
 }

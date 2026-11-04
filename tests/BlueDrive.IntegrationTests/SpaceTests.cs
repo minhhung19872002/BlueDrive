@@ -73,4 +73,41 @@ public class SpaceTests(ApiFactory factory)
         (await (await admin.GetAsync("/api/v1/workspaces/trash")).ReadJsonAsync()).EnumerateArray().Should().NotContain(t => t.GetProperty("id").GetGuid() == ws);
         (await owner.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
+
+    [Fact]
+    public async Task Views_shared_by_me_storage_and_a_breadcrumb_that_hides_what_is_above()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (friend, friendId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var secret = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Bí mật cấp trên" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var open = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, parentId = secret, name = "Chia sẻ cho bạn" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var file = (await StorageTests.UploadAsync(owner, ws, open, "ban-ve.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var big = (await StorageTests.UploadAsync(owner, ws, null, "lon-hon.png", [.. StorageTests.Png, .. new byte[4096]])).GetProperty("fileId").GetGuid();
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+        await (await owner.PostAsJsonAsync($"/api/v1/items/{open}/permissions", new { targets = new[] { new { kind = "user", id = friendId } }, levelId = levels["viewer"], notify = false })).ReadJsonAsync();
+        await (await owner.PostAsJsonAsync("/api/v1/share-links", new { resourceType = "file", resourceId = big, scope = "existing", allowDownload = true })).ReadJsonAsync();
+
+        // The friend's path starts at what was shared: no name of the drive or of the folder above.
+        var info = await (await friend.GetAsync($"/api/v1/workspaces/{ws}/folder-info?folderId={open}")).ReadJsonAsync();
+        var crumbs = info.GetProperty("breadcrumb").EnumerateArray().ToList();
+        crumbs.First().GetProperty("shared").GetBoolean().Should().BeTrue();
+        crumbs.Select(c => c.GetProperty("name").GetString()).Should().Equal("Được chia sẻ với tôi", "Chia sẻ cho bạn");
+        var detail = (await (await friend.GetAsync($"/api/v1/files/{file}")).ReadJsonAsync()).ToString();
+        detail.Should().NotContain("Bí mật cấp trên").And.NotContain("Tài liệu của");
+        // The owner sees the whole path.
+        (await (await owner.GetAsync($"/api/v1/workspaces/{ws}/folder-info?folderId={open}")).ReadJsonAsync()).GetProperty("breadcrumb").EnumerateArray()
+            .Select(c => c.GetProperty("name").GetString()).Should().Equal("Tài liệu của tôi", "Bí mật cấp trên", "Chia sẻ cho bạn");
+
+        // "Tôi đã chia sẻ": the folder (one person) and the file (one link).
+        var byMe = (await (await owner.GetAsync("/api/v1/shares/by-me")).ReadJsonAsync()).GetProperty("items").EnumerateArray().ToList();
+        byMe.Should().Contain(r => r.GetProperty("item").GetProperty("id").GetGuid() == open && r.GetProperty("people").GetInt32() == 1);
+        byMe.Should().Contain(r => r.GetProperty("item").GetProperty("id").GetGuid() == big && r.GetProperty("links").GetInt32() == 1);
+        (await (await friend.GetAsync("/api/v1/shares/by-me")).ReadJsonAsync()).GetProperty("total").GetInt32().Should().Be(0);
+
+        // "Bộ nhớ": largest first.
+        var usage = (await (await owner.GetAsync("/api/v1/storage/usage")).ReadJsonAsync()).GetProperty("items").EnumerateArray().ToList();
+        usage.First().GetProperty("item").GetProperty("id").GetGuid().Should().Be(big);
+        usage.Select(u => u.GetProperty("totalBytes").GetInt64()).Should().BeInDescendingOrder();
+    }
 }

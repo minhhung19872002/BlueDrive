@@ -1,6 +1,7 @@
-import { Button, Card, DatePicker, Empty, Input, Select, Space, Tabs, Tag, Tooltip } from 'antd'
+import { Button, Card, DatePicker, Empty, Input, Select, Space, Switch, Tabs, Tag, Tooltip } from 'antd'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import type { Dayjs } from 'dayjs'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { qk } from '@/api/queryKeys'
@@ -41,6 +42,15 @@ export default function SharedPage() {
     siblingFileIds: rows.filter((r) => r.item.type === 'file').map((r) => r.item.id),
   })
   const filtered = !!(table.filter.q || table.filter.sharedBy || table.filter.mediaType || table.filter.range)
+  // Spec 1.3: grouped by who shared (the page's items).
+  const [grouped, setGrouped] = useState(false)
+  const groups = Object.entries(
+    rows.reduce<Record<string, DriveRow<SharedItem>[]>>((acc, r) => {
+      const name = r.extra?.sharedByName || t('drive.unknownSharer')
+      ;(acc[name] ??= []).push(r)
+      return acc
+    }, {}),
+  ).sort(([a], [b]) => a.localeCompare(b, 'vi'))
 
   return (
     <>
@@ -92,9 +102,16 @@ export default function SharedPage() {
             style={{ width: 160 }}
           />
           {filtered && <Button onClick={table.resetFilter}>{t('common.clearFilter')}</Button>}
+          <Space size={6}>
+            <Switch size="small" checked={grouped} onChange={setGrouped} aria-label={t('drive.groupBySharer')} />
+            <span>{t('drive.groupBySharer')}</span>
+          </Space>
         </Space>
+        {(grouped ? groups : [['', rows] as [string, DriveRow<SharedItem>[]]]).map(([sharer, groupRows]) => (
+        <div key={sharer || 'all'}>
+        {grouped && <div className="bd-shared-group" style={{ padding: '12px 16px 4px', fontWeight: 600 }}>{sharer} ({groupRows.length})</div>}
         <DriveItemTable<SharedItem>
-          rows={rows}
+          rows={groupRows}
           loading={shared.isFetching}
           actions={actions}
           flagsFor={(row) => {
@@ -125,10 +142,12 @@ export default function SharedPage() {
             },
           ]}
           dateColumn={{ title: t('drive.sharedAt'), value: (row) => row.extra?.sharedAt ?? null }}
-          pagination={table.pagination(shared.data?.total)}
+          pagination={grouped ? false : table.pagination(shared.data?.total)}
           onChange={table.onTableChange}
           empty={<Empty description={filtered ? t('common.noMatch') : t('empty.shared')} style={{ padding: '32px 0' }} />}
         />
+        </div>
+        ))}
       </Card>
       )}
       {actions.dialogs}
