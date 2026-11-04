@@ -64,6 +64,23 @@ test.describe.serial('Tư liệu cá nhân', () => {
     await openMyDrive(page)
     await expect(page.getByRole('row', { name: new RegExp(folder) })).toBeVisible()
   })
+
+  test('thùng rác hiện đúng loại tệp (.txt không hiện biểu tượng Word)', async ({ page }) => {
+    await openMyDrive(page)
+    await page.getByRole('row', { name: new RegExp(folder) }).getByText(folder).click()
+    await page.waitForLoadState('networkidle')
+    await page.getByRole('row', { name: new RegExp(fileName) }).getByRole('checkbox').check()
+    await page.keyboard.press('Delete')
+    await page.getByRole('button', { name: /Xóa|Đồng ý|OK/ }).last().click()
+    await page.goto('/trash')
+    const row = page.getByRole('row', { name: new RegExp(fileName) })
+    await expect(row.getByRole('img', { name: 'TXT' })).toBeVisible()
+    await row.getByRole('checkbox').check()
+    await Promise.all([
+      page.waitForResponse((r) => r.url().includes('/trash/restore') && r.ok()),
+      page.getByRole('main').getByRole('button', { name: /Khôi phục$/ }).click(),
+    ])
+  })
 })
 
 test('tạo tài liệu Word mới và mở trình soạn thảo ONLYOFFICE', async ({ page }) => {

@@ -24,7 +24,7 @@ import { bytesTick, DASHBOARD_BUCKETS, MEDIA_COLORS, SERIES_COLOR, SERIES_COLOR_
 import { useAuthStore } from '@/stores/auth'
 import type { MediaType } from '@/types/drive'
 import type { FolderUsage, GroupDashboard, GroupLink, RecentDoc } from '@/types/ops'
-import { formatBytes, formatDateTime, percentOf } from '@/utils/format'
+import { extensionOf, formatBytes, formatDateTime, percentOf } from '@/utils/format'
 
 const DASH_STALE = 60_000
 
@@ -41,7 +41,7 @@ function RecentTable({ rows, showGroup, loading }: { rows: RecentDoc[]; showGrou
       dataIndex: 'name',
       render: (name: string, r) => (
         <Space size={8}>
-          <FileTypeIcon type="file" mediaType={r.mediaType} size={18} />
+          <FileTypeIcon type="file" mediaType={r.mediaType} extension={extensionOf(name)} size={18} />
           <Link to={`/files/${r.id}`} onClick={(e) => e.stopPropagation()}>
             {name}
           </Link>

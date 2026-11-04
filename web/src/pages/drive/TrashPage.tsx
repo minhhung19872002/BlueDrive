@@ -14,7 +14,7 @@ import { useCan } from '@/hooks/usePermissions'
 import { useServerTable } from '@/hooks/useServerTable'
 import { useAuthStore } from '@/stores/auth'
 import type { TrashItem } from '@/types/drive'
-import { formatBytes, formatDateTime } from '@/utils/format'
+import { extensionOf, formatBytes, formatDateTime } from '@/utils/format'
 
 const MANAGING_ROLES = ['owner', 'manager', 'editor']
 
@@ -148,7 +148,7 @@ export default function TrashPage() {
               ellipsis: true,
               render: (_, r) => (
                 <Space>
-                  <FileTypeIcon type={r.type} mediaType={r.mediaType} size={20} />
+                  <FileTypeIcon type={r.type} mediaType={r.mediaType} extension={extensionOf(r.name)} size={20} />
                   <span title={r.name}>{r.name}</span>
                 </Space>
               ),

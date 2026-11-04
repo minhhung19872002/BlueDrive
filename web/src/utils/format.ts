@@ -5,6 +5,12 @@ const UNITS = ['B', 'KB', 'MB', 'GB', 'TB']
 
 export const GB = 1024 ** 3
 
+/** Extension from a file name ("báo cáo.txt" → "txt"), for lists that only have the name (trash, recent files). */
+export function extensionOf(name: string): string | null {
+  const dot = name.lastIndexOf('.')
+  return dot > 0 && dot < name.length - 1 ? name.slice(dot + 1) : null
+}
+
 /** Format bytes using binary units with Vietnamese decimal separator (e.g. "1,5 GB"). */
 export function formatBytes(bytes: number, fractionDigits = 1): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
