@@ -90,6 +90,19 @@ public sealed class TextIndexBackfillJob(IAppDbContext db, Media.TextIndexStep s
     }
 }
 
+/// <summary>Perm-Phase 1: keeps the new permission model in step with the current one (the source of writes until Perm-Phase 2).</summary>
+public sealed class PermissionProjectionJob(Application.Features.Access.PermissionProjection projection, ILogger<PermissionProjectionJob> logger)
+{
+    [AutomaticRetry(Attempts = 1)]
+    [DisableConcurrentExecution(1800)]
+    [Queue(HangfireSetup.QueueMaintenance)]
+    public async Task RunAsync(CancellationToken ct)
+    {
+        var r = await projection.RebuildAsync(ct);
+        logger.LogInformation("Đã dựng lại mô hình phân quyền mới: {Securables} mục, {Scopes} phạm vi quyền, {Entries} quyền, {Grants} dòng lọc", r.Securables, r.Scopes, r.Entries, r.Grants);
+    }
+}
+
 public sealed class SyncJournalRetentionJob(ISender mediator, ILogger<SyncJournalRetentionJob> logger)
 {
     [Queue(HangfireSetup.QueueMaintenance)]
@@ -109,6 +122,7 @@ public sealed class StorageRecurringJobs(IRecurringJobManager jobs) : IRecurring
         jobs.AddOrUpdate<SyncJournalRetentionJob>("sync-journal-retention", j => j.RunAsync(CancellationToken.None), "45 1 * * *",
             new RecurringJobOptions { TimeZone = Reporting.VietnamTime.Zone });
         jobs.AddOrUpdate<TextIndexBackfillJob>("text-index-backfill", j => j.RunAsync(CancellationToken.None), "*/10 * * * *");
+        jobs.AddOrUpdate<PermissionProjectionJob>("permission-projection", j => j.RunAsync(CancellationToken.None), "*/15 * * * *");
         return Task.CompletedTask;
     }
 }

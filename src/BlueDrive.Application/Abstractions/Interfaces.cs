@@ -9,6 +9,20 @@ public interface IAppDbContext
 {
     DbSet<Organization> Organizations { get; }
     DbSet<FileText> FileTexts { get; }
+    DbSet<Space> Spaces { get; }
+    DbSet<PersonalDrive> PersonalDrives { get; }
+    DbSet<Library> Libraries { get; }
+    DbSet<Securable> Securables { get; }
+    DbSet<Principal> Principals { get; }
+    DbSet<PrincipalMembership> PrincipalMemberships { get; }
+    DbSet<MembershipVersion> MembershipVersions { get; }
+    DbSet<GroupNesting> GroupNestings { get; }
+    DbSet<SpaceGroup> SpaceGroups { get; }
+    DbSet<SpaceGroupMember> SpaceGroupMembers { get; }
+    DbSet<PermissionLevel> PermissionLevels { get; }
+    DbSet<AclScope> AclScopes { get; }
+    DbSet<AclEntry> AclEntries { get; }
+    DbSet<ScopeGrant> ScopeGrants { get; }
     DbSet<User> Users { get; }
     DbSet<PasswordHistory> PasswordHistories { get; }
     DbSet<UserGroup> UserGroups { get; }

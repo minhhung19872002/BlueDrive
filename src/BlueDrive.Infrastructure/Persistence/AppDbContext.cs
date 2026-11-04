@@ -35,6 +35,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Share> Shares => Set<Share>();
     public DbSet<ShareLink> ShareLinks => Set<ShareLink>();
     public DbSet<FileText> FileTexts => Set<FileText>();
+    public DbSet<Space> Spaces => Set<Space>();
+    public DbSet<PersonalDrive> PersonalDrives => Set<PersonalDrive>();
+    public DbSet<Library> Libraries => Set<Library>();
+    public DbSet<Securable> Securables => Set<Securable>();
+    public DbSet<Principal> Principals => Set<Principal>();
+    public DbSet<PrincipalMembership> PrincipalMemberships => Set<PrincipalMembership>();
+    public DbSet<MembershipVersion> MembershipVersions => Set<MembershipVersion>();
+    public DbSet<GroupNesting> GroupNestings => Set<GroupNesting>();
+    public DbSet<SpaceGroup> SpaceGroups => Set<SpaceGroup>();
+    public DbSet<SpaceGroupMember> SpaceGroupMembers => Set<SpaceGroupMember>();
+    public DbSet<PermissionLevel> PermissionLevels => Set<PermissionLevel>();
+    public DbSet<AclScope> AclScopes => Set<AclScope>();
+    public DbSet<AclEntry> AclEntries => Set<AclEntry>();
+    public DbSet<ScopeGrant> ScopeGrants => Set<ScopeGrant>();
     public DbSet<Comment> Comments => Set<Comment>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<SavedSearch> SavedSearches => Set<SavedSearch>();
@@ -73,6 +87,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     protected override void OnModelCreating(ModelBuilder b)
     {
         b.HasPostgresExtension("unaccent");
+        b.HasPostgresExtension("ltree");
         b.HasPostgresExtension("pg_trgm");
         b.HasDbFunction(typeof(Application.Common.DbFn).GetMethod(nameof(Application.Common.DbFn.Unaccent))!).HasName("f_unaccent").HasSchema(null);
 
@@ -227,6 +242,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(x => new { x.ResourceType, x.ResourceId });
         });
         b.Entity<ShareLink>(e => { e.HasIndex(x => x.Token).IsUnique(); e.HasIndex(x => new { x.ResourceType, x.ResourceId }); });
+        ConfigureAccessModel(b);
         b.Entity<FileText>(e =>
         {
             e.HasKey(x => x.FileId);
@@ -273,6 +289,63 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<SystemAnnouncement>().HasIndex(x => new { x.IsActive, x.StartsAt });
         b.Entity<ReportJob>().HasIndex(x => new { x.RequestedBy, x.CreatedAt });
         b.Entity<SystemLog>(e => { e.HasIndex(x => x.Timestamp); e.Property(x => x.Properties).HasColumnType("jsonb"); });
+    }
+
+    /// <summary>Storage and permission model like Google Drive / SharePoint (docs/migration-permissions.md).</summary>
+    private void ConfigureAccessModel(ModelBuilder b)
+    {
+        var npgsql = Database.IsNpgsql();
+        b.Entity<Space>(e =>
+        {
+            e.Property(x => x.Policy).HasColumnType(npgsql ? "jsonb" : null);
+            e.HasIndex(x => x.OrgUnitId);
+        });
+        b.Entity<PersonalDrive>().HasIndex(x => x.UserId).IsUnique();
+        b.Entity<Library>(e =>
+        {
+            e.Property(x => x.Settings).HasColumnType(npgsql ? "jsonb" : null);
+            e.HasIndex(x => x.SpaceId);
+            e.HasIndex(x => x.PersonalDriveId);
+        });
+        b.Entity<Securable>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(255);
+            if (npgsql)
+            {
+                e.Property(x => x.Path).HasColumnType("ltree");
+                e.HasIndex(x => x.Path).HasMethod("gist");
+            }
+            e.HasIndex(x => x.ParentId);
+            e.HasIndex(x => x.AclScopeId);
+            e.HasIndex(x => x.SpaceId);
+            e.HasIndex(x => x.PersonalDriveId);
+        });
+        b.Entity<Principal>(e => { e.HasIndex(x => new { x.Kind, x.RefId }); e.Property(x => x.DisplayName).HasMaxLength(255); });
+        b.Entity<PrincipalMembership>(e => { e.HasKey(x => new { x.UserId, x.PrincipalId }); e.HasIndex(x => x.PrincipalId); });
+        b.Entity<MembershipVersion>().HasKey(x => x.UserId);
+        b.Entity<GroupNesting>(e => { e.HasKey(x => new { x.ParentGroupId, x.ChildGroupId }); e.HasIndex(x => x.ChildGroupId); });
+        b.Entity<SpaceGroup>(e => { e.HasIndex(x => new { x.RootId, x.Kind }); e.Property(x => x.Name).HasMaxLength(255); });
+        b.Entity<SpaceGroupMember>(e => { e.HasKey(x => new { x.SpaceGroupId, x.PrincipalId }); e.HasIndex(x => x.PrincipalId); });
+        b.Entity<PermissionLevel>(e =>
+        {
+            e.HasIndex(x => x.Code).IsUnique();
+            e.Property(x => x.Code).HasMaxLength(64);
+            e.Property(x => x.Name).HasMaxLength(255);
+            e.Property(x => x.Permissions).HasConversion<long>();
+        });
+        b.Entity<AclScope>().HasKey(x => x.ScopeId);
+        b.Entity<AclEntry>(e =>
+        {
+            e.HasIndex(x => x.ScopeId);
+            e.HasIndex(x => x.PrincipalId);
+            e.HasIndex(x => x.ExpiresAt);
+        });
+        b.Entity<ScopeGrant>(e =>
+        {
+            e.HasKey(x => new { x.ScopeId, x.PrincipalId });
+            e.HasIndex(x => new { x.PrincipalId, x.ScopeId });
+            e.Property(x => x.Permissions).HasConversion<long>();
+        });
     }
 }
 

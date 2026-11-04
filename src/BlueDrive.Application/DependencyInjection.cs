@@ -21,6 +21,8 @@ public static class DependencyInjection
         services.AddScoped<Features.Auth.SessionRevoker>();
         services.AddScoped<Features.Monitoring.IAlertService, Features.Monitoring.AlertService>();
         services.AddScoped<Security.IResourceAuthorizationService, Security.ResourceAuthorizationService>();
+        services.AddScoped<Features.Access.PermissionProjection>();
+        services.AddScoped<Features.Access.ReferencePermissionEvaluator>();
         services.AddScoped<Abstractions.IResourceAccessChecker, Security.ResourceAccessChecker>();
         services.AddScoped<Features.Storage.QuotaService>();
         services.AddSingleton<Features.Office.OfficeEditingTracker>();

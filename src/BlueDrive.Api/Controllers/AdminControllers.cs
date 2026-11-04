@@ -259,6 +259,18 @@ public class SettingsController : ApiControllerBase
     public async Task<IActionResult> Update([FromBody] Dictionary<string, JsonElement> values) => Ok(new { changed = await Mediator.Send(new UpdateSettingsCommand(values)) });
 }
 
+/// <summary>Mô hình phân quyền mới (Perm-Phase 1): dựng lại từ mô hình hiện tại và đối chiếu quyền cũ ⊆ quyền mới.</summary>
+[Route("api/v1/admin/permission-model")]
+public class PermissionModelController : ApiControllerBase
+{
+    [HttpPost("rebuild"), HasPermission(Perm.SettingsEdit)]
+    public Task<Application.Features.Access.PermissionProjection.Result> Rebuild() => Mediator.Send(new Application.Features.Access.RebuildPermissionModelCommand());
+
+    [HttpGet("verify"), HasPermission(Perm.SettingsEdit)]
+    public Task<Application.Features.Access.PermissionMigrationReport> Verify([FromQuery] int samples = 10_000, [FromQuery] int? seed = null) =>
+        Mediator.Send(new Application.Features.Access.VerifyPermissionMigrationQuery(samples, seed));
+}
+
 /// <summary>Thông báo của tôi.</summary>
 [Route("api/v1/notifications")]
 public class NotificationsController : ApiControllerBase
