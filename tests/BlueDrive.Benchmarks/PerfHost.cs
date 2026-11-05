@@ -17,7 +17,9 @@ public sealed class PerfHost : WebApplicationFactory<Program>
     private readonly PostgreSqlContainer _pg = new PostgreSqlBuilder("postgres:16-alpine")
         .WithDatabase("bluedrive_perf").WithUsername("bluedrive").WithPassword("bluedrive_perf")
         // Memory for large sorts and the 1M-row inserts.
-        .WithCommand("-c", "shared_buffers=512MB", "-c", "work_mem=64MB", "-c", "maintenance_work_mem=512MB", "-c", "max_wal_size=4GB", "-c", "synchronous_commit=off")
+        .WithCommand("-c", "shared_buffers=512MB", "-c", "work_mem=64MB", "-c", "maintenance_work_mem=512MB", "-c", "max_wal_size=4GB", "-c", "synchronous_commit=off",
+            // Statements slower than 300 ms are written to the container log (docker logs) with their parameters.
+            "-c", "log_min_duration_statement=300")
         .Build();
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), "bluedrive-perf-" + Guid.NewGuid().ToString("N"));

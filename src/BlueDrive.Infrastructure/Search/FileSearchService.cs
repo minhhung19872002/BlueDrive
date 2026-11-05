@@ -66,10 +66,15 @@ public sealed class FileSearchService(AppDbContext db, TimeProvider clock, Appli
         {
             var tsQuery = string.Join(" & ", terms.Select(t => t + ":*"));
             var phrase = string.Join(' ', terms);
-            // Name, title, description, tags — and the text inside the document (file_texts, weight D: ranks after the name).
-            var matched = q.Where(f => EF.Property<NpgsqlTsVector>(f, "SearchVector").Matches(EF.Functions.ToTsQuery("simple", tsQuery))
-                                       || DbFn.Unaccent(f.Name).Contains(phrase)
-                                       || db.FileTexts.Any(t => t.FileId == f.Id && EF.Property<NpgsqlTsVector>(t, "ContentVector").Matches(EF.Functions.ToTsQuery("simple", tsQuery))));
+            // Name, title, description, tags — and the text inside the document (file_texts, weight D: ranks after the name). Three branches
+            // united, each on its own index (search_vector GIN, the name's trigram GIN through LIKE, content_vector GIN): an OR of them would
+            // make PostgreSQL scan every file (spec 4.5: search p95 < 1 s on a million files).
+            var pattern = "%" + phrase.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_") + "%";
+            var byVector = db.Files.Where(f => EF.Property<NpgsqlTsVector>(f, "SearchVector").Matches(EF.Functions.ToTsQuery("simple", tsQuery))).Select(f => f.Id);
+            var byName = db.Files.Where(f => EF.Functions.Like(DbFn.Unaccent(f.Name), pattern)).Select(f => f.Id);
+            var byText = db.FileTexts.Where(t => EF.Property<NpgsqlTsVector>(t, "ContentVector").Matches(EF.Functions.ToTsQuery("simple", tsQuery))).Select(t => t.FileId);
+            var hits = byVector.Union(byName).Union(byText);
+            var matched = q.Where(f => hits.Contains(f.Id));
             var ranked = matched.Select(f => new
             {
                 f.Id, f.CreatedAt, f.Name, f.SizeBytes,

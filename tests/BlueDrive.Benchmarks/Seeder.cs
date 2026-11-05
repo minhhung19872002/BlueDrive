@@ -35,7 +35,7 @@ public sealed record PerfOptions(int Users = 5_000, int Groups = 2_000, int Spac
     /// <summary>Folders with their own permissions (every seeded folder breaks inheritance).</summary>
     public int UniqueScopes => Spaces * TopFolders * (SubFolders + 1);
 
-    public int FilesPerFolder => Math.Max(1, (Files - BigFolder - ListFolder) / (Spaces * TopFolders * SubFolders));
+    public int FilesPerFolder => Math.Max(1, (int)Math.Ceiling((Files - BigFolder - ListFolder) / (double)(Spaces * TopFolders * SubFolders)));
 }
 
 /// <summary>What the measurements need from the seeded world.</summary>

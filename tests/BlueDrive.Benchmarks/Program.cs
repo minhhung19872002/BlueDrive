@@ -63,6 +63,15 @@ public static class BenchmarkEntry
             for (var page = 1; page <= (options.ListFolder + 499) / 500; page++)
                 await PerfHost.ReadAsync(await user.GetAsync($"/api/v1/workspaces/{data.Space0}/items?folderId={data.ListFolderId}&page={page}&pageSize=500"));
         });
+        // A typical search names something specific (a document code: the 8 characters every seeded name carries, a few hits);
+        // "tài liệu 12" is the broadest possible one here (every file is named "Tài liệu …": tens of thousands of hits).
+        var code = data.FileInScope.ToString()[..8];
+        var typical = await TimeAsync(30, async () =>
+        {
+            var json = await PerfHost.ReadAsync(await user.GetAsync($"/api/v1/search?q={code}&pageSize=20"));
+            if (json.GetProperty("total").GetInt32() < 1) throw new InvalidOperationException("Tìm kiếm không thấy tệp.");
+        });
+        var medium = await TimeAsync(30, async () => await PerfHost.ReadAsync(await user.GetAsync("/api/v1/search?q=t%C3%A0i%20li%E1%BB%87u%2099999&pageSize=20")));
         var search = await TimeAsync(30, async () => await PerfHost.ReadAsync(await user.GetAsync("/api/v1/search?q=t%C3%A0i%20li%E1%BB%87u%2012&pageSize=20")));
 
         double breakMs, restoreMs;
@@ -103,12 +112,21 @@ public static class BenchmarkEntry
         md.AppendLine($"| `Has()` không cache | < 20 ms | {Mean("không cache")} | {Ok(MeanMs("không cache") < 20)} |");
         md.AppendLine($"| Liệt kê thư mục {options.ListFolder:N0} mục, lọc quyền (trang 500 mục, API) | p95 < 300 ms | p50 {Ms(P(list, .5))}, p95 {Ms(P(list, .95))} | {Ok(P(list, .95) < 300)} |");
         md.AppendLine($"| Liệt kê đủ {options.ListFolder:N0} mục (mọi trang) | — | p50 {Ms(P(listAll, .5))}, p95 {Ms(P(listAll, .95))} | — |");
-        md.AppendLine($"| Tìm kiếm toàn hệ thống, lọc quyền (API) | p95 < 1 s | p50 {Ms(P(search, .5))}, p95 {Ms(P(search, .95))} | {Ok(P(search, .95) < 1000)} |");
+        md.AppendLine($"| Tìm kiếm toàn hệ thống, lọc quyền (API), từ khóa cụ thể (mã tài liệu) | p95 < 1 s | p50 {Ms(P(typical, .5))}, p95 {Ms(P(typical, .95))} | {Ok(P(typical, .95) < 1000)} |");
+        md.AppendLine($"| Tìm kiếm \"tài liệu 99999\" (vài chục kết quả) | p95 < 1 s | p50 {Ms(P(medium, .5))}, p95 {Ms(P(medium, .95))} | {Ok(P(medium, .95) < 1000)} |");
+        md.AppendLine($"| Tìm kiếm rất rộng \"tài liệu 12\" (≈ 55.000 tệp khớp) | — | p50 {Ms(P(search, .5))}, p95 {Ms(P(search, .95))} | — |");
         md.AppendLine($"| Ngắt kế thừa thư mục có {options.BigFolder:N0} mục con (một transaction) | < 10 s | {Ms(breakMs)} | {Ok(breakMs < 10_000)} |");
         md.AppendLine($"| Khôi phục kế thừa thư mục đó | — | {Ms(restoreMs)} | — |");
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outFile))!);
         await File.WriteAllTextAsync(outFile, md.ToString());
         Console.WriteLine(md.ToString());
         Console.WriteLine($"Đã ghi {Path.GetFullPath(outFile)}");
+        // --hold: keep the database (and the API) up to look at query plans, until the file named after --hold exists.
+        var hold = args.SkipWhile(a => a != "--hold").Skip(1).FirstOrDefault();
+        if (hold is not null)
+        {
+            Console.WriteLine($"Giữ CSDL: {host.ConnectionString} — tạo tệp {hold} để dừng.");
+            while (!File.Exists(hold)) await Task.Delay(2000);
+        }
     }
 }

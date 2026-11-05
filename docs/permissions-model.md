@@ -94,3 +94,20 @@ Màn hình *Báo cáo quyền truy cập → Kiểm tra quyền* (và nút "Ki�
 | IDOR, dò token liên kết, tự nâng quyền, khách liệt kê người dùng | `SecurityTests`, `SharingModelTests.Guest_invited_by_email…` |
 | Vòng đời (thùng rác 2 tầng + khôi phục quyền, lưu giữ, giữ pháp lý, nghỉ việc, chuyển quyền sở hữu, di chuyển Drive ↔ Space) | `AdvancedAdminTests`, `SpaceTests` |
 | Hiệu năng (đặc tả 4.5) | `tests/BlueDrive.Benchmarks` → [`perf-permissions.md`](perf-permissions.md) |
+
+## 6. Tiêu chí hoàn thành (đặc tả mục 16)
+
+| Tiêu chí | Kết quả | Kiểm chứng |
+|---|---|---|
+| Chia sẻ một tệp trong Space cho người ngoài Space: thấy tệp trong "Được chia sẻ với tôi", không thấy thư mục cha hay tệp khác | Đạt | `PermissionModelTests`, `SyncTests.Shared_root_lists_shares…` |
+| Ngắt kế thừa thư mục và bỏ nhóm Thành viên: thành viên không còn thấy thư mục ở mọi kênh (web, tìm kiếm, mobile, desktop sync, dashboard) | Đạt (không có kênh WebDAV) | `PermissionModelTests`, `SyncTests`, E2E `permissions.spec.ts` (ngắt kế thừa) |
+| "Kiểm tra quyền" giải thích đúng nguồn quyền (trực tiếp / kế thừa / nhóm lồng / đơn vị cha / link) và hạn chế | Đạt | `PermissionModelTests` (Explain), `AdvancedAdminTests.Access_reports_explain…` |
+| Người Chỉ xem mở được tệp có watermark, không tải / in / sao chép, tệp không có trong desktop sync | Đạt | `AdvancedAdminTests.Office_opens_to_edit_comment_or_view…`, `SyncTests.Shared_root…`, E2E (hình mờ) |
+| Link "Bất kỳ ai" có mật khẩu và hạn dùng; bị chặn khi chính sách tenant / Space / nhãn không cho phép | Đạt phần hạn dùng và chặn theo chính sách; **không có mật khẩu** (lệch có chủ đích, xem `sharing-policies.md` mục 3) | `SharingModelTests`, `AdvancedAdminTests.A_label_restricts_sharing…`, E2E (liên kết) |
+| Yêu cầu truy cập: gửi, duyệt với cấp khác, người yêu cầu nhận thông báo và mở được | Đạt | `SharingModelTests`, E2E (yêu cầu quyền) |
+| Quyền có hạn tự hết hiệu lực và nhắc trước 3 ngày | Đạt | `SharingModelTests` (hết hạn, nhắc) |
+| Nghỉ việc: chuyển toàn bộ Drive của tôi cho người khác, chia sẻ cũ vẫn hoạt động | Đạt | `AdvancedAdminTests.Offboarding_hands_the_drive_over…`, E2E (nghỉ việc) |
+| Hold chặn xóa vĩnh viễn, kể cả với quản trị | Đạt | `AdvancedAdminTests.A_hold_blocks_every_purge…` |
+| Property-based test: PermissionService ≡ ReferenceEvaluator trên 10 000 kịch bản | Đạt | `PermissionEngineProperties` với `PERM_PROPERTY_RUNS=800` (800 thế giới × 13 trạng thái = 10 400 kịch bản, mỗi kịch bản so mọi cặp người dùng × nút) |
+| Đạt mục tiêu hiệu năng mục 4.5 | Đạt (1 triệu tệp: Has() 0,06 ms / 14 ms, liệt kê p95 250 ms, tìm kiếm p95 0,54–0,66 s, ngắt kế thừa 100.000 mục 2,6 s) | [`perf-permissions.md`](perf-permissions.md) |
+| Toàn bộ UI / thông báo / tài liệu tiếng Việt; không TODO / stub | Đạt | `scripts/ci.ps1` (lint), rà soát mã |
