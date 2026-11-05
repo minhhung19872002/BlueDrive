@@ -165,7 +165,7 @@ test('chia sẻ qua liên kết: mặc định Hạn chế, chọn "Bất kỳ a
     page.waitForResponse((r) => r.url().includes('/api/v1/share-links') && ['PUT', 'POST'].includes(r.request().method()) && r.ok()),
     page.locator('.ant-select-dropdown:visible .ant-select-item-option', { hasText: 'Bất kỳ ai có liên kết' }).click(),
   ])
-  await expect(dialog.getByText('Bất kỳ ai có liên kết').first()).toBeVisible()
+  await expect(dialog.locator('.ant-select-selection-item', { hasText: 'Bất kỳ ai có liên kết' })).toBeVisible()
   await expect(linkBox).toHaveValue(link)
   await pub.reload()
   await expect(pub.getByText(/Chia sẻ bởi|được chia sẻ/i).first()).toBeVisible({ timeout: 15_000 })

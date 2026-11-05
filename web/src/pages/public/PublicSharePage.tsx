@@ -90,11 +90,18 @@ export default function PublicSharePage() {
   }, [autoOpen, open])
 
   const access = open.data?.accessToken
+  const staleSession = open.isError && errorStatus(open.error) === 401
+  const logout = useAuthStore((s) => s.logout)
+  // The stored session no longer works (expired, signed out elsewhere): drop it so "Đăng nhập" shows the login form instead of
+  // bouncing straight back here.
+  useEffect(() => {
+    if (staleSession && loggedIn) logout()
+  }, [staleSession, loggedIn, logout])
 
   let body
   if (info.isLoading) body = <Spin size="large" />
   else if (info.isError) body = <ShareError error={info.error} />
-  else if (data && needsLogin)
+  else if (data && (needsLogin || staleSession))
     body = (
       <Result
         icon={<LoginOutlined />}
