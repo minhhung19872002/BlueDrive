@@ -67,7 +67,7 @@ BlueDrive là hệ thống lưu trữ, tìm kiếm, khai thác và chia sẻ s�
 ![Nhóm](images/nhom-cua-toi.png)
 
 - Tạo nhóm tài nguyên của nhóm/đơn vị, mời thành viên với vai trò: *Trưởng nhóm, Quản lý, Chỉnh sửa, Tải lên, Phê duyệt, Chỉ xem*. Trưởng nhóm/quản lý có thể **khóa nhóm** (chỉ xem, không ghi).
-- Chỉ người **quản trị nhóm** (trưởng nhóm, quản lý nhóm có quyền *Nhóm tài nguyên - Chỉnh sửa*, hoặc quản trị hệ thống) thấy nút **Thành viên**, tab **Cài đặt** và **Phân quyền**, thêm/xóa người và đổi vai trò. Thành viên khác chỉ làm việc với tài liệu: không xem danh sách thành viên, không tự rời nhóm (nhờ người quản trị nhóm gỡ ra).
+- Chỉ người **quản trị nhóm** (trưởng nhóm, quản lý nhóm có quyền *Nhóm tài nguyên - Chỉnh sửa*, hoặc quản trị hệ thống) thấy nút **Thành viên**, các tab **Thư viện**, **Tổng hợp tư liệu**, **Lịch sử chỉnh sửa**, **Cài đặt** và **Phân quyền**, thêm/xóa người và đổi vai trò. Thành viên khác chỉ làm việc với tài liệu: không xem danh sách thành viên, không tự rời nhóm (nhờ người quản trị nhóm gỡ ra).
 - Trong nhóm có đầy đủ thao tác như Tài liệu của tôi (tạo mới, tải lên, tìm kiếm, chia sẻ, phiên bản, thảo luận).
 - Nhóm là của hệ thống, không thuộc riêng ai: menu **Nhóm** liệt kê các nhóm bạn là thành viên. Khi chia sẻ một tài liệu, gõ tên nhóm (ví dụ *DEV*) vào ô **Thêm người, nhóm hoặc đơn vị**, mục **Nhóm**: mọi thành viên của nhóm được quyền đã chọn, kể cả người vào nhóm sau.
 - Tab **Tổng hợp tư liệu**: số lượng, dung lượng tư liệu theo từng thành viên; lọc tư liệu theo thành viên.

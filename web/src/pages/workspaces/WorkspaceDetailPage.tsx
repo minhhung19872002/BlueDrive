@@ -137,11 +137,12 @@ export default function WorkspaceDetailPage() {
             items={[
               { key: 'home', label: <span><HomeOutlined /> {t('spaceHome.tab')}</span> },
               { key: 'files', label: <span><FolderOutlined /> {t('collab.workspaceTabs.files')}</span> },
-              { key: 'library', label: <span><TableOutlined /> {t('library.tab')}</span> },
-              { key: 'summary', label: <span><BarChartOutlined /> {t('collab.workspaceTabs.summary')}</span> },
-              { key: 'activity', label: <span><HistoryOutlined /> {t('collab.workspaceTabs.activity')}</span> },
+              // Library views, summary per member, editing history, settings and permissions: who administers the group.
               ...(isManager
                 ? [
+                    { key: 'library', label: <span><TableOutlined /> {t('library.tab')}</span> },
+                    { key: 'summary', label: <span><BarChartOutlined /> {t('collab.workspaceTabs.summary')}</span> },
+                    { key: 'activity', label: <span><HistoryOutlined /> {t('collab.workspaceTabs.activity')}</span> },
                     { key: 'sharing', label: <span><ShareAltOutlined /> {t('spaceSettings.tab')}</span> },
                     { key: 'permissions', label: <span><SafetyOutlined /> {t('spacePermissions.tab')}</span> },
                   ]
@@ -149,10 +150,10 @@ export default function WorkspaceDetailPage() {
             ]}
           />
           {tab === 'files' && explorer}
-          {tab === 'summary' && <WorkspaceSummaryTab workspaceId={id} />}
-          {tab === 'activity' && <WorkspaceActivityTab workspaceId={id} />}
+          {tab === 'summary' && isManager && <WorkspaceSummaryTab workspaceId={id} />}
+          {tab === 'activity' && isManager && <WorkspaceActivityTab workspaceId={id} />}
           {tab === 'home' && <WorkspaceHomeTab workspaceId={id} />}
-          {tab === 'library' && <LibraryViewTab workspaceId={id} />}
+          {tab === 'library' && isManager && <LibraryViewTab workspaceId={id} />}
           {tab === 'permissions' && isManager && <WorkspacePermissionsTab workspaceId={id} />}
           {tab === 'sharing' && isManager && w && <WorkspaceSettingsTab workspaceId={id} name={w.name} />}
         </>

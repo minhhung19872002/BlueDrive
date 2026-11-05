@@ -184,12 +184,14 @@ public sealed record WorkspaceSummaryDto(int TotalFiles, long TotalBytes, IReadO
 
 public sealed record GetWorkspaceSummaryQuery(Guid WorkspaceId, Guid? MemberId, MediaType? MediaType) : PageQuery, IRequest<WorkspaceSummaryDto>;
 
-public sealed class GetWorkspaceSummaryHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets) : IRequestHandler<GetWorkspaceSummaryQuery, WorkspaceSummaryDto>
+public sealed class GetWorkspaceSummaryHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IContentTicketService tickets)
+    : IRequestHandler<GetWorkspaceSummaryQuery, WorkspaceSummaryDto>
 {
     public async Task<WorkspaceSummaryDto> Handle(GetWorkspaceSummaryQuery q, CancellationToken ct)
     {
         var uid = me.RequireUserId();
         var access = await auth.EnsureAsync(uid, ResourceType.Workspace, q.WorkspaceId, AccessLevel.View, ct);
+        await Workspaces.WorkspaceManagement.EnsureAdministersAsync(db, auth, perms, uid, q.WorkspaceId, ct);
         var files = DriveProjection.VisibleApproval(db.Files.AsNoTracking().Where(f => f.WorkspaceId == q.WorkspaceId && !f.IsDeleted), access, uid);
         var stats = await files.GroupBy(f => f.CreatedBy).Select(g => new { UserId = g.Key, Count = g.Count(), Bytes = g.Sum(f => f.SizeBytes), Last = g.Max(f => f.CreatedAt) }).ToListAsync(ct);
         var memberIds = await db.WorkspaceMembers.Where(m => m.WorkspaceId == q.WorkspaceId).Select(m => m.UserId).ToListAsync(ct);
@@ -218,7 +220,8 @@ public sealed record ActivityDto(long Id, DateTime OccurredAt, Guid? UserId, str
 /// <summary>#31: editing timeline of a group workspace, filterable by member.</summary>
 public sealed record GetWorkspaceActivityQuery(Guid WorkspaceId, Guid? UserId, AuditAction? Action, DateTime? From, DateTime? To) : PageQuery, IRequest<PagedResult<ActivityDto>>;
 
-public sealed class GetWorkspaceActivityHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth) : IRequestHandler<GetWorkspaceActivityQuery, PagedResult<ActivityDto>>
+public sealed class GetWorkspaceActivityHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms)
+    : IRequestHandler<GetWorkspaceActivityQuery, PagedResult<ActivityDto>>
 {
     private static readonly AuditAction[] ContentActions =
     [
@@ -229,7 +232,10 @@ public sealed class GetWorkspaceActivityHandler(IAppDbContext db, ICurrentUser m
 
     public async Task<PagedResult<ActivityDto>> Handle(GetWorkspaceActivityQuery q, CancellationToken ct)
     {
-        await auth.EnsureAsync(me.RequireUserId(), ResourceType.Workspace, q.WorkspaceId, AccessLevel.View, ct);
+        var uid = me.RequireUserId();
+        await auth.EnsureAsync(uid, ResourceType.Workspace, q.WorkspaceId, AccessLevel.View, ct);
+        // Who did what to which document (names included) is for who administers the group.
+        await Workspaces.WorkspaceManagement.EnsureAdministersAsync(db, auth, perms, uid, q.WorkspaceId, ct);
         var query = db.AuditLogs.AsNoTracking().Where(a => a.WorkspaceId == q.WorkspaceId && ContentActions.Contains(a.Action));
         if (q.UserId.HasValue) query = query.Where(a => a.UserId == q.UserId);
         if (q.Action.HasValue) query = query.Where(a => a.Action == q.Action);

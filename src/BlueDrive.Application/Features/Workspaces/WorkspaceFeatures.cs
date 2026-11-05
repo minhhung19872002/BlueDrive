@@ -61,6 +61,15 @@ public static class WorkspaceManagement
         ws.OwnerId == userId || await perms.HasAsync(userId, Perm.WorkspaceAdmin, ct)
         || (await IsManagerAsync(db, auth, userId, ws, ct) && await perms.HasAsync(userId, Perm.WorkspaceEdit, ct));
 
+    /// <summary>Group tabs about its people (members, summary per member, editing history): administrators only.</summary>
+    public static async Task EnsureAdministersAsync(IAppDbContext db, IResourceAuthorizationService auth, IPermissionService perms, Guid userId, Guid workspaceId,
+        CancellationToken ct)
+    {
+        var ws = await db.Workspaces.AsNoTracking().FirstAsync(w => w.Id == workspaceId, ct);
+        if (!await CanAdministerAsync(db, auth, perms, userId, ws, ct))
+            throw new ForbiddenException("Chỉ người quản trị nhóm được xem mục này.");
+    }
+
     private static async Task<bool> IsManagerAsync(IAppDbContext db, IResourceAuthorizationService auth, Guid userId, Workspace ws, CancellationToken ct) =>
         await db.WorkspaceMembers.AnyAsync(m => m.WorkspaceId == ws.Id && m.UserId == userId
                                                 && (m.MemberRole == WorkspaceMemberRole.Manager || m.MemberRole == WorkspaceMemberRole.Owner), ct)

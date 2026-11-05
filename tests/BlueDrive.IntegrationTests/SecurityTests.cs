@@ -29,6 +29,10 @@ public class SecurityTests(ApiFactory factory)
         (await member.GetAsync($"/api/v1/workspaces/{ws}")).StatusCode.Should().Be(HttpStatusCode.OK);
         (await member.GetAsync($"/api/v1/workspaces/{ws}/members")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await member.GetAsync($"/api/v1/workspaces/{ws}/group-members")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await member.GetAsync($"/api/v1/workspaces/{ws}/summary")).StatusCode.Should().Be(HttpStatusCode.Forbidden, "summary per member");
+        (await member.GetAsync($"/api/v1/workspaces/{ws}/activity")).StatusCode.Should().Be(HttpStatusCode.Forbidden, "who did what");
+        (await lead.GetAsync($"/api/v1/workspaces/{ws}/summary")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await lead.GetAsync($"/api/v1/workspaces/{ws}/activity")).StatusCode.Should().Be(HttpStatusCode.OK);
         (await (await member.GetAsync($"/api/v1/workspaces/{ws}/home")).ReadJsonAsync()).GetProperty("members").GetArrayLength().Should().Be(0);
         (await member.DeleteAsync($"/api/v1/workspaces/{ws}/members/{memberId}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await member.DeleteAsync($"/api/v1/workspaces/{ws}/members/{otherId}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);

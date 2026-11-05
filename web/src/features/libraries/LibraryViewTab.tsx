@@ -148,7 +148,8 @@ export default function LibraryViewTab({ workspaceId }: { workspaceId: string })
           value={viewId ?? view?.id ?? ''}
           onChange={(v) => setViewId(v || undefined)}
           options={[
-            ...(view && !view.id ? [{ value: '', label: view.name }] : []),
+            // The built-in view (empty id) is not among the saved ones: list it under its name, never its id.
+            ...(view && !(views.data ?? []).some((v) => v.id === view.id) ? [{ value: view.id ?? '', label: view.name }] : []),
             ...(views.data ?? []).map((v) => ({ value: v.id, label: `${v.name}${v.isPublic ? '' : ` (${t('library.personal')})`}` })),
           ]}
           aria-label={t('library.view')}
