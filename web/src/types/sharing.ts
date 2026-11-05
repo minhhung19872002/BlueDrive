@@ -1,7 +1,8 @@
 import type { BreadcrumbItem, DriveItem, MediaType } from './drive'
 
 export type ResourceType = 'workspace' | 'folder' | 'file'
-export type PrincipalType = 'user' | 'group' | 'organization' | 'role'
+/** "space": a group Space (Nhóm, e.g. DEV) — everyone in it. */
+export type PrincipalType = 'user' | 'group' | 'organization' | 'role' | 'space'
 
 /**
  * Access level. The API serializes it as a snake_case string ("view"...) because of the global

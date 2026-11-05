@@ -180,13 +180,24 @@ public sealed class GrantItemPermissionHandler(IAppDbContext db, ICurrentUser me
             byEmail.Add((id, isGuest));
         }
         var emailTargets = byEmail.Select(x => new PrincipalTarget(x.IsGuest ? PrincipalKind.Guest : PrincipalKind.User, x.Id)).ToList();
-        var targets = cmd.Targets.Concat(emailTargets).Distinct().ToList();
+        var targets = new List<PrincipalTarget>();
+        foreach (var t in cmd.Targets.Concat(emailTargets).Distinct())
+        {
+            // A group Space (e.g. "DEV", by its id) stands for all its groups, so everyone in it — and whoever joins later — gets the level.
+            if (t.Kind == PrincipalKind.SpaceGroup && !await db.Principals.AnyAsync(p => p.Id == t.Id && p.Kind == PrincipalKind.SpaceGroup, ct))
+            {
+                var groups = await db.Principals.AsNoTracking().Where(p => p.Kind == PrincipalKind.SpaceGroup && p.RefId == t.Id).Select(p => p.Id).ToListAsync(ct);
+                if (groups.Count == 0) throw new NotFoundException("Không tìm thấy nhóm được chọn.");
+                targets.AddRange(groups.Select(g => new PrincipalTarget(PrincipalKind.SpaceGroup, g)));
+            }
+            else targets.Add(t);
+        }
         await policy.EnsureCanShareAsync(uid, cmd.ItemId, targets.Where(t => !(t.Kind == PrincipalKind.User && t.Id == uid))
             .Select(t => (t.Kind == PrincipalKind.Guest ? PrincipalKind.User : t.Kind, t.Id)).ToList(), breaksInheritance: true, ct);
         var count = 0;
         foreach (var t in targets)
         {
-            if (t.Kind is not (PrincipalKind.User or PrincipalKind.Group or PrincipalKind.OrgUnit or PrincipalKind.OrgUnitTree or PrincipalKind.Guest))
+            if (t.Kind is not (PrincipalKind.User or PrincipalKind.Group or PrincipalKind.OrgUnit or PrincipalKind.OrgUnitTree or PrincipalKind.Guest or PrincipalKind.SpaceGroup))
                 throw new AppException("Chỉ cấp quyền cho người dùng, khách, nhóm hoặc đơn vị.");
             if (!emailTargets.Contains(t) && !await db.Principals.AnyAsync(p => p.Id == t.Id && p.Kind == t.Kind, ct))
                 throw new NotFoundException("Không tìm thấy người, nhóm hoặc đơn vị được chọn.");

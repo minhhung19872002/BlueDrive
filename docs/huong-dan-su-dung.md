@@ -62,12 +62,13 @@ BlueDrive là hệ thống lưu trữ, tìm kiếm, khai thác và chia sẻ s�
 
 ![Thùng rác](images/thung-rac.png)
 
-## 7. Nhóm của tôi — tư liệu dùng chung (#28–38, #57–58)
+## 7. Nhóm — tư liệu dùng chung (#28–38, #57–58)
 
-![Nhóm của tôi](images/nhom-cua-toi.png)
+![Nhóm](images/nhom-cua-toi.png)
 
 - Tạo nhóm tài nguyên của nhóm/đơn vị, mời thành viên với vai trò: *Trưởng nhóm, Quản lý, Chỉnh sửa, Tải lên, Phê duyệt, Chỉ xem*. Trưởng nhóm/quản lý có thể **khóa nhóm** (chỉ xem, không ghi).
 - Trong nhóm có đầy đủ thao tác như Tài liệu của tôi (tạo mới, tải lên, tìm kiếm, chia sẻ, phiên bản, thảo luận).
+- Nhóm là của hệ thống, không thuộc riêng ai: menu **Nhóm** liệt kê các nhóm bạn là thành viên. Khi chia sẻ một tài liệu, gõ tên nhóm (ví dụ *DEV*) vào ô **Thêm người, nhóm hoặc đơn vị**, mục **Nhóm**: mọi thành viên của nhóm được quyền đã chọn, kể cả người vào nhóm sau.
 - Tab **Tổng hợp tư liệu**: số lượng, dung lượng tư liệu theo từng thành viên; lọc tư liệu theo thành viên.
 - Tab **Lịch sử chỉnh sửa**: dòng thời gian thao tác của các thành viên.
 - **Quyền kế thừa** (trong hộp thoại **Chia sẻ** của thư mục/tệp): quyền của thư mục được kế thừa xuống mọi thư mục con và tệp bên trong, có thể **ngừng kế thừa** tại một thư mục con.

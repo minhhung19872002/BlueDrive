@@ -1,4 +1,4 @@
-import { ApartmentOutlined, SafetyCertificateOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons'
+import { ApartmentOutlined, SafetyCertificateOutlined, TeamOutlined, UserOutlined, UsergroupAddOutlined } from '@ant-design/icons'
 import type { PrincipalType } from '@/types/sharing'
 
 export default function PrincipalIcon({ type }: { type: PrincipalType }) {
@@ -9,6 +9,8 @@ export default function PrincipalIcon({ type }: { type: PrincipalType }) {
       return <ApartmentOutlined />
     case 'role':
       return <SafetyCertificateOutlined />
+    case 'space':
+      return <UsergroupAddOutlined />
     default:
       return <UserOutlined />
   }

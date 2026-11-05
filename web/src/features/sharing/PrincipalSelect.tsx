@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { qk } from '@/api/queryKeys'
 import { listRoles } from '@/api/roles'
 import { listUserGroups, lookupUsers } from '@/api/users'
+import { listMyWorkspaces } from '@/api/workspaces'
 import { useOrgTree } from '@/hooks/useLookups'
 import type { OrganizationTreeNode } from '@/types/admin'
 import type { PrincipalType } from '@/types/sharing'
@@ -68,6 +69,7 @@ export default function PrincipalSelect(props: MultiProps | SingleProps) {
     enabled: types.includes('group'),
   })
   const orgTree = useOrgTree(false)
+  const spaces = useQuery({ queryKey: [...qk.workspaces, 'group'], queryFn: () => listMyWorkspaces('group'), enabled: types.includes('space') })
   const roles = useQuery({ queryKey: [...qk.roles, 'list', ''], queryFn: () => listRoles(), enabled: types.includes('role') })
 
   const groupedOptions = useMemo(() => {
@@ -88,6 +90,14 @@ export default function PrincipalSelect(props: MultiProps | SingleProps) {
       sections.push({
         type: 'group',
         options: (groups.data?.items ?? []).map((g) => ({ value: `group:${g.id}`, label: g.name, type: 'group' as const })),
+      })
+    if (types.includes('space'))
+      sections.push({
+        type: 'space',
+        options: (spaces.data ?? [])
+          .filter((w) => match(w.name))
+          .slice(0, 20)
+          .map((w) => ({ value: `space:${w.id}`, label: w.name, type: 'space' as const })),
       })
     if (types.includes('organization'))
       sections.push({
@@ -122,7 +132,7 @@ export default function PrincipalSelect(props: MultiProps | SingleProps) {
           ),
         })),
       }))
-  }, [types, users.data, groups.data, orgTree.data, roles.data, term, t])
+  }, [types, users.data, groups.data, spaces.data, orgTree.data, roles.data, term, t])
 
   const loading = users.isFetching || groups.isFetching
 

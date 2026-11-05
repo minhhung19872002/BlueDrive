@@ -63,7 +63,7 @@ function KindIcon({ kind }: { kind: PrincipalKind }) {
 function toTarget(value: PrincipalValue): PrincipalTarget {
   const { type, id } = splitPrincipal(value.value)
   // A unit is shared with its sub-units too (as everywhere else in BlueDrive).
-  return { kind: type === 'organization' ? 'org_unit_tree' : (type as PrincipalKind), id }
+  return { kind: type === 'organization' ? 'org_unit_tree' : type === 'space' ? 'space_group' : (type as PrincipalKind), id }
 }
 
 /**
@@ -140,7 +140,7 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
     <>
       {a.canShare && (
         <Space direction="vertical" style={{ width: '100%' }}>
-          <PrincipalSelect multiple types={['user', 'group', 'organization']} value={targets} onChange={setTargets} placeholder={t('sharing.people.addPlaceholder')} />
+          <PrincipalSelect multiple types={['user', 'space', 'group', 'organization']} value={targets} onChange={setTargets} placeholder={t('sharing.people.addPlaceholder')} />
           {(policy.data?.external ?? 'off') !== 'off' && (
             <Select
               mode="tags"

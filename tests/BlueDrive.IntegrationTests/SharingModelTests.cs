@@ -16,6 +16,37 @@ public class SharingModelTests(ApiFactory factory)
     private static object User(Guid id) => new { kind = "user", id };
 
     [Fact]
+    public async Task Sharing_with_a_group_space_reaches_everyone_in_it_and_whoever_joins_later()
+    {
+        // "DEV" is a group Space of the system (menu Nhóm), not anyone's own: sharing with it gives the level to all its members.
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (lead, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (member, memberId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (late, lateId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (outsider, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var dev = (await (await lead.PostAsJsonAsync("/api/v1/workspaces", new { name = "DEV", type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        await (await lead.PostAsJsonAsync($"/api/v1/workspaces/{dev}/members", new { userIds = new[] { memberId }, role = "viewer" })).ReadJsonAsync();
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var file = (await StorageTests.UploadAsync(owner, ws, null, "dac-ta-dev.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+
+        (await member.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await (await owner.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { new { kind = "space_group", id = dev } }, levelId = levels["viewer"], notify = false }))
+            .ReadJsonAsync()).ValueKind.Should().Be(JsonValueKind.Object);
+        (await member.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await lead.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK, "the group's leader is in it too");
+        (await outsider.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        var entries = (await (await owner.GetAsync($"/api/v1/items/{file}/permissions")).ReadJsonAsync()).GetProperty("entries").EnumerateArray()
+            .Where(e => e.GetProperty("principalKind").GetString() == "space_group" && e.GetProperty("origin").GetString() == "direct").Select(e => e.GetProperty("principalName").GetString()).ToList();
+        entries.Should().NotBeEmpty().And.OnlyContain(n => n!.EndsWith("— DEV"));
+
+        // Someone added to DEV afterwards gets it without sharing again.
+        (await late.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        await (await lead.PostAsJsonAsync($"/api/v1/workspaces/{dev}/members", new { userIds = new[] { lateId }, role = "editor" })).ReadJsonAsync();
+        (await late.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
     public async Task Share_with_levels_list_sources_change_and_take_back()
     {
         var (owner, ownerId, _) = await factory.CreateUserClientAsync("bien_tap");

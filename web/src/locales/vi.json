@@ -38,7 +38,7 @@
     "shared": "Được chia sẻ",
     "recent": "Gần đây",
     "starred": "Quan trọng",
-    "workspaces": "Nhóm của tôi",
+    "workspaces": "Nhóm",
     "search": "Tìm kiếm nâng cao",
     "trash": "Thùng rác",
     "admin": "Quản trị",
@@ -1206,7 +1206,8 @@
       "user": "Người dùng",
       "group": "Nhóm người dùng",
       "organization": "Đơn vị",
-      "role": "Vai trò"
+      "role": "Vai trò",
+      "space": "Nhóm"
     },
     "level": "Quyền",
     "levels": {

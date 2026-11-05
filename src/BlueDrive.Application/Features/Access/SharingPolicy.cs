@@ -110,7 +110,9 @@ public sealed class SharingPolicy(IAppDbContext db, ISettingsService settings, I
         var users = targets.Where(t => t.Kind == PrincipalKind.User).Select(t => t.Id).ToList();
         var members = await db.PrincipalMemberships.AsNoTracking().Where(m => users.Contains(m.UserId) && groups.Contains(m.PrincipalId))
             .Select(m => m.UserId).Distinct().CountAsync(ct);
-        if (users.Count != targets.Count || members != users.Count)
+        // The Space's own groups are inside it; any other group, unit or Space is outside.
+        var inside = users.Count + targets.Count(t => t.Kind == PrincipalKind.SpaceGroup && groups.Contains(t.Id));
+        if (inside != targets.Count || members != users.Count)
             throw new ForbiddenException("Space này chỉ cho phép thành viên chia sẻ với người trong Space.");
     }
 }

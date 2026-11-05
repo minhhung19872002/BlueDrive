@@ -41,7 +41,7 @@ Cột "Kết quả mong đợi" ghi "Thành công" nghĩa là thao tác thực h
 | 24 | Đổi tên, sao chép, cắt, sao chép tới, xem thông tin, xóa | F2 đổi tên; Ctrl+C/Ctrl+V; Ctrl+X/Ctrl+V; Sao chép tới nhóm khác; panel thông tin; Del | | Đúng; panel có kích thước, người tạo, vị trí, phiên bản, ai có quyền | ☐ | ☐ | |
 | 26 | Quản lý, cập nhật, theo dõi phiên bản | Sửa trực tuyến, đóng; tải lên phiên bản mới; xem/tải phiên bản cũ; khôi phục phiên bản 1 | | Mỗi lần lưu tạo 1 phiên bản; khôi phục tạo phiên bản mới | ☐ | ☐ | |
 | 27 | Thảo luận trong chi tiết tài liệu | Tab Thảo luận: bình luận, trả lời, @nhắc tên, đính kèm, sửa/xóa bình luận của mình | 2 người cùng mở | Hiện thời gian thực; người được nhắc nhận thông báo; người không có quyền xem không thấy | ☐ | ☐ | |
-| 28 | Thư mục/tư liệu dùng chung theo nhóm, đơn vị | Nhóm của tôi > Tạo nhóm (nhóm/đơn vị); tạo thư mục dùng chung | | Nhóm hiện ở menu trái của thành viên | ☐ | ☐ | |
+| 28 | Thư mục/tư liệu dùng chung theo nhóm, đơn vị | Nhóm > Tạo nhóm (nhóm/đơn vị); tạo thư mục dùng chung | | Nhóm hiện ở menu trái của thành viên | ☐ | ☐ | |
 | 29 | Tổng hợp tư liệu thành viên | Mở nhóm > Tổng hợp tư liệu; lọc theo thành viên | | Số lượng, dung lượng theo thành viên đúng | ☐ | ☐ | |
 | 30 | Phân quyền tư liệu cho thành viên | Quản lý quyền truy cập thư mục: Xem cho 1 thành viên, Chỉnh sửa cho người khác | | Thao tác đúng mức quyền | ☐ | ☐ | |
 | 31 | Lịch sử chỉnh sửa theo thành viên | Nhóm > Lịch sử chỉnh sửa, lọc thành viên | | Đúng người, đúng thời điểm | ☐ | ☐ | |
