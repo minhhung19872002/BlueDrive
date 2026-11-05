@@ -13,7 +13,7 @@ RUN npm run build
 
 # ---------- Runtime stage ----------
 # nginx stable branch; apk upgrade picks up Alpine security fixes released after the base image (Trivy gate in CI).
-FROM nginx:1.30-alpine
+FROM nginx:1.31-alpine
 RUN apk upgrade --no-cache
 
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
