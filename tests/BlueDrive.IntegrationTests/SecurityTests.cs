@@ -17,8 +17,8 @@ public class SecurityTests(ApiFactory factory)
         var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
         var (other, otherId, _) = await factory.CreateUserClientAsync("bien_tap");
         var ws = await StorageTests.PersonalWorkspaceAsync(owner);
-        var folder = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Hồ sơ mật danh K7" })).ReadJsonAsync()).GetProperty("id").GetGuid();
-        var file = (await StorageTests.UploadAsync(owner, ws, folder, "bao-cao-bi-mat-k7.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var folder = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Hồ sơ mật danh Kestrel" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        var file = (await StorageTests.UploadAsync(owner, ws, folder, "bao-cao-bi-mat-kestrel.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
         string[] reads =
         [
             $"/api/v1/files/{file}", $"/api/v1/files/{file}/download-url", $"/api/v1/files/{file}/versions", $"/api/v1/items/{file}/permissions",
@@ -30,7 +30,7 @@ public class SecurityTests(ApiFactory factory)
             (await owner.GetAsync(url)).IsSuccessStatusCode.Should().BeTrue($"{url} exists for the owner");
             var res = await other.GetAsync(url);
             res.IsSuccessStatusCode.Should().BeFalse($"{url} must not answer someone without access");
-            (await res.Content.ReadAsStringAsync()).Should().NotContain("K7", $"{url} must not leak names");
+            (await res.Content.ReadAsStringAsync()).Should().NotContainEquivalentOf("kestrel", $"{url} must not leak names (a word: a random traceId can hold any short code)");
         }
         // Writes with the ids: refused, nothing changes.
         (await other.PutAsJsonAsync($"/api/v1/files/{file}/name", new { name = "da-doi.png" })).IsSuccessStatusCode.Should().BeFalse();
@@ -39,9 +39,9 @@ public class SecurityTests(ApiFactory factory)
             .IsSuccessStatusCode.Should().BeFalse();
         (await other.PostAsJsonAsync("/api/v1/items/move", new { items = new[] { new { type = "file", id = file } }, targetWorkspaceId = await StorageTests.PersonalWorkspaceAsync(other), targetFolderId = (Guid?)null }))
             .IsSuccessStatusCode.Should().BeFalse();
-        (await (await owner.GetAsync($"/api/v1/files/{file}")).ReadJsonAsync()).GetProperty("name").GetString().Should().Be("bao-cao-bi-mat-k7.png");
+        (await (await owner.GetAsync($"/api/v1/files/{file}")).ReadJsonAsync()).GetProperty("name").GetString().Should().Be("bao-cao-bi-mat-kestrel.png");
         // Search and "recent" of the other user do not count it.
-        (await (await other.GetAsync("/api/v1/search?q=k7")).ReadJsonAsync()).GetProperty("total").GetInt32().Should().Be(0);
+        (await (await other.GetAsync("/api/v1/search?q=kestrel")).ReadJsonAsync()).GetProperty("total").GetInt32().Should().Be(0);
     }
 
     [Fact]
