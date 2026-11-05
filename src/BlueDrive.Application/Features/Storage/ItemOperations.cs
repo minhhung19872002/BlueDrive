@@ -85,7 +85,8 @@ public static class FolderChain
     }
 }
 
-public sealed record UpdateFolderCommand(Guid Id, string? Name, bool? RequiresApproval) : IRequest<Unit>;
+/// <summary>Renames a folder. Approval of uploads is the library's setting ("Phê duyệt nội dung"), not set per folder.</summary>
+public sealed record UpdateFolderCommand(Guid Id, string? Name) : IRequest<Unit>;
 
 public sealed class UpdateFolderHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IAuditLogger audit) : IRequestHandler<UpdateFolderCommand, Unit>
 {
@@ -103,15 +104,6 @@ public sealed class UpdateFolderHandler(IAppDbContext db, ICurrentUser me, IReso
             folder.Name = name;
             await db.SaveChangesAsync(ct);
             await audit.LogAsync(new AuditEntry(AuditAction.Rename, ResourceType.Folder, folder.Id, folder.Name, folder.WorkspaceId, new { from = old, to = name }), ct);
-        }
-        if (cmd.RequiresApproval is { } ra)
-        {
-            await auth.EnsureAsync(uid, ResourceType.Folder, folder.Id, AccessLevel.Manage, ct);
-            folder.RequiresApproval = ra;
-            await db.SaveChangesAsync(ct);
-            // Apply to sub-folders so the rule covers the whole subtree.
-            await db.Folders.Where(f => f.Path.StartsWith(folder.Path)).ExecuteUpdateAsync(s => s.SetProperty(f => f.RequiresApproval, ra), ct);
-            await audit.LogAsync(new AuditEntry(AuditAction.ConfigChange, ResourceType.Folder, folder.Id, folder.Name, folder.WorkspaceId, new { requiresApproval = ra }), ct);
         }
         return Unit.Value;
     }

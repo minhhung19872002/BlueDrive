@@ -133,7 +133,7 @@ public sealed class SyncBatchHandler(IAppDbContext db, ICurrentUser me, ISender 
                         id = op.ItemId ?? throw new AppException("Thiếu item_id.");
                         await SyncPreconditions.CheckAsync(db, access, uid, id, op.IfMatch, ct);
                         if (await TypeOfAsync(id, ct) == "file") await mediator.Send(new RenameFileCommand(id, op.Name ?? ""), ct);
-                        else await mediator.Send(new UpdateFolderCommand(id, op.Name, null), ct);
+                        else await mediator.Send(new UpdateFolderCommand(id, op.Name), ct);
                         break;
                     case "delete":
                         id = op.ItemId ?? throw new AppException("Thiếu item_id.");

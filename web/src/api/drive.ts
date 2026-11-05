@@ -53,8 +53,8 @@ export async function createFolder(workspaceId: string, parentId: string | null,
   return data
 }
 
-export async function updateFolder(id: string, body: { name?: string | null; requiresApproval?: boolean | null }): Promise<void> {
-  await api.put(`/folders/${id}`, { name: body.name ?? null, requiresApproval: body.requiresApproval ?? null })
+export async function updateFolder(id: string, body: { name?: string | null }): Promise<void> {
+  await api.put(`/folders/${id}`, { name: body.name ?? null })
 }
 
 /** `recordView` = the user actually opened the file (adds it to "Gần đây"); false for info panels. */
