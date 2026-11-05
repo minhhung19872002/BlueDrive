@@ -2,7 +2,7 @@
 
 Dùng cho Chủ đầu tư khi vận hành thử (HSMT mục 3.5) và nghiệm thu theo từng dòng chức năng mục 3.2 (HSMT không có mục 25).
 
-**Chuẩn bị**: hệ thống đã cài đặt (`docs/huong-dan-cai-dat.md`), đã nạp dữ liệu mẫu (`scripts/seed.ps1`): tài khoản `canbo1`, `canbo2` (Biên tập/Tải lên), `canbo3` (Phê duyệt), `canbo4` (Chỉ xem), `canbo5` (Biên tập), mật khẩu ban đầu `DEMO_PASSWORD` trong `deploy/.env` (sinh ngẫu nhiên khi cài đặt hoặc khi chạy `scripts/seed.*`, đổi khi đăng nhập lần đầu); 2 nhóm tài nguyên; tệp mẫu các loại. Cấu hình SMTP để kiểm tra email.
+**Chuẩn bị**: hệ thống đã cài đặt (`docs/huong-dan-cai-dat.md`), đã nạp dữ liệu mẫu (`scripts/seed.ps1`): tài khoản `canbo1`, `canbo2` (Biên tập/Tải lên), `canbo3` (Phê duyệt), `canbo4` (Chỉ xem), `canbo5` (Chỉnh sửa), mật khẩu ban đầu `DEMO_PASSWORD` trong `deploy/.env` (sinh ngẫu nhiên khi cài đặt hoặc khi chạy `scripts/seed.*`, đổi khi đăng nhập lần đầu); 2 nhóm tài nguyên; tệp mẫu các loại. Cấu hình SMTP để kiểm tra email.
 
 Cột "Kết quả mong đợi" ghi "Thành công" nghĩa là thao tác thực hiện được, dữ liệu hiển thị đúng, có thông báo tiếng Việt.
 
@@ -14,7 +14,7 @@ Cột "Kết quả mong đợi" ghi "Thành công" nghĩa là thao tác thực h
 | 2 | Xem danh sách, tra cứu tổ chức | Chuyển dạng cây/bảng; tìm "phong thu nghiem" (không dấu); lọc trạng thái, đơn vị cha | Từ khóa không dấu | Hiển thị đúng; tìm không dấu ra "Phòng Thử nghiệm" | ☐ | ☐ | |
 | 3 | In, xuất Excel, PDF danh sách tổ chức | Lọc rồi bấm Xuất Excel, Xuất PDF, In | Bộ lọc đang áp dụng | Tệp có tiêu đề, ngày xuất, người xuất, đúng dữ liệu đã lọc; bản in có Quốc hiệu | ☐ | ☐ | |
 | 4 | Thêm, sửa, xóa tài khoản và nhóm người dùng | Thêm người dùng (để trống mật khẩu); sửa; khóa/mở khóa; đặt lại mật khẩu; nhập từ Excel theo mẫu; tạo nhóm người dùng, thêm thành viên; xóa | Tệp mẫu Excel có 1 dòng lỗi | Hiện mật khẩu tạm; dòng lỗi báo đúng số dòng và không nhập; người bị khóa không đăng nhập được | ☐ | ☐ | |
-| 5 | Gán người dùng vào đơn vị và vai trò | Chọn nhiều người dùng > Gán hàng loạt đơn vị + vai trò | 2 người dùng, vai trò Biên tập | Người dùng nhận đơn vị và quyền mới ngay | ☐ | ☐ | |
+| 5 | Gán người dùng vào đơn vị và vai trò | Chọn nhiều người dùng > Gán hàng loạt đơn vị + vai trò | 2 người dùng, vai trò Chỉnh sửa | Người dùng nhận đơn vị và quyền mới ngay | ☐ | ☐ | |
 | 6 | Tra cứu, xuất danh sách người dùng | Lọc theo đơn vị (gồm đơn vị con), vai trò, trạng thái, nhóm; xuất Excel/PDF | | Danh sách và tệp xuất đúng bộ lọc | ☐ | ☐ | |
 | 7 | Thêm, sửa, xóa vai trò | Tạo vai trò "Thử nghiệm" (sao chép từ Chỉ xem); sửa; xóa; thử xóa vai trò hệ thống | | Vai trò hệ thống, vai trò đang gán không xóa được | ☐ | ☐ | |
 | 8 | Cấu hình phân quyền chi tiết theo vai trò | Mở ma trận quyền, chọn cả dòng/cột, Lưu; đăng nhập tài khoản có vai trò đó | Quyền Cơ cấu tổ chức - Xem | Người dùng thấy/không thấy chức năng theo ma trận; nhật ký ghi Đổi quyền | ☐ | ☐ | |

@@ -72,7 +72,7 @@ public sealed class OffboardingHandlers(IAppDbContext db, ICurrentUser me, IPerm
             {
                 WorkspaceMemberRole.Owner => "Chủ sở hữu",
                 WorkspaceMemberRole.Manager => "Quản lý",
-                WorkspaceMemberRole.Editor => "Biên tập",
+                WorkspaceMemberRole.Editor => "Chỉnh sửa",
                 _ => "Thành viên",
             }, false)));
         return list;

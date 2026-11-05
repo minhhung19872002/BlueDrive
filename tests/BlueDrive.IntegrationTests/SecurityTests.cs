@@ -89,14 +89,14 @@ public class SecurityTests(ApiFactory factory)
         var folder = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Chung" })).ReadJsonAsync()).GetProperty("id").GetGuid();
         var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
 
-        // Making oneself owner / content manager: needs "Quản lý quyền", which Biên tập does not have.
+        // Making oneself owner / content manager: needs "Quản lý quyền", which Chỉnh sửa does not have.
         foreach (var level in new[] { "owner", "content_manager" })
             (await editor.PostAsJsonAsync($"/api/v1/items/{folder}/permissions", new { targets = new[] { new { kind = "user", id = editorId } }, levelId = levels[level], notify = false }))
                 .StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await editor.PostAsJsonAsync($"/api/v1/workspaces/{ws}/members", new { userIds = new[] { editorId }, role = "manager" })).IsSuccessStatusCode.Should().BeFalse();
         (await editor.PostAsync($"/api/v1/items/{folder}/inheritance", null)).IsSuccessStatusCode.Should().BeFalse();
 
-        // Sharing inside: allowed by default for Biên tập, until the Space turns item sharing off.
+        // Sharing inside: allowed by default for Chỉnh sửa, until the Space turns item sharing off.
         (await editor.PostAsJsonAsync($"/api/v1/items/{folder}/permissions", new { targets = new[] { new { kind = "user", id = friendId } }, levelId = levels["viewer"], notify = false }))
             .IsSuccessStatusCode.Should().BeTrue();
         (await owner.PutAsJsonAsync($"/api/v1/workspaces/{ws}/sharing-policy", new { external = (string?)null, membersShareOutside = false, allowItemSharing = false, accessRequestDeciders = "item_managers" }))

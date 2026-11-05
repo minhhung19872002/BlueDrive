@@ -120,7 +120,7 @@ test('hai người dùng chia sẻ tài liệu qua lại', async ({ browser }) =
   // A → B with edit rights.
   const pageA = await loginPage(browser, a)
   await pageA.goto('/my-drive')
-  await shareWith(pageA, fileA, b, /^Biên tập$/)
+  await shareWith(pageA, fileA, b, /^Chỉnh sửa$/)
 
   // B: notification + "Được chia sẻ" + open + rename (edit right).
   const pageB = await loginPage(browser, b)

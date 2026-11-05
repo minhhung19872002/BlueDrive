@@ -72,13 +72,13 @@ sách: thư mục, tìm kiếm, Gần đây, Có gắn sao, Được chia sẻ v
 
 ## 4. Ví dụ "Vì sao A thấy tệp X"
 
-Space **Truyền thông** có nhóm Space *Thành viên* gồm nhóm **Phòng Nội dung** (A thuộc nhóm con **Tổ Biên tập**, lồng trong Phòng Nội dung). Thư
+Space **Truyền thông** có nhóm Space *Thành viên* gồm nhóm **Phòng Nội dung** (A thuộc nhóm con **Tổ Chỉnh sửa**, lồng trong Phòng Nội dung). Thư
 mục **Chiến dịch 2026** ngắt kế thừa và cấp *Người xem* cho đơn vị **Trung tâm** *gồm đơn vị con*. Tệp **Kế hoạch.docx** nằm trong thư mục đó.
 
-1. Thành viên phẳng của A: {A, Tổ Biên tập, Phòng Nội dung, Phòng Truyền thông (đơn vị của A), Trung tâm (đơn vị cha, dạng "gồm con"), nhóm Space Thành viên — Truyền thông, Mọi người}.
+1. Thành viên phẳng của A: {A, Tổ Chỉnh sửa, Phòng Nội dung, Phòng Truyền thông (đơn vị của A), Trung tâm (đơn vị cha, dạng "gồm con"), nhóm Space Thành viên — Truyền thông, Mọi người}.
 2. Scope của Kế hoạch.docx = Chiến dịch 2026 (nút gần nhất có quyền riêng).
-3. ACE của scope: *Chủ sở hữu — Truyền thông* (Chủ sở hữu, sao chép khi ngắt), *Thành viên — Truyền thông* (Biên tập, sao chép khi ngắt), *Trung tâm gồm con* (Người xem).
-4. A khớp hai ACE: Biên tập (qua nhóm Space ← Phòng Nội dung ← Tổ Biên tập) và Người xem (qua Trung tâm ← Phòng Truyền thông). Quyền thô = OR = Biên tập.
+3. ACE của scope: *Chủ sở hữu — Truyền thông* (Chủ sở hữu, sao chép khi ngắt), *Thành viên — Truyền thông* (Chỉnh sửa, sao chép khi ngắt), *Trung tâm gồm con* (Người xem).
+4. A khớp hai ACE: Chỉnh sửa (qua nhóm Space ← Phòng Nội dung ← Tổ Chỉnh sửa) và Người xem (qua Trung tâm ← Phòng Truyền thông). Quyền thô = OR = Chỉnh sửa.
 5. Hạn chế: vai trò của A là *Chỉ xem* → bỏ mọi quyền ghi. **Kết quả: A xem, tải xuống, in, xem phiên bản — không sửa.**
 
 Màn hình *Báo cáo quyền truy cập → Kiểm tra quyền* (và nút "Kiểm tra quyền" trong hộp thoại quyền) hiển thị đúng chuỗi trên: từng nguồn (trực tiếp

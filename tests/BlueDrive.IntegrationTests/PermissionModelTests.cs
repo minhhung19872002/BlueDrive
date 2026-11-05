@@ -161,7 +161,7 @@ public class PermissionModelTests(ApiFactory factory)
 
             var reference = scope.ServiceProvider.GetRequiredService<ReferencePermissionEvaluator>();
             async Task<AccessRight> R(Guid user, Guid item) => await reference.EvaluateAsync(user, item, CancellationToken.None);
-            (await R(editorId, inC)).Has(AccessRight.EditItems).Should().BeTrue("Thành viên → Biên tập");
+            (await R(editorId, inC)).Has(AccessRight.EditItems).Should().BeTrue("Thành viên → Chỉnh sửa");
             (await R(editorId, inB)).Should().Be(AccessRight.None, "below the break only the owners and the people granted there");
             (await R(ownerId, inB)).Has(AccessRight.ManagePermissions).Should().BeTrue();
             (await R(outsiderId, a)).Has(AccessRight.EditItems).Should().BeTrue();

@@ -34,7 +34,7 @@
     "roles": {
       "owner": "Trưởng nhóm",
       "manager": "Quản lý",
-      "editor": "Biên tập",
+      "editor": "Chỉnh sửa",
       "uploader": "Tải lên",
       "approver": "Phê duyệt",
       "viewer": "Chỉ xem"

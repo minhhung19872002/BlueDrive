@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 namespace BlueDrive.Application.Features.Storage;
 
 // Spec 1.1 "Chuyển quyền sở hữu" (Drive của tôi, like Google): the owner offers an item to someone in the organization; once they accept it is
-// theirs (it goes to their Drive của tôi, keeping what was given to people directly) and the former owner keeps "Biên tập".
+// theirs (it goes to their Drive của tôi, keeping what was given to people directly) and the former owner keeps "Chỉnh sửa".
 
 public sealed record OwnershipTransferDto(Guid Id, Guid ItemId, string ItemType, string ItemName, Guid FromUserId, string FromName, Guid ToUserId, string ToName,
     OwnershipTransferStatus Status, DateTime CreatedAt, DateTime? DecidedAt);
@@ -101,11 +101,11 @@ public sealed class OwnershipHandlers(IAppDbContext db, ICurrentUser me, IUserNo
                 var (node, drive) = await OwnedAsync(t.ItemId, t.FromUserId, ct);
                 var target = await db.Workspaces.Where(w => w.OwnerId == uid && w.Type == WorkspaceType.Personal).Select(w => (Guid?)w.Id).FirstOrDefaultAsync(ct)
                              ?? throw new AppException("Tài khoản của bạn chưa có Drive của tôi.");
-                // The former owner keeps "Biên tập" (a direct grant, which goes with the item).
+                // The former owner keeps "Chỉnh sửa" (a direct grant, which goes with the item).
                 await acl.GrantAsync(node.Id, PrincipalKind.User, t.FromUserId, SystemLevels.Editor, null, uid, ct, "Chủ sở hữu trước");
                 await mover.MoveAsync(uid, new MoveItemsCommand([new ItemRef(t.ItemType, t.ItemId)], target, null), trusted: true, ct);
                 t.Status = OwnershipTransferStatus.Accepted;
-                await notify.NotifyUserAsync(t.FromUserId, "ownership", $"Đã chuyển quyền sở hữu \"{t.ItemName}\"; bạn vẫn có quyền Biên tập", null,
+                await notify.NotifyUserAsync(t.FromUserId, "ownership", $"Đã chuyển quyền sở hữu \"{t.ItemName}\"; bạn vẫn có quyền Chỉnh sửa", null,
                     t.ItemType == "file" ? $"/files/{t.ItemId}" : "/shared", ct);
                 await audit.LogAsync(new AuditEntry(AuditAction.OwnershipTransferred, t.ItemType == "file" ? ResourceType.File : ResourceType.Folder, t.ItemId, t.ItemName,
                     drive.Id, new { from = t.FromUserId, to = uid }), ct);

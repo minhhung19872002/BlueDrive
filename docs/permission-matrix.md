@@ -42,8 +42,8 @@ bảng này và đối chiếu từng ô với mã: sửa cấp quyền mà khô
 | Vai trò | Ảnh hưởng lên quyền trên tư liệu |
 |---|---|
 | Quản trị hệ thống | Không tự thấy nội dung người khác (chỉ qua *Truy cập khẩn cấp*). |
-| Biên tập / Tải lên | Như cấp quyền được cấp. |
-| Phê duyệt | Không tải lên / sửa được dù được cấp "Biên tập". |
+| Chỉnh sửa / Tải lên | Như cấp quyền được cấp. |
+| Phê duyệt | Không tải lên / sửa được dù được cấp "Chỉnh sửa". |
 | Chỉ xem | Chỉ các quyền xem (`Read`), không bình luận trong ONLYOFFICE, không chia sẻ. |
 | Khách | Chỉ thấy mục được chia sẻ trực tiếp; không chia sẻ tiếp, không tìm người dùng. |
 

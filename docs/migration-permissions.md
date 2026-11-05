@@ -27,11 +27,11 @@ Những chỗ các bản sao quy tắc đang lệch nhau (sẽ hết khi mọi k
 |---|---|---|
 | `workspaces` Personal | **Drive của tôi** (`personal_drives`) + Library mặc định | id giữ nguyên để URL, đồng bộ desktop và nhật ký không đổi |
 | `workspaces` Group / Organization | **Space** (`spaces`) + Library "Tài liệu" | Space thuộc tổ chức; `owner_id` cũ thành thành viên nhóm Chủ sở hữu |
-| `workspace_members.member_role` | nhóm mặc định của Space: Owner/Manager → Chủ sở hữu (Quản lý); Editor → Thành viên (Biên tập); Uploader → nhóm "Đóng góp"; Approver → nhóm "Duyệt nội dung"; Viewer → Khách xem (Người xem) | |
+| `workspace_members.member_role` | nhóm mặc định của Space: Owner/Manager → Chủ sở hữu (Quản lý); Editor → Thành viên (Chỉnh sửa); Uploader → nhóm "Đóng góp"; Approver → nhóm "Duyệt nội dung"; Viewer → Khách xem (Người xem) | |
 | `folders`, `files` | giữ bảng, thêm bản ghi 1-1 trong `securables` (cùng id) | không gộp bảng: mọi truy vấn hiện có vẫn chạy |
 | `folders.break_inheritance`, `files.break_inheritance` | `securables.has_unique_acl` + `acl_scope_id` | |
 | `resource_permissions`, `shares` | `acl_entries` trên scope (ngắt kế thừa kiểu sao chép tại nút có quyền riêng, như SharePoint) | `shares` cũ không có hạn → ACE không hạn |
-| `AccessLevel` 0–4 | `permission_levels` (cờ 64 bit `Permission`): Xem → Người xem, Tải xuống → Người xem, Sửa → Biên tập, Quản lý → Chủ sở hữu/Quản lý | cũ "Xem" không tải được → **Chỉ xem (không tải)** để không mở rộng quyền |
+| `AccessLevel` 0–4 | `permission_levels` (cờ 64 bit `Permission`): Xem → Người xem, Tải xuống → Người xem, Sửa → Chỉnh sửa, Quản lý → Chủ sở hữu/Quản lý | cũ "Xem" không tải được → **Chỉ xem (không tải)** để không mở rộng quyền |
 | nhóm phẳng, đơn vị theo path | `principals` + `principal_memberships` làm phẳng (nhóm lồng nhóm, đơn vị "gồm đơn vị con") | |
 | `ResourceAuthorizationService` | `IPermissionService` mới (Get/Has/Demand/Explain) + `ReferencePermissionEvaluator` | Perm-Phase 2 |
 | `share_links` | `share_links` mới: 4 loại (Bất kỳ ai / Người trong đơn vị / Người cụ thể / Người đã có quyền), là một principal | Perm-Phase 4 |
@@ -77,12 +77,12 @@ Tất cả các phase đã hoàn thành ngày 05/11/2026; chi tiết từng ch�
 các nhóm (kể cả nhóm cha khi lồng nhau), vai trò, đơn vị của mình (đúng đơn vị), "đơn vị và đơn vị con" của mình và mọi đơn vị cha,
 các nhóm không gian, `everyone`. Mỗi người dùng có `membership_version`.
 
-**Nhóm của không gian:** Chủ sở hữu (Quản lý), Thành viên (Biên tập), Đóng góp, Duyệt nội dung, Khách xem. Khách xem chuyển từ dữ liệu cũ
+**Nhóm của không gian:** Chủ sở hữu (Quản lý), Thành viên (Chỉnh sửa), Đóng góp, Duyệt nội dung, Khách xem. Khách xem chuyển từ dữ liệu cũ
 nhận **Chỉ xem (không tải)**: thành viên vai trò Người xem trước đây không tải được, chuyển sang "Người xem" sẽ mở rộng quyền (lần đối chiếu
 trên prod ngày 04/11/2026 thấy đúng 1 cặp như vậy; quyết định ngày 04/11/2026: giữ quyền hiện tại). Space tạo mới từ Perm-Phase 5 dùng mặc định của đặc tả: Khách xem → Người xem. Chủ cũ
 (`owner_id`) của không gian nhóm/đơn vị vào Chủ sở hữu. Drive của tôi: chủ có toàn quyền theo quy tắc chủ sở hữu.
 
-**Cấp quyền cũ → mới:** Xem → *Chỉ xem (không tải)*, Tải xuống → *Người xem*, Sửa → *Biên tập*, Quản lý → *Chủ sở hữu / Quản lý*.
+**Cấp quyền cũ → mới:** Xem → *Chỉ xem (không tải)*, Tải xuống → *Người xem*, Sửa → *Chỉnh sửa*, Quản lý → *Chủ sở hữu / Quản lý*.
 
 **Scope:** gốc không gian luôn có ACL riêng gồm các nhóm không gian và quyền cấp trên chính không gian (`resource_permissions` loại
 workspace). Một thư mục/tệp có ACL riêng khi (a) có cờ ngắt kế thừa, hoặc (b) có quyền / chia sẻ trực tiếp, hoặc (c) nút cha có quyền

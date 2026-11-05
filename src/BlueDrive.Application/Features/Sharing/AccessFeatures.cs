@@ -143,7 +143,7 @@ public static class MemberRoleNames
 {
     public static string Of(WorkspaceMemberRole r) => r switch
     {
-        WorkspaceMemberRole.Owner => "Trưởng nhóm", WorkspaceMemberRole.Manager => "Quản lý", WorkspaceMemberRole.Editor => "Biên tập",
+        WorkspaceMemberRole.Owner => "Trưởng nhóm", WorkspaceMemberRole.Manager => "Quản lý", WorkspaceMemberRole.Editor => "Chỉnh sửa",
         WorkspaceMemberRole.Uploader => "Tải lên", WorkspaceMemberRole.Approver => "Phê duyệt", _ => "Chỉ xem",
     };
 }

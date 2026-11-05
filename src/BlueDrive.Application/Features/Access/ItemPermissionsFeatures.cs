@@ -124,7 +124,7 @@ public sealed class GrantItemPermissionValidator : AbstractValidator<GrantItemPe
     }
 }
 
-/// <summary>Who may grant what: managers anything; people allowed to share (Biên tập) at most what they hold themselves (spec 13.7).</summary>
+/// <summary>Who may grant what: managers anything; people allowed to share (Chỉnh sửa) at most what they hold themselves (spec 13.7).</summary>
 internal static class GrantRules
 {
     public static async Task<(AccessRight Rights, PermissionLevel Level)> CheckAsync(IAppDbContext db, IItemPermissionService engine, IPermissionService rbac,

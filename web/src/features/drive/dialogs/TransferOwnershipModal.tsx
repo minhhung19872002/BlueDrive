@@ -7,7 +7,7 @@ import PrincipalSelect from '@/features/sharing/PrincipalSelect'
 import { useApiMutation } from '@/hooks/useApiMutation'
 import type { DriveItem } from '@/types/drive'
 
-/** Spec 1.1: offer an item of my drive to someone; it becomes theirs when they accept, and I keep "Biên tập". */
+/** Spec 1.1: offer an item of my drive to someone; it becomes theirs when they accept, and I keep "Chỉnh sửa". */
 export default function TransferOwnershipModal({ item, onClose }: { item: DriveItem; onClose: () => void }) {
   const { t } = useTranslation()
   const [to, setTo] = useState<PrincipalValue[]>([])

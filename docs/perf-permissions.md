@@ -12,8 +12,8 @@ Dự án `tests/BlueDrive.Benchmarks` (BenchmarkDotNet, chạy trong tiến trì
 
 1. Khởi động PostgreSQL 16 trong container (Testcontainers) và API thật trong bộ nhớ (như integration test), chạy migration và dữ liệu nền.
 2. Tạo dữ liệu lớn nhanh: vài dòng mẫu qua API (để mọi cột đúng), rồi nhân bản bằng SQL `generate_series`:
-   - 5.000 người dùng (mỗi người trong 3 nhóm), 2.000 nhóm; 50 Space, mỗi Space có 10 nhóm làm thành viên (Biên tập);
-   - mỗi Space 50 thư mục cấp 1 × 20 thư mục con; **mọi thư mục có quyền riêng** (52.500 scope): sao chép mục quyền của Space + một nhóm Người xem + một nhóm Biên tập;
+   - 5.000 người dùng (mỗi người trong 3 nhóm), 2.000 nhóm; 50 Space, mỗi Space có 10 nhóm làm thành viên (Chỉnh sửa);
+   - mỗi Space 50 thư mục cấp 1 × 20 thư mục con; **mọi thư mục có quyền riêng** (52.500 scope): sao chép mục quyền của Space + một nhóm Người xem + một nhóm Chỉnh sửa;
    - 18 tệp mỗi thư mục con, thêm một thư mục 1.000 tệp (để liệt kê) và một thư mục 100.000 tệp (để ngắt kế thừa): tổng ≈ 1.001.000 tệp;
    - `securables` (đường dẫn ltree), `acl_scopes`, `acl_entries`, `scope_grants` ghi đúng như bộ chiếu / bộ sửa quyền ghi.
 3. Đo:

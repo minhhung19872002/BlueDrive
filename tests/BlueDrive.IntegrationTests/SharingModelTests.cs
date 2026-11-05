@@ -52,7 +52,7 @@ public class SharingModelTests(ApiFactory factory)
         mine.GetProperty("expiresAt").GetDateTime().Should().BeCloseTo(until, TimeSpan.FromSeconds(2));
         entries.Should().Contain(e => e.GetProperty("origin").GetString() == "space" && e.GetProperty("originLabel").GetString() == "Thành viên Space");
 
-        // A Space member with "Biên tập" may share, but not above their own rights; someone without rights cannot share at all.
+        // A Space member with "Chỉnh sửa" may share, but not above their own rights; someone without rights cannot share at all.
         (await editor.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { User(strangerId) }, levelId = levels["owner"] }))
             .StatusCode.Should().Be(HttpStatusCode.Forbidden);
         (await (await editor.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { User(strangerId) }, levelId = levels["viewer"], notify = false })).ReadJsonAsync())
@@ -94,7 +94,7 @@ public class SharingModelTests(ApiFactory factory)
         why.GetProperty("hasUniqueAcl").GetBoolean().Should().BeTrue();
         (await owner.DeleteAsync($"/api/v1/items/{folder}/inheritance")).StatusCode.Should().Be(HttpStatusCode.NoContent);
         (await member.GetAsync($"/api/v1/items/{folder}/permissions")).StatusCode.Should().Be(HttpStatusCode.OK);
-        (await member.PostAsync($"/api/v1/items/{folder}/inheritance", null)).StatusCode.Should().Be(HttpStatusCode.Forbidden, "Biên tập does not manage permissions");
+        (await member.PostAsync($"/api/v1/items/{folder}/inheritance", null)).StatusCode.Should().Be(HttpStatusCode.Forbidden, "Chỉnh sửa does not manage permissions");
 
         // "Mọi người trong đơn vị": anyone signed in may open it (here: view), then it is restricted again.
         (await anyone.GetAsync($"/api/v1/items/{folder}/permissions")).StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -129,7 +129,7 @@ public class SharingModelTests(ApiFactory factory)
 
         var pending = (await (await owner.GetAsync("/api/v1/access-requests")).ReadJsonAsync()).EnumerateArray().Single(r => r.GetProperty("itemId").GetGuid() == file);
         pending.GetProperty("requesterId").GetGuid().Should().Be(askerId);
-        pending.GetProperty("requestedLevelName").GetString().Should().Be("Biên tập");
+        pending.GetProperty("requestedLevelName").GetString().Should().Be("Chỉnh sửa");
         // Approved, but as "Người xem".
         (await owner.PostAsJsonAsync($"/api/v1/access-requests/{pending.GetProperty("id").GetGuid()}/decide", new { approve = true, levelId = levels["viewer"] }))
             .StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -424,6 +424,6 @@ public class SharingModelTests(ApiFactory factory)
         var inSpace = (await StorageTests.UploadAsync(owner, ws, null, "chung.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
         var spaceGroups = (await (await owner.GetAsync($"/api/v1/items/{inSpace}/permissions")).ReadJsonAsync()).GetProperty("entries").EnumerateArray()
             .Where(e => e.GetProperty("principalKind").GetString() == "space_group").Select(e => e.GetProperty("levelName").GetString()).ToList();
-        spaceGroups.Should().BeEquivalentTo(["Chủ sở hữu / Quản lý", "Biên tập"]);
+        spaceGroups.Should().BeEquivalentTo(["Chủ sở hữu / Quản lý", "Chỉnh sửa"]);
     }
 }

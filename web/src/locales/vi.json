@@ -1043,7 +1043,7 @@
   "ownership": {
     "menu": "Chuyển quyền sở hữu",
     "title": "Chuyển quyền sở hữu \"{{name}}\"",
-    "hint": "Người nhận phải chấp nhận. Khi đó tư liệu chuyển sang Drive của họ (giữ nguyên những người được chia sẻ trực tiếp) và bạn vẫn có quyền Biên tập.",
+    "hint": "Người nhận phải chấp nhận. Khi đó tư liệu chuyển sang Drive của họ (giữ nguyên những người được chia sẻ trực tiếp) và bạn vẫn có quyền Chỉnh sửa.",
     "to": "Người nhận",
     "toPlaceholder": "Chọn một người trong đơn vị",
     "send": "Gửi yêu cầu",
@@ -1423,12 +1423,12 @@
     "roles": {
       "owner": "Trưởng nhóm",
       "manager": "Quản lý",
-      "editor": "Biên tập",
+      "editor": "Chỉnh sửa",
       "uploader": "Tải lên",
       "approver": "Phê duyệt",
       "viewer": "Chỉ xem"
     },
-    "rolesHint": "Quản lý: toàn quyền nhóm · Biên tập: tải lên, sửa, xóa · Tải lên: chỉ tải lên · Phê duyệt: duyệt tư liệu · Chỉ xem: xem và tải xuống tư liệu đã duyệt.",
+    "rolesHint": "Quản lý: toàn quyền nhóm · Chỉnh sửa: tải lên, sửa, xóa · Tải lên: chỉ tải lên · Phê duyệt: duyệt tư liệu · Chỉ xem: xem và tải xuống tư liệu đã duyệt.",
     "addMembers": "Thêm",
     "membersAdded": "Đã thêm/cập nhật {{count}} thành viên.",
     "roleChanged": "Đã đổi vai trò thành viên.",

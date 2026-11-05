@@ -130,7 +130,7 @@ public static class SystemLevels
         new(ContentManager, "content_manager", "Quản lý nội dung",
             "Mọi quyền trừ quản lý Space và lưu giữ; quản lý quyền của thư mục, tệp.",
             AccessRights.All & ~(AccessRight.ManageSpace | AccessRight.ManageRetention), 20),
-        new(Editor, "editor", "Biên tập",
+        new(Editor, "editor", "Chỉnh sửa",
             "Xem đầy đủ, thêm, sửa, xóa, đổi tên, di chuyển, tạo thư mục, bình luận, khôi phục phiên bản, chia sẻ nội bộ.",
             AccessRights.Read | AccessRight.ViewDrafts | AccessRight.AddItems | AccessRight.EditItems | AccessRight.DeleteItems | AccessRight.RenameMove
             | AccessRight.CreateFolders | AccessRight.Comment | AccessRight.RestoreVersions | AccessRight.ShareInternal, 30),
