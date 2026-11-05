@@ -1,5 +1,4 @@
-import { Alert, Modal, Tabs } from 'antd'
-import { LinkOutlined, TeamOutlined } from '@ant-design/icons'
+import { Alert, Divider, Modal } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useCan } from '@/hooks/usePermissions'
 import type { ItemType } from '@/types/drive'
@@ -32,28 +31,10 @@ export default function ShareDialog({ target, onClose }: { target: ShareTarget; 
       destroyOnHidden
     >
       {!can('doc.share') && <Alert type="warning" showIcon message={t('sharing.noPermission')} style={{ marginBottom: 12 }} />}
-      <Tabs
-        items={[
-          {
-            key: 'internal',
-            label: (
-              <span>
-                <TeamOutlined /> {t('sharing.tabInternal')}
-              </span>
-            ),
-            children: <PeopleAccessTab itemId={target.id} />,
-          },
-          {
-            key: 'link',
-            label: (
-              <span>
-                <LinkOutlined /> {t('sharing.tabLink')}
-              </span>
-            ),
-            children: <LinkShareTab resourceType={target.type} resourceId={target.id} canDownload={target.canDownload ?? true} canEdit={target.canEdit ?? true} />,
-          },
-        ]}
-      />
+      {/* One page, no tabs: who has access (and the "Chia sẻ ra ngoài" switch) first, the item's link below. */}
+      <PeopleAccessTab itemId={target.id} />
+      <Divider style={{ margin: '20px 0 12px' }} />
+      <LinkShareTab resourceType={target.type} resourceId={target.id} canDownload={target.canDownload ?? true} canEdit={target.canEdit ?? true} />
     </Modal>
   )
 }

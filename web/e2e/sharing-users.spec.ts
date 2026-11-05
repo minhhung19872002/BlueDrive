@@ -68,7 +68,6 @@ async function shareWith(page: Page, fileName: string, user: TestUser, level: Re
   await contextMenu(page, fileName)
   await page.getByRole('menuitem', { name: /Chia sẻ$/ }).click()
   const dlg = page.getByRole('dialog')
-  await dlg.getByRole('tab', { name: /Người có quyền truy cập/ }).click()
   await dlg.locator('.ant-select').first().click()
   await page.keyboard.type(user.fullName)
   await page.locator('.ant-select-dropdown:visible').getByText(user.fullName).first().click()

@@ -61,6 +61,8 @@ public static class SettingKeys
         "mp4", "mov", "avi", "mkv", "webm", "m4v",
         "mp3", "wav", "aac", "m4a", "ogg", "flac",
         "doc", "docx", "xls", "xlsx", "ppt", "pptx", "pdf", "txt", "odt", "ods", "odp", "rtf", "csv",
+        // Macro-enabled Office files (like SharePoint): kept and scanned; the online editor only shows them, macros never run there.
+        "docm", "xlsm", "pptm",
         "epub", "psd", "ai", "indd", "zip", "rar", "7z",
     ];
 

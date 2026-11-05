@@ -143,7 +143,7 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
         (PrincipalKind.OrgUnit, _) => "Qua đơn vị",
         (PrincipalKind.OrgUnitTree, _) => "Qua đơn vị (gồm đơn vị con)",
         (PrincipalKind.SpaceGroup, _) => "Qua nhóm của Space",
-        (PrincipalKind.Everyone, _) => "Mọi người trong đơn vị",
+        (PrincipalKind.Everyone, _) => "Tất cả trong tổ chức",
         (PrincipalKind.Role, _) => "Qua vai trò",
         (PrincipalKind.Link, _) => "Qua liên kết",
         _ => "Khác",

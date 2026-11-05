@@ -68,11 +68,24 @@ public static class CloudFiles
 #endif
     }
 
-    /// <summary>BlueDrive's state of an item in Explorer (co-editing, conflict); null clears it. Files On-Demand sync roots only.</summary>
-    public static async Task SetStatusAsync(string path, string? text)
+    /// <summary>Kind of BlueDrive state shown in Explorer: its icon.</summary>
+    public enum StatusKind { Info, Warning, Error }
+
+    /// <summary>
+    /// BlueDrive's state of an item in Explorer (co-editing, conflict, refused by the server); null clears it. Files On-Demand sync roots
+    /// only. Errors show Windows' red cross and conflicts its warning sign, so a refused file does not look like it is still syncing.
+    /// </summary>
+    public static async Task SetStatusAsync(string path, string? text, StatusKind kind = StatusKind.Info)
     {
 #if WINDOWS
-        await ItemStatus.SetAsync(path, text, Environment.ProcessPath is { } exe ? $"{exe},0" : Path.Combine(Environment.SystemDirectory, "imageres.dll") + ",-1015");
+        var imageres = Path.Combine(Environment.SystemDirectory, "imageres.dll");
+        var icon = kind switch
+        {
+            StatusKind.Error => imageres + ",-98",
+            StatusKind.Warning => imageres + ",-84",
+            _ => Environment.ProcessPath is { } exe ? $"{exe},0" : imageres + ",-1015",
+        };
+        await ItemStatus.SetAsync(path, text, icon);
 #else
         await Task.CompletedTask;
 #endif

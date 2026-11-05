@@ -137,6 +137,8 @@ public sealed class AccountSession : IAsyncDisposable
     }
 
     private Dictionary<string, string> _explorerStates = new(StringComparer.OrdinalIgnoreCase);
+    private const string ErrorPrefix = "Lỗi đồng bộ — ";
+    private const string ConflictText = "Có xung đột — mở BlueDrive để chọn bản giữ lại";
 
     /// <summary>
     /// Explorer shows BlueDrive's own state next to the sync status (spec 7.2): "Đang được … chỉnh sửa trực tuyến" for documents being
@@ -149,15 +151,19 @@ public sealed class AccountSession : IAsyncDisposable
         foreach (var (id, e) in Editing)
             if (Read(db => LocalIndex.AbsPathOf(db, Config.SyncFolder, id), null) is { } path)
                 wanted[path] = $"Đang được {string.Join(", ", e.Editors.Take(3))} chỉnh sửa trực tuyến";
-        foreach (var c in Conflicts()) wanted[Agent.LocalPathOf(c.RootId, c.ConflictPath)] = "Có xung đột — mở BlueDrive để chọn bản giữ lại";
+        foreach (var c in Conflicts()) wanted[Agent.LocalPathOf(c.RootId, c.ConflictPath)] = ConflictText;
         // Refused by the server (format not allowed, out of space, no right…): the file says why instead of looking like it is still syncing.
         foreach (var p in Agent.Status.Problems)
             if (ProblemPath(p) is { } rel)
-                wanted.TryAdd(Locate("", rel), "Lỗi đồng bộ — " + p[(rel.Length + 2)..]);
+                wanted.TryAdd(Locate("", rel), ErrorPrefix + p[(rel.Length + 2)..]);
         foreach (var (path, text) in wanted.Where(w => !_explorerStates.TryGetValue(w.Key, out var old) || old != w.Value)
                      .Concat(_explorerStates.Where(o => !wanted.ContainsKey(o.Key)).Select(o => new KeyValuePair<string, string>(o.Key, null!))))
         {
-            try { await CloudFiles.SetStatusAsync(path, text); }
+            var kind = text is null ? CloudFiles.StatusKind.Info
+                : text.StartsWith(ErrorPrefix, StringComparison.Ordinal) ? CloudFiles.StatusKind.Error
+                : text.StartsWith(ConflictText, StringComparison.Ordinal) ? CloudFiles.StatusKind.Warning
+                : CloudFiles.StatusKind.Info;
+            try { await CloudFiles.SetStatusAsync(path, text, kind); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Runtime.InteropServices.COMException or ArgumentException
                                            or FileNotFoundException) { }
         }

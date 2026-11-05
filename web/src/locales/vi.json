@@ -1173,7 +1173,9 @@
       "until": "đến {{date}}",
       "generalAccess": "Quyền truy cập chung",
       "restricted": "Hạn chế",
-      "organization": "Mọi người trong tổ chức",
+      "organization": "Tất cả trong tổ chức",
+      "anyone": "Bất kỳ ai có liên kết",
+      "anyoneLevel": "Người xem",
       "restrictedHint": "Chỉ những người có quyền ở trên mới mở được.",
       "organizationHint": "Mọi tài khoản đã đăng nhập trong tổ chức đều mở được với cấp quyền đã chọn.",
       "generalSaved": "Đã lưu quyền truy cập chung.",
@@ -1231,7 +1233,7 @@
     "generalAccess": "Quyền truy cập chung",
     "audience": {
       "existing": "Hạn chế (người đã có quyền)",
-      "organization": "Mọi người trong tổ chức",
+      "organization": "Tất cả trong tổ chức",
       "specific": "Người cụ thể",
       "anyone": "Bất kỳ ai có liên kết"
     },
@@ -1246,7 +1248,7 @@
     "linkPeoplePlaceholder": "Tìm người dùng",
     "linkPeopleRequired": "Vui lòng chọn ít nhất một người.",
     "publicSwitch": "Cho phép người ngoài xem qua liên kết",
-    "publicOnHint": "Ai có liên kết (tab Chia sẻ qua liên kết) đều xem được, không cần đăng nhập.",
+    "publicOnHint": "Ai có liên kết của tài liệu (bên dưới) đều xem được, không cần đăng nhập.",
     "publicOffHint": "Chỉ người đã có quyền mở được liên kết.",
     "publicBlocked": "Không bật được: {{source}} không cho phép chia sẻ ra ngoài.",
     "publicOn": "Đã cho phép người ngoài xem qua liên kết.",

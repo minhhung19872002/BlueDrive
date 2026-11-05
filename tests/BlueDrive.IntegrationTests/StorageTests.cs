@@ -255,4 +255,23 @@ public class StorageTests(ApiFactory factory)
         ((int)locked.StatusCode).Should().Be(423);
         (await member.GetAsync($"/api/v1/files/{fileId}")).StatusCode.Should().Be(HttpStatusCode.OK, "a locked workspace stays readable");
     }
+
+    [Fact]
+    public async Task Macro_enabled_office_files_upload_and_open_read_only_online()
+    {
+        var (c, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await PersonalWorkspaceAsync(c);
+        // Like SharePoint: .xlsm / .docm / .pptm are accepted (scanned like any file); online they are only shown, macros never run there.
+        var zipHeader = new byte[] { 0x50, 0x4B, 0x03, 0x04, 0x14, 0x00 };
+        foreach (var name in new[] { "bang-tinh.xlsm", "van-ban.docm", "trinh-chieu.pptm" })
+        {
+            var up = await UploadAsync(c, ws, null, name, zipHeader);
+            var id = up.GetProperty("fileId").GetGuid();
+            var cfg = await (await c.GetAsync($"/api/v1/office/config/{id}")).ReadJsonAsync();
+            cfg.GetProperty("mode").GetString().Should().Be("view", $"{name} opens read-only");
+        }
+        // Executables stay refused whatever the list says.
+        var form = new MultipartFormDataContent { { new ByteArrayContent([0x4D, 0x5A, 0x90, 0x00]), "file", "chay.exe" }, { new StringContent(ws.ToString()), "workspaceId" } };
+        (await c.PostAsync("/api/v1/files/upload", form)).IsSuccessStatusCode.Should().BeFalse();
+    }
 }

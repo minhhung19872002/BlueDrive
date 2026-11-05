@@ -4,8 +4,9 @@ import type { UploadResult } from '@/types/drive'
 import type { CreateDocumentRequest, OfficeEditorConfig } from '@/types/collab'
 
 /** Editor config for the current version (edit mode when allowed; `view` forces read-only). */
-export async function getOfficeConfig(fileId: string, view = false): Promise<OfficeEditorConfig> {
-  const { data } = await api.get<OfficeEditorConfig>(`/office/config/${fileId}`, { params: view ? { view: true } : undefined })
+export async function getOfficeConfig(fileId: string, view = false, version?: string | null): Promise<OfficeEditorConfig> {
+  const params = { ...(view ? { view: true } : {}), ...(version ? { version } : {}) }
+  const { data } = await api.get<OfficeEditorConfig>(`/office/config/${fileId}`, { params })
   return data
 }
 

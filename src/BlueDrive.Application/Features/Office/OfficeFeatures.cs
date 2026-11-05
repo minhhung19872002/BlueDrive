@@ -15,7 +15,8 @@ using Microsoft.Extensions.Logging;
 namespace BlueDrive.Application.Features.Office;
 
 /// <summary>#42: editor config for the current version; edit mode when the user may edit (co-editing shares the key).</summary>
-public sealed record GetOfficeConfigQuery(Guid FileId, bool ForceView = false, bool Mobile = false) : IRequest<OfficeEditorConfig>;
+/// <param name="VersionId">An older version to read in the editor ("Phiên bản" → Xem): read-only, needs the right to see versions.</param>
+public sealed record GetOfficeConfigQuery(Guid FileId, bool ForceView = false, bool Mobile = false, Guid? VersionId = null) : IRequest<OfficeEditorConfig>;
 
 public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth,
     IOfficeEditorProvider office, IContentTicketService tickets, IAuditLogger audit, TimeProvider clock, Access.IItemPermissionService engine, Libraries.Libraries libraries,
@@ -31,6 +32,14 @@ public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IR
         // People who may not see drafts read the latest published version (spec 1.4).
         var rights = await engine.GetEffectiveAsync(uid, f.Id, ct);
         var versionId = Libraries.Libraries.VersionFor(f, rights) ?? throw new NotFoundException("Không tìm thấy tài liệu.");
+        if (q.VersionId is { } wanted && wanted != versionId)
+        {
+            if (!rights.Has(Domain.Permissions.AccessRight.ViewVersions)) throw new ForbiddenException("Bạn không có quyền xem các phiên bản của tài liệu.");
+            var v = await db.FileVersions.AsNoTracking().Where(x => x.Id == wanted && x.FileId == f.Id).Select(x => new { x.IsPublished }).FirstOrDefaultAsync(ct)
+                    ?? throw new NotFoundException("Không tìm thấy phiên bản.");
+            if (!v.IsPublished && !rights.Has(Domain.Permissions.AccessRight.ViewDrafts)) throw new ForbiddenException("Bạn không có quyền xem bản nháp.");
+            versionId = wanted; // an older version opens read-only (editing needs the current one)
+        }
         await ScanGate.EnsureAsync(db, f, versionId, uid, ct);
         // The item's own rights decide (like rename / new version): a "Chỉ xem" role shared "Chỉnh sửa" edits that document. A library that
         // requires a check-out opens for editing only to who checked it out.

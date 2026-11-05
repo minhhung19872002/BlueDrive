@@ -122,7 +122,7 @@ public sealed class PermissionProjection(IAppDbContext db, TimeProvider clock, A
         // ---- principals
         var principals = new List<Principal>
         {
-            new() { Id = StableGuid.Everyone, Kind = PrincipalKind.Everyone, DisplayName = "Mọi người trong đơn vị" },
+            new() { Id = StableGuid.Everyone, Kind = PrincipalKind.Everyone, DisplayName = "Tất cả trong tổ chức" },
         };
         principals.AddRange(users.Select(u => new Principal { Id = u.Id, Kind = u.IsGuest ? PrincipalKind.Guest : PrincipalKind.User, RefId = u.Id, DisplayName = u.FullName }));
         principals.AddRange(groups.Select(g => new Principal { Id = g.Id, Kind = PrincipalKind.Group, RefId = g.Id, DisplayName = g.Name }));

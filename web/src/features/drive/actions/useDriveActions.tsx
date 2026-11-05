@@ -15,7 +15,6 @@ import {
   FormOutlined,
   HistoryOutlined,
   InfoCircleOutlined,
-  SafetyOutlined,
   ScissorOutlined,
   ShareAltOutlined,
   StarFilled,
@@ -230,10 +229,8 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
   }, [])
   const info = useCallback((item: DriveItem) => (onShowInfo ? onShowInfo(item) : details(item, 'info')), [details, onShowInfo])
   const share = useCallback((item: DriveItem) => setShareTarget({ type: item.type, id: item.id, name: item.name, workspaceId: item.workspaceId }), [])
-  const manageAccess = useCallback(
-    (item: DriveItem) => setAccessTarget({ type: item.type, id: item.id, name: item.name, workspaceId: item.workspaceId }),
-    [],
-  )
+  // Files and folders: the one "Chia sẻ" dialog (people, general access, link).
+  const manageAccess = share
   const copyTo = useCallback(
     (items: DriveItem[]) => items.length && setCopyMove({ mode: 'copy', items: items.map(toRef), workspaceId: items[0].workspaceId, folderId: items[0].parentId }),
     [],
@@ -277,7 +274,9 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
         })
       }
       if (canDownload && shown('download')) list.push({ key: 'download', icon: <DownloadOutlined />, label: t('actions.download') })
-      if (single && can('doc.share') && shown('share')) list.push({ key: 'share', icon: <ShareAltOutlined />, label: t('actions.share') })
+      // One "Chia sẻ" for files and folders: who has access, general access (incl. "Bất kỳ ai có liên kết") and the link, in one dialog.
+      if (single && (can('doc.share') || canManage) && (shown('share') || shown('access')))
+        list.push({ key: 'share', icon: <ShareAltOutlined />, label: t('actions.share') })
       list.push({ type: 'divider' })
       if (single && canEdit && shown('rename')) list.push({ key: 'rename', icon: <EditOutlined />, label: t('actions.rename'), extra: 'F2' })
       if (can('doc.upload') && shown('copyTo')) list.push({ key: 'copyTo', icon: <CopyOutlined />, label: t('actions.copyTo') })
@@ -294,7 +293,6 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
         list.push({ key: 'versions', icon: <HistoryOutlined />, label: t('collab.versions.tab') })
         list.push({ key: 'discussion', icon: <CommentOutlined />, label: t('collab.discussion.tab') })
       }
-      if (single && canManage && shown('access')) list.push({ key: 'access', icon: <SafetyOutlined />, label: t('actions.manageAccess') })
       if (single && personalWorkspaceId && shown('addShortcut'))
         list.push({ key: 'addShortcut', icon: <RollbackOutlined rotate={180} />, label: t('shortcut.add') })
       // Spec 1.1: only what is in my own drive can be given away (in a Space it belongs to the Space).
@@ -397,7 +395,11 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
     manageAccess,
     remove,
     viewFile: setViewerId,
-    openAccess: setAccessTarget,
+    // Spaces / Drives (no link) keep the people-only dialog; files and folders open "Chia sẻ".
+    openAccess: (target: AccessTarget) =>
+      target.type === 'file' || target.type === 'folder'
+        ? setShareTarget({ type: target.type, id: target.id, name: target.name, workspaceId: target.workspaceId })
+        : setAccessTarget(target),
     menuItems,
     run,
     dialogs,

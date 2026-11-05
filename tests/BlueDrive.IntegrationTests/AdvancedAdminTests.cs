@@ -386,4 +386,28 @@ public class AdvancedAdminTests(ApiFactory factory)
         vp.GetProperty("print").GetBoolean().Should().BeFalse();
         vp.GetProperty("copy").GetBoolean().Should().BeFalse();
     }
+
+    [Fact]
+    public async Task An_older_version_opens_read_only_in_the_online_editor()
+    {
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (viewOnly, viewOnlyId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var file = (await (await owner.PostAsJsonAsync("/api/v1/office/new", new { workspaceId = ws, folderId = (Guid?)null, kind = "docx", name = "Nhiều bản" })).ReadJsonAsync())
+            .GetProperty("fileId").GetGuid();
+        var first = (await (await owner.GetAsync($"/api/v1/files/{file}/versions")).ReadJsonAsync()).EnumerateArray().Single().GetProperty("id").GetGuid();
+        await StorageTests.UploadAsync(owner, ws, null, "Nhiều bản.docx", "PK phiên bản 2"u8.ToArray(), target: file);
+
+        var current = await (await owner.GetAsync($"/api/v1/office/config/{file}")).ReadJsonAsync();
+        current.GetProperty("mode").GetString().Should().Be("edit");
+        var old = await (await owner.GetAsync($"/api/v1/office/config/{file}?version={first}")).ReadJsonAsync();
+        old.GetProperty("mode").GetString().Should().Be("view", "an older version is only read");
+        old.GetProperty("config").GetProperty("document").GetProperty("key").GetString().Should().EndWith(first.ToString("N"));
+        (await owner.GetAsync($"/api/v1/office/config/{file}?version={Guid.NewGuid()}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        // "Chỉ xem (không tải)" may not see versions.
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+        await (await owner.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { new { kind = "user", id = viewOnlyId } }, levelId = levels["view_only"], notify = false })).ReadJsonAsync();
+        (await viewOnly.GetAsync($"/api/v1/office/config/{file}?version={first}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
 }

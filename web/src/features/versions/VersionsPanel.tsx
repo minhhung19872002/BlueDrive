@@ -4,6 +4,7 @@ import { CloudUploadOutlined, DownloadOutlined, EyeOutlined, HistoryOutlined, In
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { getDownloadUrl, startDownload } from '@/api/drive'
+import { needsOfficeViewer } from '@/features/office/officeFiles'
 import { getErrorMessage, showApiError } from '@/api/errors'
 import { qk } from '@/api/queryKeys'
 import { qkc } from '@/api/queryKeys.collab'
@@ -103,6 +104,11 @@ export default function VersionsPanel({ fileId }: VersionsPanelProps) {
   })
 
   const open = async (v: FileVersion, inline: boolean) => {
+    // Word / Excel / PowerPoint: read the version in the online editor (a browser would download it instead of showing it).
+    if (inline && f && needsOfficeViewer(f.extension)) {
+      window.open(`/files/${fileId}/edit?version=${v.id}`, '_blank', 'noopener')
+      return
+    }
     setBusy(`${v.id}:${inline}`)
     try {
       const r = await getDownloadUrl(fileId, inline, v.id)

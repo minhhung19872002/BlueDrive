@@ -140,14 +140,13 @@ async function openLinkTab(page: Page) {
   const row = page.getByRole('row', { name: new RegExp(`${docName}\\.docx`) })
   await openContextMenu(page, row.getByText(`${docName}.docx`))
   await page.getByRole('menuitem', { name: /Chia sẻ$/ }).click()
-  await page.getByRole('tab', { name: /liên kết/i }).click()
   const dialog = page.getByRole('dialog')
   const linkBox = dialog.getByRole('textbox', { name: 'Liên kết của tài liệu' })
   await expect(linkBox).toHaveValue(/\/s\//, { timeout: 15_000 })
   return { dialog, linkBox }
 }
 
-test('chia sẻ qua liên kết: mặc định Hạn chế, bật "cho phép người ngoài xem" thì ai có liên kết cũng mở được', async ({ page, browser }) => {
+test('chia sẻ qua liên kết: mặc định Hạn chế, chọn "Bất kỳ ai có liên kết" thì ai có liên kết cũng mở được', async ({ page, browser }) => {
   // Like Google Drive the link is there right away, restricted (signed in and with access) by default.
   const { dialog, linkBox } = await openLinkTab(page)
   await expect(dialog.getByText('Hạn chế (người đã có quyền)').first()).toBeVisible()
@@ -160,13 +159,12 @@ test('chia sẻ qua liên kết: mặc định Hạn chế, bật "cho phép ng�
   await pub.goto(path)
   await expect(pub.getByText('Yêu cầu đăng nhập').first()).toBeVisible({ timeout: 15_000 })
 
-  // "Cho phép người ngoài xem qua liên kết" on the first tab: the same link opens without signing in.
-  await dialog.getByRole('tab', { name: /Người có quyền truy cập/ }).click()
+  // "Quyền truy cập chung" → "Bất kỳ ai có liên kết": the same link opens without signing in.
+  await dialog.getByRole('combobox', { name: 'Quyền truy cập chung' }).click({ force: true })
   await Promise.all([
     page.waitForResponse((r) => r.url().includes('/api/v1/share-links') && ['PUT', 'POST'].includes(r.request().method()) && r.ok()),
-    dialog.getByRole('switch', { name: 'Cho phép người ngoài xem qua liên kết' }).click(),
+    page.locator('.ant-select-dropdown:visible .ant-select-item-option', { hasText: 'Bất kỳ ai có liên kết' }).click(),
   ])
-  await dialog.getByRole('tab', { name: /liên kết/i }).click()
   await expect(dialog.getByText('Bất kỳ ai có liên kết').first()).toBeVisible()
   await expect(linkBox).toHaveValue(link)
   await pub.reload()

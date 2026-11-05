@@ -105,7 +105,7 @@ export function mediaTypeLabel(mediaType: MediaType | null | undefined): string 
 export type PreviewKind = 'image' | 'video' | 'audio' | 'office' | 'text' | 'none';
 
 const TEXT_EXT = new Set(['txt', 'md', 'csv', 'log', 'json', 'xml', 'yml', 'yaml', 'ini', 'conf', 'srt', 'vtt', 'tsv']);
-const OFFICE_EXT = new Set(['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'pdf', 'odt', 'ods', 'odp', 'rtf', 'epub', 'csv', 'txt']);
+const OFFICE_EXT = new Set(['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'pdf', 'odt', 'ods', 'odp', 'rtf', 'epub', 'csv', 'txt', 'docm', 'xlsm', 'pptm']);
 const IMAGE_EXT = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif']);
 
 export function previewKind(item: { mediaType?: MediaType | null; extension?: string | null; mimeType?: string | null }): PreviewKind {

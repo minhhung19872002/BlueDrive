@@ -1,6 +1,7 @@
 /** Extensions handled by the online editor (must match OnlyOfficeProvider on the server). */
 const EDITABLE = new Set(['docx', 'xlsx', 'pptx', 'txt', 'odt', 'ods', 'odp', 'csv', 'rtf'])
-const VIEW_ONLY = new Set(['doc', 'xls', 'ppt', 'pdf', 'epub'])
+// Macro-enabled files are only shown online (macros never run in the browser); edit them in desktop Office.
+const VIEW_ONLY = new Set(['doc', 'xls', 'ppt', 'pdf', 'epub', 'docm', 'xlsm', 'pptm'])
 
 const norm = (ext: string | null | undefined) => (ext ?? '').toLowerCase().replace(/^\./, '')
 

@@ -19,15 +19,17 @@ import '@/styles/collab.css'
 export default function OfficeEditorPage() {
   const { id = '' } = useParams<{ id: string }>()
   const [params] = useSearchParams()
-  const forceView = params.get('view') === 'true'
+  // ?version=… opens an older version (read-only), from "Phiên bản" → Xem.
+  const version = params.get('version')
+  const forceView = params.get('view') === 'true' || !!version
   const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const queryClient = useQueryClient()
   const detail = useFileDetail(id)
   const config = useQuery({
-    queryKey: qkc.officeConfig(id, forceView),
-    queryFn: () => getOfficeConfig(id, forceView),
+    queryKey: qkc.officeConfig(id, forceView, version),
+    queryFn: () => getOfficeConfig(id, forceView, version),
     enabled: !!id,
     retry: 0,
     // A fresh signed config each time the page opens; never refetch under a running editor.

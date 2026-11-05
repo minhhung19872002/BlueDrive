@@ -82,15 +82,11 @@ test('menu ngữ cảnh: mọi thao tác trên tệp', async ({ page }) => {
   await expect(drawer.getByRole('tab', { name: /Thảo luận/, selected: true })).toBeVisible()
   await page.keyboard.press('Escape')
 
-  // Quản lý quyền truy cập.
-  await clickMenu(page, fileName, /Quản lý quyền truy cập/)
-  await expect(page.getByRole('dialog')).toBeVisible()
-  await page.getByRole('dialog').getByRole('button', { name: /Close|Đóng/ }).first().click()
-  await expect(page.getByRole('dialog')).toHaveCount(0)
-
-  // Chia sẻ.
+  // Chia sẻ: one dialog for who has access, general access and the link (no separate "Quản lý quyền truy cập").
   await clickMenu(page, fileName, /Chia sẻ$/)
   await expect(page.getByRole('dialog')).toBeVisible()
+  await expect(page.getByRole('dialog').getByRole('combobox', { name: 'Quyền truy cập chung' })).toBeVisible()
+  await expect(page.getByRole('dialog').getByRole('textbox', { name: 'Liên kết của tài liệu' })).toBeVisible({ timeout: 15_000 })
   await page.getByRole('dialog').getByRole('button', { name: /Close|Đóng/ }).first().click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
 

@@ -39,7 +39,9 @@ import { useApiMutation } from '@/hooks/useApiMutation'
 import { formatDateTime } from '@/utils/format'
 import { splitPrincipal, type PrincipalValue } from './levels'
 import PrincipalSelect from './PrincipalSelect'
-import PublicLinkSwitch from './PublicLinkSwitch'
+import { usePublicLink } from './usePublicLink'
+
+type GeneralMode = 'restricted' | 'organization' | 'anyone'
 
 const ORIGIN_COLORS: Record<ItemPermission['origin'], string> = { direct: 'green', inherited: 'purple', space: 'blue' }
 
@@ -118,12 +120,15 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
   const stop = useApiMutation((copy: boolean) => breakInheritance(itemId, copy), { ...opts, successMessage: t('sharing.people.stopped') })
   const restore = useApiMutation((recursive: boolean) => restoreInheritance(itemId, recursive), { ...opts, successMessage: t('sharing.people.restored') })
   const policy = useQuery({ queryKey: ['item-sharing-policy', itemId], queryFn: () => getItemSharingPolicy(itemId) })
+  const kind = access.data?.kind
+  const publicLink = usePublicLink(kind === 'file' || kind === 'folder' ? kind : null, itemId)
 
   if (access.isLoading || levels.isLoading) return <Skeleton active />
   if (!access.data) return <Empty />
   const a = access.data
   const levelOptions = offered.map((l) => ({ value: l.id, label: l.name, title: l.description }))
   const isRoot = a.kind === 'space' || a.kind === 'drive'
+  const mode: GeneralMode = publicLink.on ? 'anyone' : a.generalAccess
 
   return (
     <>
@@ -175,7 +180,7 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
       </Divider>
       <List
         size="small"
-        dataSource={a.entries}
+        dataSource={a.entries.filter((e) => e.principalKind !== 'link') /* the link is shown below, not as a person */}
         locale={{ emptyText: t('sharing.people.nobody') }}
         renderItem={(e) => (
           <List.Item
@@ -242,19 +247,30 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
         {t('sharing.people.generalAccess')}
       </Divider>
       <Space wrap>
-        {a.generalAccess === 'restricted' ? <LockOutlined /> : <GlobalOutlined />}
+        {mode === 'restricted' ? <LockOutlined /> : <GlobalOutlined />}
         <Select
           style={{ minWidth: 260 }}
           disabled={!a.canManage}
-          value={a.generalAccess}
-          onChange={(mode) => general.mutate({ mode, levelId: mode === 'organization' ? (a.generalAccessLevelId ?? defaultLevel ?? null) : null })}
+          loading={general.isPending || publicLink.set.isPending}
+          value={mode}
+          onChange={async (next: GeneralMode) => {
+            // One choice for who may open the item: "anyone" is the item's link opening without sign-in; the others close it again.
+            if (next === 'anyone') return publicLink.set.mutate(true)
+            if (publicLink.on) await publicLink.set.mutateAsync(false)
+            if (next !== a.generalAccess || publicLink.on)
+              general.mutate({ mode: next, levelId: next === 'organization' ? (a.generalAccessLevelId ?? defaultLevel ?? null) : null })
+          }}
           options={[
             { value: 'restricted', label: t('sharing.people.restricted') },
             { value: 'organization', label: t('sharing.people.organization') },
+            ...(publicLink.enabled
+              ? [{ value: 'anyone', label: t('sharing.people.anyone'), disabled: (publicLink.blocked && !publicLink.on) || !publicLink.canChange }]
+              : []),
           ]}
           aria-label={t('sharing.people.generalAccess')}
         />
-        {a.generalAccess === 'organization' && (
+        {mode === 'anyone' && <Select style={{ minWidth: 200 }} disabled value="viewer" options={[{ value: 'viewer', label: t('sharing.people.anyoneLevel') }]} />}
+        {mode === 'organization' && (
           <Select
             style={{ minWidth: 200 }}
             disabled={!a.canManage}
@@ -266,10 +282,10 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
         )}
       </Space>
       <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 4 }}>
-        {a.generalAccess === 'restricted' ? t('sharing.people.restrictedHint') : t('sharing.people.organizationHint')}
+        {mode === 'anyone'
+          ? t('sharing.publicOnHint')
+          : publicLink.blockedText ?? (mode === 'restricted' ? t('sharing.people.restrictedHint') : t('sharing.people.organizationHint'))}
       </Typography.Paragraph>
-
-      {(a.kind === 'file' || a.kind === 'folder') && a.canShare && <PublicLinkSwitch resourceType={a.kind} resourceId={itemId} />}
 
       {!isRoot && a.canManage && (
         <>

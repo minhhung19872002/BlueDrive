@@ -26,7 +26,7 @@ public sealed class OnlyOfficeProvider(IOptions<OnlyOfficeOptions> options, IHtt
 {
     private readonly OnlyOfficeOptions _o = options.Value;
     private static readonly HashSet<string> Editable = new(StringComparer.OrdinalIgnoreCase) { "docx", "xlsx", "pptx", "txt", "odt", "ods", "odp", "csv", "rtf" };
-    private static readonly HashSet<string> Viewable = new(StringComparer.OrdinalIgnoreCase) { "doc", "xls", "ppt", "pdf", "epub", "docx", "xlsx", "pptx", "txt", "odt", "ods", "odp", "csv", "rtf" };
+    private static readonly HashSet<string> Viewable = new(StringComparer.OrdinalIgnoreCase) { "doc", "xls", "ppt", "pdf", "epub", "docx", "xlsx", "pptx", "txt", "odt", "ods", "odp", "csv", "rtf", "docm", "xlsm", "pptm" };
 
     public string CallbackBaseUrl => _o.CallbackBaseUrl.TrimEnd('/');
     public bool CanEdit(string extension) => Editable.Contains(extension);
@@ -34,8 +34,8 @@ public sealed class OnlyOfficeProvider(IOptions<OnlyOfficeOptions> options, IHtt
 
     private static string DocumentType(string ext) => ext.ToLowerInvariant() switch
     {
-        "xlsx" or "xls" or "ods" or "csv" => "cell",
-        "pptx" or "ppt" or "odp" => "slide",
+        "xlsx" or "xlsm" or "xls" or "ods" or "csv" => "cell",
+        "pptx" or "pptm" or "ppt" or "odp" => "slide",
         "pdf" => "pdf",
         _ => "word",
     };
