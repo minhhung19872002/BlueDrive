@@ -12,7 +12,6 @@ import {
   FolderOutlined,
   EllipsisOutlined,
   InfoCircleOutlined,
-  LinkOutlined,
   PlusOutlined,
   ScissorOutlined,
   ShareAltOutlined,
@@ -56,7 +55,6 @@ interface ExplorerToolbarProps {
   onDownload: () => void
   /** Single selection only (like SharePoint's Share / Copy link in the command bar). */
   onShare?: () => void
-  onCopyLink?: () => void
   onCopyTo: () => void
   onMoveTo: () => void
   onDelete: () => void
@@ -220,7 +218,6 @@ function SelectionCommands(p: ExplorerToolbarProps) {
           </Button>
         </Badge>
         {p.onShare && cmd('share', t('actions.share'), <ShareAltOutlined />, p.onShare, { main: true })}
-        {p.onCopyLink && cmd('copyLink', t('actions.copyLink'), <LinkOutlined />, p.onCopyLink, { main: true })}
         {p.canDownload && cmd('download', t('actions.download'), <DownloadOutlined />, p.onDownload, { main: true })}
         {p.canDelete && cmd('delete', t('actions.delete'), <DeleteOutlined />, p.onDelete, { danger: true, main: true })}
         {cmd(

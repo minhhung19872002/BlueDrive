@@ -1,5 +1,5 @@
 import { Button, Table, Tag, Tooltip, Typography, type TableProps } from 'antd'
-import { DownloadOutlined, LinkOutlined, LockOutlined, MoreOutlined, ShareAltOutlined, StarFilled } from '@ant-design/icons'
+import { DownloadOutlined, LockOutlined, MoreOutlined, ShareAltOutlined, StarFilled } from '@ant-design/icons'
 import type { SorterResult, SortOrder } from 'antd/es/table/interface'
 import type { Breakpoint } from 'antd/es/_util/responsiveObserver'
 import { useTranslation } from 'react-i18next'
@@ -23,7 +23,6 @@ const SORTABLE = ['name', 'size', 'updatedAt']
 /** Quick actions shown next to the name while the row is hovered (only those the item's menu offers). */
 const QUICK_ACTIONS = [
   { key: 'share', icon: <ShareAltOutlined />, label: 'actions.share' },
-  { key: 'copyLink', icon: <LinkOutlined />, label: 'actions.copyLink' },
   { key: 'download', icon: <DownloadOutlined />, label: 'actions.download' },
 ] as const
 

@@ -548,7 +548,6 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
         onExtra={(ext) => ext.onClick({ workspaceId, folderId })}
         onDownload={() => void actions.download(selectedItems)}
         onShare={selectedItems.length === 1 && can('doc.share') ? () => actions.share(selectedItems[0]) : undefined}
-        onCopyLink={selectedItems.length === 1 ? () => void actions.copyLink(selectedItems[0]) : undefined}
         onCopyTo={() => actions.copyTo(selectedItems)}
         onMoveTo={() => actions.moveTo(selectedItems)}
         onDelete={() => actions.remove(selectedItems)}
@@ -652,7 +651,7 @@ export default function FileExplorer(props: FileExplorerProps) {
 export type { NewMenuExtension } from './types'
 
 /** Commands already on the selection bar; its "..." keeps only the others (open, rename, info, versions, access...). */
-const ON_BAR = new Set(['download', 'delete', 'star', 'unstar', 'copyTo', 'moveTo', 'share', 'copyLink'])
+const ON_BAR = new Set(['download', 'delete', 'star', 'unstar', 'copyTo', 'moveTo', 'share'])
 
 function overflowItems(items: NonNullable<MenuProps['items']>): NonNullable<MenuProps['items']> {
   const kept = items.filter((i) => !(i && 'key' in i && ON_BAR.has(String(i.key))))
