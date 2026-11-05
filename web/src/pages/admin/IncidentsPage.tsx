@@ -256,7 +256,7 @@ export default function IncidentsPage() {
 
       <Card size="small">
         <Row gutter={[12, 12]} style={{ marginBottom: 12 }} align="middle">
-          <Col xs={24} md={12} xl={5}>
+          <Col xs={24} md={12} xl={8}>
             <Input.Search
               allowClear
               placeholder={t('ops.incident.searchPlaceholder')}
@@ -266,7 +266,7 @@ export default function IncidentsPage() {
               }}
             />
           </Col>
-          <Col xs={12} md={6} xl={3}>
+          <Col xs={12} md={6} xl={4}>
             <Select<OpenFilter>
               style={{ width: '100%' }}
               value={openFilter}
@@ -281,7 +281,7 @@ export default function IncidentsPage() {
               ]}
             />
           </Col>
-          <Col xs={12} md={6} xl={3}>
+          <Col xs={12} md={6} xl={4}>
             <Select
               allowClear
               style={{ width: '100%' }}
@@ -294,7 +294,7 @@ export default function IncidentsPage() {
               options={INCIDENT_STATUSES.map((x) => ({ value: x, label: t(`ops.incident.status.${x}`) }))}
             />
           </Col>
-          <Col xs={12} md={6} xl={3}>
+          <Col xs={12} md={6} xl={4}>
             <Select
               allowClear
               style={{ width: '100%' }}
@@ -307,7 +307,7 @@ export default function IncidentsPage() {
               options={INCIDENT_SEVERITIES.map((x) => ({ value: x, label: t(`ops.incident.severity.${x}`) }))}
             />
           </Col>
-          <Col xs={12} md={6} xl={3}>
+          <Col xs={12} md={6} xl={4}>
             <Select
               allowClear
               style={{ width: '100%' }}
@@ -320,7 +320,7 @@ export default function IncidentsPage() {
               options={INCIDENT_CATEGORIES.map((x) => ({ value: x, label: t(`ops.incident.category.${x}`) }))}
             />
           </Col>
-          <Col xs={24} md={12} xl={5}>
+          <Col xs={24} md={12} xl={8}>
             <DatePicker.RangePicker
               style={{ width: '100%' }}
               format="DD/MM/YYYY"
@@ -332,7 +332,7 @@ export default function IncidentsPage() {
               }}
             />
           </Col>
-          <Col xs={12} md={6} xl={2}>
+          <Col flex="none">
             <Button icon={<ClearOutlined />} onClick={clear}>
               {t('common.clearFilter')}
             </Button>

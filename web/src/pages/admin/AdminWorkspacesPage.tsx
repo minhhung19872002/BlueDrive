@@ -104,12 +104,14 @@ export default function AdminWorkspacesPage() {
           loading={list.isFetching}
           pagination={table.pagination(list.data?.total)}
           onChange={table.onTableChange}
-          scroll={{ x: 1000 }}
+          // Fixed columns take 960px: the name column needs its own minimum or it collapses to one letter per line.
+          scroll={{ x: 1240 }}
           locale={{ emptyText: t('empty.adminWorkspaces') }}
           columns={[
             {
               title: t('workspace.name'),
               key: 'name',
+              width: 280,
               render: (_, w) => (
                 <div>
                   <Typography.Link onClick={() => navigate(`/workspaces/${w.id}`)}>{w.name}</Typography.Link>

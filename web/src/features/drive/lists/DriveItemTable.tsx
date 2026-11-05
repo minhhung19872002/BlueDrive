@@ -114,6 +114,10 @@ export default function DriveItemTable<T>({
       ),
     },
   ]
+  // The name column has no fixed width: with extra fixed-width columns on a phone it would shrink to nothing
+  // and push the table past the screen, so the table scrolls horizontally instead.
+  const fixedWidth = columns.reduce((sum, c) => sum + (typeof c.width === 'number' ? c.width : 0), 0)
+  const scrollX = isMobile ? (extraColumns?.length ? fixedWidth + 180 : undefined) : Math.max(760, fixedWidth + 300)
 
   return (
     <>
@@ -125,7 +129,7 @@ export default function DriveItemTable<T>({
         pagination={pagination}
         onChange={onChange}
         locale={{ emptyText: empty }}
-        scroll={{ x: isMobile ? undefined : 760 }}
+        scroll={{ x: scrollX }}
         onRow={(row) => ({
           // A click opens (like the explorer); buttons, links and the "..." menu keep their own action.
           onClick: (e) => {

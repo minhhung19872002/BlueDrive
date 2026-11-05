@@ -159,8 +159,15 @@ body {
 
 .bd-auth-links {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
   margin: -8px 0 16px;
+}
+
+/* Each link stays on one line; the pair wraps as a whole on narrow cards. */
+.bd-auth-links > a {
+  white-space: nowrap;
 }
 
 /* ---------- Responsive ---------- */

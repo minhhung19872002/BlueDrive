@@ -43,7 +43,8 @@ if (-not (Test-Path $envFile)) {
     $gitSha = git -C $root rev-parse --short HEAD 2>$null
     if (-not $gitSha) { $gitSha = 'dev' }
     $baseUrl = if ($Domain) { "https://$Domain" } elseif ($HttpPort -ne 80) { "http://localhost:$HttpPort" } else { 'http://localhost' }
-    $content = (Get-Content (Join-Path $deploy '.env.example') -Raw)
+    # Windows PowerShell 5.1 reads BOM-less files as ANSI: without -Encoding the Vietnamese values end up double-encoded.
+    $content = (Get-Content (Join-Path $deploy '.env.example') -Raw -Encoding UTF8)
     $replacements = [ordered]@{
         '(?m)^SITE_ADDRESS=.*$'          = "SITE_ADDRESS=$(if ($Domain) { $Domain } else { ':80' })"
         '(?m)^PUBLIC_BASE_URL=.*$'       = "PUBLIC_BASE_URL=$baseUrl"

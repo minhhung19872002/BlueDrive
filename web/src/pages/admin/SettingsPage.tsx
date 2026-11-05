@@ -24,16 +24,29 @@ function formatDefault(value: SettingValue, yes: string, no: string): string {
   return String(value)
 }
 
-function SettingInput({ setting, disabled }: { setting: SettingDto; disabled: boolean }) {
+/** Form.Item injects id/value/checked/onChange into its direct child: they must reach the real control. */
+interface SettingInputProps {
+  setting: SettingDto
+  disabled: boolean
+  id?: string
+  value?: SettingValue
+  checked?: boolean
+  onChange?: (value: unknown) => void
+}
+
+function SettingInput({ setting, disabled, id, value, checked, onChange }: SettingInputProps) {
   const { t } = useTranslation()
   switch (setting.type) {
     case 'number':
-      return <InputNumber min={0} style={{ width: '100%', maxWidth: 240 }} disabled={disabled} />
+      return <InputNumber id={id} value={value as number | undefined} onChange={onChange} min={0} style={{ width: '100%', maxWidth: 240 }} disabled={disabled} />
     case 'boolean':
-      return <Switch checkedChildren={t('common.yes')} unCheckedChildren={t('common.no')} disabled={disabled} />
+      return <Switch id={id} checked={checked} onChange={onChange} checkedChildren={t('common.yes')} unCheckedChildren={t('common.no')} disabled={disabled} />
     case 'tags':
       return (
         <Select
+          id={id}
+          value={value as string[] | undefined}
+          onChange={onChange}
           mode="tags"
           tokenSeparators={[',', ' ', ';']}
           disabled={disabled}
@@ -42,11 +55,11 @@ function SettingInput({ setting, disabled }: { setting: SettingDto; disabled: bo
         />
       )
     case 'cron':
-      return <Input disabled={disabled} placeholder="0 2 * * *" style={{ maxWidth: 240 }} />
+      return <Input id={id} value={value as string | undefined} onChange={onChange} disabled={disabled} placeholder="0 2 * * *" style={{ maxWidth: 240 }} />
     case 'external':
-      return <Select disabled={disabled} style={{ maxWidth: 320 }} options={EXTERNAL_LEVELS.map((l) => ({ value: l, label: t(`externalSharing.${l}`) }))} />
+      return <Select id={id} value={value as string | undefined} onChange={onChange} disabled={disabled} style={{ maxWidth: 320 }} options={EXTERNAL_LEVELS.map((l) => ({ value: l, label: t(`externalSharing.${l}`) }))} />
     default:
-      return <Input disabled={disabled} maxLength={1000} />
+      return <Input id={id} value={value as string | undefined} onChange={onChange} disabled={disabled} maxLength={1000} />
   }
 }
 

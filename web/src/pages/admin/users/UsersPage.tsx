@@ -122,8 +122,9 @@ export default function UsersPage() {
         </Space>
       ),
     },
-    { title: t('user.organization'), dataIndex: 'organizationName', render: (v: string | null) => v || t('common.none') },
-    { title: t('user.position'), dataIndex: 'position' },
+    // Long unit names would otherwise push status, storage and last sign-in out of view.
+    { title: t('user.organization'), dataIndex: 'organizationName', width: 220, ellipsis: true, render: (v: string | null) => v || t('common.none') },
+    { title: t('user.position'), dataIndex: 'position', width: 160, ellipsis: true },
     {
       title: t('user.roles'),
       dataIndex: 'roles',

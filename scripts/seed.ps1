@@ -9,7 +9,7 @@ $ErrorActionPreference = 'Stop'
 $deploy = Join-Path (Split-Path -Parent $PSScriptRoot) 'deploy'
 $envFile = Join-Path $deploy '.env'
 if (-not (Test-Path $envFile)) { throw 'Chưa có deploy/.env. Chạy scripts/install.ps1 trước.' }
-$content = Get-Content $envFile -Raw
+$content = Get-Content $envFile -Raw -Encoding UTF8
 $content = [regex]::Replace($content, '(?m)^SEED_DEMO=.*$', 'SEED_DEMO=true')
 # No shared default: a missing or empty DEMO_PASSWORD gets a random one (upper, lower, digit and symbol for the password policy).
 if ($content -notmatch '(?m)^DEMO_PASSWORD=\S+') {
