@@ -62,3 +62,51 @@
     display: none;
   }
 }
+
+/* Chart tooltips paint above the cards that follow the chart (AntD cards are positioned). */
+.recharts-tooltip-wrapper {
+  z-index: 1000;
+}
+
+.bd-chart-tooltip {
+  min-width: 200px;
+  max-width: 320px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.bd-chart-tooltip-title {
+  margin-bottom: 4px;
+  font-weight: 600;
+  color: #1f2937;
+  word-break: break-word;
+}
+
+.bd-chart-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bd-chart-tooltip-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.bd-chart-tooltip-name {
+  flex: 1;
+  color: #4b5563;
+}
+
+.bd-chart-tooltip-value {
+  color: #1f2937;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

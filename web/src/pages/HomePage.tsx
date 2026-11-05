@@ -20,13 +20,16 @@ import { qko } from '@/api/queryKeys.ops'
 import FileTypeIcon from '@/features/drive/components/FileTypeIcon'
 import { useUploadLauncher } from '@/features/drive/upload/useUploadLauncher'
 import MediaTypePie from '@/features/ops/MediaTypePie'
+import ShareTooltip from '@/features/ops/ShareTooltip'
 import { bytesTick, DASHBOARD_BUCKETS, MEDIA_COLORS, SERIES_COLOR, SERIES_COLOR_2, usageColor } from '@/features/ops/utils'
 import { useAuthStore } from '@/stores/auth'
-import type { MediaType } from '@/types/drive'
 import type { FolderUsage, GroupDashboard, GroupLink, RecentDoc } from '@/types/ops'
 import { extensionOf, formatBytes, formatDateTime, percentOf } from '@/utils/format'
 
 const DASH_STALE = 60_000
+
+/** Rounded shares can add up to 100.1%: keep the axis fixed at 0–100. */
+const PERCENT_TICKS = [0, 25, 50, 75, 100]
 
 function truncate(text: string, max = 22): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text
@@ -103,7 +106,7 @@ function TopFoldersChart({ folders }: { folders: FolderUsage[] }) {
         <BarChart data={folders} layout="vertical" margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>
           <CartesianGrid strokeDasharray="3 3" horizontal={false} />
           <XAxis type="number" tickFormatter={bytesTick} fontSize={11} />
-          <YAxis type="category" dataKey="name" width={120} fontSize={12} tickFormatter={(v: string) => truncate(v, 16)} />
+          <YAxis type="category" dataKey="name" width={150} fontSize={12} tickFormatter={(v: string) => truncate(v, 18)} />
           <Tooltip
             cursor={{ fill: 'rgba(11,83,148,0.06)' }}
             labelFormatter={(_, payload) => (payload?.[0]?.payload as FolderUsage | undefined)?.path ?? ''}
@@ -234,7 +237,7 @@ function GroupSection({ data, loading }: { data: GroupDashboard | undefined; loa
                 <BarChart data={usageData} layout="vertical" margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                   <XAxis type="number" tickFormatter={bytesTick} fontSize={11} />
-                  <YAxis type="category" dataKey="name" width={120} fontSize={12} tickFormatter={(v: string) => truncate(v, 16)} />
+                  <YAxis type="category" dataKey="name" width={150} fontSize={12} tickFormatter={(v: string) => truncate(v, 18)} />
                   <Tooltip formatter={(value, name) => [formatBytes(Number(value ?? 0)), name]} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Bar dataKey="used" name={t('dash.used')} fill={SERIES_COLOR} radius={[0, 4, 4, 0]} isAnimationActive={false} />
@@ -272,15 +275,9 @@ function GroupSection({ data, loading }: { data: GroupDashboard | undefined; loa
                 <ResponsiveContainer>
                   <BarChart data={typeData} layout="vertical" margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} fontSize={11} />
-                    <YAxis type="category" dataKey="name" width={120} fontSize={12} tickFormatter={(v: string) => truncate(v, 16)} />
-                    <Tooltip
-                      formatter={(value, name, item) => {
-                        const key = String(item.dataKey) as MediaType
-                        const bytes = Number((item.payload as Record<string, number>)[`${key}Bytes`] ?? 0)
-                        return [`${Number(value ?? 0).toLocaleString('vi-VN')}% (${formatBytes(bytes)})`, name]
-                      }}
-                    />
+                    <XAxis type="number" domain={[0, 100]} ticks={PERCENT_TICKS} allowDataOverflow tickFormatter={(v: number) => `${v}%`} fontSize={11} />
+                    <YAxis type="category" dataKey="name" width={150} fontSize={12} tickFormatter={(v: string) => truncate(v, 18)} />
+                    <Tooltip content={<ShareTooltip />} cursor={{ fill: 'rgba(0, 0, 0, 0.04)' }} />
                     <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" />
                     {usedBuckets.map((b) => (
                       <Bar key={b} dataKey={b} stackId="types" name={t(`mediaType.${b}`)} fill={MEDIA_COLORS[b]} isAnimationActive={false} />
