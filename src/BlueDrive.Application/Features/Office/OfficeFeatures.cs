@@ -84,6 +84,7 @@ public sealed class GetPublicOfficeConfigHandler(IAppDbContext db, IPublicLinkTi
         var f = await PublicLinks.FileInScopeAsync(db, link, q.FileId, ct);
         if (!office.CanView(f.Extension)) throw new AppException("Định dạng không hỗ trợ xem trực tuyến.");
         var url = $"{office.CallbackBaseUrl}/api/v1/public/s/{q.Token}/content?access={Uri.EscapeDataString(q.Access)}&fileId={f.Id}";
+        var download = await PublicLinks.CanDownloadAsync(auth, link, t.UserId, ResourceType.File, f.Id, ct);
         // Restricted link: the visitor's own rights (they are signed in and may see the item). "Anyone with the link" as editor: the
         // link creator's right to edit, unless the administrator turned link editing off.
         var edit = office.CanEdit(f.Extension) && (link.RequireLogin
@@ -91,14 +92,14 @@ public sealed class GetPublicOfficeConfigHandler(IAppDbContext db, IPublicLinkTi
             : link.AllowEdit && link.CreatedBy is { } owner && await settings.GetAsync(SettingKeys.ShareLinkAllowEdit, true, ct)
               && (await auth.GetAccessAsync(owner, ResourceType.File, f.Id, ct)).CanEdit);
         if (!edit)
-            return office.BuildConfig(new OfficeEditorRequest(f.Id, f.CurrentVersionId!.Value, f.Name, f.Extension, url, null, false, link.AllowDownload, null, "Khách", true));
+            return office.BuildConfig(new OfficeEditorRequest(f.Id, f.CurrentVersionId!.Value, f.Name, f.Extension, url, null, false, download, null, "Khách", true));
         // Signed in: edits under their own account and name (the version is theirs). Otherwise a guest of the link.
         var account = me.UserId is { } sid ? await db.Users.Where(u => u.Id == sid).Select(u => u.FullName).FirstOrDefaultAsync(ct) : null;
         var name = account ?? "Khách";
         var guestId = account is null ? $"{LinkEditor.Prefix}{link.Id:N}:{Guid.NewGuid():N}" : null;
         // The full editor (toolbars): the embedded type only shows the document.
         var config = office.BuildConfig(new OfficeEditorRequest(f.Id, f.CurrentVersionId!.Value, f.Name, f.Extension, url,
-            $"{office.CallbackBaseUrl}/api/office/callback/{f.Id}", true, link.AllowDownload, account is null ? null : me.UserId, name, false, GuestId: guestId));
+            $"{office.CallbackBaseUrl}/api/office/callback/{f.Id}", true, download, account is null ? null : me.UserId, name, false, GuestId: guestId));
         await audit.LogAsync(new AuditEntry(AuditAction.View, ResourceType.File, f.Id, f.Name, f.WorkspaceId,
             new { office = config.Mode, shareLink = link.Id, editor = name, guest = account is null }, me.UserId, null), ct);
         return config;

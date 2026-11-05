@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text.Json;
 using BlueDrive.Application.Abstractions;
 using BlueDrive.Application.Features.Access;
@@ -290,7 +290,8 @@ public sealed class RevokeShareLinkHandler(IAppDbContext db, ICurrentUser me, IR
 public sealed record PublicShareInfoDto(string Name, ResourceType ResourceType, long SizeBytes, MediaType? MediaType, string? MimeType, string? Extension,
     bool AllowDownload, bool RequireLogin, DateTime? ExpiresAt, string SharedByName, string? OrganizationName, bool AllowEdit);
 
-public sealed record PublicAccessGrant(string AccessToken, DateTime ExpiresAt);
+/// <param name="AllowDownload">This visitor may download the shared item (<see cref="PublicLinks.CanDownloadAsync"/>).</param>
+public sealed record PublicAccessGrant(string AccessToken, DateTime ExpiresAt, bool AllowDownload);
 
 public sealed record PublicLinkTicket(Guid LinkId, Guid? UserId);
 
@@ -313,6 +314,16 @@ public sealed class PublicLinkTickets(IDataProtectionProvider provider) : IPubli
 
 public static class PublicLinks
 {
+    /// <summary>
+    /// Whether this visitor may download through the link. "Anyone with the link": the link's own setting. Restricted (signed in, the
+    /// link is only the item's address): the visitor's own right, so "Chỉ xem (không tải)" holds when opened through the link.
+    /// </summary>
+    public static async Task<bool> CanDownloadAsync(IResourceAuthorizationService auth, ShareLink link, Guid? visitor, ResourceType type, Guid resourceId,
+        CancellationToken ct) =>
+        link.RequireLogin
+            ? visitor is { } uid && (await auth.GetAccessAsync(uid, type, resourceId, ct)).CanDownload
+            : link.AllowDownload;
+
     /// <summary>SHA-256 (lower-case hex) of a link token: what the database keeps.</summary>
     public static string Hash(string token) => Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
 
@@ -399,7 +410,8 @@ public sealed class OpenPublicShareHandler(IAppDbContext db, ICurrentUser me, IP
             .ExecuteUpdateAsync(s => s.SetProperty(l => l.AccessCount, l => l.AccessCount + 1), ct);
         if (updated == 0) throw new AppException("Liên kết chia sẻ đã hết số lượt truy cập cho phép.", 410);
         await audit.LogAsync(new AuditEntry(AuditAction.LinkUsed, link.ResourceType, link.ResourceId, null, null, new { shareLink = link.Id, success = true, count = link.AccessCount + 1 }), ct);
-        return new PublicAccessGrant(tickets.Issue(new PublicLinkTicket(link.Id, me.UserId)), now.AddHours(4));
+        var download = await PublicLinks.CanDownloadAsync(auth, link, me.UserId, link.ResourceType, link.ResourceId, ct);
+        return new PublicAccessGrant(tickets.Issue(new PublicLinkTicket(link.Id, me.UserId)), now.AddHours(4), download);
     }
 }
 

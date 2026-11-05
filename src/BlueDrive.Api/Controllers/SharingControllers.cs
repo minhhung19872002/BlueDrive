@@ -1,8 +1,9 @@
-using BlueDrive.Api.Infrastructure;
+﻿using BlueDrive.Api.Infrastructure;
 using BlueDrive.Application.Abstractions;
 using BlueDrive.Application.Common;
 using BlueDrive.Application.Features.Sharing;
 using BlueDrive.Application.Features.Users;
+using BlueDrive.Application.Security;
 using BlueDrive.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -97,7 +98,8 @@ public class ShareLinksController : ApiControllerBase
 [Route("api/v1/public/s/{token}")]
 [AllowAnonymous]
 [EnableRateLimiting(SecuritySetup.PublicRateLimit)]
-public class PublicShareController(IAppDbContext db, IPublicLinkTickets tickets, IFileContentService content, IAuditLogger audit, TimeProvider clock) : ApiControllerBase
+public class PublicShareController(IAppDbContext db, IPublicLinkTickets tickets, IFileContentService content, IAuditLogger audit, TimeProvider clock,
+    IResourceAuthorizationService auth) : ApiControllerBase
 {
     [HttpGet]
     public Task<PublicShareInfoDto> Info(string token) => Mediator.Send(new GetPublicShareQuery(token));
@@ -115,8 +117,9 @@ public class PublicShareController(IAppDbContext db, IPublicLinkTickets tickets,
     {
         var link = await PublicLinks.LoadActiveAsync(db, token, clock.GetUtcNow().UtcDateTime, HttpContext.RequestAborted);
         if (tickets.Read(access) is not { } t || t.LinkId != link.Id) throw new AppException("Phiên xem liên kết đã hết hạn. Vui lòng mở lại liên kết.", 401);
-        if (download && !link.AllowDownload) throw new ForbiddenException("Liên kết này không cho phép tải xuống.");
         var file = await PublicLinks.FileInScopeAsync(db, link, fileId, HttpContext.RequestAborted);
+        if (download && !await PublicLinks.CanDownloadAsync(auth, link, t.UserId, ResourceType.File, file.Id, HttpContext.RequestAborted))
+            throw new ForbiddenException(link.RequireLogin ? "Bạn chỉ có quyền xem tài liệu này, không được tải xuống." : "Liên kết này không cho phép tải xuống.");
         var version = await db.FileVersions.AsNoTracking().FirstAsync(v => v.Id == file.CurrentVersionId);
         // Count downloads (not every Range chunk of a video): only full/first-range requests are logged.
         var range = Request.Headers.Range.ToString();

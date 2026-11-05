@@ -174,6 +174,8 @@ export interface PublicShareInfo {
 export interface PublicAccessGrant {
   accessToken: string
   expiresAt: string
+  /** This visitor may download (the link allows it and, for a restricted link, their own permission does too). */
+  allowDownload: boolean
 }
 
 export interface PublicFolderListing {

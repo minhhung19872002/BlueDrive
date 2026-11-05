@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -161,6 +161,18 @@ public class CollaborationTests(ApiFactory factory)
         }
         (await ModeFor(friend)).Should().Be("view");
         (await ModeFor(owner)).Should().Be("edit");
+        // ...and downloads too: the view-only friend gets no download through the link, whatever the link says; the owner does.
+        async Task<(bool Allowed, HttpStatusCode Status)> DownloadFor(HttpClient c)
+        {
+            var grant = await (await c.PostAsJsonAsync($"/api/v1/public/s/{rToken}/open", new { })).ReadJsonAsync();
+            var a = Uri.EscapeDataString(grant.GetProperty("accessToken").GetString()!);
+            var cfg = await (await c.GetAsync($"/api/v1/office/public-config/{rToken}?access={a}")).ReadJsonAsync();
+            cfg.GetProperty("config").GetProperty("document").GetProperty("permissions").GetProperty("download").GetBoolean()
+                .Should().Be(grant.GetProperty("allowDownload").GetBoolean());
+            return (grant.GetProperty("allowDownload").GetBoolean(), (await c.GetAsync($"/api/v1/public/s/{rToken}/content?access={a}&download=true")).StatusCode);
+        }
+        (await DownloadFor(friend)).Should().Be((false, HttpStatusCode.Forbidden));
+        (await DownloadFor(owner)).Should().Be((true, HttpStatusCode.OK));
         (await anon.PostAsJsonAsync($"/api/v1/public/s/{rToken}/open", new { })).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
 
         // Turned off by the administrator: links open read-only, new editing links are refused.

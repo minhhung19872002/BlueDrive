@@ -255,8 +255,8 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
           value={mode}
           onChange={async (next: GeneralMode) => {
             // One choice for who may open the item: "anyone" is the item's link opening without sign-in; the others close it again.
-            if (next === 'anyone') return publicLink.set.mutate(true)
-            if (publicLink.on) await publicLink.set.mutateAsync(false)
+            if (next === 'anyone') return publicLink.set.mutate({ on: true })
+            if (publicLink.on) await publicLink.set.mutateAsync({ on: false })
             if (next !== a.generalAccess || publicLink.on)
               general.mutate({ mode: next, levelId: next === 'organization' ? (a.generalAccessLevelId ?? defaultLevel ?? null) : null })
           }}
@@ -269,7 +269,17 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
           ]}
           aria-label={t('sharing.people.generalAccess')}
         />
-        {mode === 'anyone' && <Select style={{ minWidth: 200 }} disabled value="viewer" options={[{ value: 'viewer', label: t('sharing.people.anyoneLevel') }]} />}
+        {mode === 'anyone' && (
+          <Select
+            style={{ minWidth: 200 }}
+            disabled={!publicLink.canChange}
+            loading={publicLink.set.isPending}
+            value={publicLink.levelId ?? undefined}
+            options={publicLink.levelOptions}
+            onChange={(v: string) => publicLink.set.mutate({ on: true, levelId: v })}
+            aria-label={t('sharing.people.anyoneLevel')}
+          />
+        )}
         {mode === 'organization' && (
           <Select
             style={{ minWidth: 200 }}

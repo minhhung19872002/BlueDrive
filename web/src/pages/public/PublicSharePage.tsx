@@ -35,10 +35,10 @@ function ShareError({ error }: { error: unknown }) {
   )
 }
 
-function FileView({ token, access, info }: { token: string; access: string; info: PublicShareInfo }) {
+function FileView({ token, access, info, allowDownload }: { token: string; access: string; info: PublicShareInfo; allowDownload: boolean }) {
   const { t } = useTranslation()
   const kind = previewKind(info.mimeType, info.mediaType, info.extension)
-  const download = info.allowDownload ? (
+  const download = allowDownload ? (
     <Button type="primary" icon={<DownloadOutlined />} href={publicContentUrl(token, access, null, true)}>
       {t('actions.download')}
     </Button>
@@ -61,7 +61,7 @@ function FileView({ token, access, info }: { token: string; access: string; info
             icon={<FileTypeIcon type="file" mediaType={info.mediaType} extension={info.extension} size={96} />}
             title={info.name}
             subTitle={
-              info.allowDownload ? t('viewer.noPreview', { size: formatBytes(info.sizeBytes) }) : t('publicShare.noPreviewNoDownload')
+              allowDownload ? t('viewer.noPreview', { size: formatBytes(info.sizeBytes) }) : t('publicShare.noPreviewNoDownload')
             }
             extra={download}
           />
@@ -90,6 +90,7 @@ export default function PublicSharePage() {
   }, [autoOpen, open])
 
   const access = open.data?.accessToken
+  const canDownload = !!open.data?.allowDownload
   const staleSession = open.isError && errorStatus(open.error) === 401
   const logout = useAuthStore((s) => s.logout)
   // The stored session no longer works (expired, signed out elsewhere): drop it so "Đăng nhập" shows the login form instead of
@@ -120,9 +121,9 @@ export default function PublicSharePage() {
   else if (data && access)
     body =
       data.resourceType === 'folder' ? (
-        <PublicFolderView token={token} access={access} allowDownload={data.allowDownload} rootName={data.name} />
+        <PublicFolderView token={token} access={access} allowDownload={canDownload} rootName={data.name} />
       ) : (
-        <FileView token={token} access={access} info={data} />
+        <FileView token={token} access={access} info={data} allowDownload={canDownload} />
       )
   else body = <Spin size="large" />
 
@@ -147,7 +148,7 @@ export default function PublicSharePage() {
             </Typography.Text>
           </div>
         )}
-        {data && access && data.resourceType === 'file' && data.allowDownload && (
+        {data && access && data.resourceType === 'file' && canDownload && (
           <Button type="primary" icon={<DownloadOutlined />} href={publicContentUrl(token, access, null, true)}>
             {t('actions.download')}
           </Button>
