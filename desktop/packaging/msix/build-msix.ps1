@@ -51,7 +51,7 @@ $manifest = (Get-Content (Join-Path $PSScriptRoot 'AppxManifest.template.xml') -
 
 $makeappx = Find-SdkTool 'makeappx.exe'
 if (Test-Path $Out) { Remove-Item $Out -Force }
-& $makeappx pack /o /h SHA256 /d $layout /p $Out | Out-Null
-if ($LASTEXITCODE -ne 0) { throw 'makeappx không thành công' }
+$packLog = & $makeappx pack /o /h SHA256 /d $layout /p $Out 2>&1
+if ($LASTEXITCODE -ne 0) { $packLog | Select-Object -Last 40 | Write-Host; throw 'makeappx không thành công' }
 if (-not $NoSign) { & (Join-Path $PSScriptRoot '../sign.ps1') $Out }
 Write-Host "MSIX: $Out (Publisher: $Publisher)"
