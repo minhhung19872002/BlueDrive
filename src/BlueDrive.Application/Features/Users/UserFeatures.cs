@@ -1,3 +1,4 @@
+using BlueDrive.Application.Features.Access;
 using System.Security.Cryptography;
 using BlueDrive.Application.Abstractions;
 using BlueDrive.Application.Common;
@@ -337,7 +338,7 @@ public sealed class AdminResetPasswordHandler(IAppDbContext db, IPasswordService
 
 public sealed record DeleteUserCommand(Guid Id) : IRequest<Unit>;
 
-public sealed class DeleteUserHandler(IAppDbContext db, ICurrentUser me, IAuditLogger audit) : IRequestHandler<DeleteUserCommand, Unit>
+public sealed class DeleteUserHandler(IAppDbContext db, ICurrentUser me, IAuditLogger audit, PermissionProjection projection) : IRequestHandler<DeleteUserCommand, Unit>
 {
     public async Task<Unit> Handle(DeleteUserCommand cmd, CancellationToken ct)
     {
@@ -352,6 +353,7 @@ public sealed class DeleteUserHandler(IAppDbContext db, ICurrentUser me, IAuditL
 
         await db.UserRoles.Where(r => r.UserId == user.Id).ExecuteDeleteAsync(ct);
         await db.UserGroupMembers.Where(r => r.UserId == user.Id).ExecuteDeleteAsync(ct);
+        var memberSpaces = await db.WorkspaceMembers.Where(r => r.UserId == user.Id).Select(r => r.WorkspaceId).ToListAsync(ct);
         await db.WorkspaceMembers.Where(r => r.UserId == user.Id).ExecuteDeleteAsync(ct);
         await db.RefreshTokens.Where(r => r.UserId == user.Id).ExecuteDeleteAsync(ct);
         await db.UserSessions.Where(r => r.UserId == user.Id).ExecuteDeleteAsync(ct);
@@ -364,6 +366,8 @@ public sealed class DeleteUserHandler(IAppDbContext db, ICurrentUser me, IAuditL
         await db.Workspaces.Where(w => personal.Contains(w.Id)).ExecuteDeleteAsync(ct);
         db.Users.Remove(user);
         await db.SaveChangesAsync(ct);
+        // The memberships went by bulk delete: the Spaces they were in lose the person's groups now.
+        if (memberSpaces.Count > 0) await projection.ProjectAsync(memberSpaces.Distinct().ToList(), [user.Id], ct);
         await audit.LogAsync(new AuditEntry(AuditAction.Delete, ResourceName: $"Người dùng {user.Username}", Detail: new { entity = "user", id = user.Id, user.FullName }), ct);
         return Unit.Value;
     }

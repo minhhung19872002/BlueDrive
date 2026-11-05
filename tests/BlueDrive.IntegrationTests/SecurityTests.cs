@@ -12,6 +12,24 @@ namespace BlueDrive.IntegrationTests;
 public class SecurityTests(ApiFactory factory)
 {
     [Fact]
+    public async Task Someone_removed_from_a_group_no_longer_sees_it_or_its_files()
+    {
+        var (lead, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (member, memberId, _) = await factory.CreateUserClientAsync("chi_xem");
+        var ws = (await (await lead.PostAsJsonAsync("/api/v1/workspaces", new { name = "Nhóm rời", type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        await (await lead.PostAsJsonAsync($"/api/v1/workspaces/{ws}/members", new { userIds = new[] { memberId }, role = "viewer" })).ReadJsonAsync();
+        var file = (await StorageTests.UploadAsync(lead, ws, null, "noi-bo-nhom.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        async Task<bool> Listed() => (await (await member.GetAsync("/api/v1/workspaces?type=group")).ReadJsonAsync()).EnumerateArray().Any(w => w.GetProperty("id").GetGuid() == ws);
+        (await Listed()).Should().BeTrue();
+        (await member.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        (await lead.DeleteAsync($"/api/v1/workspaces/{ws}/members/{memberId}")).IsSuccessStatusCode.Should().BeTrue();
+        (await Listed()).Should().BeFalse("removed from the group, the group is gone from their menu");
+        (await member.GetAsync($"/api/v1/workspaces/{ws}")).IsSuccessStatusCode.Should().BeFalse();
+        (await member.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
     public async Task Ids_of_someone_elses_items_reveal_nothing_on_any_endpoint()
     {
         var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");

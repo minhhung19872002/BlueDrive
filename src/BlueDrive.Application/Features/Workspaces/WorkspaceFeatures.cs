@@ -1,3 +1,4 @@
+using BlueDrive.Application.Features.Access;
 using BlueDrive.Application.Abstractions;
 using BlueDrive.Application.Common;
 using BlueDrive.Application.Security;
@@ -267,7 +268,8 @@ public sealed class SetWorkspaceMembersHandler(IAppDbContext db, ICurrentUser me
 
 public sealed record RemoveWorkspaceMemberCommand(Guid WorkspaceId, Guid UserId) : IRequest<Unit>;
 
-public sealed class RemoveWorkspaceMemberHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IAuditLogger audit)
+public sealed class RemoveWorkspaceMemberHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IAuditLogger audit,
+    PermissionProjection projection)
     : IRequestHandler<RemoveWorkspaceMemberCommand, Unit>
 {
     public async Task<Unit> Handle(RemoveWorkspaceMemberCommand cmd, CancellationToken ct)
@@ -283,6 +285,8 @@ public sealed class RemoveWorkspaceMemberHandler(IAppDbContext db, ICurrentUser 
         if (cmd.UserId == ws.OwnerId) throw new AppException("Không thể xóa trưởng nhóm khỏi nhóm. Hãy chuyển trưởng nhóm trước.");
         var removed = await db.WorkspaceMembers.Where(m => m.WorkspaceId == ws.Id && m.UserId == cmd.UserId).ExecuteDeleteAsync(ct);
         if (removed == 0) throw new NotFoundException("Người dùng không phải thành viên nhóm.");
+        // A bulk delete skips the save interceptor: project now, or the person keeps the Space's groups (and sees the Space).
+        await projection.ProjectAsync([ws.Id], [cmd.UserId], ct);
         await audit.LogAsync(new AuditEntry(AuditAction.PermissionChange, ResourceType.Workspace, ws.Id, ws.Name, ws.Id, new { action = "remove_member", userId = cmd.UserId }), ct);
         return Unit.Value;
     }
