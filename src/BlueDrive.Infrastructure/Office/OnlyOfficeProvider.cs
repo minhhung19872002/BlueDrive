@@ -52,6 +52,8 @@ public sealed class OnlyOfficeProvider(IOptions<OnlyOfficeOptions> options, IHtt
     public OfficeEditorConfig BuildConfig(OfficeEditorRequest r)
     {
         var edit = r.CanEdit && CanEdit(r.Extension);
+        // Spec 11.8: "Người nhận xét" opens the document to comment only (no changes to the content).
+        var comment = !edit && r.CanComment && CanEdit(r.Extension);
         var config = new JsonObject
         {
             ["documentType"] = DocumentType(r.Extension),
@@ -69,25 +71,25 @@ public sealed class OnlyOfficeProvider(IOptions<OnlyOfficeOptions> options, IHtt
                 {
                     ["edit"] = edit,
                     ["download"] = r.CanDownload,
-                    ["print"] = r.CanDownload,
-                    ["copy"] = r.CanDownload,
-                    ["comment"] = edit,
+                    ["print"] = r.CanDownload && r.CanPrint,
+                    ["copy"] = r.CanCopy,
+                    ["comment"] = edit || comment,
                     ["review"] = edit,
                 },
             },
             ["editorConfig"] = new JsonObject
             {
-                ["mode"] = edit ? "edit" : "view",
+                ["mode"] = edit || comment ? "edit" : "view",
                 ["lang"] = "vi",
                 ["region"] = "vi-VN",
                 ["user"] = new JsonObject { ["id"] = r.GuestId ?? r.UserId?.ToString() ?? "anonymous", ["name"] = r.UserName },
                 ["customization"] = new JsonObject { ["forcesave"] = true, ["autosave"] = true, ["compactHeader"] = r.Embedded, ["hideRightMenu"] = false, ["uiTheme"] = "theme-light" },
             },
         };
-        if (edit && r.CallbackUrl is not null) config["editorConfig"]!["callbackUrl"] = r.CallbackUrl;
+        if ((edit || comment) && r.CallbackUrl is not null) config["editorConfig"]!["callbackUrl"] = r.CallbackUrl;
         config["token"] = Sign(JsonNode.Parse(config.ToJsonString())!.AsObject());
         return new OfficeEditorConfig("onlyoffice", $"{_o.PublicUrl.TrimEnd('/')}/web-apps/apps/api/documents/api.js",
-            JsonSerializer.Deserialize<JsonElement>(config.ToJsonString()), edit ? "edit" : "view");
+            JsonSerializer.Deserialize<JsonElement>(config.ToJsonString()), edit ? "edit" : comment ? "comment" : "view");
     }
 
     public OfficeCallback? ParseCallback(string body, string? authorizationHeader)

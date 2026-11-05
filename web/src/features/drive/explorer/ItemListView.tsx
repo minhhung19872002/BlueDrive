@@ -1,11 +1,12 @@
-import { Button, Table, Tag, Typography, type TableProps } from 'antd'
-import { DownloadOutlined, LinkOutlined, MoreOutlined, ShareAltOutlined, StarFilled } from '@ant-design/icons'
+import { Button, Table, Tag, Tooltip, Typography, type TableProps } from 'antd'
+import { DownloadOutlined, LinkOutlined, LockOutlined, MoreOutlined, ShareAltOutlined, StarFilled } from '@ant-design/icons'
 import type { SorterResult, SortOrder } from 'antd/es/table/interface'
 import type { Breakpoint } from 'antd/es/_util/responsiveObserver'
 import { useTranslation } from 'react-i18next'
 import type { DriveItem } from '@/types/drive'
 import { formatBytes, formatDateTime } from '@/utils/format'
 import FileTypeIcon from '../components/FileTypeIcon'
+import ShortcutTag from '../components/ShortcutTag'
 import { APPROVAL_COLORS, itemKey } from '../utils'
 import type { ItemViewProps } from './types'
 import FitDropdown from '../components/FitDropdown'
@@ -51,6 +52,12 @@ export default function ItemListView(props: ItemListViewProps) {
             <Typography.Text ellipsis className="bd-item-name" title={item.name}>
               {item.name}
             </Typography.Text>
+            <ShortcutTag item={item} />
+            {item.checkedOutBy && (
+              <Tooltip title={t('library.checkedOutTag')}>
+                <LockOutlined style={{ color: '#fa8c16', flex: 'none' }} aria-label={t('library.checkedOutTag')} />
+              </Tooltip>
+            )}
             {item.isStarred && <StarFilled style={{ color: '#faad14', flex: 'none' }} />}
             {item.approvalStatus && item.approvalStatus !== 'approved' && (
               <Tag color={APPROVAL_COLORS[item.approvalStatus]} style={{ flex: 'none', marginInlineEnd: 0 }}>

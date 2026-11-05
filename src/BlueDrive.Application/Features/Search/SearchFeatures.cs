@@ -90,7 +90,7 @@ public sealed class SearchFilesHandler(IAppDbContext db, ICurrentUser me, IResou
             // Precise check (break-inheritance edge cases are filtered here).
             if (!await auth.CanAsync(uid, ResourceType.File, fileId, AccessLevel.View, ct)) { total--; continue; }
             var m = meta[fileId];
-            var location = FileLocation.ToText(await FileLocation.BuildAsync(db, m.f.Workspace!, m.f.Folder, uid, ct));
+            var location = FileLocation.ToText(await FileLocation.BuildAsync(db, m.f.Workspace!, m.f.Folder, uid, ct, auth));
             hits.Add(new SearchHit(item, location, SearchText.Highlight(m.f.Name, terms), SearchText.Highlight(m.f.Title, terms),
                 !SearchText.Mentions(m.f.Description, terms) && bodies.TryGetValue(fileId, out var body) && SearchText.Mentions(body, terms)
                     ? SearchText.Snippet(body, terms) : SearchText.Snippet(m.f.Description, terms), rank, m.Org));

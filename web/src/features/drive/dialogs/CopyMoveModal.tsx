@@ -4,6 +4,7 @@ import { ApartmentOutlined, FolderAddOutlined, FolderOutlined, HomeOutlined, Rig
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { copyItems, createFolder, getFolderInfo, listItems, moveItems } from '@/api/drive'
+import { confirmMove, MoveCancelled } from './confirmMove'
 import { qk } from '@/api/queryKeys'
 import { useApiMutation } from '@/hooks/useApiMutation'
 import { formatBytes, formatDateTime } from '@/utils/format'
@@ -71,11 +72,14 @@ export default function CopyMoveModal({ request, onClose }: { request: CopyMoveR
   const run = useApiMutation(
     () =>
       isMove
-        ? moveItems(request.items, where.workspaceId, where.folderId).then((r) => r.moved)
+        ? confirmMove(t, request.items, where.workspaceId, where.folderId)
+            .then(() => moveItems(request.items, where.workspaceId, where.folderId))
+            .then((r) => r.moved)
         : copyItems(request.items, where.workspaceId, where.folderId).then((r) => r.copied),
     {
       successMessage: (count) => (isMove ? t('drive.moved', { count }) : t('drive.copied', { count })),
       invalidate: [qk.drive, qk.workspaces, qk.me],
+      onError: (e) => e instanceof MoveCancelled,
       onSuccess: () => {
         if (isMove) clearClipboard(request.items)
         onClose()

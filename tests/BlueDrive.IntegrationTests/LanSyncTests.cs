@@ -18,8 +18,14 @@ public sealed class LanSyncTests(ApiFactory factory) : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_tmp, recursive: true); }
-        catch (IOException) { }
+        try
+        {
+            // View-only files are made read-only by the sync engine: clear that so the folder can go.
+            if (Directory.Exists(_tmp))
+                foreach (var f in Directory.EnumerateFiles(_tmp, "*", SearchOption.AllDirectories)) File.SetAttributes(f, FileAttributes.Normal);
+            Directory.Delete(_tmp, recursive: true);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
     private async Task<MemoryTokenStore> SignInAsync(HttpClient user, string device)

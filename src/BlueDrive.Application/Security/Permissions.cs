@@ -33,6 +33,9 @@ public static class Perm
     public const string IncidentView = "incident.view", IncidentCreate = "incident.upload", IncidentEdit = "incident.edit", IncidentAdmin = "incident.admin";
     public const string AnnouncementView = "announcement.view", AnnouncementEdit = "announcement.edit";
     public const string DataExportAdmin = "dataexport.admin";
+    public const string RetentionView = "retention.view", RetentionAdmin = "retention.admin";
+    public const string EmergencyAdmin = "emergency.admin", AuditInvestigation = "investigation.admin";
+    public const string AccessReportView = "accessreport.view", AccessReportAdmin = "accessreport.admin";
     public const string DocView = "doc.view", DocUpload = "doc.upload", DocEdit = "doc.edit", DocDelete = "doc.delete",
         DocShare = "doc.share", DocApprove = "doc.approve", DocAdmin = "doc.admin";
     public const string WorkspaceView = "workspace.view", WorkspaceCreate = "workspace.upload", WorkspaceEdit = "workspace.edit",
@@ -50,6 +53,7 @@ public static class Perm
         ("admin", "Quản trị hệ thống", "usergroup", "Nhóm người dùng", ["view", "upload", "edit", "delete"]),
         ("admin", "Quản trị hệ thống", "role", "Vai trò & phân quyền", ["view", "upload", "edit", "delete", "admin"]),
         ("admin", "Quản trị hệ thống", "catalog", "Danh mục dùng chung", ["view", "upload", "edit", "delete"]),
+        ("admin", "Quản trị hệ thống", "retention", "Lưu giữ & giữ pháp lý", ["view", "admin"]),
         ("monitor", "Giám sát hệ thống", "audit", "Nhật ký hoạt động", ["view", "admin"]),
         ("monitor", "Giám sát hệ thống", "stats", "Thống kê dung lượng", ["view"]),
         ("monitor", "Giám sát hệ thống", "alert", "Cảnh báo bất thường", ["view", "edit"]),
@@ -57,6 +61,9 @@ public static class Perm
         ("monitor", "Giám sát hệ thống", "session", "Phiên đăng nhập", ["view", "admin"]),
         ("monitor", "Giám sát hệ thống", "device", "Thiết bị đồng bộ (BlueDrive Desktop)", ["view", "admin"]),
         ("monitor", "Giám sát hệ thống", "dashboard", "Dashboard quản trị", ["view"]),
+        ("monitor", "Giám sát hệ thống", "emergency", "Truy cập khẩn cấp (tối đa 24 giờ, có ghi nhật ký và thông báo)", ["admin"]),
+        ("monitor", "Giám sát hệ thống", "investigation", "Điều tra (truy cập khẩn cấp không thông báo)", ["admin"]),
+        ("monitor", "Giám sát hệ thống", "accessreport", "Báo cáo quyền truy cập & thao tác hàng loạt", ["view", "admin"]),
         ("ops", "Vận hành", "settings", "Cấu hình hệ thống", ["view", "edit"]),
         ("ops", "Vận hành", "backup", "Sao lưu & phục hồi", ["view", "admin"]),
         ("ops", "Vận hành", "ticket", "Hỗ trợ & sự cố", ["view", "upload", "edit", "admin"]),
@@ -87,7 +94,7 @@ public static class Perm
     /// <summary>System role codes (not deletable).</summary>
     public static class Roles
     {
-        public const string Admin = "quan_tri", Editor = "bien_tap", Approver = "phe_duyet", Viewer = "chi_xem";
+        public const string Admin = "quan_tri", Editor = "bien_tap", Approver = "phe_duyet", Viewer = "chi_xem", Guest = "khach";
     }
 
     public static IReadOnlyDictionary<string, string[]> DefaultRolePermissions { get; } = new Dictionary<string, string[]>
@@ -97,5 +104,7 @@ public static class Perm
             SearchView, CatalogView, TicketCreate],
         [Roles.Approver] = [DocView, DocApprove, DocShare, WorkspaceView, TrashView, TrashRestore, SearchView, CatalogView, TicketCreate],
         [Roles.Viewer] = [DocView, WorkspaceView, SearchView, CatalogView, TicketCreate],
+        // Guests work only on what is shared with them; what they may do there comes from the level they were given (never sharing).
+        [Roles.Guest] = [DocView, DocUpload, DocEdit, SearchView],
     };
 }

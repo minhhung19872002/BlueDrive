@@ -72,6 +72,7 @@ export default function LoginPage() {
           </Form.Item>
           <div className="bd-auth-links">
             <Link to="/forgot-password">{t('auth.forgotPassword')}</Link>
+            <Link to="/guest-login">{t('guestLogin.link')}</Link>
           </div>
           <Button type="primary" htmlType="submit" block loading={mutation.isPending}>
             {t('auth.login')}

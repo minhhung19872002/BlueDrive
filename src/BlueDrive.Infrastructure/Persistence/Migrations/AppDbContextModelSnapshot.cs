@@ -22,9 +22,179 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                 .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "ltree");
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "unaccent");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.AccessRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("decided_at");
+
+                    b.Property<Guid?>("DecidedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("decided_by");
+
+                    b.Property<Guid?>("DecidedLevelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("decided_level_id");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("decision_note");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("message");
+
+                    b.Property<Guid>("RequestedLevelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_level_id");
+
+                    b.Property<Guid>("RequesterId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requester_id");
+
+                    b.Property<Guid>("SecurableId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("securable_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_access_requests");
+
+                    b.HasIndex("RequesterId", "CreatedAt")
+                        .HasDatabaseName("ix_access_requests_requester_id_created_at");
+
+                    b.HasIndex("SecurableId", "Status")
+                        .HasDatabaseName("ix_access_requests_securable_id_status");
+
+                    b.ToTable("access_requests", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.AclEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AdditiveTargetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("additive_target_id");
+
+                    b.Property<bool>("AppliesToChildren")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("applies_to_children");
+
+                    b.Property<DateTime?>("ExpiredNoticeAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expired_notice_at");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTime>("GrantedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("granted_at");
+
+                    b.Property<Guid?>("GrantedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("granted_by");
+
+                    b.Property<bool>("IsAdditive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_additive");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("message");
+
+                    b.Property<Guid>("PermissionLevelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("permission_level_id");
+
+                    b.Property<Guid>("PrincipalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("principal_id");
+
+                    b.Property<string>("PrincipalKind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("principal_kind");
+
+                    b.Property<DateTime?>("ReminderSentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reminder_sent_at");
+
+                    b.Property<Guid>("ScopeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("scope_id");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("source");
+
+                    b.HasKey("Id")
+                        .HasName("pk_acl_entries");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_acl_entries_expires_at");
+
+                    b.HasIndex("PrincipalId")
+                        .HasDatabaseName("ix_acl_entries_principal_id");
+
+                    b.HasIndex("ScopeId")
+                        .HasDatabaseName("ix_acl_entries_scope_id");
+
+                    b.ToTable("acl_entries", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.AclScope", b =>
+                {
+                    b.Property<Guid>("ScopeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("scope_id");
+
+                    b.Property<long>("AclVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("acl_version");
+
+                    b.HasKey("ScopeId")
+                        .HasName("pk_acl_scopes");
+
+                    b.ToTable("acl_scopes", (string)null);
+                });
 
             modelBuilder.Entity("BlueDrive.Domain.Entities.Alert", b =>
                 {
@@ -556,6 +726,61 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.ToTable("comments", (string)null);
                 });
 
+            modelBuilder.Entity("BlueDrive.Domain.Entities.EmergencyAccess", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AdminId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("admin_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ended_at");
+
+                    b.Property<Guid?>("EndedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ended_by");
+
+                    b.PrimitiveCollection<List<Guid>>("EntryIds")
+                        .IsRequired()
+                        .HasColumnType("uuid[]")
+                        .HasColumnName("entry_ids");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<bool>("Investigation")
+                        .HasColumnType("boolean")
+                        .HasColumnName("investigation");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("reason");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_emergency_accesses");
+
+                    b.HasIndex("WorkspaceId", "CreatedAt")
+                        .HasDatabaseName("ix_emergency_accesses_workspace_id_created_at");
+
+                    b.ToTable("emergency_accesses", (string)null);
+                });
+
             modelBuilder.Entity("BlueDrive.Domain.Entities.FileCatalogItem", b =>
                 {
                     b.Property<Guid>("FileId")
@@ -573,6 +798,43 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_file_catalog_items_catalog_item_id");
 
                     b.ToTable("file_catalog_items", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.FileColumnValue", b =>
+                {
+                    b.Property<Guid>("FileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("file_id");
+
+                    b.Property<Guid>("ColumnId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("column_id");
+
+                    b.Property<DateTime?>("DateValue")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_value");
+
+                    b.Property<decimal?>("NumberValue")
+                        .HasColumnType("numeric")
+                        .HasColumnName("number_value");
+
+                    b.Property<string>("TextValue")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("text_value");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("value");
+
+                    b.HasKey("FileId", "ColumnId")
+                        .HasName("pk_file_column_values");
+
+                    b.HasIndex("ColumnId", "TextValue")
+                        .HasDatabaseName("ix_file_column_values_column_id_text_value");
+
+                    b.ToTable("file_column_values", (string)null);
                 });
 
             modelBuilder.Entity("BlueDrive.Domain.Entities.FileText", b =>
@@ -642,6 +904,18 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_encrypted");
 
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_published");
+
+                    b.Property<int>("Major")
+                        .HasColumnType("integer")
+                        .HasColumnName("major");
+
+                    b.Property<int>("Minor")
+                        .HasColumnType("integer")
+                        .HasColumnName("minor");
+
                     b.Property<long>("SizeBytes")
                         .HasColumnType("bigint")
                         .HasColumnName("size_bytes");
@@ -696,13 +970,26 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("deleted_by");
 
+                    b.Property<string>("ExternalSharing")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("external_sharing");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean")
                         .HasColumnName("is_deleted");
 
+                    b.Property<bool>("IsLibrary")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_library");
+
                     b.Property<bool>("IsTrashRoot")
                         .HasColumnType("boolean")
                         .HasColumnName("is_trash_root");
+
+                    b.Property<Guid?>("LabelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("label_id");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -714,6 +1001,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("original_parent_id");
 
+                    b.Property<string>("OriginalPath")
+                        .HasColumnType("text")
+                        .HasColumnName("original_path");
+
                     b.Property<Guid?>("ParentId")
                         .HasColumnType("uuid")
                         .HasColumnName("parent_id");
@@ -723,6 +1014,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("path");
 
+                    b.Property<DateTime?>("PreservedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("preserved_at");
+
                     b.Property<bool>("RequiresApproval")
                         .HasColumnType("boolean")
                         .HasColumnName("requires_approval");
@@ -730,6 +1025,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.Property<long>("Revision")
                         .HasColumnType("bigint")
                         .HasColumnName("revision");
+
+                    b.Property<DateTime?>("SecondStageAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("second_stage_at");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -756,6 +1055,116 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_folders_workspace_id_parent_id_is_deleted");
 
                     b.ToTable("folders", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.FolderColumnDefault", b =>
+                {
+                    b.Property<Guid>("FolderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("folder_id");
+
+                    b.Property<Guid>("ColumnId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("column_id");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("value");
+
+                    b.HasKey("FolderId", "ColumnId")
+                        .HasName("pk_folder_column_defaults");
+
+                    b.ToTable("folder_column_defaults", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.GroupNesting", b =>
+                {
+                    b.Property<Guid>("ParentGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_group_id");
+
+                    b.Property<Guid>("ChildGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("child_group_id");
+
+                    b.HasKey("ParentGroupId", "ChildGroupId")
+                        .HasName("pk_group_nestings");
+
+                    b.HasIndex("ChildGroupId")
+                        .HasDatabaseName("ix_group_nestings_child_group_id");
+
+                    b.ToTable("group_nestings", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.Guest", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTime>("InvitedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("invited_at");
+
+                    b.Property<Guid?>("InvitedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("invited_by");
+
+                    b.HasKey("UserId")
+                        .HasName("pk_guests");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_guests_expires_at");
+
+                    b.ToTable("guests", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.GuestOtp", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("code_hash");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTime?>("UsedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_guest_otps");
+
+                    b.HasIndex("UserId", "CreatedAt")
+                        .HasDatabaseName("ix_guest_otps_user_id_created_at");
+
+                    b.ToTable("guest_otps", (string)null);
                 });
 
             modelBuilder.Entity("BlueDrive.Domain.Entities.IncidentEvent", b =>
@@ -793,6 +1202,376 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_incident_events_incident_id");
 
                     b.ToTable("incident_events", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.LegalHold", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("ReleaseReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("release_reason");
+
+                    b.Property<DateTime?>("ReleasedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("released_at");
+
+                    b.Property<Guid?>("ReleasedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("released_by");
+
+                    b.Property<Guid>("ScopeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("scope_id");
+
+                    b.Property<string>("ScopeKind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("scope_kind");
+
+                    b.HasKey("Id")
+                        .HasName("pk_legal_holds");
+
+                    b.HasIndex("ReleasedAt")
+                        .HasDatabaseName("ix_legal_holds_released_at");
+
+                    b.ToTable("legal_holds", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.Library", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_default");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<Guid?>("PersonalDriveId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("personal_drive_id");
+
+                    b.Property<string>("Settings")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("settings");
+
+                    b.Property<Guid?>("SpaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("space_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_libraries");
+
+                    b.HasIndex("PersonalDriveId")
+                        .HasDatabaseName("ix_libraries_personal_drive_id");
+
+                    b.HasIndex("SpaceId")
+                        .HasDatabaseName("ix_libraries_space_id");
+
+                    b.ToTable("libraries", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.LibraryColumn", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("CatalogId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("catalog_id");
+
+                    b.PrimitiveCollection<List<string>>("Choices")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("choices");
+
+                    b.Property<string>("DefaultValue")
+                        .HasColumnType("text")
+                        .HasColumnName("default_value");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("key");
+
+                    b.Property<Guid>("LibraryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("library_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<bool>("Required")
+                        .HasColumnType("boolean")
+                        .HasColumnName("required");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("type");
+
+                    b.Property<bool>("Unique")
+                        .HasColumnType("boolean")
+                        .HasColumnName("unique");
+
+                    b.Property<string>("Validation")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("validation");
+
+                    b.Property<string>("ValidationMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("validation_message");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_library_columns");
+
+                    b.HasIndex("LibraryId", "Key")
+                        .IsUnique()
+                        .HasDatabaseName("ix_library_columns_library_id_key");
+
+                    b.ToTable("library_columns", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.LibrarySettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.PrimitiveCollection<List<string>>("AllowedExtensions")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("allowed_extensions");
+
+                    b.Property<bool>("ContentApproval")
+                        .HasColumnType("boolean")
+                        .HasColumnName("content_approval");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int?>("DeleteVersionsOlderThanDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("delete_versions_older_than_days");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_default");
+
+                    b.Property<int>("MajorLimit")
+                        .HasColumnType("integer")
+                        .HasColumnName("major_limit");
+
+                    b.Property<int?>("MaxFileSizeMb")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_file_size_mb");
+
+                    b.Property<int>("MinorLimit")
+                        .HasColumnType("integer")
+                        .HasColumnName("minor_limit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<bool>("RequireCheckout")
+                        .HasColumnType("boolean")
+                        .HasColumnName("require_checkout");
+
+                    b.Property<string>("Versioning")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("versioning");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_library_settings");
+
+                    b.HasIndex("WorkspaceId")
+                        .HasDatabaseName("ix_library_settings_workspace_id");
+
+                    b.ToTable("library_settings", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.LibraryTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("FileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("file_id");
+
+                    b.Property<Guid>("LibraryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("library_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_library_templates");
+
+                    b.HasIndex("LibraryId")
+                        .HasDatabaseName("ix_library_templates_library_id");
+
+                    b.ToTable("library_templates", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.LibraryView", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.PrimitiveCollection<List<string>>("Columns")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("columns");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Filters")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("filters");
+
+                    b.Property<bool>("Flat")
+                        .HasColumnType("boolean")
+                        .HasColumnName("flat");
+
+                    b.Property<string>("GroupBy")
+                        .HasColumnType("text")
+                        .HasColumnName("group_by");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_default");
+
+                    b.Property<Guid>("LibraryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("library_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid?>("OwnerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_user_id");
+
+                    b.Property<string>("SortBy")
+                        .HasColumnType("text")
+                        .HasColumnName("sort_by");
+
+                    b.Property<bool>("SortDescending")
+                        .HasColumnType("boolean")
+                        .HasColumnName("sort_descending");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_library_views");
+
+                    b.HasIndex("LibraryId", "OwnerUserId")
+                        .HasDatabaseName("ix_library_views_library_id_owner_user_id");
+
+                    b.ToTable("library_views", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.MembershipVersion", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("UserId")
+                        .HasName("pk_membership_versions");
+
+                    b.ToTable("membership_versions", (string)null);
                 });
 
             modelBuilder.Entity("BlueDrive.Domain.Entities.Notification", b =>
@@ -900,6 +1679,47 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.ToTable("oauth_authorization_codes", (string)null);
                 });
 
+            modelBuilder.Entity("BlueDrive.Domain.Entities.OffboardingRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("PerformedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("performed_at");
+
+                    b.Property<Guid>("PerformedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("performed_by");
+
+                    b.Property<Guid>("RecipientId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recipient_id");
+
+                    b.Property<string>("ReportJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("report_json");
+
+                    b.Property<bool>("RevokedLinks")
+                        .HasColumnType("boolean")
+                        .HasColumnName("revoked_links");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_offboarding_records");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_offboarding_records_user_id");
+
+                    b.ToTable("offboarding_records", (string)null);
+                });
+
             modelBuilder.Entity("BlueDrive.Domain.Entities.Organization", b =>
                 {
                     b.Property<Guid>("Id")
@@ -924,6 +1744,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
+
+                    b.Property<double?>("DefaultQuotaGb")
+                        .HasColumnType("double precision")
+                        .HasColumnName("default_quota_gb");
 
                     b.Property<string>("Email")
                         .HasColumnType("text")
@@ -984,6 +1808,63 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_organizations_path");
 
                     b.ToTable("organizations", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.OwnershipTransfer", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("decided_at");
+
+                    b.Property<Guid>("FromUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("from_user_id");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("item_id");
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("item_name");
+
+                    b.Property<string>("ItemType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("item_type");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("ToUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("to_user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ownership_transfers");
+
+                    b.HasIndex("ItemId", "Status")
+                        .HasDatabaseName("ix_ownership_transfers_item_id_status");
+
+                    b.HasIndex("ToUserId", "Status")
+                        .HasDatabaseName("ix_ownership_transfers_to_user_id_status");
+
+                    b.ToTable("ownership_transfers", (string)null);
                 });
 
             modelBuilder.Entity("BlueDrive.Domain.Entities.PasswordHistory", b =>
@@ -1088,6 +1969,136 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasName("pk_permissions");
 
                     b.ToTable("permissions", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.PermissionLevel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("code");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsCustomized")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_customized");
+
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_system");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<long>("Permissions")
+                        .HasColumnType("bigint")
+                        .HasColumnName("permissions");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("Id")
+                        .HasName("pk_permission_levels");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_permission_levels_code");
+
+                    b.ToTable("permission_levels", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.PersonalDrive", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<long>("QuotaBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("quota_bytes");
+
+                    b.Property<long>("UsedBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("used_bytes");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_personal_drives");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_personal_drives_user_id");
+
+                    b.ToTable("personal_drives", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.Principal", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("display_name");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid?>("RefId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ref_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_principals");
+
+                    b.HasIndex("Kind", "RefId")
+                        .HasDatabaseName("ix_principals_kind_ref_id");
+
+                    b.ToTable("principals", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.PrincipalMembership", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<Guid>("PrincipalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("principal_id");
+
+                    b.HasKey("UserId", "PrincipalId")
+                        .HasName("pk_principal_memberships");
+
+                    b.HasIndex("PrincipalId")
+                        .HasDatabaseName("ix_principal_memberships_principal_id");
+
+                    b.ToTable("principal_memberships", (string)null);
                 });
 
             modelBuilder.Entity("BlueDrive.Domain.Entities.RecentItem", b =>
@@ -1311,6 +2322,76 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.ToTable("resource_permissions", (string)null);
                 });
 
+            modelBuilder.Entity("BlueDrive.Domain.Entities.RetentionPolicy", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Basis")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("basis");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("OnExpiry")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("on_expiry");
+
+                    b.Property<Guid>("ScopeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("scope_id");
+
+                    b.Property<string>("ScopeKind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("scope_kind");
+
+                    b.Property<Guid?>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.Property<int>("Years")
+                        .HasColumnType("integer")
+                        .HasColumnName("years");
+
+                    b.HasKey("Id")
+                        .HasName("pk_retention_policies");
+
+                    b.HasIndex("ScopeKind", "ScopeId")
+                        .HasDatabaseName("ix_retention_policies_scope_kind_scope_id");
+
+                    b.ToTable("retention_policies", (string)null);
+                });
+
             modelBuilder.Entity("BlueDrive.Domain.Entities.Role", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1330,6 +2411,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("CreatedBy")
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
+
+                    b.Property<double?>("DefaultQuotaGb")
+                        .HasColumnType("double precision")
+                        .HasColumnName("default_quota_gb");
 
                     b.Property<string>("Description")
                         .HasColumnType("text")
@@ -1413,6 +2498,112 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_saved_searches_user_id");
 
                     b.ToTable("saved_searches", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.ScopeGrant", b =>
+                {
+                    b.Property<Guid>("ScopeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("scope_id");
+
+                    b.Property<Guid>("PrincipalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("principal_id");
+
+                    b.Property<long>("Permissions")
+                        .HasColumnType("bigint")
+                        .HasColumnName("permissions");
+
+                    b.HasKey("ScopeId", "PrincipalId")
+                        .HasName("pk_scope_grants");
+
+                    b.HasIndex("PrincipalId", "ScopeId")
+                        .HasDatabaseName("ix_scope_grants_principal_id_scope_id");
+
+                    b.ToTable("scope_grants", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.Securable", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("AclScopeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("acl_scope_id");
+
+                    b.Property<bool>("HasUniqueAcl")
+                        .HasColumnType("boolean")
+                        .HasColumnName("has_unique_acl");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid?>("LabelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("label_id");
+
+                    b.Property<Guid?>("LibraryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("library_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid?>("OwnerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_user_id");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_id");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasColumnType("ltree")
+                        .HasColumnName("path");
+
+                    b.Property<Guid?>("PersonalDriveId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("personal_drive_id");
+
+                    b.Property<Guid?>("SpaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("space_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_securables");
+
+                    b.HasIndex("AclScopeId")
+                        .HasDatabaseName("ix_securables_acl_scope_id");
+
+                    b.HasIndex("ParentId")
+                        .HasDatabaseName("ix_securables_parent_id");
+
+                    b.HasIndex("Path")
+                        .HasDatabaseName("ix_securables_path");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Path"), "gist");
+
+                    b.HasIndex("PersonalDriveId")
+                        .HasDatabaseName("ix_securables_personal_drive_id");
+
+                    b.HasIndex("SpaceId")
+                        .HasDatabaseName("ix_securables_space_id");
+
+                    b.ToTable("securables", (string)null);
                 });
 
             modelBuilder.Entity("BlueDrive.Domain.Entities.SecurityIncident", b =>
@@ -1519,6 +2710,69 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.ToTable("security_incidents", (string)null);
                 });
 
+            modelBuilder.Entity("BlueDrive.Domain.Entities.SensitivityLabel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("BlockAnyoneLinks")
+                        .HasColumnType("boolean")
+                        .HasColumnName("block_anyone_links");
+
+                    b.Property<bool>("BlockExternal")
+                        .HasColumnType("boolean")
+                        .HasColumnName("block_external");
+
+                    b.Property<bool>("BlockSync")
+                        .HasColumnType("boolean")
+                        .HasColumnName("block_sync");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("color");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer")
+                        .HasColumnName("priority");
+
+                    b.Property<bool>("ViewOnlyOutsideSpace")
+                        .HasColumnType("boolean")
+                        .HasColumnName("view_only_outside_space");
+
+                    b.Property<bool>("Watermark")
+                        .HasColumnType("boolean")
+                        .HasColumnName("watermark");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sensitivity_labels");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_sensitivity_labels_name");
+
+                    b.ToTable("sensitivity_labels", (string)null);
+                });
+
             modelBuilder.Entity("BlueDrive.Domain.Entities.Share", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1613,9 +2867,17 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_revoked");
 
+                    b.Property<Guid?>("LevelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("level_id");
+
                     b.Property<int?>("MaxAccessCount")
                         .HasColumnType("integer")
                         .HasColumnName("max_access_count");
+
+                    b.Property<DateTime?>("ReminderSentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reminder_sent_at");
 
                     b.Property<bool>("RequireLogin")
                         .HasColumnType("boolean")
@@ -1631,10 +2893,17 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(40)")
                         .HasColumnName("resource_type");
 
-                    b.Property<string>("Token")
+                    b.Property<string>("Scope")
                         .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("token");
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("scope");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("token_hash");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -1647,14 +2916,207 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.HasKey("Id")
                         .HasName("pk_share_links");
 
-                    b.HasIndex("Token")
+                    b.HasIndex("TokenHash")
                         .IsUnique()
-                        .HasDatabaseName("ix_share_links_token");
+                        .HasDatabaseName("ix_share_links_token_hash");
 
                     b.HasIndex("ResourceType", "ResourceId")
                         .HasDatabaseName("ix_share_links_resource_type_resource_id");
 
                     b.ToTable("share_links", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.ShareLinkMember", b =>
+                {
+                    b.Property<Guid>("LinkId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("link_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("added_at");
+
+                    b.HasKey("LinkId", "UserId")
+                        .HasName("pk_share_link_members");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_share_link_members_user_id");
+
+                    b.ToTable("share_link_members", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.Shortcut", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<Guid?>("FolderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("folder_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("target_id");
+
+                    b.Property<string>("TargetType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("target_type");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_shortcuts");
+
+                    b.HasIndex("TargetId")
+                        .HasDatabaseName("ix_shortcuts_target_id");
+
+                    b.HasIndex("WorkspaceId", "FolderId")
+                        .HasDatabaseName("ix_shortcuts_workspace_id_folder_id");
+
+                    b.ToTable("shortcuts", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.Space", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("CoverFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cover_file_id");
+
+                    b.Property<Guid?>("DefaultLabelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("default_label_id");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<Guid?>("OrgUnitId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("org_unit_id");
+
+                    b.Property<string>("Policy")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("policy");
+
+                    b.Property<long>("QuotaBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("quota_bytes");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Template")
+                        .HasColumnType("text")
+                        .HasColumnName("template");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<long>("UsedBytes")
+                        .HasColumnType("bigint")
+                        .HasColumnName("used_bytes");
+
+                    b.HasKey("Id")
+                        .HasName("pk_spaces");
+
+                    b.HasIndex("OrgUnitId")
+                        .HasDatabaseName("ix_spaces_org_unit_id");
+
+                    b.ToTable("spaces", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.SpaceGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("PermissionLevelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("permission_level_id");
+
+                    b.Property<Guid>("RootId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("root_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_space_groups");
+
+                    b.HasIndex("RootId", "Kind")
+                        .HasDatabaseName("ix_space_groups_root_id_kind");
+
+                    b.ToTable("space_groups", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.SpaceGroupMember", b =>
+                {
+                    b.Property<Guid>("SpaceGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("space_group_id");
+
+                    b.Property<Guid>("PrincipalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("principal_id");
+
+                    b.HasKey("SpaceGroupId", "PrincipalId")
+                        .HasName("pk_space_group_members");
+
+                    b.HasIndex("PrincipalId")
+                        .HasDatabaseName("ix_space_group_members_principal_id");
+
+                    b.ToTable("space_group_members", (string)null);
                 });
 
             modelBuilder.Entity("BlueDrive.Domain.Entities.StoredFile", b =>
@@ -1681,6 +3143,14 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.Property<bool>("BreakInheritance")
                         .HasColumnType("boolean")
                         .HasColumnName("break_inheritance");
+
+                    b.Property<DateTime?>("CheckedOutAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("checked_out_at");
+
+                    b.Property<Guid?>("CheckedOutBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("checked_out_by");
 
                     b.Property<string>("ChecksumSha256")
                         .HasColumnType("text")
@@ -1720,6 +3190,11 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(20)")
                         .HasColumnName("extension");
 
+                    b.Property<string>("ExternalSharing")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("external_sharing");
+
                     b.Property<Guid?>("FolderId")
                         .HasColumnType("uuid")
                         .HasColumnName("folder_id");
@@ -1735,6 +3210,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsTrashRoot")
                         .HasColumnType("boolean")
                         .HasColumnName("is_trash_root");
+
+                    b.Property<Guid?>("LabelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("label_id");
 
                     b.Property<string>("MediaType")
                         .IsRequired()
@@ -1758,9 +3237,21 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("original_folder_id");
 
+                    b.Property<string>("OriginalPath")
+                        .HasColumnType("text")
+                        .HasColumnName("original_path");
+
+                    b.Property<DateTime?>("PreservedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("preserved_at");
+
                     b.Property<string>("PreviewKey")
                         .HasColumnType("text")
                         .HasColumnName("preview_key");
+
+                    b.Property<Guid?>("PublishedVersionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("published_version_id");
 
                     b.Property<string>("RejectionReason")
                         .HasColumnType("text")
@@ -1779,6 +3270,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.Property<NpgsqlTsVector>("SearchVector")
                         .HasColumnType("tsvector")
                         .HasColumnName("search_vector");
+
+                    b.Property<DateTime?>("SecondStageAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("second_stage_at");
 
                     b.Property<long>("SizeBytes")
                         .HasColumnType("bigint")
@@ -2214,6 +3709,10 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_active");
 
+                    b.Property<bool>("IsGuest")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_guest");
+
                     b.Property<bool>("IsLocked")
                         .HasColumnType("boolean")
                         .HasColumnName("is_locked");
@@ -2471,6 +3970,36 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AccessRequestDeciders")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("access_request_deciders");
+
+                    b.Property<bool>("ActivityForMembers")
+                        .HasColumnType("boolean")
+                        .HasColumnName("activity_for_members");
+
+                    b.Property<bool>("AllowDownload")
+                        .HasColumnType("boolean")
+                        .HasColumnName("allow_download");
+
+                    b.Property<bool>("AllowItemSharing")
+                        .HasColumnType("boolean")
+                        .HasColumnName("allow_item_sharing");
+
+                    b.Property<bool>("AllowMoveOut")
+                        .HasColumnType("boolean")
+                        .HasColumnName("allow_move_out");
+
+                    b.Property<bool>("AllowSync")
+                        .HasColumnType("boolean")
+                        .HasColumnName("allow_sync");
+
+                    b.Property<Guid?>("CoverFileId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cover_file_id");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -2479,13 +4008,26 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("created_by");
 
+                    b.Property<Guid?>("DefaultLabelId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("default_label_id");
+
                     b.Property<string>("Description")
                         .HasColumnType("text")
                         .HasColumnName("description");
 
+                    b.Property<string>("ExternalSharing")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("external_sharing");
+
                     b.Property<bool>("IsLocked")
                         .HasColumnType("boolean")
                         .HasColumnName("is_locked");
+
+                    b.Property<bool>("MembersShareOutside")
+                        .HasColumnType("boolean")
+                        .HasColumnName("members_share_outside");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -2503,6 +4045,24 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                     b.Property<long>("QuotaBytes")
                         .HasColumnType("bigint")
                         .HasColumnName("quota_bytes");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("StatusChangedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("status_changed_at");
+
+                    b.Property<string>("Template")
+                        .HasColumnType("text")
+                        .HasColumnName("template");
+
+                    b.Property<int?>("TrashRetentionDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("trash_retention_days");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -2532,6 +4092,41 @@ namespace BlueDrive.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_workspaces_owner_id_type");
 
                     b.ToTable("workspaces", (string)null);
+                });
+
+            modelBuilder.Entity("BlueDrive.Domain.Entities.WorkspaceGroupMember", b =>
+                {
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.Property<Guid>("PrincipalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("principal_id");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("added_at");
+
+                    b.Property<string>("MemberRole")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("member_role");
+
+                    b.Property<string>("PrincipalKind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("principal_kind");
+
+                    b.HasKey("WorkspaceId", "PrincipalId")
+                        .HasName("pk_workspace_group_members");
+
+                    b.HasIndex("PrincipalId")
+                        .HasDatabaseName("ix_workspace_group_members_principal_id");
+
+                    b.ToTable("workspace_group_members", (string)null);
                 });
 
             modelBuilder.Entity("BlueDrive.Domain.Entities.WorkspaceMember", b =>

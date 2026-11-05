@@ -1,7 +1,7 @@
 import { api } from './client'
 import { cleanParams } from './http'
 import type { UserLookupDto } from '@/types/admin'
-import type { ApprovalStatus } from '@/types/drive'
+import type { ApprovalStatus, DriveItem } from '@/types/drive'
 import type { Paged, PageParams } from '@/types/common'
 import {
   toAccessLevel,
@@ -103,4 +103,35 @@ export async function rejectFile(fileId: string, reason: string): Promise<void> 
 
 export async function submitForApproval(fileId: string): Promise<void> {
   await api.post(`/approvals/${fileId}/submit`)
+}
+
+export interface SharedByMe {
+  item: DriveItem
+  people: number
+  links: number
+  lastSharedAt: string
+}
+
+export async function listSharedByMe(params: PageParams & { q?: string }): Promise<Paged<SharedByMe>> {
+  const { data } = await api.get<Paged<SharedByMe>>('/shares/by-me', { params })
+  return data
+}
+
+export interface StorageItem {
+  item: DriveItem
+  totalBytes: number
+  versions: number
+  /** Versions other than the current and the published one (what "Xóa phiên bản cũ" frees). */
+  oldVersionBytes: number
+}
+
+/** My Drive, or a Space I manage (spec 8.2). */
+export async function listStorageUsage(params: PageParams, workspaceId?: string | null): Promise<Paged<StorageItem>> {
+  const { data } = await api.get<Paged<StorageItem>>('/storage/usage', { params: { ...params, workspaceId: workspaceId ?? undefined } })
+  return data
+}
+
+export async function pruneOldVersions(fileId: string): Promise<{ deleted: number; freedBytes: number }> {
+  const { data } = await api.post<{ deleted: number; freedBytes: number }>(`/files/${fileId}/versions/prune`)
+  return data
 }

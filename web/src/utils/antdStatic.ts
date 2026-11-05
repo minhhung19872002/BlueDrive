@@ -1,4 +1,4 @@
-import { App, message as staticMessage } from 'antd'
+import { App, Modal, message as staticMessage } from 'antd'
 
 type AppApi = ReturnType<typeof App.useApp>
 
@@ -11,4 +11,9 @@ export function setAntdApp(api: AppApi): void {
 
 export function getMessage(): AppApi['message'] {
   return appApi?.message ?? staticMessage
+}
+
+/** Confirm dialog (context-aware when the app is mounted). */
+export function getModal(): { confirm: typeof Modal.confirm } {
+  return appApi?.modal ? { confirm: (props) => appApi!.modal.confirm(props) } : Modal
 }

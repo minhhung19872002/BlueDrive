@@ -11,7 +11,8 @@ using Microsoft.EntityFrameworkCore;
 namespace BlueDrive.Application.Features.Workspaces;
 
 public sealed record WorkspaceDto(Guid Id, string Name, string? Description, WorkspaceType Type, Guid? OrganizationId, string? OrganizationName,
-    Guid OwnerId, string OwnerName, long QuotaBytes, long UsedBytes, bool IsLocked, WorkspaceMemberRole? MyRole, int MemberCount, DateTime CreatedAt);
+    Guid OwnerId, string OwnerName, long QuotaBytes, long UsedBytes, bool IsLocked, WorkspaceMemberRole? MyRole, int MemberCount, DateTime CreatedAt,
+    SpaceStatus Status = SpaceStatus.Active, Guid? CoverFileId = null);
 
 public sealed record WorkspaceMemberDto(Guid UserId, string Username, string FullName, string? OrganizationName, WorkspaceMemberRole MemberRole, DateTime AddedAt);
 
@@ -20,15 +21,20 @@ public static class WorkspaceQueries
     public static IQueryable<WorkspaceDto> Project(IAppDbContext db, IQueryable<Workspace> q, Guid userId) => q.Select(w => new WorkspaceDto(
         w.Id, w.Name, w.Description, w.Type, w.OrganizationId, w.Organization != null ? w.Organization.Name : null, w.OwnerId, w.Owner!.FullName,
         w.QuotaBytes, w.UsedBytes, w.IsLocked, w.Members.Where(m => m.UserId == userId).Select(m => (WorkspaceMemberRole?)m.MemberRole).FirstOrDefault(),
-        w.Members.Count, w.CreatedAt));
+        w.Members.Count, w.CreatedAt, w.Status, w.CoverFileId));
 
-    /// <summary>Workspaces the user belongs to or has been granted at workspace level (user/group/org/role ACL).</summary>
-    public static async Task<IQueryable<Workspace>> AccessibleAsync(IAppDbContext db, IResourceAuthorizationService auth, Guid userId, CancellationToken ct)
+    /// <summary>
+    /// Workspaces whose root the user may see on the new permission model: their Drive của tôi, Spaces they are a member of (Space groups),
+    /// and Spaces granted to them, one of their groups, units or roles at Space level.
+    /// </summary>
+    public static async Task<IQueryable<Workspace>> AccessibleAsync(IAppDbContext db, Guid userId, CancellationToken ct)
     {
-        var p = await auth.GetPrincipalsAsync(userId, ct);
-        var principalIds = p.GroupIds.Concat(p.OrganizationIds).Concat(p.RoleIds).Append(userId).ToList();
-        return db.Workspaces.AsNoTracking().Where(w => w.OwnerId == userId || w.Members.Any(m => m.UserId == userId) ||
-            db.ResourcePermissions.Any(a => a.ResourceType == ResourceType.Workspace && a.ResourceId == w.Id && principalIds.Contains(a.PrincipalId)));
+        var principals = await db.PrincipalMemberships.Where(m => m.UserId == userId).Select(m => m.PrincipalId).ToListAsync(ct);
+        var scopes = db.ScopeGrants.Where(g => principals.Contains(g.PrincipalId) && (g.Permissions & Domain.Permissions.AccessRight.ViewItems) != 0).Select(g => g.ScopeId);
+        var roots = db.Securables.Where(s => (s.Kind == SecurableKind.Space || s.Kind == SecurableKind.Drive) && !s.IsDeleted
+                                             && (s.OwnerUserId == userId || scopes.Contains(s.AclScopeId))).Select(s => s.Id);
+        // A deleted Space (system trash) is nobody's to open.
+        return db.Workspaces.AsNoTracking().Where(w => roots.Contains(w.Id) && w.Status != SpaceStatus.Deleted);
     }
 }
 
@@ -54,19 +60,21 @@ public static class WorkspaceManagement
     }
 }
 
-public sealed record ListMyWorkspacesQuery(WorkspaceType? Type) : IRequest<IReadOnlyList<WorkspaceDto>>;
+/// <param name="IncludeArchived">Archived Spaces are hidden from the default list (spec 6) but can be listed.</param>
+public sealed record ListMyWorkspacesQuery(WorkspaceType? Type, bool IncludeArchived = false) : IRequest<IReadOnlyList<WorkspaceDto>>;
 
-public sealed class ListMyWorkspacesHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms)
+public sealed class ListMyWorkspacesHandler(IAppDbContext db, ICurrentUser me, IPermissionService perms)
     : IRequestHandler<ListMyWorkspacesQuery, IReadOnlyList<WorkspaceDto>>
 {
     public async Task<IReadOnlyList<WorkspaceDto>> Handle(ListMyWorkspacesQuery q, CancellationToken ct)
     {
         var uid = me.RequireUserId();
-        var query = await WorkspaceQueries.AccessibleAsync(db, auth, uid, ct);
+        var query = await WorkspaceQueries.AccessibleAsync(db, uid, ct);
         // Group / organization workspaces need "Nhóm tài nguyên - Xem"; the personal space is always listed.
         var seesGroups = await perms.HasAsync(uid, Perm.WorkspaceView, ct);
         query = query.Where(w => w.Type == WorkspaceType.Personal ? w.OwnerId == uid : seesGroups);
         if (q.Type.HasValue) query = query.Where(w => w.Type == q.Type);
+        if (!q.IncludeArchived) query = query.Where(w => w.Status == SpaceStatus.Active);
         return await WorkspaceQueries.Project(db, query.OrderBy(w => w.Type).ThenBy(w => w.Name), uid).ToListAsync(ct);
     }
 }
@@ -78,7 +86,7 @@ public sealed class ListAllWorkspacesHandler(IAppDbContext db, ICurrentUser me) 
 {
     public Task<PagedResult<WorkspaceDto>> Handle(ListAllWorkspacesQuery q, CancellationToken ct)
     {
-        var query = db.Workspaces.AsNoTracking().Where(w => q.Type.HasValue ? w.Type == q.Type : w.Type != WorkspaceType.Personal);
+        var query = db.Workspaces.AsNoTracking().Where(w => (q.Type.HasValue ? w.Type == q.Type : w.Type != WorkspaceType.Personal) && w.Status != SpaceStatus.Deleted);
         if (q.OrganizationId.HasValue) query = query.Where(w => w.OrganizationId == q.OrganizationId);
         if (q.IsLocked.HasValue) query = query.Where(w => w.IsLocked == q.IsLocked);
         if (!string.IsNullOrWhiteSpace(q.Q))
@@ -99,12 +107,14 @@ public sealed class GetWorkspaceHandler(IAppDbContext db, ICurrentUser me, IReso
     {
         var uid = me.RequireUserId();
         await auth.EnsureAsync(uid, ResourceType.Workspace, q.Id, AccessLevel.View, ct);
-        return await WorkspaceQueries.Project(db, db.Workspaces.AsNoTracking().Where(w => w.Id == q.Id), uid).FirstAsync(ct);
+        return await WorkspaceQueries.Project(db, db.Workspaces.AsNoTracking().Where(w => w.Id == q.Id && w.Status != SpaceStatus.Deleted), uid).FirstOrDefaultAsync(ct)
+               ?? throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
     }
 }
 
+/// <param name="Template">On creation: Space template (blank, department, project, campaign) whose folders are made at once.</param>
 public sealed record SaveWorkspaceCommand(Guid? Id, string Name, string? Description, WorkspaceType Type, Guid? OrganizationId, double? QuotaGb,
-    IReadOnlyList<Guid>? MemberIds, WorkspaceMemberRole MemberRole = WorkspaceMemberRole.Editor) : IRequest<Guid>;
+    IReadOnlyList<Guid>? MemberIds, WorkspaceMemberRole MemberRole = WorkspaceMemberRole.Editor, string? Template = null) : IRequest<Guid>;
 
 public sealed class SaveWorkspaceValidator : AbstractValidator<SaveWorkspaceCommand>
 {
@@ -115,11 +125,12 @@ public sealed class SaveWorkspaceValidator : AbstractValidator<SaveWorkspaceComm
         RuleFor(x => x.OrganizationId).NotNull().When(x => x.Type == WorkspaceType.Organization).WithMessage("Nhóm tài nguyên của đơn vị phải chọn đơn vị.");
         RuleFor(x => x.QuotaGb).InclusiveBetween(0, 100_000).When(x => x.QuotaGb.HasValue).WithMessage("Dung lượng không hợp lệ.");
         RuleFor(x => x.MemberRole).Must(r => r != WorkspaceMemberRole.Owner).WithMessage("Không thể thêm thành viên với vai trò trưởng nhóm.");
+        RuleFor(x => x.Template).Must(t => t is null || SpaceTemplates.Find(t) is not null).WithMessage("Mẫu Space không hợp lệ.");
     }
 }
 
 public sealed class SaveWorkspaceHandler(IAppDbContext db, ICurrentUser me, IPermissionService perms, ISettingsService settings,
-    IResourceAuthorizationService auth, IAuditLogger audit, TimeProvider clock) : IRequestHandler<SaveWorkspaceCommand, Guid>
+    IResourceAuthorizationService auth, IAuditLogger audit, TimeProvider clock, Access.LegacyAclSync sync) : IRequestHandler<SaveWorkspaceCommand, Guid>
 {
     public async Task<Guid> Handle(SaveWorkspaceCommand cmd, CancellationToken ct)
     {
@@ -134,11 +145,14 @@ public sealed class SaveWorkspaceHandler(IAppDbContext db, ICurrentUser me, IPer
             ws = new Workspace { OwnerId = uid, Type = cmd.Type, QuotaBytes = (long)((isAdmin && cmd.QuotaGb.HasValue ? cmd.QuotaGb.Value : defaultGb) * WorkspaceProvisioning.Gb) };
             ws.Members.Add(new WorkspaceMember { WorkspaceId = ws.Id, UserId = uid, MemberRole = WorkspaceMemberRole.Owner, AddedAt = clock.GetUtcNow().UtcDateTime });
             db.Workspaces.Add(ws);
+            if (SpaceTemplates.Find(cmd.Template) is { } template) SpaceTemplates.Apply(db, ws, template);
         }
         else
         {
-            ws = await db.Workspaces.Include(w => w.Members).FirstOrDefaultAsync(w => w.Id == cmd.Id, ct) ?? throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
+            ws = await db.Workspaces.Include(w => w.Members).FirstOrDefaultAsync(w => w.Id == cmd.Id && w.Status != SpaceStatus.Deleted, ct)
+                 ?? throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
             if (ws.Type == WorkspaceType.Personal) throw new AppException("Không gian cá nhân không chỉnh sửa tại đây.");
+            if (ws.Status == SpaceStatus.Archived) throw new AppException("Space đã lưu trữ: chỉ đọc. Hãy đưa Space hoạt động lại trước khi sửa.", 423);
             await WorkspaceManagement.EnsureCanChangeAsync(db, auth, perms, uid, ws, ct);
             WorkspaceManagement.EnsureNotLocked(ws);
             if (cmd.QuotaGb.HasValue && isAdmin) ws.QuotaBytes = (long)(cmd.QuotaGb.Value * WorkspaceProvisioning.Gb);
@@ -158,6 +172,7 @@ public sealed class SaveWorkspaceHandler(IAppDbContext db, ICurrentUser me, IPer
         if (isNew && cmd.Type == WorkspaceType.Organization && cmd.OrganizationId.HasValue)
             db.ResourcePermissions.Add(new ResourcePermission { ResourceType = ResourceType.Workspace, ResourceId = ws.Id, PrincipalType = PrincipalType.Organization, PrincipalId = cmd.OrganizationId.Value, AccessLevel = AccessLevel.Download });
         await db.SaveChangesAsync(ct);
+        if (isNew) await sync.SyncAsync(ResourceType.Workspace, ws.Id, copyOnBreak: true, uid, ct);
         await audit.LogAsync(new AuditEntry(isNew ? AuditAction.Create : AuditAction.Edit, ResourceType.Workspace, ws.Id, ws.Name, ws.Id,
             new { ws.Type, ws.OrganizationId, quotaBytes = ws.QuotaBytes, members = cmd.MemberIds }), ct);
         return ws.Id;
@@ -166,7 +181,8 @@ public sealed class SaveWorkspaceHandler(IAppDbContext db, ICurrentUser me, IPer
 
 public sealed record DeleteWorkspaceCommand(Guid Id) : IRequest<Unit>;
 
-public sealed class DeleteWorkspaceHandler(IAppDbContext db, ICurrentUser me, IPermissionService perms, IAuditLogger audit) : IRequestHandler<DeleteWorkspaceCommand, Unit>
+public sealed class DeleteWorkspaceHandler(IAppDbContext db, ICurrentUser me, IPermissionService perms, IAuditLogger audit, TimeProvider clock, Retention.RetentionService retention)
+    : IRequestHandler<DeleteWorkspaceCommand, Unit>
 {
     public async Task<Unit> Handle(DeleteWorkspaceCommand cmd, CancellationToken ct)
     {
@@ -174,14 +190,14 @@ public sealed class DeleteWorkspaceHandler(IAppDbContext db, ICurrentUser me, IP
         var ws = await db.Workspaces.FirstOrDefaultAsync(w => w.Id == cmd.Id, ct) ?? throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
         if (ws.Type == WorkspaceType.Personal) throw new AppException("Không thể xóa không gian cá nhân.");
         if (ws.OwnerId != uid && !await perms.HasAsync(uid, Perm.WorkspaceDelete, ct)) throw new ForbiddenException("Chỉ trưởng nhóm hoặc quản trị viên được xóa nhóm tài nguyên.");
-        if (await db.Files.AnyAsync(f => f.WorkspaceId == ws.Id, ct))
-            throw new ConflictException("Nhóm tài nguyên còn tư liệu (kể cả trong thùng rác). Hãy xóa vĩnh viễn hoặc di chuyển tư liệu trước khi xóa nhóm.");
-        await db.ResourcePermissions.Where(p => p.ResourceType == ResourceType.Workspace && p.ResourceId == ws.Id).ExecuteDeleteAsync(ct);
-        await db.WorkspaceMembers.Where(m => m.WorkspaceId == ws.Id).ExecuteDeleteAsync(ct);
-        await db.Folders.Where(f => f.WorkspaceId == ws.Id).ExecuteDeleteAsync(ct);
-        db.Workspaces.Remove(ws);
+        if (ws.Status == SpaceStatus.Deleted) throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
+        // Spec 6: a Space under a retention policy or a legal hold cannot be deleted.
+        if (await retention.WorkspaceBlockAsync(ws.Id, ct) is { } block) throw new ConflictException($"Không xóa được Space: đang có {block}.");
+        // To the system trash (spec 6): nobody opens it any more; administrators restore it within 93 days, then it is purged.
+        ws.Status = SpaceStatus.Deleted;
+        ws.StatusChangedAt = clock.GetUtcNow().UtcDateTime;
         await db.SaveChangesAsync(ct);
-        await audit.LogAsync(new AuditEntry(AuditAction.Delete, ResourceType.Workspace, ws.Id, ws.Name, ws.Id), ct);
+        await audit.LogAsync(new AuditEntry(AuditAction.Delete, ResourceType.Workspace, ws.Id, ws.Name, ws.Id, new { trashDays = SpaceHandlers.TrashLife.TotalDays }), ct);
         return Unit.Value;
     }
 }
@@ -314,28 +330,37 @@ public sealed class SetWorkspaceQuotaHandler(IAppDbContext db, IAuditLogger audi
 }
 
 /// <summary>#59: set the personal quota of one user, or of every user of a unit (optionally including sub-units).</summary>
-public sealed record SetPersonalQuotaCommand(IReadOnlyList<Guid>? UserIds, Guid? OrganizationId, bool IncludeSubOrganizations, double QuotaGb) : IRequest<int>;
+public sealed record SetPersonalQuotaCommand(IReadOnlyList<Guid>? UserIds, Guid? OrganizationId, bool IncludeSubOrganizations, double QuotaGb,
+    Guid? RoleId = null, bool SetAsDefault = false) : IRequest<int>;
 
 public sealed class SetPersonalQuotaHandler(IAppDbContext db, IAuditLogger audit) : IRequestHandler<SetPersonalQuotaCommand, int>
 {
     public async Task<int> Handle(SetPersonalQuotaCommand cmd, CancellationToken ct)
     {
         if (cmd.QuotaGb < 0) throw new AppException("Dung lượng không hợp lệ.");
-        if (cmd.UserIds is not { Count: > 0 } && cmd.OrganizationId is null) throw new AppException("Vui lòng chọn người dùng hoặc đơn vị.");
+        if (cmd.UserIds is not { Count: > 0 } && cmd.OrganizationId is null && cmd.RoleId is null) throw new AppException("Vui lòng chọn người dùng, đơn vị hoặc vai trò.");
         var bytes = (long)(cmd.QuotaGb * WorkspaceProvisioning.Gb);
         var users = db.Users.AsQueryable();
         if (cmd.UserIds is { Count: > 0 }) users = users.Where(u => cmd.UserIds.Contains(u.Id));
+        else if (cmd.RoleId is { } roleId)
+        {
+            if (!await db.Roles.AnyAsync(r => r.Id == roleId, ct)) throw new NotFoundException("Không tìm thấy vai trò.");
+            users = users.Where(u => u.UserRoles.Any(r => r.RoleId == roleId));
+            if (cmd.SetAsDefault) await db.Roles.Where(r => r.Id == roleId).ExecuteUpdateAsync(s => s.SetProperty(r => r.DefaultQuotaGb, cmd.QuotaGb), ct);
+        }
         else if (cmd.IncludeSubOrganizations)
         {
             var path = await db.Organizations.Where(o => o.Id == cmd.OrganizationId).Select(o => o.Path).FirstOrDefaultAsync(ct) ?? throw new NotFoundException("Không tìm thấy đơn vị.");
             users = users.Where(u => u.Organization != null && u.Organization.Path.StartsWith(path));
         }
         else users = users.Where(u => u.OrganizationId == cmd.OrganizationId);
+        if (cmd.SetAsDefault && cmd.RoleId is null && cmd.UserIds is not { Count: > 0 } && cmd.OrganizationId is { } org)
+            await db.Organizations.Where(o => o.Id == org).ExecuteUpdateAsync(s => s.SetProperty(o => o.DefaultQuotaGb, cmd.QuotaGb), ct);
         var ids = await users.Select(u => u.Id).ToListAsync(ct);
         await db.Users.Where(u => ids.Contains(u.Id)).ExecuteUpdateAsync(s => s.SetProperty(u => u.QuotaBytes, bytes), ct);
         await db.Workspaces.Where(w => w.Type == WorkspaceType.Personal && ids.Contains(w.OwnerId)).ExecuteUpdateAsync(s => s.SetProperty(w => w.QuotaBytes, bytes), ct);
         await audit.LogAsync(new AuditEntry(AuditAction.ConfigChange, ResourceName: "Cấu hình dung lượng cá nhân",
-            Detail: new { cmd.OrganizationId, cmd.IncludeSubOrganizations, users = ids.Count, quotaBytes = bytes }), ct);
+            Detail: new { cmd.OrganizationId, cmd.IncludeSubOrganizations, cmd.RoleId, cmd.SetAsDefault, users = ids.Count, quotaBytes = bytes }), ct);
         return ids.Count;
     }
 }

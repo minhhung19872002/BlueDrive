@@ -68,16 +68,16 @@ async function shareWith(page: Page, fileName: string, user: TestUser, level: Re
   await contextMenu(page, fileName)
   await page.getByRole('menuitem', { name: /Chia sẻ$/ }).click()
   const dlg = page.getByRole('dialog')
-  await dlg.getByRole('tab', { name: /Chia sẻ nội bộ/ }).click()
+  await dlg.getByRole('tab', { name: /Người có quyền truy cập/ }).click()
   await dlg.locator('.ant-select').first().click()
   await page.keyboard.type(user.fullName)
   await page.locator('.ant-select-dropdown:visible').getByText(user.fullName).first().click()
   await page.keyboard.press('Escape')
-  await dlg.locator('.ant-select').nth(1).click()
+  await dlg.getByRole('combobox', { name: 'Cấp quyền' }).first().click({ force: true })
   await page.locator('.ant-select-dropdown:visible').getByTitle(level).or(page.locator('.ant-select-dropdown:visible').getByText(level)).first().click()
   await dlg.getByRole('textbox', { name: /Lời nhắn/ }).fill(`Gửi ${user.fullName} (E2E)`)
   await Promise.all([
-    page.waitForResponse((r) => r.url().endsWith('/api/v1/shares') && r.request().method() === 'POST' && r.ok()),
+    page.waitForResponse((r) => r.url().endsWith('/permissions') && r.request().method() === 'POST' && r.ok()),
     dlg.getByRole('button', { name: /Chia sẻ$/ }).last().click(),
   ])
   await expect(dlg.getByText(user.fullName).last()).toBeVisible()
@@ -103,7 +103,7 @@ test.afterAll(async () => {
     const refs = items.map((i: { type: string; id: string }) => ({ type: i.type, id: i.id }))
     if (refs.length) {
       await api.post('/api/v1/items/delete', { headers: bearer(u), data: { items: refs } })
-      await api.post('/api/v1/trash/purge', { headers: bearer(u), data: refs })
+      for (let i = 0; i < 2; i++) await api.post('/api/v1/trash/purge', { headers: bearer(u), data: refs })
     }
     await api.delete(`/api/v1/users/${u.id}`, { headers: admin })
   }
@@ -121,7 +121,7 @@ test('hai người dùng chia sẻ tài liệu qua lại', async ({ browser }) =
   // A → B with edit rights.
   const pageA = await loginPage(browser, a)
   await pageA.goto('/my-drive')
-  await shareWith(pageA, fileA, b, /^Chỉnh sửa$/)
+  await shareWith(pageA, fileA, b, /^Biên tập$/)
 
   // B: notification + "Được chia sẻ" + open + rename (edit right).
   const pageB = await loginPage(browser, b)
@@ -148,7 +148,7 @@ test('hai người dùng chia sẻ tài liệu qua lại', async ({ browser }) =
 
   // B → A view only.
   await pageB.goto('/my-drive')
-  await shareWith(pageB, fileB, a, /^Xem$/)
+  await shareWith(pageB, fileB, a, /^Người xem$/)
   await pageA.goto('/shared')
   const rowA = pageA.getByRole('row', { name: new RegExp(fileB) })
   await expect(rowA).toBeVisible({ timeout: 15_000 })
@@ -176,7 +176,7 @@ test('hai người dùng chia sẻ tài liệu qua lại', async ({ browser }) =
   })
   expect(deep.ok()).toBeTruthy()
   await pageA.goto('/my-drive')
-  await shareWith(pageA, folderName, b, /^Xem$/)
+  await shareWith(pageA, folderName, b, /^Người xem$/)
   await pageB.goto('/shared')
   await pageB.getByRole('row', { name: new RegExp(folderName) }).getByText(folderName).click()
   await expect(pageB).toHaveURL(new RegExp(`folder=${top}`))
@@ -185,23 +185,43 @@ test('hai người dùng chia sẻ tài liệu qua lại', async ({ browser }) =
   await pageB.getByRole('row', { name: new RegExp(`sau-${stamp}`) }).getByText(`sau-${stamp}.txt`).click()
   await expect(pageB.getByText('Tệp trong thư mục con')).toBeVisible({ timeout: 15_000 })
   await pageB.getByRole('button', { name: 'Đóng' }).first().click()
-  // The sub-folder's share dialog lists the inherited share; it cannot be removed there
-  // (only in "Quản lý quyền truy cập", which stops inheriting first).
+  // The sub-folder's share dialog lists the inherited access with where it comes from; it cannot be removed there
+  // (stop inheriting first).
   await pageA.goto(`/my-drive?folder=${top}`)
   await contextMenu(pageA, 'Thư mục con')
   await pageA.getByRole('menuitem', { name: /Chia sẻ$/ }).click()
   const inheritedRow = pageA.getByRole('dialog').getByRole('listitem').filter({ hasText: b.fullName })
   await expect(inheritedRow).toBeVisible()
-  await expect(inheritedRow.getByRole('button', { name: 'Hủy chia sẻ' })).toHaveCount(0)
+  await expect(inheritedRow.getByRole('button', { name: 'Gỡ quyền' })).toHaveCount(0)
   await pageA.getByRole('dialog').getByRole('button', { name: /Close|Đóng/ }).first().click()
 
   // A revokes the share → B no longer sees nor opens the file.
-  const shares = await (await api.get(`/api/v1/shares?resourceType=file&resourceId=${fileAId}`, { headers: bearer(a) })).json()
-  for (const s of shares.items ?? shares) expect((await api.delete(`/api/v1/shares/${s.id}`, { headers: bearer(a) })).ok()).toBeTruthy()
+  const access: { entries: { id: string; principalId: string; editable: boolean }[] } = await (
+    await api.get(`/api/v1/items/${fileAId}/permissions`, { headers: bearer(a) })
+  ).json()
+  const granted = access.entries.filter((e) => e.principalId === b.id && e.editable)
+  expect(granted.length).toBeGreaterThan(0)
+  for (const e of granted) expect((await api.delete(`/api/v1/items/${fileAId}/permissions/${e.id}`, { headers: bearer(a) })).ok()).toBeTruthy()
   await pageB.goto('/shared')
   await pageB.waitForLoadState('networkidle')
   await expect(pageB.getByRole('row', { name: new RegExp(renamed) })).toHaveCount(0)
   expect((await api.get(`/api/v1/files/${fileAId}`, { headers: bearer(b) })).status()).toBe(404)
+
+  // Spec 5.2: B opens the address → "Bạn cần quyền truy cập" → asks; A approves on "Yêu cầu quyền truy cập" → B opens it again.
+  await pageB.goto(`/files/${fileAId}`)
+  await expect(pageB.getByText('Bạn cần quyền truy cập')).toBeVisible({ timeout: 15_000 })
+  await pageB.getByRole('textbox', { name: 'Lời nhắn' }).fill('Cho mình xem lại báo cáo (E2E)')
+  await pageB.getByRole('button', { name: 'Gửi yêu cầu' }).click()
+  await expect(pageB.getByText(/đang chờ duyệt/)).toBeVisible()
+  await pageA.goto('/access-requests')
+  const request = pageA.getByRole('row', { name: new RegExp(b.fullName) })
+  await expect(request).toContainText(renamed)
+  await request.getByRole('button', { name: 'Duyệt' }).click()
+  await Promise.all([
+    pageA.waitForResponse((r) => r.url().includes('/decide') && r.ok()),
+    pageA.getByRole('dialog').getByRole('button', { name: 'Duyệt' }).click(),
+  ])
+  expect((await api.get(`/api/v1/files/${fileAId}`, { headers: bearer(b) })).ok()).toBeTruthy()
 
   await pageA.context().close()
   await pageB.context().close()

@@ -3,6 +3,7 @@ import { Alert, Button, Card, Col, Empty, Form, Input, InputNumber, Row, Select,
 import { SaveOutlined, UndoOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { EXTERNAL_LEVELS } from '@/api/permissions'
 import { applyFieldErrors } from '@/api/formErrors'
 import { qk } from '@/api/queryKeys'
 import { listSettings, updateSettings } from '@/api/system'
@@ -42,6 +43,8 @@ function SettingInput({ setting, disabled }: { setting: SettingDto; disabled: bo
       )
     case 'cron':
       return <Input disabled={disabled} placeholder="0 2 * * *" style={{ maxWidth: 240 }} />
+    case 'external':
+      return <Select disabled={disabled} style={{ maxWidth: 320 }} options={EXTERNAL_LEVELS.map((l) => ({ value: l, label: t(`externalSharing.${l}`) }))} />
     default:
       return <Input disabled={disabled} maxLength={1000} />
   }

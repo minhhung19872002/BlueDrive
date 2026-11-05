@@ -18,7 +18,11 @@ public static class SettingKeys
     public const string QuotaPersonalDefaultGb = "quota.personal_default_gb";
     public const string QuotaGroupDefaultGb = "quota.group_default_gb";
     public const string QuotaWarningPercent = "quota.warning_percent";
+    /// <summary>Spec 8.2: storage of the whole system (GB, 0 = no limit), above the Spaces and Drives.</summary>
+    public const string QuotaTenantGb = "quota.tenant_gb";
     public const string TrashRetentionDays = "trash.retention_days";
+    /// <summary>Spec 8.1: 93 days from the first deletion, both trash stages together.</summary>
+    public const int DefaultTrashDays = 93;
     public const string UploadMaxSizeMb = "upload.max_size_mb";
     public const string UploadAllowedExtensions = "upload.allowed_extensions";
     public const string DownloadUnusualPerHour = "download.unusual_per_hour";
@@ -44,6 +48,12 @@ public static class SettingKeys
     public const string SyncJournalRetentionDays = "sync.journal_retention_days";
     public const string SyncPollSeconds = "sync.poll_seconds";
     public const string ShareLinkAllowEdit = "share.link_allow_edit";
+    public const string ShareExternal = "share.external";
+    public const string ShareAnyoneLinkMaxDays = "share.anyone_link_max_days";
+    public const string GuestEnabled = "guest.enabled";
+    public const string GuestAllowedDomains = "guest.allowed_domains";
+    public const string GuestBlockedDomains = "guest.blocked_domains";
+    public const string GuestInactiveDays = "guest.inactive_days";
 
     public static readonly string[] DefaultAllowedExtensions =
     [
@@ -72,10 +82,17 @@ public static class SettingKeys
         new(SessionIdleMinutes, 30, "Đăng nhập & phiên", "Tự đăng xuất khi không hoạt động (phút)", "number"),
         new(QuotaPersonalDefaultGb, 10, "Dung lượng", "Dung lượng mặc định cá nhân (GB)", "number"),
         new(QuotaGroupDefaultGb, 50, "Dung lượng", "Dung lượng mặc định nhóm (GB)", "number"),
-        new(QuotaWarningPercent, 90, "Dung lượng", "Ngưỡng cảnh báo dung lượng (%)", "number"),
-        new(TrashRetentionDays, 30, "Lưu trữ", "Số ngày giữ trong thùng rác", "number"),
+        new(QuotaWarningPercent, 80, "Dung lượng", "Ngưỡng cảnh báo dung lượng đầu tiên (%) — cảnh báo tiếp ở 90% và 100%", "number"),
+        new(QuotaTenantGb, 0, "Dung lượng", "Dung lượng toàn hệ thống (GB, 0 = không giới hạn)", "number"),
+        new(TrashRetentionDays, DefaultTrashDays, "Lưu trữ", "Số ngày giữ trong thùng rác (cả 2 tầng, tính từ lúc xóa)", "number"),
         new(UploadMaxSizeMb, 5120, "Lưu trữ", "Kích thước tải lên tối đa (MB)", "number"),
         new(UploadAllowedExtensions, DefaultAllowedExtensions, "Lưu trữ", "Định dạng tệp cho phép", "tags"),
+        new(ShareExternal, "anyone", "Chia sẻ", "Chia sẻ ra ngoài (tầng hệ thống; Space, thư mục, tệp chỉ đặt chặt hơn)", "external"),
+        new(ShareAnyoneLinkMaxDays, 30, "Chia sẻ", "Thời hạn tối đa của liên kết cho bất kỳ ai (ngày, 0 = không giới hạn)", "number"),
+        new(GuestEnabled, true, "Khách bên ngoài", "Cho phép mời khách bên ngoài qua email (đăng nhập bằng mã gửi email)", "boolean"),
+        new(GuestAllowedDomains, Array.Empty<string>(), "Khách bên ngoài", "Chỉ mời được email thuộc các tên miền (để trống = mọi tên miền)", "tags"),
+        new(GuestBlockedDomains, Array.Empty<string>(), "Khách bên ngoài", "Không mời email thuộc các tên miền", "tags"),
+        new(GuestInactiveDays, 90, "Khách bên ngoài", "Tài khoản khách tự hết hạn sau số ngày không dùng", "number"),
         new(ShareLinkAllowEdit, true, "Chia sẻ", "Cho phép liên kết chia sẻ cho người không đăng nhập chỉnh sửa tài liệu (Word, Excel, PowerPoint)", "boolean"),
         new(DownloadUnusualPerHour, 200, "Giám sát", "Ngưỡng tải xuống bất thường (tệp/giờ)", "number"),
         new(AlertEmailAdmins, true, "Giám sát", "Gửi email cảnh báo cho quản trị viên", "boolean"),

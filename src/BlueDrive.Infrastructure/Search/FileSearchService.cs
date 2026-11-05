@@ -13,33 +13,15 @@ namespace BlueDrive.Infrastructure.Search;
 /// PostgreSQL full-text search on files.search_vector and on the text inside documents (file_texts.content_vector), unaccented,
 /// 'simple' config, with prefix matching, plus an unaccented substring fallback on the name. The access scope is expressed in SQL; the handler re-checks each hit.
 /// </summary>
-public sealed class FileSearchService(AppDbContext db, TimeProvider clock) : IFileSearchService
+public sealed class FileSearchService(AppDbContext db, TimeProvider clock, Application.Features.Access.AccessFilter filter) : IFileSearchService
 {
     public async Task<(IReadOnlyList<(Guid FileId, double Rank)> Page, int Total, bool TotalCapped)> SearchAsync(SearchCriteria c, PrincipalSet p, CancellationToken ct)
     {
         var now = clock.GetUtcNow().UtcDateTime;
         IQueryable<StoredFile> q = db.Files.AsNoTracking().Where(f => !f.IsDeleted && f.ScanStatus != ScanStatus.Infected);
 
-        if (!p.IsDocAdmin)
-        {
-            var uid = p.UserId;
-            var principals = p.GroupIds.Concat(p.OrganizationIds).Concat(p.RoleIds).Append(uid).ToList();
-            var wsIds = db.Workspaces.Where(w => w.OwnerId == uid || w.Members.Any(m => m.UserId == uid) ||
-                db.ResourcePermissions.Any(a => a.ResourceType == ResourceType.Workspace && a.ResourceId == w.Id && principals.Contains(a.PrincipalId) && (a.ExpiresAt == null || a.ExpiresAt > now)))
-                .Select(w => w.Id);
-            var folderGrants = db.ResourcePermissions.Where(a => a.ResourceType == ResourceType.Folder && principals.Contains(a.PrincipalId) && (a.ExpiresAt == null || a.ExpiresAt > now))
-                .Select(a => a.ResourceId)
-                .Concat(db.Shares.Where(s => s.ResourceType == ResourceType.Folder && principals.Contains(s.SharedWithId)).Select(s => s.ResourceId));
-            var fileGrants = db.ResourcePermissions.Where(a => a.ResourceType == ResourceType.File && principals.Contains(a.PrincipalId) && (a.ExpiresAt == null || a.ExpiresAt > now))
-                .Select(a => a.ResourceId)
-                .Concat(db.Shares.Where(s => s.ResourceType == ResourceType.File && principals.Contains(s.SharedWithId)).Select(s => s.ResourceId));
-            q = q.Where(f => wsIds.Contains(f.WorkspaceId) || fileGrants.Contains(f.Id) ||
-                             (f.Folder != null && folderGrants.Any(g => f.Folder.Path.Contains("/" + g.ToString() + "/"))));
-            // Unapproved items: only their uploader and workspace editors/approvers see them.
-            WorkspaceMemberRole[] reviewers = [WorkspaceMemberRole.Owner, WorkspaceMemberRole.Manager, WorkspaceMemberRole.Editor, WorkspaceMemberRole.Approver];
-            q = q.Where(f => f.ApprovalStatus == ApprovalStatus.Approved || f.CreatedBy == uid ||
-                             db.WorkspaceMembers.Any(m => m.WorkspaceId == f.WorkspaceId && m.UserId == uid && reviewers.Contains(m.MemberRole)));
-        }
+        // Security trimming in SQL (new permission model): only what the user may see, before paging and counting.
+        q = filter.Files(q, await filter.ForAsync(p.UserId, ct));
 
         if (c.WorkspaceId is { } ws) q = q.Where(f => f.WorkspaceId == ws);
         if (c.FolderId is { } fid)
@@ -84,10 +66,15 @@ public sealed class FileSearchService(AppDbContext db, TimeProvider clock) : IFi
         {
             var tsQuery = string.Join(" & ", terms.Select(t => t + ":*"));
             var phrase = string.Join(' ', terms);
-            // Name, title, description, tags — and the text inside the document (file_texts, weight D: ranks after the name).
-            var matched = q.Where(f => EF.Property<NpgsqlTsVector>(f, "SearchVector").Matches(EF.Functions.ToTsQuery("simple", tsQuery))
-                                       || DbFn.Unaccent(f.Name).Contains(phrase)
-                                       || db.FileTexts.Any(t => t.FileId == f.Id && EF.Property<NpgsqlTsVector>(t, "ContentVector").Matches(EF.Functions.ToTsQuery("simple", tsQuery))));
+            // Name, title, description, tags — and the text inside the document (file_texts, weight D: ranks after the name). Three branches
+            // united, each on its own index (search_vector GIN, the name's trigram GIN through LIKE, content_vector GIN): an OR of them would
+            // make PostgreSQL scan every file (spec 4.5: search p95 < 1 s on a million files).
+            var pattern = "%" + phrase.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_") + "%";
+            var byVector = db.Files.Where(f => EF.Property<NpgsqlTsVector>(f, "SearchVector").Matches(EF.Functions.ToTsQuery("simple", tsQuery))).Select(f => f.Id);
+            var byName = db.Files.Where(f => EF.Functions.Like(DbFn.Unaccent(f.Name), pattern)).Select(f => f.Id);
+            var byText = db.FileTexts.Where(t => EF.Property<NpgsqlTsVector>(t, "ContentVector").Matches(EF.Functions.ToTsQuery("simple", tsQuery))).Select(t => t.FileId);
+            var hits = byVector.Union(byName).Union(byText);
+            var matched = q.Where(f => hits.Contains(f.Id));
             var ranked = matched.Select(f => new
             {
                 f.Id, f.CreatedAt, f.Name, f.SizeBytes,

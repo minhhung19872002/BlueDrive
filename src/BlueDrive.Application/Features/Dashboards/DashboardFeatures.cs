@@ -55,7 +55,7 @@ public sealed class GetPersonalDashboardHandler(IAppDbContext db, ICurrentUser m
             var top = folders.Select(f =>
             {
                 var inside = perFolder.Where(p => pathOf.TryGetValue(p.Key, out var path) && path.StartsWith(f.Path)).ToList();
-                var display = string.Join(" / ", ResourceAuthorizationService.PathIds(f.Path).AsEnumerable().Reverse().Select(id => names.GetValueOrDefault(id, "")));
+                var display = string.Join(" / ", LegacyResourceAuthorizationService.PathIds(f.Path).AsEnumerable().Reverse().Select(id => names.GetValueOrDefault(id, "")));
                 return new FolderUsage(f.Id, f.Name, display, inside.Sum(i => i.Bytes), inside.Sum(i => i.Count));
             }).Where(f => f.Bytes > 0).OrderByDescending(f => f.Bytes).Take(10).ToList();
 
@@ -84,7 +84,7 @@ public sealed record GroupDashboardDto(int MemberOf, int LeaderOf, IReadOnlyList
 /// <summary>#67–70: group dashboard (cached 1 minute per user).</summary>
 public sealed record GetGroupDashboardQuery : IRequest<GroupDashboardDto>;
 
-public sealed class GetGroupDashboardHandler(IAppDbContext db, ICurrentUser me, IMemoryCache cache) : IRequestHandler<GetGroupDashboardQuery, GroupDashboardDto>
+public sealed class GetGroupDashboardHandler(IAppDbContext db, ICurrentUser me, IMemoryCache cache, Access.AccessFilter filter) : IRequestHandler<GetGroupDashboardQuery, GroupDashboardDto>
 {
     public async Task<GroupDashboardDto> Handle(GetGroupDashboardQuery q, CancellationToken ct)
     {
@@ -98,11 +98,13 @@ public sealed class GetGroupDashboardHandler(IAppDbContext db, ICurrentUser me, 
                     w.OwnerId == uid, w.UsedBytes, w.QuotaBytes, w.IsLocked))
                 .ToListAsync(ct);
             var ids = groups.Select(g => g.Id).ToList();
-            var types = await db.Files.AsNoTracking().Where(f => ids.Contains(f.WorkspaceId) && !f.IsDeleted && f.ApprovalStatus == ApprovalStatus.Approved)
+            // Only what this member may see: items with their own permissions (no inheritance) are counted for those granted on them.
+            var visible = filter.Files(db.Files.AsNoTracking(), await filter.ForAsync(uid, ct));
+            var types = await visible.Where(f => ids.Contains(f.WorkspaceId) && !f.IsDeleted && f.ApprovalStatus == ApprovalStatus.Approved)
                 .GroupBy(f => new { f.WorkspaceId, f.MediaType }).Select(g => new { g.Key.WorkspaceId, g.Key.MediaType, Bytes = g.Sum(f => f.SizeBytes), Count = g.Count() }).ToListAsync(ct);
             var breakdown = groups.Select(g => new GroupTypeBreakdown(g.Id, g.Name,
                 DashboardBuckets.Slices(types.Where(t => t.WorkspaceId == g.Id).Select(t => (t.MediaType, t.Bytes, t.Count))))).ToList();
-            var recent = await db.Files.AsNoTracking().Where(f => ids.Contains(f.WorkspaceId) && !f.IsDeleted && (f.ApprovalStatus == ApprovalStatus.Approved || f.CreatedBy == uid))
+            var recent = await visible.Where(f => ids.Contains(f.WorkspaceId) && !f.IsDeleted)
                 .OrderByDescending(f => f.UpdatedAt ?? f.CreatedAt).Take(10)
                 .Select(f => new RecentDocDto(f.Id, f.Name, f.MediaType, db.Users.Where(u => u.Id == (f.UpdatedBy ?? f.CreatedBy)).Select(u => u.FullName).FirstOrDefault() ?? "",
                     f.Workspace!.Name, f.WorkspaceId, f.SizeBytes, f.UpdatedAt ?? f.CreatedAt)).ToListAsync(ct);

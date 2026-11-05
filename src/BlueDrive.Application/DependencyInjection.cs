@@ -16,16 +16,32 @@ public static class DependencyInjection
             cfg.RegisterServicesFromAssembly(asm);
             cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
             cfg.AddOpenBehavior(typeof(AuditBehavior<,>));
+            cfg.AddOpenBehavior(typeof(AccessModelBehavior<,>));
         });
         services.AddValidatorsFromAssembly(asm, includeInternalTypes: true);
         services.AddScoped<Features.Auth.SessionRevoker>();
         services.AddScoped<Features.Monitoring.IAlertService, Features.Monitoring.AlertService>();
-        services.AddScoped<Security.IResourceAuthorizationService, Security.ResourceAuthorizationService>();
+        services.AddScoped<Security.LegacyResourceAuthorizationService>();
+        services.AddScoped<Security.IResourceAuthorizationService, Security.ModelResourceAuthorizationService>();
+        services.AddScoped<Features.Access.PermissionProjection>();
+        services.AddScoped<Features.Access.ReferencePermissionEvaluator>();
+        services.AddScoped<Features.Access.IItemPermissionService, Features.Access.ItemPermissionService>();
+        services.AddScoped<Features.Access.AclEditor>();
+        services.AddScoped<Features.Access.AccessFilter>();
+        services.AddScoped<Features.Access.LegacyAclSync>();
+        services.AddScoped<Features.Sharing.LinkModel>();
+        services.AddScoped<Features.Access.SharingPolicy>();
+        services.AddScoped<Features.Access.ExpiryReminders>();
+        services.AddScoped<Features.Access.GuestService>();
+        services.AddScoped<Features.Storage.MoveItemsHandler>();
+        services.AddScoped<Features.Libraries.Libraries>();
+        services.AddScoped<Features.Access.Labels>();
         services.AddScoped<Abstractions.IResourceAccessChecker, Security.ResourceAccessChecker>();
         services.AddScoped<Features.Storage.QuotaService>();
         services.AddSingleton<Features.Office.OfficeEditingTracker>();
         services.AddSingleton<Features.Auth.LoginIpGuard>();
         services.AddScoped<Features.Storage.TrashPurger>();
+        services.AddScoped<Features.Retention.RetentionService>();
         services.AddScoped<Features.Sync.SyncPolicyService>();
         services.AddScoped<Features.Sync.SyncAccessContext>();
         services.AddSingleton<Features.Storage.IContentTicketService, Features.Storage.ContentTicketService>();
@@ -50,6 +66,18 @@ public sealed class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidat
                 .GroupBy(f => string.IsNullOrEmpty(f.PropertyName) ? "" : char.ToLowerInvariant(f.PropertyName[0]) + f.PropertyName[1..])
                 .ToDictionary(g => g.Key, g => g.Select(f => f.ErrorMessage).Distinct().ToArray()));
         return await next(ct);
+    }
+}
+
+/// <summary>When a request that changed storage or permissions ends, the new permission model is projected again for what it touched.</summary>
+public sealed class AccessModelBehavior<TRequest, TResponse>(IEnumerable<Features.Access.IAccessModelSync> sync)
+    : IPipelineBehavior<TRequest, TResponse> where TRequest : notnull
+{
+    public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken ct)
+    {
+        var response = await next(ct);
+        foreach (var s in sync) await s.FlushTouchedAsync(ct);
+        return response;
     }
 }
 

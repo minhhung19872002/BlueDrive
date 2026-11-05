@@ -15,7 +15,9 @@ import {
   FileSearchOutlined,
   FolderOutlined,
   HistoryOutlined,
+  HddOutlined,
   HomeOutlined,
+  KeyOutlined,
   DesktopOutlined,
   LaptopOutlined,
   MonitorOutlined,
@@ -24,6 +26,8 @@ import {
   SafetyCertificateOutlined,
   SafetyOutlined,
   SettingOutlined,
+  TagsOutlined,
+  SendOutlined,
   ShareAltOutlined,
   StarOutlined,
   TableOutlined,
@@ -47,26 +51,40 @@ export const mainNav: NavItem[] = [
   { path: '/', labelKey: 'menu.home', icon: HomeOutlined },
   { path: '/my-drive', labelKey: 'menu.myDrive', icon: FolderOutlined },
   { path: '/shared', labelKey: 'menu.shared', icon: ShareAltOutlined },
+  { path: '/shared-by-me', labelKey: 'menu.sharedByMe', icon: SendOutlined },
   { path: '/recent', labelKey: 'menu.recent', icon: ClockCircleOutlined },
   { path: '/starred', labelKey: 'menu.starred', icon: StarOutlined },
   { path: '/workspaces', labelKey: 'menu.workspaces', icon: TeamOutlined },
   { path: '/search', labelKey: 'menu.search', icon: FileSearchOutlined },
   { path: '/trash', labelKey: 'menu.trash', icon: DeleteOutlined },
+  { path: '/storage', labelKey: 'menu.storage', icon: HddOutlined },
+  { path: '/access-requests', labelKey: 'menu.accessRequests', icon: KeyOutlined },
   { path: '/approvals', labelKey: 'menu.approvals', icon: CheckSquareOutlined, perm: 'doc.approve' },
 ]
 
 /** Key of the "Nhóm của tôi" submenu (children: every group workspace + the overview page). */
+/** What a guest from outside sees: only what is shared with them (spec 2). */
+export const GUEST_NAV = ['/shared', '/recent', '/search', '/access-requests']
+
 export const WORKSPACES_MENU_KEY = 'workspaces-menu'
 
 export const adminNav: NavItem[] = [
   { path: '/admin/dashboard', labelKey: 'menu.adminDashboard', icon: DashboardOutlined, perm: 'dashboard.view' },
   { path: '/admin/organizations', labelKey: 'menu.organizations', icon: ApartmentOutlined, perm: 'org.view' },
   { path: '/admin/users', labelKey: 'menu.users', icon: UserOutlined, perm: 'user.view' },
+  { path: '/admin/guests', labelKey: 'menu.guests', icon: UserOutlined, perm: 'user.view' },
   { path: '/admin/user-groups', labelKey: 'menu.userGroups', icon: UsergroupAddOutlined, perm: 'usergroup.view' },
   { path: '/admin/roles', labelKey: 'menu.roles', icon: SafetyCertificateOutlined, perm: 'role.view' },
   { path: '/admin/permission-matrix', labelKey: 'menu.permissionMatrix', icon: TableOutlined, perm: 'role.view' },
+  { path: '/admin/access-levels', labelKey: 'menu.accessLevels', icon: SafetyCertificateOutlined, perm: 'role.view' },
+  { path: '/admin/access-reports', labelKey: 'menu.accessReports', icon: AuditOutlined, perm: 'accessreport.view' },
+  { path: '/admin/offboarding', labelKey: 'menu.offboarding', icon: UserOutlined, perm: 'user.admin' },
+  { path: '/admin/emergency-access', labelKey: 'menu.emergencyAccess', icon: AlertOutlined, perm: 'emergency.admin' },
+  { path: '/admin/retention', labelKey: 'menu.retention', icon: SafetyOutlined, perm: 'retention.view' },
+  { path: '/admin/labels', labelKey: 'menu.labels', icon: TagsOutlined, perm: 'settings.view' },
   { path: '/admin/catalogs', labelKey: 'menu.catalogs', icon: AppstoreOutlined, perm: 'catalog.view' },
   { path: '/admin/workspaces', labelKey: 'menu.adminWorkspaces', icon: ClusterOutlined, perm: 'workspace.admin' },
+  { path: '/admin/space-trash', labelKey: 'menu.spaceTrash', icon: DeleteOutlined, perm: 'workspace.admin' },
   { path: '/admin/audit-logs', labelKey: 'menu.auditLogs', icon: AuditOutlined, perm: 'audit.view' },
   { path: '/admin/storage-stats', labelKey: 'menu.storageStats', icon: PieChartOutlined, perm: 'stats.view' },
   { path: '/admin/alerts', labelKey: 'menu.alerts', icon: AlertOutlined, perm: 'alert.view' },

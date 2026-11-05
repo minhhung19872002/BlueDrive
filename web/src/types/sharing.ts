@@ -131,7 +131,17 @@ export interface ShareLink {
   allowEdit: boolean
   createdAt: string
   status: ShareLinkStatus
+  /** Who the link works for (spec 5.3). */
+  scope: ShareLinkScope
+  levelId: string | null
+  levelName: string | null
+  /** "Người cụ thể": the people listed. */
+  people: { id: string; name: string }[]
+  createdByName: string | null
 }
+
+/** existing: people who already have access; organization: anyone signed in; specific: listed people; anyone: no sign-in. */
+export type ShareLinkScope = 'existing' | 'organization' | 'specific' | 'anyone'
 
 export interface SaveShareLinkRequest {
   resourceType: ResourceType
@@ -141,6 +151,9 @@ export interface SaveShareLinkRequest {
   maxAccessCount: number | null
   requireLogin: boolean
   allowEdit: boolean
+  scope?: ShareLinkScope
+  levelId?: string | null
+  people?: string[]
 }
 
 export interface PublicShareInfo {

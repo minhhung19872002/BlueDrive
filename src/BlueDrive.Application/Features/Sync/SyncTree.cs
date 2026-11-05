@@ -91,16 +91,14 @@ public sealed class SyncAccessContext(IAppDbContext db, IResourceAuthorizationSe
     public async Task<List<Guid>> SharedWorkspacesAsync(IEnumerable<Guid> rootWorkspaces, CancellationToken ct)
     {
         var p = _principals!;
-        var principals = p.GroupIds.Concat(p.OrganizationIds).Concat(p.RoleIds).Append(p.UserId).ToList();
         var roots = rootWorkspaces.ToList();
         var now = clock.GetUtcNow().UtcDateTime;
-        var viaShares = db.Shares.Where(s => principals.Contains(s.SharedWithId))
-            .SelectMany(s => db.Folders.Where(f => s.ResourceType == ResourceType.Folder && f.Id == s.ResourceId && !f.IsDeleted).Select(f => f.WorkspaceId)
-                .Concat(db.Files.Where(f => s.ResourceType == ResourceType.File && f.Id == s.ResourceId && !f.IsDeleted).Select(f => f.WorkspaceId)));
-        var viaAcl = db.ResourcePermissions.Where(a => principals.Contains(a.PrincipalId) && (a.ExpiresAt == null || a.ExpiresAt > now))
-            .SelectMany(a => db.Folders.Where(f => a.ResourceType == ResourceType.Folder && f.Id == a.ResourceId && !f.IsDeleted).Select(f => f.WorkspaceId)
-                .Concat(db.Files.Where(f => a.ResourceType == ResourceType.File && f.Id == a.ResourceId && !f.IsDeleted).Select(f => f.WorkspaceId)));
-        var ids = await viaShares.Concat(viaAcl).Distinct().ToListAsync(ct);
+        // Workspaces holding an item granted to the user directly (new permission model), outside their own roots.
+        var principals = await db.PrincipalMemberships.Where(m => m.UserId == p.UserId).Select(m => m.PrincipalId).ToListAsync(ct);
+        var ids = await db.AclEntries.Where(e => e.Source == AclSource.Direct && principals.Contains(e.PrincipalId) && (e.ExpiresAt == null || e.ExpiresAt > now))
+            .Join(db.Securables.Where(n => !n.IsDeleted && (n.Kind == SecurableKind.Folder || n.Kind == SecurableKind.File)), e => e.ScopeId, n => n.Id,
+                (e, n) => n.SpaceId ?? n.PersonalDriveId ?? Guid.Empty)
+            .Distinct().ToListAsync(ct);
         return ids.Except(roots).ToList();
     }
 
@@ -142,8 +140,9 @@ public sealed class ListSyncRootsHandler(IAppDbContext db, ICurrentUser me, IRes
         var uid = me.RequireUserId();
         await policy.EnsureAllowedAsync(uid, ct);
         var p = await policy.GetAsync(ct);
-        var query = await Workspaces.WorkspaceQueries.AccessibleAsync(db, auth, uid, ct);
-        var list = await query.Where(w => w.Type != WorkspaceType.Personal || w.OwnerId == uid).OrderBy(w => w.Type).ThenBy(w => w.Name).ToListAsync(ct);
+        var query = await Workspaces.WorkspaceQueries.AccessibleAsync(db, uid, ct);
+        var list = await query.Where(w => (w.Type != WorkspaceType.Personal || w.OwnerId == uid) && (w.Type == WorkspaceType.Personal || w.AllowSync))
+            .OrderBy(w => w.Type).ThenBy(w => w.Name).ToListAsync(ct);
         var roots = new List<SyncRootDto>();
         foreach (var w in list)
         {
@@ -167,7 +166,7 @@ public sealed record SyncSnapshotDto(IReadOnlyList<SyncItemDto> Items, string? N
 
 internal sealed record SnapshotToken(long Cursor, int Phase, Guid? WorkspaceId, string? AfterPath, Guid? AfterId);
 
-public sealed class SyncSnapshotHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, SyncAccessContext access, SyncPolicyService policy)
+public sealed class SyncSnapshotHandler(IAppDbContext db, ICurrentUser me, SyncAccessContext access, SyncPolicyService policy)
     : IRequestHandler<SyncSnapshotQuery, SyncSnapshotDto>
 {
     private const int PageSize = 1000;
@@ -183,8 +182,9 @@ public sealed class SyncSnapshotHandler(IAppDbContext db, ICurrentUser me, IReso
         List<Guid> workspaces;
         if (q.RootId == SyncIds.SharedRoot)
         {
-            var roots = (await Workspaces.WorkspaceQueries.AccessibleAsync(db, auth, uid, ct)).Select(w => w.Id);
-            workspaces = (await access.SharedWorkspacesAsync(await roots.ToListAsync(ct), ct)).OrderBy(x => x).ToList();
+            var roots = (await Workspaces.WorkspaceQueries.AccessibleAsync(db, uid, ct)).Select(w => w.Id);
+            var noSync = await db.Workspaces.Where(w => !w.AllowSync && w.Type != WorkspaceType.Personal).Select(w => w.Id).ToListAsync(ct);
+            workspaces = (await access.SharedWorkspacesAsync(await roots.ToListAsync(ct), ct)).Where(x => !noSync.Contains(x)).OrderBy(x => x).ToList();
         }
         else if (SyncIds.TryParseRoot(q.RootId, out var wsId))
         {
@@ -255,14 +255,20 @@ public sealed class SyncSnapshotHandler(IAppDbContext db, ICurrentUser me, IReso
                 if (afterId is { } a) files = files.Where(f => f.Id.CompareTo(a) > 0);
                 var batch = await files.OrderBy(f => f.Id).Take(PageSize)
                     .Select(f => new { f.Id, f.FolderId, f.Name, f.Revision, f.CurrentVersionId, f.SizeBytes, f.ChecksumSha256, f.ApprovalStatus, f.CreatedBy,
+                        f.CheckedOutBy, f.PublishedVersionId,
+                PubSize = db.FileVersions.Where(pv => pv.Id == f.PublishedVersionId).Select(pv => (long?)pv.SizeBytes).FirstOrDefault(),
+                PubSum = db.FileVersions.Where(pv => pv.Id == f.PublishedVersionId).Select(pv => pv.Checksum).FirstOrDefault(),
                         Modified = f.UpdatedAt ?? f.CreatedAt }).ToListAsync(ct);
                 if (batch.Count == 0) break;
                 foreach (var f in batch)
                 {
                     afterId = f.Id;
-                    var level = map.FileLevel(f.Id, f.FolderId, f.ApprovalStatus, f.CreatedBy);
+                    var level = map.FileLevel(f.Id, f.FolderId, f.ApprovalStatus, f.CreatedBy, f.CheckedOutBy, f.PublishedVersionId != null);
                     if (level < AccessLevel.View) continue;
-                    items.Add(access.File(map, level, f.Id, f.FolderId, f.Name, f.Revision, f.CurrentVersionId, f.SizeBytes, f.ChecksumSha256, f.Modified));
+                    // Who may not edit syncs the latest published version, not a draft (spec 1.4).
+                    var published = level < AccessLevel.Edit && f.PublishedVersionId is { } pid && pid != f.CurrentVersionId;
+                    items.Add(access.File(map, level, f.Id, f.FolderId, f.Name, f.Revision, published ? f.PublishedVersionId : f.CurrentVersionId,
+                        published ? f.PubSize ?? f.SizeBytes : f.SizeBytes, published ? f.PubSum : f.ChecksumSha256, f.Modified));
                     if (items.Count == PageSize) break;
                 }
                 if (batch.Count < PageSize && items.Count < PageSize) break;
@@ -294,7 +300,7 @@ public sealed record SyncChangesQuery(long Cursor, int Limit = 500) : IRequest<S
 /// <summary>410 Gone: the cursor predates the retained journal, the client must run a full resync (snapshot).</summary>
 public sealed class CursorExpiredException() : AppException("Mốc đồng bộ đã quá cũ, cần đồng bộ lại toàn bộ.", 410);
 
-public sealed class SyncChangesHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, SyncAccessContext access, SyncPolicyService policy)
+public sealed class SyncChangesHandler(IAppDbContext db, ICurrentUser me, SyncAccessContext access, SyncPolicyService policy)
     : IRequestHandler<SyncChangesQuery, SyncChangesDto>
 {
     public async Task<SyncChangesDto> Handle(SyncChangesQuery q, CancellationToken ct)
@@ -306,13 +312,16 @@ public sealed class SyncChangesHandler(IAppDbContext db, ICurrentUser me, IResou
         if (min is { } m && q.Cursor + 1 < m) throw new CursorExpiredException();
         var limit = Math.Clamp(q.Limit, 1, 1000);
         var rows = await db.ChangeJournal.AsNoTracking().Where(c => c.Seq > q.Cursor).OrderBy(c => c.Seq).Take(limit).ToListAsync(ct);
-        var roots = (await Workspaces.WorkspaceQueries.AccessibleAsync(db, auth, uid, ct)).Select(w => w.Id);
+        var roots = (await Workspaces.WorkspaceQueries.AccessibleAsync(db, uid, ct)).Select(w => w.Id);
         var rootIds = (await roots.ToListAsync(ct)).ToHashSet();
 
         var fileIds = rows.Where(r => r.ItemType == ChangeItemType.File).Select(r => r.ItemId).Distinct().ToList();
         var folderIds = rows.Where(r => r.ItemType == ChangeItemType.Folder).Select(r => r.ItemId).Distinct().ToList();
         var files = await db.Files.AsNoTracking().Where(f => fileIds.Contains(f.Id))
             .Select(f => new { f.Id, f.WorkspaceId, f.FolderId, f.Name, f.Revision, f.CurrentVersionId, f.SizeBytes, f.ChecksumSha256, f.ApprovalStatus, f.CreatedBy, f.IsDeleted,
+                f.CheckedOutBy, f.PublishedVersionId,
+                PubSize = db.FileVersions.Where(pv => pv.Id == f.PublishedVersionId).Select(pv => (long?)pv.SizeBytes).FirstOrDefault(),
+                PubSum = db.FileVersions.Where(pv => pv.Id == f.PublishedVersionId).Select(pv => pv.Checksum).FirstOrDefault(),
                 Modified = f.UpdatedAt ?? f.CreatedAt }).ToDictionaryAsync(f => f.Id, ct);
         var folders = await db.Folders.AsNoTracking().Where(f => folderIds.Contains(f.Id))
             .Select(f => new { f.Id, f.WorkspaceId, f.ParentId, f.Name, f.Revision, f.IsDeleted, Modified = f.UpdatedAt ?? f.CreatedAt }).ToDictionaryAsync(f => f.Id, ct);
@@ -340,8 +349,11 @@ public sealed class SyncChangesHandler(IAppDbContext db, ICurrentUser me, IResou
             SyncItemDto? item = null;
             if (map is not null && r.ItemType == ChangeItemType.File && files.TryGetValue(r.ItemId, out var f) && !f.IsDeleted)
             {
-                var level = map.FileLevel(f.Id, f.FolderId, f.ApprovalStatus, f.CreatedBy);
-                if (level >= AccessLevel.View) item = access.File(map, level, f.Id, f.FolderId, f.Name, f.Revision, f.CurrentVersionId, f.SizeBytes, f.ChecksumSha256, f.Modified);
+                var level = map.FileLevel(f.Id, f.FolderId, f.ApprovalStatus, f.CreatedBy, f.CheckedOutBy, f.PublishedVersionId != null);
+                var published = level < AccessLevel.Edit && f.PublishedVersionId is { } pid && pid != f.CurrentVersionId;
+                if (level >= AccessLevel.View)
+                    item = access.File(map, level, f.Id, f.FolderId, f.Name, f.Revision, published ? f.PublishedVersionId : f.CurrentVersionId,
+                        published ? f.PubSize ?? f.SizeBytes : f.SizeBytes, published ? f.PubSum : f.ChecksumSha256, f.Modified);
             }
             else if (map is not null && r.ItemType == ChangeItemType.Folder && folders.TryGetValue(r.ItemId, out var fo) && !fo.IsDeleted)
             {
@@ -353,7 +365,8 @@ public sealed class SyncChangesHandler(IAppDbContext db, ICurrentUser me, IResou
                 // The person's / group's folder in "Được chia sẻ với tôi" comes first (the client may not have it yet).
                 if (item.ParentId == SyncIds.SharerFolder(r.WorkspaceId) && sharerFolders.Add(r.WorkspaceId))
                     changes.Add(new SyncChangeDto(r.Seq, "update_meta", "folder", item.ParentId.Value, r.WorkspaceId, SyncAccessContext.SharerFolder(map!), r.OccurredAt, null));
-                changes.Add(Bare(Op(r.Op)) with { Item = item });
+                // Spec 4.4: a permission change that makes the item visible is "access_granted" (older clients treat it as an upsert).
+                changes.Add(Bare(r.Op == ChangeOp.PermissionChanged ? "access_granted" : Op(r.Op)) with { Item = item });
             }
             else if (r.Op is ChangeOp.PermissionChanged or ChangeOp.UpdateMeta
                      && (inScope || r.PrincipalId is { } who && access.Concerns(who))) // the last share taken back: only the person concerned is told
@@ -397,12 +410,17 @@ public static class SyncItems
     {
         var f = await db.Files.AsNoTracking().Where(x => x.Id == id && !x.IsDeleted)
             .Select(x => new { x.Id, x.WorkspaceId, x.FolderId, x.Name, x.Revision, x.CurrentVersionId, x.SizeBytes, x.ChecksumSha256, x.ApprovalStatus, x.CreatedBy,
+                x.CheckedOutBy, x.PublishedVersionId,
+                PubSize = db.FileVersions.Where(pv => pv.Id == x.PublishedVersionId).Select(pv => (long?)pv.SizeBytes).FirstOrDefault(),
+                PubSum = db.FileVersions.Where(pv => pv.Id == x.PublishedVersionId).Select(pv => pv.Checksum).FirstOrDefault(),
                 Modified = x.UpdatedAt ?? x.CreatedAt }).FirstOrDefaultAsync(ct);
         if (f is not null)
         {
             var map = await access.MapAsync(f.WorkspaceId, ct);
-            var level = map?.FileLevel(f.Id, f.FolderId, f.ApprovalStatus, f.CreatedBy) ?? AccessLevel.None;
-            return level < AccessLevel.View ? null : access.File(map!, level, f.Id, f.FolderId, f.Name, f.Revision, f.CurrentVersionId, f.SizeBytes, f.ChecksumSha256, f.Modified);
+            var level = map?.FileLevel(f.Id, f.FolderId, f.ApprovalStatus, f.CreatedBy, f.CheckedOutBy, f.PublishedVersionId != null) ?? AccessLevel.None;
+            var published = level < AccessLevel.Edit && f.PublishedVersionId is { } pid && pid != f.CurrentVersionId;
+            return level < AccessLevel.View ? null : access.File(map!, level, f.Id, f.FolderId, f.Name, f.Revision, published ? f.PublishedVersionId : f.CurrentVersionId,
+                published ? f.PubSize ?? f.SizeBytes : f.SizeBytes, published ? f.PubSum : f.ChecksumSha256, f.Modified);
         }
         var fo = await db.Folders.AsNoTracking().Where(x => x.Id == id && !x.IsDeleted)
             .Select(x => new { x.Id, x.WorkspaceId, x.ParentId, x.Name, x.Revision, Modified = x.UpdatedAt ?? x.CreatedAt }).FirstOrDefaultAsync(ct);

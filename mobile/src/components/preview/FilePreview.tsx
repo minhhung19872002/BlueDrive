@@ -12,6 +12,7 @@ import { mediaColor, mediaIcon, previewKind } from '@/utils/format';
 import { Button, ErrorState, Icon, LoadingView } from '../ui';
 import { AudioPlayerView, VideoPlayerView } from './MediaPlayers';
 import { OfficeViewer } from './OfficeViewer';
+import { WatermarkOverlay } from './Watermark';
 import { ZoomableImage } from './ZoomableImage';
 
 function useInlineUrl(fileId: string, enabled: boolean) {
@@ -58,7 +59,17 @@ function NoPreview({ file }: { file: FileDetail }) {
  * Viewer body by type (#76): ảnh (zoom), video, âm thanh, PDF/Office (ONLYOFFICE), văn bản, còn lại: biểu tượng + tải xuống.
  * `compact` = embedded in the detail screen (#83): images are a tappable preview instead of a zoom surface.
  */
-export function FilePreview({ file, compact, onOpenFull }: { file: FileDetail; compact?: boolean; onOpenFull?: () => void }) {
+export function FilePreview(props: { file: FileDetail; compact?: boolean; onOpenFull?: () => void }) {
+  if (!props.file.watermark) return <PreviewBody {...props} />;
+  return (
+    <View style={{ flex: 1 }}>
+      <PreviewBody {...props} />
+      <WatermarkOverlay />
+    </View>
+  );
+}
+
+function PreviewBody({ file, compact, onOpenFull }: { file: FileDetail; compact?: boolean; onOpenFull?: () => void }) {
   const c = useColors();
   const kind = previewKind(file);
   const needsUrl = kind === 'image' || kind === 'video' || kind === 'audio';

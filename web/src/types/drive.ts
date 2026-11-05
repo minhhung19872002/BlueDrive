@@ -44,6 +44,12 @@ export interface DriveItem {
   id: string
   type: ItemType
   name: string
+  /** A shortcut row (spec 1.2): id / type are the target's; this is the shortcut's own id. */
+  shortcutId?: string | null
+  /** Checked out (spec 1.4) by this user. */
+  checkedOutBy?: string | null
+  /** ok, no_access (open shows "Bạn cần quyền truy cập"), deleted. */
+  shortcutState?: 'ok' | 'no_access' | 'deleted' | null
   workspaceId: string
   parentId: string | null
   sizeBytes: number
@@ -66,6 +72,8 @@ export interface DriveItem {
 }
 
 export interface BreadcrumbItem {
+  /** "Được chia sẻ với tôi": stands for the levels above that the user may not see. */
+  shared?: boolean
   id: string | null
   name: string
 }
@@ -109,6 +117,10 @@ export interface FileVersion {
   createdByName: string | null
   createdAt: string
   isCurrent: boolean
+  /** 1.0 / 1.1 (spec 1.4); a minor version is a draft. */
+  major?: number
+  minor?: number
+  isPublished?: boolean
 }
 
 export interface CatalogTag {
@@ -119,6 +131,18 @@ export interface CatalogTag {
 }
 
 export interface FileDetail {
+  /** Spec 7.1/11.9: the effective sensitivity label and whether the viewer gets a watermark. */
+  labelName?: string | null
+  labelColor?: string | null
+  watermark?: boolean
+  /** Spec 1.4: check-out, drafts, the library's rules. */
+  checkedOutBy?: string | null
+  checkedOutByName?: string | null
+  checkedOutAt?: string | null
+  hasDraft?: boolean
+  versioning?: 'major' | 'major_minor'
+  requireCheckout?: boolean
+  libraryName?: string | null
   id: string
   name: string
   title: string | null
@@ -194,6 +218,8 @@ export interface TrashItem {
   originalLocation: string
   originalLocationExists: boolean
   purgeAt: string
+  /** Spec 8.1: 1 = the trash, 2 = the managers' second stage. */
+  stage: 1 | 2
 }
 
 /** Metadata posted to /uploads/{tusId}/complete (same shape as the tus Upload-Metadata). */
@@ -242,6 +268,9 @@ export interface Workspace {
   myRole: WorkspaceMemberRole | null
   memberCount: number
   createdAt: string
+  /** Spec 6: archived = read only, hidden from the default list. */
+  status?: 'active' | 'archived' | 'deleted'
+  coverFileId?: string | null
 }
 
 export interface WorkspaceMember {
@@ -261,6 +290,8 @@ export interface SaveWorkspaceRequest {
   quotaGb?: number | null
   memberIds?: string[] | null
   memberRole?: WorkspaceMemberRole
+  /** Space template on creation (blank, department, project, campaign). */
+  template?: string | null
 }
 
 export interface AllWorkspacesFilter {
@@ -273,8 +304,12 @@ export interface AllWorkspacesFilter {
 export interface SetPersonalQuotaRequest {
   userIds?: string[] | null
   organizationId?: string | null
+  /** Spec 8.2: every user holding the role. */
+  roleId?: string | null
   includeSubOrganizations: boolean
   quotaGb: number
+  /** Keep it as the default quota of new users of the unit / role. */
+  setAsDefault?: boolean
 }
 
 /** Upload / create target inside a workspace. folderId null = workspace root. */

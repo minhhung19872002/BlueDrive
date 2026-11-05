@@ -29,7 +29,7 @@ public sealed class CreateShareValidator : AbstractValidator<CreateShareCommand>
 }
 
 public sealed class CreateShareHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IUserNotifier notify,
-    IAuditLogger audit, TimeProvider clock) : IRequestHandler<CreateShareCommand, int>
+    IAuditLogger audit, TimeProvider clock, Access.LegacyAclSync sync, Access.SharingPolicy policy) : IRequestHandler<CreateShareCommand, int>
 {
     public async Task<int> Handle(CreateShareCommand cmd, CancellationToken ct)
     {
@@ -43,6 +43,9 @@ public sealed class CreateShareHandler(IAppDbContext db, ICurrentUser me, IResou
             ? await db.Files.Where(f => f.Id == cmd.ResourceId).Select(f => f.Name).FirstAsync(ct)
             : await db.Folders.Where(f => f.Id == cmd.ResourceId).Select(f => f.Name).FirstAsync(ct);
         var sharer = await db.Users.Where(u => u.Id == uid).Select(u => u.FullName).FirstAsync(ct);
+        var targets = cmd.Targets.Distinct().Where(t => !(t.Type == PrincipalType.User && t.Id == uid)).Select(t => Access.LegacyAclSync.Map(t.Type, t.Id))
+            .Where(p => p is not null).Select(p => p!.Value).ToList();
+        if (await db.Securables.AnyAsync(s => s.Id == cmd.ResourceId, ct)) await policy.EnsureCanShareAsync(uid, cmd.ResourceId, targets, breaksInheritance: true, ct);
         var now = clock.GetUtcNow().UtcDateTime;
         var count = 0;
         foreach (var t in cmd.Targets.Distinct())
@@ -55,6 +58,8 @@ public sealed class CreateShareHandler(IAppDbContext db, ICurrentUser me, IResou
             count++;
         }
         await db.SaveChangesAsync(ct);
+        foreach (var t in cmd.Targets.Distinct().Where(t => !(t.Type == PrincipalType.User && t.Id == uid)))
+            await sync.SetOneAsync(cmd.ResourceId, t.Type, t.Id, cmd.AccessLevel, cmd.Message, uid, ct);
         var recipients = (await PrincipalNames.ExpandToUsersAsync(db, cmd.Targets, ct)).Where(x => x != uid).ToList();
         var link = cmd.ResourceType == ResourceType.File ? $"/files/{cmd.ResourceId}" : "/shared";
         foreach (var r in recipients)
@@ -125,17 +130,27 @@ public sealed class ListSharesOfResourceHandler(IAppDbContext db, ICurrentUser m
 
 public sealed record DeleteShareCommand(Guid Id) : IRequest<Unit>;
 
-public sealed class DeleteShareHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IAuditLogger audit) : IRequestHandler<DeleteShareCommand, Unit>
+public sealed class DeleteShareHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IAuditLogger audit, Access.LegacyAclSync sync, ISender mediator)
+    : IRequestHandler<DeleteShareCommand, Unit>
 {
     public async Task<Unit> Handle(DeleteShareCommand cmd, CancellationToken ct)
     {
         var uid = me.RequireUserId();
-        var s = await db.Shares.FirstOrDefaultAsync(x => x.Id == cmd.Id, ct) ?? throw new NotFoundException("Không tìm thấy lượt chia sẻ.");
+        var s = await db.Shares.FirstOrDefaultAsync(x => x.Id == cmd.Id, ct);
+        if (s is null)
+        {
+            // A grant of the new model ("Được chia sẻ với tôi" lists those): leave it, or take it back as a manager of the item.
+            var entry = await db.AclEntries.AsNoTracking().FirstOrDefaultAsync(e => e.Id == cmd.Id && e.Source != Domain.Enums.AclSource.SpaceDefault, ct)
+                        ?? throw new NotFoundException("Không tìm thấy lượt chia sẻ.");
+            await mediator.Send(new Access.RevokeItemPermissionCommand(entry.ScopeId, entry.Id), ct);
+            return Unit.Value;
+        }
         // The sharer, the recipient (leaving) or a manager of the item may revoke.
         var isRecipient = s.SharedWithType == PrincipalType.User && s.SharedWithId == uid;
         if (s.SharedBy != uid && !isRecipient) await auth.EnsureAsync(uid, s.ResourceType, s.ResourceId, AccessLevel.Manage, ct);
         db.Shares.Remove(s);
         await db.SaveChangesAsync(ct);
+        await sync.SetOneAsync(s.ResourceId, s.SharedWithType, s.SharedWithId, null, null, uid, ct);
         await audit.LogAsync(new AuditEntry(AuditAction.Unshare, s.ResourceType, s.ResourceId, null, null, new { shareId = s.Id, s.SharedWithType, s.SharedWithId }), ct);
         return Unit.Value;
     }
@@ -146,41 +161,55 @@ public sealed record ListSharedWithMeQuery(Guid? SharedBy, DateTime? From, DateT
 
 public sealed record SharedItemDto(DriveItemDto Item, Guid ShareId, Guid SharedBy, string SharedByName, AccessLevel AccessLevel, string? Message, DateTime SharedAt);
 
-public sealed class ListSharedWithMeHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets) : IRequestHandler<ListSharedWithMeQuery, PagedResult<SharedItemDto>>
+public sealed class ListSharedWithMeHandler(IAppDbContext db, ICurrentUser me, IContentTicketService tickets, Access.AccessFilter filter, TimeProvider clock)
+    : IRequestHandler<ListSharedWithMeQuery, PagedResult<SharedItemDto>>
 {
     public async Task<PagedResult<SharedItemDto>> Handle(ListSharedWithMeQuery q, CancellationToken ct)
     {
         var uid = me.RequireUserId();
-        var p = await auth.GetPrincipalsAsync(uid, ct);
-        var ids = p.GroupIds.Concat(p.OrganizationIds).Concat(p.RoleIds).Append(uid).ToList();
-        var shares = db.Shares.AsNoTracking().Where(s => ids.Contains(s.SharedWithId) && s.SharedBy != uid);
-        if (q.SharedBy.HasValue) shares = shares.Where(s => s.SharedBy == q.SharedBy);
-        if (q.From.HasValue) shares = shares.Where(s => s.CreatedAt >= q.From);
-        if (q.To.HasValue) shares = shares.Where(s => s.CreatedAt < q.To.Value.AddDays(1));
-        // Only resources still alive; newest share per resource.
-        var rows = await shares.Where(s => (s.ResourceType == ResourceType.File && db.Files.Any(f => f.Id == s.ResourceId && !f.IsDeleted && f.ApprovalStatus == ApprovalStatus.Approved
-                                                && (q.MediaType == null || f.MediaType == q.MediaType)))
-                                           || (s.ResourceType == ResourceType.Folder && q.MediaType == null && db.Folders.Any(f => f.Id == s.ResourceId && !f.IsDeleted)))
-            .OrderByDescending(s => s.CreatedAt).ToListAsync(ct);
-        rows = rows.GroupBy(r => r.ResourceId).Select(g => g.First()).ToList();
+        var viewer = await filter.ForAsync(uid, ct);
+        var now = clock.GetUtcNow().UtcDateTime;
+        // Items granted to me (or a group / unit of mine) directly by someone else, on the new permission model, that I may still see.
+        var visible = filter.Visible(viewer);
+        var grants = db.AclEntries.AsNoTracking()
+            .Where(e => e.Source == Domain.Enums.AclSource.Direct && viewer.Principals.Contains(e.PrincipalId) && e.GrantedBy != uid && e.PrincipalId != Domain.Common.StableGuid.Everyone
+                        && (e.ExpiresAt == null || e.ExpiresAt > now) && visible.Contains(e.ScopeId));
+        if (q.SharedBy.HasValue) grants = grants.Where(e => e.GrantedBy == q.SharedBy);
+        if (q.From.HasValue) grants = grants.Where(e => e.GrantedAt >= q.From);
+        if (q.To.HasValue) grants = grants.Where(e => e.GrantedAt < q.To.Value.AddDays(1));
+        var rows = await grants.Join(db.Securables, e => e.ScopeId, n => n.Id, (e, n) => new { e, n.Kind, n.OwnerUserId })
+            .Where(x => x.OwnerUserId != uid && (x.Kind == Domain.Enums.SecurableKind.File || x.Kind == Domain.Enums.SecurableKind.Folder))
+            .Join(db.PermissionLevels, x => x.e.PermissionLevelId, l => l.Id, (x, l) => new { x.e, x.Kind, l.Permissions })
+            .OrderByDescending(x => x.e.GrantedAt).ToListAsync(ct);
+        var fileIds = rows.Where(r => r.Kind == Domain.Enums.SecurableKind.File).Select(r => r.e.ScopeId).ToList();
+        var okFiles = (await db.Files.AsNoTracking().Where(f => fileIds.Contains(f.Id) && !f.IsDeleted && f.ApprovalStatus == ApprovalStatus.Approved
+                                                              && (q.MediaType == null || f.MediaType == q.MediaType))
+            .Select(f => new { f.Id, Published = f.PublishedVersionId != null }).ToListAsync(ct)).ToDictionary(f => f.Id, f => f.Published);
+        // A file with only drafts (spec 1.4) is shared with who may edit it or see drafts, not with a reader.
+        bool SeesDrafts(Domain.Permissions.AccessRight p) => (p & (Domain.Permissions.AccessRight.EditItems | Domain.Permissions.AccessRight.ViewDrafts)) != 0;
+        rows = rows.Where(r => r.Kind == Domain.Enums.SecurableKind.File
+                ? okFiles.TryGetValue(r.e.ScopeId, out var published) && (published || SeesDrafts(r.Permissions))
+                : q.MediaType == null)
+            .GroupBy(r => r.e.ScopeId).Select(g => g.First()).ToList();
         if (!string.IsNullOrWhiteSpace(q.Q))
         {
             var term = TextUtil.Unaccent(q.Q.Trim());
-            var fileNames = await db.Files.Where(f => rows.Select(r => r.ResourceId).Contains(f.Id)).ToDictionaryAsync(f => f.Id, f => f.Name, ct);
-            var folderNames = await db.Folders.Where(f => rows.Select(r => r.ResourceId).Contains(f.Id)).ToDictionaryAsync(f => f.Id, f => f.Name, ct);
-            rows = rows.Where(r => TextUtil.Unaccent(fileNames.GetValueOrDefault(r.ResourceId) ?? folderNames.GetValueOrDefault(r.ResourceId)).Contains(term)).ToList();
+            var ids = rows.Select(r => r.e.ScopeId).ToList();
+            var itemNames = await db.Securables.AsNoTracking().Where(n => ids.Contains(n.Id)).ToDictionaryAsync(n => n.Id, n => n.Name, ct);
+            rows = rows.Where(r => TextUtil.Unaccent(itemNames.GetValueOrDefault(r.e.ScopeId, "")).Contains(term)).ToList();
         }
         var total = rows.Count;
         var page = rows.Skip((q.SafePage - 1) * q.SafePageSize).Take(q.SafePageSize).ToList();
-        var fileIds = page.Where(r => r.ResourceType == ResourceType.File).Select(r => r.ResourceId).ToList();
-        var folderIds = page.Where(r => r.ResourceType == ResourceType.Folder).Select(r => r.ResourceId).ToList();
-        var items = (await DriveProjection.Files(db, db.Files.AsNoTracking().Where(f => fileIds.Contains(f.Id)), uid).ToListAsync(ct))
-            .Concat(await DriveProjection.Folders(db, db.Folders.AsNoTracking().Where(f => folderIds.Contains(f.Id)), uid).ToListAsync(ct))
+        var pageFiles = page.Where(r => r.Kind == Domain.Enums.SecurableKind.File).Select(r => r.e.ScopeId).ToList();
+        var pageFolders = page.Where(r => r.Kind == Domain.Enums.SecurableKind.Folder).Select(r => r.e.ScopeId).ToList();
+        var items = (await DriveProjection.Files(db, db.Files.AsNoTracking().Where(f => pageFiles.Contains(f.Id)), uid).ToListAsync(ct))
+            .Concat(await DriveProjection.Folders(db, db.Folders.AsNoTracking().Where(f => pageFolders.Contains(f.Id)), uid).ToListAsync(ct))
             .ToList();
         var itemsById = ThumbnailUrls.Apply(items, tickets, uid).ToDictionary(i => i.Id);
-        var names = await PrincipalNames.ResolveAsync(db, page.Select(r => (PrincipalType.User, r.SharedBy)), ct);
-        return new PagedResult<SharedItemDto>(page.Where(r => itemsById.ContainsKey(r.ResourceId))
-            .Select(r => new SharedItemDto(itemsById[r.ResourceId], r.Id, r.SharedBy, names.GetValueOrDefault((PrincipalType.User, r.SharedBy), ""), r.AccessLevel, r.Message, r.CreatedAt)).ToList(),
+        var names = await PrincipalNames.ResolveAsync(db, page.Where(r => r.e.GrantedBy != null).Select(r => (PrincipalType.User, r.e.GrantedBy!.Value)), ct);
+        return new PagedResult<SharedItemDto>(page.Where(r => itemsById.ContainsKey(r.e.ScopeId))
+            .Select(r => new SharedItemDto(itemsById[r.e.ScopeId], r.e.Id, r.e.GrantedBy ?? Guid.Empty, names.GetValueOrDefault((PrincipalType.User, r.e.GrantedBy ?? Guid.Empty), ""),
+                Access.ReferencePermissionEvaluator.ToLevel(r.Permissions), r.e.Message, r.e.GrantedAt)).ToList(),
             total, q.SafePage, q.SafePageSize);
     }
 }
@@ -188,14 +217,14 @@ public sealed class ListSharedWithMeHandler(IAppDbContext db, ICurrentUser me, I
 /// <summary>People who shared with me (filter dropdown).</summary>
 public sealed record ListSharersQuery : IRequest<IReadOnlyList<Users.UserLookupDto>>;
 
-public sealed class ListSharersHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth) : IRequestHandler<ListSharersQuery, IReadOnlyList<Users.UserLookupDto>>
+public sealed class ListSharersHandler(IAppDbContext db, ICurrentUser me, Access.AccessFilter filter) : IRequestHandler<ListSharersQuery, IReadOnlyList<Users.UserLookupDto>>
 {
     public async Task<IReadOnlyList<Users.UserLookupDto>> Handle(ListSharersQuery q, CancellationToken ct)
     {
         var uid = me.RequireUserId();
-        var p = await auth.GetPrincipalsAsync(uid, ct);
-        var ids = p.GroupIds.Concat(p.OrganizationIds).Concat(p.RoleIds).Append(uid).ToList();
-        var sharers = db.Shares.Where(s => ids.Contains(s.SharedWithId) && s.SharedBy != uid).Select(s => s.SharedBy).Distinct();
+        var viewer = await filter.ForAsync(uid, ct);
+        var sharers = db.AclEntries.Where(e => e.Source == Domain.Enums.AclSource.Direct && viewer.Principals.Contains(e.PrincipalId) && e.GrantedBy != null && e.GrantedBy != uid)
+            .Select(e => e.GrantedBy!.Value).Distinct();
         return await db.Users.AsNoTracking().Where(u => sharers.Contains(u.Id)).OrderBy(u => u.FullName)
             .Select(u => new Users.UserLookupDto(u.Id, u.Username, u.FullName, u.Organization != null ? u.Organization.Name : null, u.AvatarFileId)).ToListAsync(ct);
     }

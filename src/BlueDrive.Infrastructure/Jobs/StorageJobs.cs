@@ -59,6 +59,10 @@ public sealed class TrashRetentionJob(ISender mediator, ILogger<TrashRetentionJo
     {
         var n = await mediator.Send(new PurgeExpiredTrashCommand(), ct);
         if (n > 0) logger.LogInformation("Đã xóa vĩnh viễn {Count} mục hết hạn lưu trong thùng rác", n);
+        var spaces = await mediator.Send(new Application.Features.Workspaces.PurgeExpiredSpacesCommand(), ct);
+        if (spaces > 0) logger.LogInformation("Đã xóa vĩnh viễn {Count} Space quá 93 ngày trong thùng rác hệ thống", spaces);
+        var expired = await mediator.Send(new Application.Features.Retention.ApplyRetentionExpiryCommand(), ct);
+        if (expired > 0) logger.LogInformation("Đã xử lý {Count} mục hết thời gian lưu giữ", expired);
     }
 }
 
@@ -90,6 +94,49 @@ public sealed class TextIndexBackfillJob(IAppDbContext db, Media.TextIndexStep s
     }
 }
 
+/// <summary>Perm-Phase 1: keeps the new permission model in step with the current one (the source of writes until Perm-Phase 2).</summary>
+public sealed class PermissionProjectionJob(Application.Features.Access.PermissionProjection projection, ILogger<PermissionProjectionJob> logger)
+{
+    [AutomaticRetry(Attempts = 1)]
+    [DisableConcurrentExecution(1800)]
+    [Queue(HangfireSetup.QueueMaintenance)]
+    public async Task RunAsync(CancellationToken ct)
+    {
+        var r = await projection.RebuildAsync(ct);
+        logger.LogInformation("Đã dựng lại mô hình phân quyền mới: {Securables} mục, {Scopes} phạm vi quyền, {Entries} quyền, {Grants} dòng lọc", r.Securables, r.Scopes, r.Entries, r.Grants);
+    }
+}
+
+/// <summary>
+/// Grants that ran out leave scope_grants (the SQL trimming of lists and search) with rights nobody holds any more: every 5 minutes the
+/// scopes with an entry expired in the last 15 minutes get their grants rewritten (the engine itself checks expiry on every call).
+/// </summary>
+public sealed class AclExpiryJob(IAppDbContext db, Application.Features.Access.AclEditor editor, Application.Features.Access.ExpiryReminders reminders,
+    Application.Features.Access.GuestService guests, TimeProvider clock, ILogger<AclExpiryJob> logger)
+{
+    [AutomaticRetry(Attempts = 1)]
+    [DisableConcurrentExecution(300)]
+    [Queue(HangfireSetup.QueueMaintenance)]
+    public async Task<int> RunAsync(CancellationToken ct)
+    {
+        var now = clock.GetUtcNow().UtcDateTime;
+        var since = now.AddMinutes(-15);
+        var scopes = await db.AclEntries.Where(e => e.ExpiresAt != null && e.ExpiresAt > since && e.ExpiresAt <= now).Select(e => e.ScopeId).Distinct().ToListAsync(ct);
+        foreach (var scope in scopes) await editor.RefreshGrantsAsync(scope, ct);
+        if (scopes.Count > 0) logger.LogInformation("Đã cập nhật quyền hết hạn của {Count} phạm vi", scopes.Count);
+        // Access requests not answered within 30 days end (spec 5.2).
+        await db.AccessRequests.Where(r => r.Status == Domain.Enums.AccessRequestStatus.Pending && r.ExpiresAt <= now)
+            .ExecuteUpdateAsync(u => u.SetProperty(r => r.Status, Domain.Enums.AccessRequestStatus.Expired), ct);
+        // "Sắp hết hạn" 3 days ahead and "đã hết hạn" (spec 5.5).
+        var notices = await reminders.RunAsync(ct);
+        if (notices > 0) logger.LogInformation("Đã gửi {Count} thông báo hạn quyền / liên kết", notices);
+        // Guest accounts not used for N days end (spec 2).
+        var ended = await guests.ExpireAsync(ct);
+        if (ended > 0) logger.LogInformation("Đã vô hiệu hóa {Count} tài khoản khách không dùng", ended);
+        return scopes.Count;
+    }
+}
+
 public sealed class SyncJournalRetentionJob(ISender mediator, ILogger<SyncJournalRetentionJob> logger)
 {
     [Queue(HangfireSetup.QueueMaintenance)]
@@ -109,6 +156,9 @@ public sealed class StorageRecurringJobs(IRecurringJobManager jobs) : IRecurring
         jobs.AddOrUpdate<SyncJournalRetentionJob>("sync-journal-retention", j => j.RunAsync(CancellationToken.None), "45 1 * * *",
             new RecurringJobOptions { TimeZone = Reporting.VietnamTime.Zone });
         jobs.AddOrUpdate<TextIndexBackfillJob>("text-index-backfill", j => j.RunAsync(CancellationToken.None), "*/10 * * * *");
+        jobs.AddOrUpdate<PermissionProjectionJob>("permission-projection", j => j.RunAsync(CancellationToken.None), "30 2 * * *",
+            new RecurringJobOptions { TimeZone = Reporting.VietnamTime.Zone }); // safety net: the model follows every change (AccessModelInterceptor)
+        jobs.AddOrUpdate<AclExpiryJob>("acl-expiry", j => j.RunAsync(CancellationToken.None), "*/5 * * * *");
         return Task.CompletedTask;
     }
 }

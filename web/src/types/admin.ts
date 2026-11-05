@@ -273,7 +273,7 @@ export interface CatalogImportResult {
 }
 
 // ---------- Settings ----------
-export type SettingType = 'number' | 'boolean' | 'text' | 'tags' | 'cron'
+export type SettingType = 'number' | 'boolean' | 'text' | 'tags' | 'cron' | 'external'
 export type SettingValue = number | boolean | string | string[]
 
 export interface SettingDto {

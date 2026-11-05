@@ -236,7 +236,7 @@ public class SyncTests(ApiFactory factory)
         (await (await device.Client.GetAsync($"/api/v1/sync/items/{sharer.GetProperty("id").GetGuid()}")).ReadJsonAsync()).GetProperty("name").GetString()
             .Should().Be("Người dùng " + ownerName, "the virtual folder can be asked for like any item");
         shared.Single(i => i.GetProperty("id").GetGuid() == inside).GetProperty("canEdit").GetBoolean().Should().BeTrue("the folder share is inherited");
-        shared.Single(i => i.GetProperty("id").GetGuid() == viewOnly).GetProperty("canDownload").GetBoolean().Should().BeFalse();
+        shared.Should().NotContain(i => i.GetProperty("id").GetGuid() == viewOnly, "spec 11: \"Chỉ xem\" files are not part of the synced tree");
         (await device.Client.GetAsync($"/api/v1/sync/items/{viewOnly}/content")).StatusCode.Should().Be(HttpStatusCode.Forbidden, "view-only files are never synced down");
         (await device.Client.GetAsync($"/api/v1/sync/snapshot?root_id=ws:{ws}")).StatusCode.Should().Be(HttpStatusCode.NotFound, "not one of the friend's roots");
 
@@ -244,6 +244,14 @@ public class SyncTests(ApiFactory factory)
         (await owner.PutAsJsonAsync($"/api/v1/access/file/{inside}", new { entries = Array.Empty<object>(), breakInheritance = true })).StatusCode.Should().Be(HttpStatusCode.NoContent);
         (await SnapshotAsync(device.Client, "shared")).Should().NotContain(i => i.GetProperty("id").GetGuid() == inside);
         (await owner.PutAsJsonAsync($"/api/v1/access/file/{inside}", new { entries = Array.Empty<object>(), breakInheritance = false })).StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        // A new share shows up in the friend's feed as access_granted, with the item.
+        var later = (await StorageTests.UploadAsync(owner, ws, null, "chia-sau.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        await (await owner.PostAsJsonAsync("/api/v1/shares", new { resourceType = "file", resourceId = later, targets = new[] { new { type = "user", id = friendId } }, accessLevel = 2 })).ReadJsonAsync();
+        (await ChangesAsync(device.Client, cursor)).Should().Contain(c => c.GetProperty("itemId").GetGuid() == later && c.GetProperty("op").GetString() == "access_granted"
+            && c.GetProperty("item").GetProperty("canDownload").GetBoolean());
+        foreach (var s in (await (await owner.GetAsync($"/api/v1/shares?resourceType=file&resourceId={later}")).ReadJsonAsync()).EnumerateArray())
+            await owner.DeleteAsync($"/api/v1/shares/{s.GetProperty("id").GetGuid()}");
 
         // Owner stops sharing the folder: the friend's feed says access_revoked for it.
         var shares = await (await owner.GetAsync($"/api/v1/shares?resourceType=folder&resourceId={folder}")).ReadJsonAsync();

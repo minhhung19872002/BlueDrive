@@ -1,7 +1,8 @@
 import type { ApprovalStatus, DriveItem, ItemRef, ItemType, MediaType } from '@/types/drive'
 
 /** Stable selection key of an item ("file:<id>" / "folder:<id>"). */
-export const itemKey = (item: { type: ItemType; id: string }): string => `${item.type}:${item.id}`
+export const itemKey = (item: { type: ItemType; id: string; shortcutId?: string | null }): string =>
+  item.shortcutId ? `shortcut:${item.shortcutId}` : `${item.type}:${item.id}`
 
 export const toRef = (item: { type: ItemType; id: string }): ItemRef => ({ type: item.type, id: item.id })
 

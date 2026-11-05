@@ -177,12 +177,18 @@ public class StorageTests(ApiFactory factory)
         var mixed = (await (await c.GetAsync($"/api/v1/workspaces/{ws}/trash")).ReadJsonAsync()).GetProperty("items").EnumerateArray().ToList();
         mixed.Single(i => i.GetProperty("id").GetGuid() == fileId).GetProperty("mediaType").GetString().Should().Be("image");
         mixed.Single(i => i.GetProperty("id").GetGuid() == folderId).GetProperty("mediaType").ValueKind.Should().Be(JsonValueKind.Null);
-        // File's parent is gone: restoring the file puts it at the root.
+        // File's parent is gone (spec 8.1): restoring the file makes a folder of the same name again, the deleted one stays in the trash.
         await (await c.PostAsJsonAsync("/api/v1/trash/restore", new { items = new[] { new { type = "file", id = fileId } } })).ReadJsonAsync();
-        (await (await c.GetAsync($"/api/v1/files/{fileId}")).ReadJsonAsync()).GetProperty("folderId").ValueKind.Should().Be(JsonValueKind.Null);
+        var remade = (await (await c.GetAsync($"/api/v1/files/{fileId}")).ReadJsonAsync()).GetProperty("folderId").GetGuid();
+        remade.Should().NotBe(folderId);
+        (await (await c.GetAsync($"/api/v1/workspaces/{ws}/folder-info?folderId={remade}")).ReadJsonAsync()).GetProperty("name").GetString().Should().Be("Tạm");
 
-        await (await c.PostAsJsonAsync("/api/v1/items/delete", new { items = new[] { new { type = "file", id = fileId } } })).ReadJsonAsync();
+        await (await c.PostAsJsonAsync("/api/v1/items/delete", new { items = new object[] { new { type = "file", id = fileId }, new { type = "folder", id = remade } } })).ReadJsonAsync();
+        // Emptying the trash moves it to the second stage (the Drive's owner sees it); emptying that deletes for good.
         await (await c.PostAsync($"/api/v1/workspaces/{ws}/trash/empty", null)).ReadJsonAsync();
+        (await Used()).Should().Be(Png.Length, "the second stage still holds it");
+        (await (await c.GetAsync($"/api/v1/workspaces/{ws}/trash?stage=2")).ReadJsonAsync()).GetProperty("items").EnumerateArray().Should().Contain(i => i.GetProperty("id").GetGuid() == fileId);
+        await (await c.PostAsync($"/api/v1/workspaces/{ws}/trash/empty?stage=2", null)).ReadJsonAsync();
         (await Used()).Should().Be(0);
         using var scope = factory.Services.CreateScope();
         (await scope.ServiceProvider.GetRequiredService<AppDbContext>().AuditLogs.AnyAsync(a => a.UserId == userId && a.Action == Domain.Enums.AuditAction.Purge)).Should().BeTrue();

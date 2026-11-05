@@ -82,7 +82,7 @@ public sealed class SaveUserGroupHandler(IAppDbContext db, IPermissionService pe
 
 public sealed record DeleteUserGroupCommand(Guid Id) : IRequest<Unit>;
 
-public sealed class DeleteUserGroupHandler(IAppDbContext db, IAuditLogger audit) : IRequestHandler<DeleteUserGroupCommand, Unit>
+public sealed class DeleteUserGroupHandler(IAppDbContext db, IAuditLogger audit, Access.AclEditor acl) : IRequestHandler<DeleteUserGroupCommand, Unit>
 {
     public async Task<Unit> Handle(DeleteUserGroupCommand cmd, CancellationToken ct)
     {
@@ -91,6 +91,7 @@ public sealed class DeleteUserGroupHandler(IAppDbContext db, IAuditLogger audit)
         await db.ResourcePermissions.Where(p => p.PrincipalType == PrincipalType.Group && p.PrincipalId == g.Id).ExecuteDeleteAsync(ct);
         await db.Shares.Where(s => s.SharedWithType == PrincipalType.Group && s.SharedWithId == g.Id).ExecuteDeleteAsync(ct);
         await db.UserGroupMembers.Where(m => m.GroupId == g.Id).ExecuteDeleteAsync(ct);
+        await acl.ForgetPrincipalAsync(g.Id, ct);
         db.UserGroups.Remove(g);
         await db.SaveChangesAsync(ct);
         await audit.LogAsync(new AuditEntry(AuditAction.Delete, ResourceName: $"Nhóm người dùng {g.Name}", Detail: new { entity = "user_group", id = g.Id }), ct);

@@ -11,7 +11,8 @@ namespace BlueDrive.Application.Features.Storage;
 public sealed record DriveItemDto(
     Guid Id, string Type, string Name, Guid WorkspaceId, Guid? ParentId, long SizeBytes, MediaType? MediaType, string? Extension, string? MimeType,
     DateTime CreatedAt, DateTime? UpdatedAt, Guid? CreatedBy, string? CreatedByName, bool IsStarred, bool HasThumbnail, ApprovalStatus? ApprovalStatus,
-    int? VersionNo, string? Title, IReadOnlyList<string>? Tags, string? WorkspaceName = null, string? ThumbnailUrl = null);
+    int? VersionNo, string? Title, IReadOnlyList<string>? Tags, string? WorkspaceName = null, string? ThumbnailUrl = null,
+    Guid? ShortcutId = null, string? ShortcutState = null, Guid? CheckedOutBy = null);
 
 /// <summary>Adds short-lived signed thumbnail URLs (usable in &lt;img src&gt;) to listing items.</summary>
 public static class ThumbnailUrls
@@ -23,7 +24,8 @@ public static class ThumbnailUrls
         => items.Select(i => i.HasThumbnail && i.Type == "file" ? i with { ThumbnailUrl = For(tickets, userId, i.Id) } : i).ToList();
 }
 
-public sealed record BreadcrumbItem(Guid? Id, string Name);
+/// <param name="Shared">The "Được chia sẻ với tôi" entry standing for the levels above that the user may not see.</param>
+public sealed record BreadcrumbItem(Guid? Id, string Name, bool Shared = false);
 
 public sealed record AccessFlags(bool CanView, bool CanDownload, bool CanEdit, bool CanUpload, bool CanManage, bool CanApprove, bool WorkspaceLocked)
 {
@@ -40,7 +42,7 @@ public static class DriveProjection
         db.Users.Where(u => u.Id == f.CreatedBy).Select(u => u.FullName).FirstOrDefault(),
         db.UserFavorites.Any(s => s.UserId == userId && s.ItemType == FavoriteItemType.File && s.ItemId == f.Id),
         f.ThumbnailKey != null, f.ApprovalStatus, db.FileVersions.Where(v => v.Id == f.CurrentVersionId).Select(v => (int?)v.VersionNo).FirstOrDefault(),
-        f.Title, f.Tags, f.Workspace!.Name));
+        f.Title, f.Tags, f.Workspace!.Name, null, null, null, f.CheckedOutBy));
 
     public static IQueryable<DriveItemDto> Folders(IAppDbContext db, IQueryable<Folder> q, Guid userId) => q.Select(f => new DriveItemDto(
         f.Id, "folder", f.Name, f.WorkspaceId, f.ParentId, 0, null, null, null, f.CreatedAt, f.UpdatedAt, f.CreatedBy,
@@ -78,7 +80,9 @@ public static class DriveProjection
 /// <summary>Folder contents: sub-folders first, then files; server-side paging across both (#18, #44).</summary>
 public sealed record ListItemsQuery(Guid WorkspaceId, Guid? FolderId, MediaType? MediaType) : PageQuery, IRequest<PagedResult<DriveItemDto>>;
 
-public sealed class ListItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets) : IRequestHandler<ListItemsQuery, PagedResult<DriveItemDto>>
+public sealed class ListItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets, Access.AccessFilter filter,
+    Access.IItemPermissionService engine)
+    : IRequestHandler<ListItemsQuery, PagedResult<DriveItemDto>>
 {
     public async Task<PagedResult<DriveItemDto>> Handle(ListItemsQuery q, CancellationToken ct)
     {
@@ -89,30 +93,13 @@ public sealed class ListItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
 
         var folders = db.Folders.AsNoTracking().Where(f => f.WorkspaceId == q.WorkspaceId && f.ParentId == q.FolderId && !f.IsDeleted);
         var files = db.Files.AsNoTracking().Where(f => f.WorkspaceId == q.WorkspaceId && f.FolderId == q.FolderId && !f.IsDeleted);
-        var p = await auth.GetPrincipalsAsync(uid, ct);
-        var principals = p.GroupIds.Concat(p.OrganizationIds).Concat(p.RoleIds).Append(uid).ToList();
-        var grantedFolders = db.Shares.Where(s => s.ResourceType == ResourceType.Folder && principals.Contains(s.SharedWithId)).Select(s => s.ResourceId)
-            .Concat(db.ResourcePermissions.Where(a => a.ResourceType == ResourceType.Folder && principals.Contains(a.PrincipalId)).Select(a => a.ResourceId));
-        var grantedFiles = db.Shares.Where(s => s.ResourceType == ResourceType.File && principals.Contains(s.SharedWithId)).Select(s => s.ResourceId)
-            .Concat(db.ResourcePermissions.Where(a => a.ResourceType == ResourceType.File && principals.Contains(a.PrincipalId)).Select(a => a.ResourceId));
-        if (!access.CanView)
-        {
-            // No access to the container: show only children granted directly (shared items).
-            folders = folders.Where(f => grantedFolders.Contains(f.Id));
-            files = files.Where(f => grantedFiles.Contains(f.Id) && f.ApprovalStatus == ApprovalStatus.Approved);
-            if (!await folders.AnyAsync(ct) && !await files.AnyAsync(ct))
-                throw new NotFoundException("Không tìm thấy thư mục hoặc bạn không có quyền truy cập.");
-        }
-        else
-        {
-            files = DriveProjection.VisibleApproval(files, access, uid);
-            // Items with unique permissions (stopped inheriting) are listed only to those granted on them, the owner and managers.
-            if (access.Source is not ("admin" or "owner" or "member:manager" or "member:owner"))
-            {
-                folders = folders.Where(f => !f.BreakInheritance || grantedFolders.Contains(f.Id));
-                files = files.Where(f => !f.BreakInheritance || grantedFiles.Contains(f.Id));
-            }
-        }
+        // Security trimming in SQL on the new permission model: each child is listed only to who may see it (its own ACL decides for
+        // items that stopped inheriting; items shared alone show up even when the container itself is not visible).
+        var viewer = await filter.ForAsync(uid, ct);
+        folders = filter.Folders(folders, viewer);
+        files = filter.Files(files, viewer);
+        if (!access.CanView && !await folders.AnyAsync(ct) && !await files.AnyAsync(ct))
+            throw new NotFoundException("Không tìm thấy thư mục hoặc bạn không có quyền truy cập.");
 
         if (!string.IsNullOrWhiteSpace(q.Q))
         {
@@ -126,26 +113,33 @@ public sealed class ListItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
             folders = folders.Where(_ => false);
         }
 
+        // Shortcuts of the folder first (spec 1.2), for who may see the folder; not when filtering by name or type.
+        var shortcuts = access.CanView && string.IsNullOrWhiteSpace(q.Q) && !q.MediaType.HasValue
+            ? await ShortcutListing.RowsAsync(db, engine, uid, q.WorkspaceId, q.FolderId, ct) : [];
         var folderCount = await folders.CountAsync(ct);
         var fileCount = await files.CountAsync(ct);
         var skip = (q.SafePage - 1) * q.SafePageSize;
         var take = q.SafePageSize;
         var items = new List<DriveItemDto>(take);
-        if (skip < folderCount)
+        items.AddRange(shortcuts.Skip(skip).Take(take));
+        skip = Math.Max(0, skip - shortcuts.Count);
+        take -= items.Count;
+        if (take > 0 && skip < folderCount)
             items.AddRange(await DriveProjection.Folders(db, DriveProjection.SortFolders(folders, q.Sort).Skip(skip).Take(take), uid).ToListAsync(ct));
-        var remaining = take - items.Count;
+        var remaining = (q.SafePageSize - items.Count);
         if (remaining > 0)
         {
             var fileSkip = Math.Max(0, skip - folderCount);
             items.AddRange(await DriveProjection.Files(db, DriveProjection.SortFiles(files, q.Sort).Skip(fileSkip).Take(remaining), uid).ToListAsync(ct));
         }
-        return new PagedResult<DriveItemDto>(ThumbnailUrls.Apply(items, tickets, uid), folderCount + fileCount, q.SafePage, q.SafePageSize);
+        return new PagedResult<DriveItemDto>(ThumbnailUrls.Apply(items, tickets, uid), shortcuts.Count + folderCount + fileCount, q.SafePage, q.SafePageSize);
     }
 }
 
 public sealed record GetFolderInfoQuery(Guid WorkspaceId, Guid? FolderId) : IRequest<FolderInfoDto>;
 
-public sealed class GetFolderInfoHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth) : IRequestHandler<GetFolderInfoQuery, FolderInfoDto>
+public sealed class GetFolderInfoHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, Access.AccessFilter filter)
+    : IRequestHandler<GetFolderInfoQuery, FolderInfoDto>
 {
     public async Task<FolderInfoDto> Handle(GetFolderInfoQuery q, CancellationToken ct)
     {
@@ -155,14 +149,15 @@ public sealed class GetFolderInfoHandler(IAppDbContext db, ICurrentUser me, IRes
         if (q.FolderId is not { } fid)
         {
             var a = await auth.GetAccessAsync(uid, ResourceType.Workspace, ws.Id, ct);
+            // Spec 4.4 (no leaking existence): the root's name only to who may open it or holds something shared inside it.
+            if (a.Level < AccessLevel.View && !await filter.Workspaces(await filter.ForAsync(uid, ct)).ContainsAsync(ws.Id, ct))
+                throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
             return new FolderInfoDto(null, wsName, ws.Id, wsName, ws.Type, null, false, false, [new BreadcrumbItem(null, wsName)], AccessFlags.From(a));
         }
         var folder = await db.Folders.AsNoTracking().FirstOrDefaultAsync(f => f.Id == fid && f.WorkspaceId == ws.Id && !f.IsDeleted, ct) ?? throw new NotFoundException("Không tìm thấy thư mục.");
         var access = await auth.GetAccessAsync(uid, ResourceType.Folder, fid, ct);
-        var ids = ResourceAuthorizationService.PathIds(folder.Path);
-        var names = await db.Folders.AsNoTracking().Where(f => ids.Contains(f.Id)).ToDictionaryAsync(f => f.Id, f => f.Name, ct);
-        var crumbs = new List<BreadcrumbItem> { new(null, wsName) };
-        crumbs.AddRange(ids.AsEnumerable().Reverse().Where(names.ContainsKey).Select(id => new BreadcrumbItem(id, names[id])));
+        if (access.Level < AccessLevel.View) throw new NotFoundException("Không tìm thấy thư mục.");
+        var crumbs = await FileLocation.BuildAsync(db, ws, folder, uid, ct, auth);
         return new FolderInfoDto(folder.Id, folder.Name, ws.Id, wsName, ws.Type, folder.ParentId, folder.RequiresApproval, folder.BreakInheritance, crumbs, AccessFlags.From(access));
     }
 }
@@ -187,7 +182,9 @@ public sealed class GetFolderTreeHandler(IAppDbContext db, ICurrentUser me, IRes
     }
 }
 
-public sealed record FileVersionDto(Guid Id, int VersionNo, long SizeBytes, string? ChangeNote, Guid? CreatedBy, string? CreatedByName, DateTime CreatedAt, bool IsCurrent);
+/// <param name="Major">With <paramref name="Minor"/>: the 1.0 / 1.1 label (spec 1.4); a minor version is a draft.</param>
+public sealed record FileVersionDto(Guid Id, int VersionNo, long SizeBytes, string? ChangeNote, Guid? CreatedBy, string? CreatedByName, DateTime CreatedAt, bool IsCurrent,
+    int Major = 0, int Minor = 0, bool IsPublished = true);
 
 public sealed record CatalogTagDto(Guid Id, Guid CatalogId, string CatalogName, string Name);
 
@@ -197,11 +194,15 @@ public sealed record FileDetailDto(
     Guid? CreatedBy, string? CreatedByName, DateTime CreatedAt, Guid? UpdatedBy, string? UpdatedByName, DateTime? UpdatedAt,
     ApprovalStatus ApprovalStatus, string? RejectionReason, ScanStatus ScanStatus, int? Width, int? Height, double? DurationSeconds,
     bool HasThumbnail, bool HasPreview, string? ChecksumSha256, IReadOnlyList<CatalogTagDto> Catalogs, IReadOnlyList<FileVersionDto> Versions,
-    bool IsStarred, AccessFlags Access, bool IsDeleted, string? ThumbnailUrl = null, string? PreviewUrl = null, bool ContentBlocked = false);
+    bool IsStarred, AccessFlags Access, bool IsDeleted, string? ThumbnailUrl = null, string? PreviewUrl = null, bool ContentBlocked = false,
+    Guid? CheckedOutBy = null, string? CheckedOutByName = null, DateTime? CheckedOutAt = null, bool HasDraft = false, VersioningMode Versioning = VersioningMode.Major,
+    bool RequireCheckout = false, string? LibraryName = null,
+    string? LabelName = null, string? LabelColor = null, bool Watermark = false);
 
 public sealed record GetFileDetailQuery(Guid Id, bool RecordView = true) : IRequest<FileDetailDto>;
 
-public sealed class GetFileDetailHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets, TimeProvider clock)
+public sealed class GetFileDetailHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IContentTicketService tickets, TimeProvider clock,
+    Libraries.Libraries libraries, Access.IItemPermissionService engine, Access.Labels labels)
     : IRequestHandler<GetFileDetailQuery, FileDetailDto>
 {
     public async Task<FileDetailDto> Handle(GetFileDetailQuery q, CancellationToken ct)
@@ -209,12 +210,17 @@ public sealed class GetFileDetailHandler(IAppDbContext db, ICurrentUser me, IRes
         var uid = me.RequireUserId();
         var access = await auth.EnsureAsync(uid, ResourceType.File, q.Id, AccessLevel.View, ct);
         var f = await db.Files.AsNoTracking().Include(x => x.Workspace).Include(x => x.Folder).FirstAsync(x => x.Id == q.Id, ct);
-        var location = await FileLocation.BuildAsync(db, f.Workspace!, f.Folder, uid, ct);
-        var userIds = new[] { f.CreatedBy, f.UpdatedBy }.Where(x => x.HasValue).Select(x => x!.Value).ToList();
+        var location = await FileLocation.BuildAsync(db, f.Workspace!, f.Folder, uid, ct, auth);
+        var userIds = new[] { f.CreatedBy, f.UpdatedBy, f.CheckedOutBy }.Where(x => x.HasValue).Select(x => x!.Value).ToList();
         var users = await db.Users.AsNoTracking().Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName, ct);
-        var versions = await db.FileVersions.AsNoTracking().Where(v => v.FileId == f.Id).OrderByDescending(v => v.VersionNo)
+        // Drafts (minor versions) are listed only to who may see them (spec 1.4).
+        var rights = await engine.GetEffectiveAsync(uid, f.Id, ct);
+        var drafts = Domain.Permissions.AccessRights.Has(rights, Domain.Permissions.AccessRight.ViewDrafts) || Domain.Permissions.AccessRights.Has(rights, Domain.Permissions.AccessRight.EditItems);
+        var versions = await db.FileVersions.AsNoTracking().Where(v => v.FileId == f.Id && (drafts || v.IsPublished)).OrderByDescending(v => v.VersionNo)
             .Select(v => new FileVersionDto(v.Id, v.VersionNo, v.SizeBytes, v.ChangeNote, v.CreatedBy,
-                db.Users.Where(u => u.Id == v.CreatedBy).Select(u => u.FullName).FirstOrDefault(), v.CreatedAt, v.Id == f.CurrentVersionId)).ToListAsync(ct);
+                db.Users.Where(u => u.Id == v.CreatedBy).Select(u => u.FullName).FirstOrDefault(), v.CreatedAt, v.Id == f.CurrentVersionId, v.Major, v.Minor, v.IsPublished)).ToListAsync(ct);
+        var library = await libraries.ForAsync(f.WorkspaceId, f.FolderId, ct);
+        var label = (await labels.ForAsync(f.Id, ct))?.Label;
         var catalogs = await db.FileCatalogItems.AsNoTracking().Where(c => c.FileId == f.Id)
             .Select(c => new CatalogTagDto(c.CatalogItemId, c.CatalogItem!.CatalogId, c.CatalogItem.Catalog!.Name, c.CatalogItem.Name)).ToListAsync(ct);
         var starred = await db.UserFavorites.AnyAsync(s => s.UserId == uid && s.ItemType == FavoriteItemType.File && s.ItemId == f.Id, ct);
@@ -226,21 +232,35 @@ public sealed class GetFileDetailHandler(IAppDbContext db, ICurrentUser me, IRes
             AccessFlags.From(access), f.IsDeleted,
             f.ThumbnailKey != null ? ThumbnailUrls.For(tickets, uid, f.Id) : null, f.PreviewKey != null ? ThumbnailUrls.For(tickets, uid, f.Id, large: true) : null,
             // Quarantined, or still waiting for its malware scan and uploaded by someone else: the UI shows why instead of the content.
-            await ScanGate.BlockReasonAsync(db, f, null, uid, ct) is not null);
+            await ScanGate.BlockReasonAsync(db, f, null, uid, ct) is not null,
+            f.CheckedOutBy, f.CheckedOutBy is { } co ? users.GetValueOrDefault(co) : null, f.CheckedOutAt, drafts && f.PublishedVersionId != f.CurrentVersionId,
+            library.Versioning, library.RequireCheckout, library.Name,
+            // Spec 11.9: a watermark for "Chỉ xem" and for labels requiring it.
+            label?.Name, label?.Color, label?.Watermark == true || !access.CanDownload);
     }
 }
 
 public static class FileLocation
 {
-    public static async Task<List<BreadcrumbItem>> BuildAsync(IAppDbContext db, Workspace ws, Folder? folder, Guid userId, CancellationToken ct)
+    /// <summary>
+    /// Path of a folder or file. With <paramref name="auth"/> it starts at the highest level the user may see (spec 1.3): the names of the Space
+    /// and folders above something shared with them are not shown, an "Được chia sẻ với tôi" entry stands for them.
+    /// </summary>
+    public static async Task<List<BreadcrumbItem>> BuildAsync(IAppDbContext db, Workspace ws, Folder? folder, Guid userId, CancellationToken ct,
+        IResourceAuthorizationService? auth = null)
     {
         var wsName = ws.Type == WorkspaceType.Personal ? (ws.OwnerId == userId ? "Tài liệu của tôi" : ws.Name) : ws.Name;
         var list = new List<BreadcrumbItem> { new(null, wsName) };
-        if (folder is null) return list;
-        var ids = ResourceAuthorizationService.PathIds(folder.Path);
-        var names = await db.Folders.AsNoTracking().Where(f => ids.Contains(f.Id)).ToDictionaryAsync(f => f.Id, f => f.Name, ct);
-        list.AddRange(ids.AsEnumerable().Reverse().Where(names.ContainsKey).Select(id => new BreadcrumbItem(id, names[id])));
-        return list;
+        if (folder is not null)
+        {
+            var ids = LegacyResourceAuthorizationService.PathIds(folder.Path);
+            var names = await db.Folders.AsNoTracking().Where(f => ids.Contains(f.Id)).ToDictionaryAsync(f => f.Id, f => f.Name, ct);
+            list.AddRange(ids.AsEnumerable().Reverse().Where(names.ContainsKey).Select(id => new BreadcrumbItem(id, names[id])));
+        }
+        if (auth is null || await auth.CanAsync(userId, ResourceType.Workspace, ws.Id, AccessLevel.View, ct)) return list;
+        var first = 1;
+        while (first < list.Count && !await auth.CanAsync(userId, ResourceType.Folder, list[first].Id!.Value, AccessLevel.View, ct)) first++;
+        return [new BreadcrumbItem(null, "Được chia sẻ với tôi", Shared: true), .. list.Skip(first)];
     }
 
     public static string ToText(IEnumerable<BreadcrumbItem> crumbs) => string.Join(" / ", crumbs.Select(c => c.Name));

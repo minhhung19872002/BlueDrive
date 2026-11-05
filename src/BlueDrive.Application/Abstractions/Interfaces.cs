@@ -9,6 +9,21 @@ public interface IAppDbContext
 {
     DbSet<Organization> Organizations { get; }
     DbSet<FileText> FileTexts { get; }
+    DbSet<Space> Spaces { get; }
+    DbSet<PersonalDrive> PersonalDrives { get; }
+    DbSet<Library> Libraries { get; }
+    DbSet<Securable> Securables { get; }
+    DbSet<Principal> Principals { get; }
+    DbSet<PrincipalMembership> PrincipalMemberships { get; }
+    DbSet<MembershipVersion> MembershipVersions { get; }
+    DbSet<GroupNesting> GroupNestings { get; }
+    DbSet<SpaceGroup> SpaceGroups { get; }
+    DbSet<SpaceGroupMember> SpaceGroupMembers { get; }
+    DbSet<PermissionLevel> PermissionLevels { get; }
+    DbSet<AclScope> AclScopes { get; }
+    DbSet<AclEntry> AclEntries { get; }
+    DbSet<ScopeGrant> ScopeGrants { get; }
+    DbSet<AccessRequest> AccessRequests { get; }
     DbSet<User> Users { get; }
     DbSet<PasswordHistory> PasswordHistories { get; }
     DbSet<UserGroup> UserGroups { get; }
@@ -33,6 +48,23 @@ public interface IAppDbContext
     DbSet<ResourcePermission> ResourcePermissions { get; }
     DbSet<Share> Shares { get; }
     DbSet<ShareLink> ShareLinks { get; }
+    DbSet<ShareLinkMember> ShareLinkMembers { get; }
+    DbSet<Guest> Guests { get; }
+    DbSet<Shortcut> Shortcuts { get; }
+    DbSet<LibrarySettings> LibrarySettings { get; }
+    DbSet<SensitivityLabel> SensitivityLabels { get; }
+    DbSet<RetentionPolicy> RetentionPolicies { get; }
+    DbSet<LegalHold> LegalHolds { get; }
+    DbSet<OffboardingRecord> OffboardingRecords { get; }
+    DbSet<EmergencyAccess> EmergencyAccesses { get; }
+    DbSet<LibraryColumn> LibraryColumns { get; }
+    DbSet<FileColumnValue> FileColumnValues { get; }
+    DbSet<FolderColumnDefault> FolderColumnDefaults { get; }
+    DbSet<LibraryView> LibraryViews { get; }
+    DbSet<LibraryTemplate> LibraryTemplates { get; }
+    DbSet<OwnershipTransfer> OwnershipTransfers { get; }
+    DbSet<WorkspaceGroupMember> WorkspaceGroupMembers { get; }
+    DbSet<GuestOtp> GuestOtps { get; }
     DbSet<Comment> Comments { get; }
     DbSet<Notification> Notifications { get; }
     DbSet<SavedSearch> SavedSearches { get; }
@@ -52,6 +84,7 @@ public interface IAppDbContext
     DbSet<SyncDevice> Devices { get; }
     DbSet<OAuthAuthorizationCode> OAuthAuthorizationCodes { get; }
     DatabaseFacade Database { get; }
+    Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }
 

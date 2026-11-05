@@ -200,7 +200,8 @@ public sealed class BackupRunner(
 /// Restores a backup chain: checksums of every part, pg_restore of the chosen dump, then full + incremental archives in order
 /// (into the local volume or back into the S3 bucket). Folders missing on this server are fetched from the S3 copy.
 /// </summary>
-public sealed class RestoreRunner(IOptions<BackupOptions> backupOptions, IOptions<StorageOptions> storageOptions, IFileStorage storage, IPgTools pgTools, ILogger<RestoreRunner> logger)
+public sealed class RestoreRunner(IOptions<BackupOptions> backupOptions, IOptions<StorageOptions> storageOptions, IFileStorage storage, IPgTools pgTools,
+    Npgsql.NpgsqlDataSource dataSource, ILogger<RestoreRunner> logger)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -229,6 +230,11 @@ public sealed class RestoreRunner(IOptions<BackupOptions> backupOptions, IOption
                     throw new InvalidOperationException($"Sai checksum {part.Name} trong {Path.GetFileName(dir)} — bản sao lưu bị hỏng.");
         logger.LogInformation("Checksum hợp lệ. Phục hồi CSDL từ {Dir}", Path.GetFileName(target));
         await pgTools.RestoreAsync(Path.Combine(target, "db.dump"), ct);
+        // pg_restore recreates the extensions (ltree, unaccent…) with new type ids: connections and Npgsql's type cache must forget the old ones.
+        Npgsql.NpgsqlConnection.ClearAllPools();
+        await using (var connection = await dataSource.OpenConnectionAsync(ct)) await connection.ReloadTypesAsync(ct);
+        // The whole database changed outside EF: no cached permission decision may survive it.
+        Application.Features.Access.PermissionGeneration.Bump();
 
         foreach (var (dir, m) in chain)
         {

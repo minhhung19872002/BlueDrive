@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
+import Watermark from '@/features/drive/viewer/Watermark'
 import { App, Button, Result, Spin } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
@@ -114,8 +115,9 @@ export default function OfficeEditor({ config, onRetry }: OfficeEditorProps) {
   }, [config, placeholderId, attempt])
 
   return (
-    <div className="bd-office-frame">
+    <div className="bd-office-frame" onContextMenu={config.watermark ? (e) => e.preventDefault() : undefined}>
       <div ref={hostRef} className="bd-office-host" />
+      {config.watermark && <Watermark />}
       {state.status === 'loading' && (
         <div className="bd-office-overlay">
           <Spin size="large" tip={t('collab.office.loading')}>

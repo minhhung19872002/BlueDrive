@@ -89,6 +89,8 @@ public sealed class UpdateSettingsHandler(IAppDbContext db, ISettingsService set
         "tags" when v.ValueKind != JsonValueKind.Array => "Giá trị phải là danh sách.",
         "cron" when v.ValueKind != JsonValueKind.String || !CronUtil.IsValid(v.GetString()) => "Biểu thức lịch (cron) không hợp lệ, ví dụ: 0 2 * * * (2 giờ sáng hằng ngày).",
         "text" when v.ValueKind != JsonValueKind.String => "Giá trị phải là chuỗi.",
+        "external" when v.ValueKind != JsonValueKind.String || v.GetString() is not ("off" or "existing_guests" or "new_and_existing_guests" or "anyone")
+            => "Mức chia sẻ ra ngoài không hợp lệ.",
         _ => null,
     };
 }

@@ -7,11 +7,12 @@ using Microsoft.EntityFrameworkCore;
 namespace BlueDrive.Application.Security;
 
 /// <summary>Effective access of a user on one resource, with the reason (for the "who has access" panel and tests).</summary>
-public sealed record ResourceAccess(AccessLevel Level, bool CanUpload, bool CanApprove, bool WorkspaceLocked, string Source)
+/// <param name="NoDownload">Rights at this level but without downloading (a Space with downloads off, spec 6).</param>
+public sealed record ResourceAccess(AccessLevel Level, bool CanUpload, bool CanApprove, bool WorkspaceLocked, string Source, bool NoDownload = false)
 {
     public static readonly ResourceAccess None = new(AccessLevel.None, false, false, false, "none");
     public bool CanView => Level >= AccessLevel.View;
-    public bool CanDownload => Level >= AccessLevel.Download;
+    public bool CanDownload => Level >= AccessLevel.Download && !NoDownload;
     public bool CanEdit => Level >= AccessLevel.Edit && !WorkspaceLocked;
     public bool CanManage => Level >= AccessLevel.Manage && !WorkspaceLocked;
 }
@@ -49,12 +50,14 @@ public sealed record PrincipalSet(Guid UserId, IReadOnlyList<Guid> GroupIds, IRe
 }
 
 /// <summary>
+/// The current model's evaluation, kept to compare it with the new one (<c>GET /admin/permission-model/verify</c>); the application
+/// uses <see cref="ModelResourceAuthorizationService"/>.
 /// Order of evaluation (spec §4.4): doc.admin → workspace owner → workspace member role → direct ACL on the item →
 /// ACL inherited from ancestor folders (until break_inheritance) and the workspace → shares → workspace lock caps writes.
 /// Items not yet approved are visible only to editors/approvers/the uploader. Grants are additive (max wins).
 /// Owner / member levels are capped by the role's doc.edit (<see cref="PrincipalSet.CapByRole"/>); ACL and shares are not.
 /// </summary>
-public sealed class ResourceAuthorizationService(IAppDbContext db, IPermissionService perms, TimeProvider clock) : IResourceAuthorizationService
+public sealed class LegacyResourceAuthorizationService(IAppDbContext db, IPermissionService perms, TimeProvider clock) : IResourceAuthorizationService
 {
     public static AccessLevel LevelOf(WorkspaceMemberRole role) => role switch
     {
@@ -99,7 +102,7 @@ public sealed class ResourceAuthorizationService(IAppDbContext db, IPermissionSe
         if (!a.CanView) throw new NotFoundException(type == ResourceType.Folder ? "Không tìm thấy thư mục hoặc bạn không có quyền truy cập." : "Không tìm thấy tài liệu hoặc bạn không có quyền truy cập.");
         if (level >= AccessLevel.Edit && a.WorkspaceLocked && a.Level >= level)
             throw new AppException("Nhóm tài nguyên đang bị khóa, chỉ cho phép xem.", 423);
-        var ok = level switch { AccessLevel.Manage => a.CanManage, AccessLevel.Edit => a.CanEdit, _ => a.Level >= level };
+        var ok = level switch { AccessLevel.Manage => a.CanManage, AccessLevel.Edit => a.CanEdit, AccessLevel.Download => a.CanDownload, _ => a.Level >= level };
         if (!ok) throw new ForbiddenException(level switch
         {
             AccessLevel.Download => "Bạn không có quyền tải xuống tài liệu này.",
@@ -265,4 +268,56 @@ public sealed class ResourceAuthorizationService(IAppDbContext db, IPermissionSe
 public sealed class ResourceAccessChecker(IResourceAuthorizationService auth) : IResourceAccessChecker
 {
     public Task<bool> CanViewFileAsync(Guid userId, Guid fileId, CancellationToken ct = default) => auth.CanAsync(userId, ResourceType.File, fileId, AccessLevel.View, ct);
+}
+
+/// <summary>
+/// Perm-Phase 3: the access checks of the whole application on the new permission model (<see cref="Features.Access.IItemPermissionService"/>),
+/// mapped to the levels the features ask for. Upload = "Thêm nội dung", approve = "Phê duyệt"; a locked Space keeps its level but refuses
+/// writes with 423 (as before). The document administrator no longer sees other people's content on its own (spec 3.3).
+/// </summary>
+public sealed class ModelResourceAuthorizationService(Features.Access.IItemPermissionService engine, LegacyResourceAuthorizationService legacy) : IResourceAuthorizationService
+{
+    public async Task<ResourceAccess> GetAccessAsync(Guid userId, ResourceType type, Guid resourceId, CancellationToken ct = default)
+    {
+        var (rights, locked) = await engine.GetWithLockAsync(userId, resourceId, ct);
+        var level = Features.Access.ReferencePermissionEvaluator.ToLevel(rights);
+        if (level == AccessLevel.None) return ResourceAccess.None;
+        return new ResourceAccess(level, !locked && (rights & Domain.Permissions.AccessRight.AddItems) != 0,
+            (rights & Domain.Permissions.AccessRight.ApproveItems) != 0, locked, "model", NoDownload: (rights & Domain.Permissions.AccessRight.Download) == 0);
+    }
+
+    public async Task<bool> CanAsync(Guid userId, ResourceType type, Guid resourceId, AccessLevel level, CancellationToken ct = default)
+    {
+        var a = await GetAccessAsync(userId, type, resourceId, ct);
+        return level >= AccessLevel.Edit ? (level == AccessLevel.Manage ? a.CanManage : a.CanEdit) : a.Level >= level;
+    }
+
+    public async Task<ResourceAccess> EnsureAsync(Guid userId, ResourceType type, Guid resourceId, AccessLevel level, CancellationToken ct = default)
+    {
+        var a = await GetAccessAsync(userId, type, resourceId, ct);
+        if (!a.CanView) throw new NotFoundException(type == ResourceType.Folder ? "Không tìm thấy thư mục hoặc bạn không có quyền truy cập." : "Không tìm thấy tài liệu hoặc bạn không có quyền truy cập.");
+        if (level >= AccessLevel.Edit && a.WorkspaceLocked && a.Level >= level)
+            throw new AppException("Nhóm tài nguyên đang bị khóa, chỉ cho phép xem.", 423);
+        var ok = level switch { AccessLevel.Manage => a.CanManage, AccessLevel.Edit => a.CanEdit, AccessLevel.Download => a.CanDownload, _ => a.Level >= level };
+        if (!ok) throw new ForbiddenException(level switch
+        {
+            AccessLevel.Download => "Bạn không có quyền tải xuống tài liệu này.",
+            AccessLevel.Edit => "Bạn không có quyền chỉnh sửa tài liệu này.",
+            AccessLevel.Manage => "Bạn không có quyền quản lý tài liệu này.",
+            _ => "Bạn không có quyền xem tài liệu này.",
+        });
+        return a;
+    }
+
+    public async Task<ResourceAccess> EnsureCanUploadAsync(Guid userId, Guid workspaceId, Guid? folderId, CancellationToken ct = default)
+    {
+        var a = folderId.HasValue ? await GetAccessAsync(userId, ResourceType.Folder, folderId.Value, ct) : await GetAccessAsync(userId, ResourceType.Workspace, workspaceId, ct);
+        if (!a.CanView) throw new NotFoundException("Không tìm thấy thư mục đích hoặc bạn không có quyền truy cập.");
+        if (a.WorkspaceLocked) throw new AppException("Nhóm tài nguyên đang bị khóa, không thể tải lên hoặc tạo mới.", 423);
+        if (!a.CanUpload) throw new ForbiddenException("Bạn không có quyền tải lên/tạo mới tại vị trí này.");
+        return a;
+    }
+
+    /// <summary>Principals for the SQL filters that still read the current model (replaced channel by channel in Perm-Phase 3).</summary>
+    public Task<PrincipalSet> GetPrincipalsAsync(Guid userId, CancellationToken ct = default) => legacy.GetPrincipalsAsync(userId, ct);
 }

@@ -27,10 +27,12 @@ public static class DependencyInjection
         services.AddSingleton(_ => new NpgsqlDataSourceBuilder(cs).Build());
         services.AddScoped<AuditableInterceptor>();
         services.AddScoped<ChangeJournalInterceptor>();
+        services.AddScoped<AccessModelInterceptor>();
+        services.AddScoped<Application.Features.Access.IAccessModelSync>(sp => sp.GetRequiredService<AccessModelInterceptor>());
         services.AddDbContext<AppDbContext>((sp, o) => o
             .UseNpgsql(sp.GetRequiredService<NpgsqlDataSource>(), npg => npg.MigrationsHistoryTable("__ef_migrations_history"))
             .UseSnakeCaseNamingConvention()
-            .AddInterceptors(sp.GetRequiredService<AuditableInterceptor>(), sp.GetRequiredService<ChangeJournalInterceptor>()));
+            .AddInterceptors(sp.GetRequiredService<AuditableInterceptor>(), sp.GetRequiredService<ChangeJournalInterceptor>(), sp.GetRequiredService<AccessModelInterceptor>()));
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddMemoryCache();
 
@@ -77,6 +79,8 @@ public static class DependencyInjection
         services.AddScoped<Media.TextIndexStep>();
         services.AddScoped<Media.IFileProcessingStep>(sp => sp.GetRequiredService<Media.TextIndexStep>());
         services.AddScoped<Jobs.TextIndexBackfillJob>();
+        services.AddScoped<Jobs.PermissionProjectionJob>();
+        services.AddScoped<Jobs.AclExpiryJob>();
 
         services.AddScoped<Application.Features.Search.IFileSearchService, Search.FileSearchService>();
         services.AddSingleton<IAuditObserver, UnusualDownloadObserver>();

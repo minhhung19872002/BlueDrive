@@ -46,6 +46,18 @@ public class SharesController : ApiControllerBase
     [HttpGet("with-me")]
     public Task<PagedResult<SharedItemDto>> WithMe([FromQuery] ListSharedWithMeQuery query) => Mediator.Send(query);
 
+    /// <summary>Tôi đã chia sẻ (người được cấp quyền và liên kết còn hiệu lực).</summary>
+    [HttpGet("by-me")]
+    public Task<PagedResult<SharedByMeDto>> ByMe([FromQuery] ListSharedByMeQuery query) => Mediator.Send(query);
+
+    /// <summary>Bộ nhớ: tệp trong Drive của tôi theo dung lượng (kể cả các phiên bản), lớn nhất trước.</summary>
+    [HttpGet("~/api/v1/storage/usage")]
+    public Task<PagedResult<StorageItemDto>> Storage([FromQuery] ListStorageQuery query) => Mediator.Send(query);
+
+    /// <summary>Xóa phiên bản cũ của một tệp (giữ phiên bản hiện tại và bản đã xuất bản).</summary>
+    [HttpPost("~/api/v1/files/{id:guid}/versions/prune")]
+    public Task<PruneOldVersionsResult> PruneVersions(Guid id) => Mediator.Send(new PruneOldVersionsCommand(id));
+
     [HttpGet("with-me/sharers")]
     public Task<IReadOnlyList<UserLookupDto>> Sharers() => Mediator.Send(new ListSharersQuery());
 }
@@ -77,7 +89,7 @@ public class ShareLinksController : ApiControllerBase
         using var gen = new QRCoder.QRCodeGenerator();
         using var data = gen.CreateQrCode(dto.Url, QRCoder.QRCodeGenerator.ECCLevel.M);
         var png = new QRCoder.PngByteQRCode(data).GetGraphic(8);
-        return File(png, "image/png", $"qr-{link.Token[..8]}.png");
+        return File(png, "image/png", $"qr-{link.Id.ToString()[..8]}.png");
     }
 }
 

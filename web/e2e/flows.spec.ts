@@ -163,7 +163,7 @@ async function saveLink(page: Page) {
 test('chia sẻ qua liên kết: mặc định Hạn chế, chuyển sang Bất kỳ ai có liên kết', async ({ page, browser }) => {
   // Like Google Drive the link is there right away, restricted (signed in and with access) by default.
   const { dialog, linkBox } = await openLinkTab(page)
-  await expect(dialog.getByText('Hạn chế').first()).toBeVisible()
+  await expect(dialog.getByText('Hạn chế (người đã có quyền)').first()).toBeVisible()
   await expect(dialog.getByPlaceholder(/mật khẩu/i)).toHaveCount(0)
   const link = await linkBox.inputValue()
   const path = new URL(link.trim(), 'http://x').pathname
@@ -182,10 +182,10 @@ test('chia sẻ qua liên kết: mặc định Hạn chế, chuyển sang Bất 
   await anon.close()
 })
 
-test('liên kết Bất kỳ ai có liên kết, vai trò Người chỉnh sửa: người không đăng nhập mở là sửa được ngay', async ({ page, browser }) => {
+test('liên kết Bất kỳ ai có liên kết, cấp quyền Biên tập: người không đăng nhập mở là sửa được ngay', async ({ page, browser }) => {
   const { linkBox } = await openLinkTab(page)
   await choose(page, 'Quyền truy cập chung', 'Bất kỳ ai có liên kết')
-  await choose(page, 'Vai trò', 'Người chỉnh sửa')
+  await choose(page, 'Cấp quyền', 'Biên tập')
   await saveLink(page)
   await expect(page.getByRole('dialog').getByText('Cho phép chỉnh sửa', { exact: true })).toBeVisible()
   const path = new URL((await linkBox.inputValue()).trim(), 'http://x').pathname

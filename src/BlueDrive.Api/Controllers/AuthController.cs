@@ -45,6 +45,18 @@ public class AuthController : ApiControllerBase
     public Task<AuthResult> ChangePassword(ChangePasswordCommand cmd) => Mediator.Send(cmd);
 
     /// <summary>Quên mật khẩu: gửi email chứa liên kết khôi phục (hết hạn sau 30 phút).</summary>
+    /// <summary>Khách bên ngoài: gửi mã đăng nhập 6 chữ số tới email (luôn trả 204, không lộ email có tồn tại hay không).</summary>
+    [HttpPost("guest/code"), AllowAnonymous, EnableRateLimiting(SecuritySetup.AuthRateLimit)]
+    public async Task<IActionResult> GuestCode(Application.Features.Access.RequestGuestCodeCommand cmd)
+    {
+        await Mediator.Send(cmd);
+        return NoContent();
+    }
+
+    /// <summary>Khách bên ngoài: đăng nhập bằng mã (tối đa 5 lần thử mỗi mã, hết hạn sau 10 phút).</summary>
+    [HttpPost("guest/verify"), AllowAnonymous, EnableRateLimiting(SecuritySetup.LoginRateLimit)]
+    public Task<AuthResult> GuestVerify(Application.Features.Access.VerifyGuestCodeCommand cmd) => Mediator.Send(cmd);
+
     [HttpPost("forgot-password"), AllowAnonymous, EnableRateLimiting(SecuritySetup.AuthRateLimit)]
     public async Task<IActionResult> ForgotPassword(ForgotPasswordCommand cmd)
     {

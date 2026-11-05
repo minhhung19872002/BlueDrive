@@ -60,9 +60,15 @@ bản MSI: `msiexec /i … /qn`. Phần tải, kiểm chữ ký và cài kèm th
   `portal:login` đúng provider/người dùng, giao diện gọn; trang vào gọi `portal:login`.
 - `DesktopTests.OnlyOffice_provider_is_generated_…`: sinh `config.json` theo máy chủ, trạng thái Missing → Ready → Outdated, cài vào thư mục ONLYOFFICE.
 
-## 4. Còn lại (chưa làm)
-- Kiểm thử 3 người cùng lúc (2 máy Windows dùng ONLYOFFICE Desktop Editors + 1 người trên web): mới kiểm chứng trên 1 máy (mở bằng vé, vào chế độ chỉnh sửa;
-  lưu từ ứng dụng thành phiên bản dùng chung callback của Document Server); việc cùng soạn nhiều người do Document Server đảm nhận, đã kiểm thử trên web.
+## 4. Kiểm thử trên máy thật và phần làm thêm
+- 3 người cùng sửa 1 tệp (web + ONLYOFFICE Desktop Editors trên 2 máy Windows 11, máy chủ thật, 04/11/2026): Đạt — xem
+  `docs/kich-ban-kiem-thu-desktop.md`, phần "Kết quả chạy trên 2 máy Windows".
+- Mất mạng giữa phiên (04/11/2026, ONLYOFFICE Desktop 10.0 trên Windows 11, máy chủ thật; mạng của ONLYOFFICE đi qua một proxy cục bộ được
+  tắt/bật giữa phiên): gõ một dòng → cắt mạng → ONLYOFFICE báo "Connection is lost — Trying to connect" và khóa sửa (gõ thêm không vào
+  tài liệu) → Document Server lưu ngay phiên bản 6 có dòng đã gõ → có mạng lại: ONLYOFFICE báo "Đã thay đổi phiên bản… sẽ được tải lại",
+  mở lại thấy đủ nội dung, gõ tiếp, đóng → phiên bản 7 có cả dòng trước khi mất mạng và dòng sau khi có mạng. Không mất nội dung.
+- Người chỉ có quyền xem mở ở chế độ chỉ xem: vé `POST /api/v1/onlyoffice-desktop/tickets` trả `canEdit = false`, cấu hình soạn thảo
+  `mode = view` (IT `DesktopClientTests.OnlyOffice_desktop_ticket_opens_the_editor_without_signing_in_again_once`).
 - Cài kèm ONLYOFFICE: đã làm ở Sync-Phase 9 (`OnlyOfficeSetup`, tùy chọn ở trình hướng dẫn mặc định bật, chính sách `InstallOnlyOffice`,
   gỡ provider và hỏi gỡ ONLYOFFICE khi gỡ BlueDrive).
 - Đã làm sau đó: hiện "ai đang chỉnh sửa" trong flyout/Explorer (`OfficeEditingTracker`, `GET /api/v1/sync/editing`), cảnh báo khóa mềm khi

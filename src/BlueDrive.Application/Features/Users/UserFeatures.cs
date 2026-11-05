@@ -102,11 +102,13 @@ public sealed class GetUserHandler(IAppDbContext db, ISensitiveDataProtector pii
 /// <summary>Lightweight directory search for pickers (share dialog, @mentions). Available to every signed-in user.</summary>
 public sealed record LookupUsersQuery(string? Q, Guid? OrganizationId, int Take = 20) : IRequest<IReadOnlyList<UserLookupDto>>;
 
-public sealed class LookupUsersHandler(IAppDbContext db) : IRequestHandler<LookupUsersQuery, IReadOnlyList<UserLookupDto>>
+public sealed class LookupUsersHandler(IAppDbContext db, ICurrentUser me) : IRequestHandler<LookupUsersQuery, IReadOnlyList<UserLookupDto>>
 {
     public async Task<IReadOnlyList<UserLookupDto>> Handle(LookupUsersQuery q, CancellationToken ct)
     {
-        var query = db.Users.AsNoTracking().Where(u => u.IsActive);
+        if (me.UserId is { } caller && await db.Users.AnyAsync(u => u.Id == caller && u.IsGuest, ct))
+            throw new ForbiddenException("Tài khoản khách không tra cứu được người dùng.");
+        var query = db.Users.AsNoTracking().Where(u => u.IsActive && !u.IsGuest);
         if (q.OrganizationId.HasValue) query = query.Where(u => u.OrganizationId == q.OrganizationId);
         if (!string.IsNullOrWhiteSpace(q.Q))
         {

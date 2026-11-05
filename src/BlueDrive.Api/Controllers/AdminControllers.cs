@@ -259,6 +259,243 @@ public class SettingsController : ApiControllerBase
     public async Task<IActionResult> Update([FromBody] Dictionary<string, JsonElement> values) => Ok(new { changed = await Mediator.Send(new UpdateSettingsCommand(values)) });
 }
 
+/// <summary>Mô hình phân quyền mới (Perm-Phase 1): dựng lại từ mô hình hiện tại và đối chiếu quyền cũ ⊆ quyền mới.</summary>
+[Route("api/v1/admin/permission-model")]
+public class PermissionModelController : ApiControllerBase
+{
+    [HttpPost("rebuild"), HasPermission(Perm.SettingsEdit)]
+    public Task<Application.Features.Access.PermissionProjection.Result> Rebuild() => Mediator.Send(new Application.Features.Access.RebuildPermissionModelCommand());
+
+    [HttpGet("verify"), HasPermission(Perm.SettingsEdit)]
+    public Task<Application.Features.Access.PermissionMigrationReport> Verify([FromQuery] int samples = 10_000, [FromQuery] int? seed = null) =>
+        Mediator.Send(new Application.Features.Access.VerifyPermissionMigrationQuery(samples, seed));
+}
+
+/// <summary>Quyền hiệu lực và "Kiểm tra quyền" trên một mục (mô hình phân quyền mới).</summary>
+[Route("api/v1/items/{id:guid}")]
+public class ItemAccessController : ApiControllerBase
+{
+    [HttpGet("effective-permissions")]
+    public Task<Application.Features.Access.EffectivePermissionsDto> Effective(Guid id, [FromQuery] Guid? user) =>
+        Mediator.Send(new Application.Features.Access.GetEffectivePermissionsQuery(id, user));
+
+    [HttpGet("explain")]
+    public Task<Application.Features.Access.PermissionExplanation> Explain(Guid id, [FromQuery] Guid? user) =>
+        Mediator.Send(new Application.Features.Access.ExplainPermissionsQuery(id, user));
+
+    /// <summary>Người có quyền truy cập (kèm nguồn quyền).</summary>
+    [HttpGet("permissions")]
+    public Task<Application.Features.Access.ItemPermissionsDto> Permissions(Guid id) => Mediator.Send(new Application.Features.Access.GetItemPermissionsQuery(id));
+
+    /// <summary>Cấp quyền cho người, nhóm hoặc đơn vị.</summary>
+    [HttpPost("permissions")]
+    public async Task<IActionResult> Grant(Guid id, Application.Features.Access.GrantItemPermissionCommand cmd) =>
+        Ok(new { granted = await Mediator.Send(cmd with { ItemId = id }) });
+
+    [HttpPatch("permissions/{entryId:guid}")]
+    public async Task<IActionResult> UpdatePermission(Guid id, Guid entryId, Application.Features.Access.UpdateItemPermissionCommand cmd)
+    {
+        await Mediator.Send(cmd with { ItemId = id, EntryId = entryId });
+        return NoContent();
+    }
+
+    [HttpDelete("permissions/{entryId:guid}")]
+    public async Task<IActionResult> RevokePermission(Guid id, Guid entryId)
+    {
+        await Mediator.Send(new Application.Features.Access.RevokeItemPermissionCommand(id, entryId));
+        return NoContent();
+    }
+
+    /// <summary>Ngắt kế thừa (copy = sao chép quyền hiện tại).</summary>
+    [HttpPost("inheritance")]
+    public async Task<IActionResult> BreakInheritance(Guid id, [FromQuery] bool copy = true)
+    {
+        await Mediator.Send(new Application.Features.Access.SetInheritanceCommand(id, Inherit: false, Copy: copy));
+        return NoContent();
+    }
+
+    /// <summary>Khôi phục kế thừa (recursive = cả các mục con có quyền riêng).</summary>
+    [HttpDelete("inheritance")]
+    public async Task<IActionResult> RestoreInheritance(Guid id, [FromQuery] bool recursive = false)
+    {
+        await Mediator.Send(new Application.Features.Access.SetInheritanceCommand(id, Inherit: true, Recursive: recursive));
+        return NoContent();
+    }
+
+    [HttpPut("general-access")]
+    public async Task<IActionResult> GeneralAccess(Guid id, Application.Features.Access.SetGeneralAccessCommand cmd)
+    {
+        await Mediator.Send(cmd with { ItemId = id });
+        return NoContent();
+    }
+
+    /// <summary>Chính sách chia sẻ hiệu lực của mục (tầng chặt nhất thắng).</summary>
+    [HttpGet("sharing-policy")]
+    public Task<Application.Features.Access.ItemSharingPolicyDto> SharingPolicy(Guid id) =>
+        Mediator.Send(new Application.Features.Access.GetItemSharingPolicyQuery(id));
+
+    [HttpPut("external-sharing")]
+    public async Task<IActionResult> ExternalSharing(Guid id, Application.Features.Access.SetItemExternalSharingCommand cmd)
+    {
+        await Mediator.Send(cmd with { ItemId = id });
+        return NoContent();
+    }
+}
+
+/// <summary>Nhãn phân loại (không dùng cho thông tin bí mật nhà nước).</summary>
+[Route("api/v1")]
+public class LabelsController : ApiControllerBase
+{
+    [HttpGet("labels")]
+    public Task<IReadOnlyList<Application.Features.Access.LabelDto>> List() => Mediator.Send(new Application.Features.Access.ListLabelsQuery());
+
+    [HttpPost("admin/labels"), HasPermission(Perm.SettingsEdit)]
+    public async Task<IActionResult> Create(Application.Features.Access.SaveLabelCommand cmd) => Ok(new { id = await Mediator.Send(cmd with { Id = null }) });
+
+    [HttpPut("admin/labels/{id:guid}"), HasPermission(Perm.SettingsEdit)]
+    public async Task<IActionResult> Save(Guid id, Application.Features.Access.SaveLabelCommand cmd)
+    {
+        await Mediator.Send(cmd with { Id = id });
+        return NoContent();
+    }
+
+    [HttpGet("items/{id:guid}/label")]
+    public Task<Application.Features.Access.ItemLabelDto> ItemLabel(Guid id) => Mediator.Send(new Application.Features.Access.GetItemLabelQuery(id));
+
+    /// <summary>Gán / đổi / gỡ nhãn của tệp, thư mục hoặc Space (mặc định); hạ nhãn cần lý do.</summary>
+    [HttpPut("items/{id:guid}/label")]
+    public async Task<IActionResult> SetLabel(Guid id, Application.Features.Access.SetLabelCommand cmd)
+    {
+        await Mediator.Send(cmd with { ItemId = id });
+        return NoContent();
+    }
+}
+
+/// <summary>Quản trị cấp quyền (ma trận quyền × cấp quyền).</summary>
+[Route("api/v1/admin/permission-levels")]
+public class PermissionLevelAdminController : ApiControllerBase
+{
+    [HttpGet("rights"), HasPermission(Perm.RoleView)]
+    public Task<IReadOnlyList<Application.Features.Access.AccessRightDto>> Rights() => Mediator.Send(new Application.Features.Access.ListAccessRightsQuery());
+
+    [HttpPost, HasPermission(Perm.RoleEdit)]
+    public async Task<IActionResult> Create(Application.Features.Access.SavePermissionLevelCommand cmd) => Ok(new { id = await Mediator.Send(cmd with { Id = null }) });
+
+    [HttpPut("{id:guid}"), HasPermission(Perm.RoleEdit)]
+    public async Task<IActionResult> Save(Guid id, Application.Features.Access.SavePermissionLevelCommand cmd)
+    {
+        await Mediator.Send(cmd with { Id = id });
+        return NoContent();
+    }
+
+    [HttpDelete("{id:guid}"), HasPermission(Perm.RoleEdit)]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        await Mediator.Send(new Application.Features.Access.DeletePermissionLevelCommand(id));
+        return NoContent();
+    }
+
+    [HttpPost("{id:guid}/reset"), HasPermission(Perm.RoleEdit)]
+    public async Task<IActionResult> Reset(Guid id)
+    {
+        await Mediator.Send(new Application.Features.Access.ResetPermissionLevelCommand(id));
+        return NoContent();
+    }
+}
+
+/// <summary>Quản trị khách bên ngoài.</summary>
+[Route("api/v1/admin/guests")]
+public class GuestsController : ApiControllerBase
+{
+    [HttpGet, HasPermission(Perm.UserView)]
+    public Task<IReadOnlyList<Application.Features.Access.GuestDto>> List([FromQuery] string? query) => Mediator.Send(new Application.Features.Access.ListGuestsQuery(query));
+
+    [HttpPost("{id:guid}/active"), HasPermission(Perm.UserEdit)]
+    public async Task<IActionResult> SetActive(Guid id, [FromQuery] bool value)
+    {
+        await Mediator.Send(new Application.Features.Access.SetGuestActiveCommand(id, value));
+        return NoContent();
+    }
+
+    [HttpDelete("{id:guid}"), HasPermission(Perm.UserDelete)]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        await Mediator.Send(new Application.Features.Access.DeleteGuestCommand(id));
+        return NoContent();
+    }
+}
+
+/// <summary>Gia hạn quyền / liên kết sắp hết hạn (kind = permission | link).</summary>
+[Route("api/v1/renewals/{kind:regex(^(permission|link)$)}/{id:guid}")]
+public class RenewalsController : ApiControllerBase
+{
+    [HttpGet]
+    public Task<Application.Features.Access.RenewalInfoDto> Get(string kind, Guid id) => Mediator.Send(new Application.Features.Access.GetRenewalQuery(kind, id));
+
+    [HttpPost("extend")]
+    public Task<Application.Features.Access.RenewalInfoDto> Extend(string kind, Guid id, Application.Features.Access.ExtendCommand cmd) =>
+        Mediator.Send(cmd with { Kind = kind, Id = id });
+
+    [HttpPost("request")]
+    public async Task<IActionResult> RequestRenewal(string kind, Guid id)
+    {
+        if (kind != "permission") return NotFound();
+        return Ok(new { id = await Mediator.Send(new Application.Features.Access.RequestRenewalCommand(id)) });
+    }
+}
+
+/// <summary>Chính sách chia sẻ của Space.</summary>
+[Route("api/v1/workspaces/{id:guid}/sharing-policy")]
+public class SpaceSharingPolicyController : ApiControllerBase
+{
+    [HttpGet]
+    public Task<Application.Features.Access.SpaceSharingPolicyDto> Get(Guid id) => Mediator.Send(new Application.Features.Access.GetSpaceSharingPolicyQuery(id));
+
+    [HttpPut]
+    public async Task<IActionResult> Set(Guid id, Application.Features.Access.SetSpaceSharingPolicyCommand cmd)
+    {
+        await Mediator.Send(cmd with { WorkspaceId = id });
+        return NoContent();
+    }
+}
+
+/// <summary>Yêu cầu quyền truy cập.</summary>
+[Route("api/v1")]
+public class AccessRequestsController : ApiControllerBase
+{
+    /// <summary>Người chưa có quyền mở địa chỉ một mục: có tồn tại không, ai quản lý (không có tên mục).</summary>
+    [HttpGet("items/{id:guid}/access-info")]
+    public Task<Application.Features.Access.AccessInfoDto> Info(Guid id) => Mediator.Send(new Application.Features.Access.GetAccessInfoQuery(id));
+
+    [HttpPost("items/{id:guid}/access-requests")]
+    public async Task<IActionResult> RequestAccess(Guid id, Application.Features.Access.RequestAccessCommand cmd) =>
+        Ok(new { id = await Mediator.Send(cmd with { ItemId = id }) });
+
+    [HttpGet("items/{id:guid}/access-requests")]
+    public Task<IReadOnlyList<Application.Features.Access.AccessRequestDto>> OfItem(Guid id) =>
+        Mediator.Send(new Application.Features.Access.ListAccessRequestsQuery(id));
+
+    /// <summary>Yêu cầu đang chờ trên các mục tôi quản lý (mine = yêu cầu của tôi).</summary>
+    [HttpGet("access-requests")]
+    public Task<IReadOnlyList<Application.Features.Access.AccessRequestDto>> Pending([FromQuery] bool mine = false) =>
+        Mediator.Send(new Application.Features.Access.ListAccessRequestsQuery(null, mine));
+
+    [HttpPost("access-requests/{id:guid}/decide")]
+    public async Task<IActionResult> Decide(Guid id, Application.Features.Access.DecideAccessRequestCommand cmd)
+    {
+        await Mediator.Send(cmd with { Id = id });
+        return NoContent();
+    }
+}
+
+/// <summary>Cấp quyền (Permission Level).</summary>
+[Route("api/v1/permission-levels")]
+public class PermissionLevelsController : ApiControllerBase
+{
+    [HttpGet]
+    public Task<IReadOnlyList<Application.Features.Access.PermissionLevelDto>> List() => Mediator.Send(new Application.Features.Access.ListPermissionLevelsQuery());
+}
+
 /// <summary>Thông báo của tôi.</summary>
 [Route("api/v1/notifications")]
 public class NotificationsController : ApiControllerBase
@@ -271,4 +508,150 @@ public class NotificationsController : ApiControllerBase
 
     [HttpPost("mark-read")]
     public async Task<IActionResult> MarkRead([FromBody] IReadOnlyList<Guid>? ids) => Ok(new { updated = await Mediator.Send(new MarkNotificationsReadCommand(ids)) });
+}
+
+/// <summary>Chính sách lưu giữ, kho lưu giữ, danh sách chờ duyệt xóa (đặc tả 7.2).</summary>
+[Route("api/v1/admin/retention")]
+public class RetentionController : ApiControllerBase
+{
+    [HttpGet("policies")]
+    public Task<IReadOnlyList<Application.Features.Retention.RetentionPolicyDto>> Policies() => Mediator.Send(new Application.Features.Retention.ListRetentionPoliciesQuery());
+
+    [HttpPost("policies")]
+    public async Task<IActionResult> Create(Application.Features.Retention.SaveRetentionPolicyCommand cmd) => Ok(new { id = await Mediator.Send(cmd with { Id = null }) });
+
+    [HttpPut("policies/{id:guid}")]
+    public async Task<IActionResult> Save(Guid id, Application.Features.Retention.SaveRetentionPolicyCommand cmd)
+    {
+        await Mediator.Send(cmd with { Id = id });
+        return NoContent();
+    }
+
+    [HttpDelete("policies/{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        await Mediator.Send(new Application.Features.Retention.DeleteRetentionPolicyCommand(id));
+        return NoContent();
+    }
+
+    [HttpGet("preserved")]
+    public Task<PagedResult<Application.Features.Retention.PreservedItemDto>> Preserved([FromQuery] Application.Features.Retention.ListPreservedQuery query) => Mediator.Send(query);
+
+    [HttpPost("preserved/release")]
+    public async Task<IActionResult> Release(Application.Features.Retention.ReleasePreservedCommand cmd) => Ok(new { released = await Mediator.Send(cmd) });
+
+    [HttpPost("preserved/purge")]
+    public async Task<IActionResult> Purge(Application.Features.Retention.PurgePreservedCommand cmd) => Ok(new { purged = await Mediator.Send(cmd) });
+
+    [HttpGet("review")]
+    public Task<IReadOnlyList<Application.Features.Retention.ReviewItemDto>> Review() => Mediator.Send(new Application.Features.Retention.ListRetentionReviewQuery());
+
+    [HttpPost("review/approve")]
+    public async Task<IActionResult> Approve(Application.Features.Retention.ApproveRetentionDeleteCommand cmd) => Ok(new { deleted = await Mediator.Send(cmd) });
+}
+
+/// <summary>Giữ pháp lý (đặc tả 7.3): không gì trong phạm vi bị xóa vĩnh viễn, kể cả bởi quản trị, cho đến khi gỡ.</summary>
+[Route("api/v1/admin/holds")]
+public class LegalHoldsController : ApiControllerBase
+{
+    [HttpGet]
+    public Task<IReadOnlyList<Application.Features.Retention.LegalHoldDto>> List([FromQuery] bool includeReleased = false) =>
+        Mediator.Send(new Application.Features.Retention.ListLegalHoldsQuery(includeReleased));
+
+    [HttpPost]
+    public async Task<IActionResult> Create(Application.Features.Retention.CreateLegalHoldCommand cmd) => Ok(new { id = await Mediator.Send(cmd) });
+
+    [HttpPost("{id:guid}/release")]
+    public async Task<IActionResult> Release(Guid id, ReleaseHoldBody body)
+    {
+        await Mediator.Send(new Application.Features.Retention.ReleaseLegalHoldCommand(id, body.Reason));
+        return NoContent();
+    }
+
+    [HttpGet("folders")]
+    public Task<IReadOnlyList<Application.Features.Retention.HoldFolderDto>> Folders([FromQuery] Guid workspaceId) =>
+        Mediator.Send(new Application.Features.Retention.ListHoldFoldersQuery(workspaceId));
+
+    public sealed record ReleaseHoldBody(string Reason);
+}
+
+/// <summary>Người dùng nghỉ việc / chuyển đơn vị (đặc tả 8.3).</summary>
+[Route("api/v1/admin/offboarding")]
+public class OffboardingController : ApiControllerBase
+{
+    [HttpGet]
+    public Task<IReadOnlyList<Application.Features.Users.OffboardingReportDto>> List() => Mediator.Send(new Application.Features.Users.ListOffboardingsQuery());
+
+    [HttpGet("{userId:guid}/preview")]
+    public Task<Application.Features.Users.OffboardingPreviewDto> Preview(Guid userId) => Mediator.Send(new Application.Features.Users.GetOffboardingPreviewQuery(userId));
+
+    [HttpPost("{userId:guid}")]
+    public Task<Application.Features.Users.OffboardingReportDto> Run(Guid userId, Application.Features.Users.OffboardUserCommand cmd) => Mediator.Send(cmd with { UserId = userId });
+
+    /// <summary>Biên bản bàn giao (Excel/PDF).</summary>
+    [HttpGet("records/{id:guid}/export")]
+    public async Task<IActionResult> Export(Guid id, [FromQuery] string format = "xlsx")
+    {
+        var file = await Mediator.Send(new Application.Features.Users.ExportOffboardingQuery(id, format));
+        return File(file.Content, file.ContentType, file.FileName);
+    }
+
+    /// <summary>Chuyển đơn vị: kèm danh sách quyền thay đổi theo.</summary>
+    [HttpPost("{userId:guid}/unit")]
+    public Task<Application.Features.Users.UnitChangeReportDto> ChangeUnit(Guid userId, Application.Features.Users.ChangeUserUnitCommand cmd) => Mediator.Send(cmd with { UserId = userId });
+}
+
+/// <summary>Truy cập khẩn cấp của quản trị (đặc tả 8.5).</summary>
+[Route("api/v1/admin/emergency-access")]
+public class EmergencyAccessController : ApiControllerBase
+{
+    [HttpGet]
+    public Task<IReadOnlyList<Application.Features.Access.EmergencyAccessDto>> List() => Mediator.Send(new Application.Features.Access.ListEmergencyAccessQuery());
+
+    [HttpPost]
+    public async Task<IActionResult> Grant(Application.Features.Access.GrantEmergencyAccessCommand cmd) => Ok(new { id = await Mediator.Send(cmd) });
+
+    [HttpPost("{id:guid}/end")]
+    public async Task<IActionResult> End(Guid id)
+    {
+        await Mediator.Send(new Application.Features.Access.EndEmergencyAccessCommand(id));
+        return NoContent();
+    }
+}
+
+/// <summary>Báo cáo quyền truy cập (đặc tả 8.4): quản trị toàn hệ thống, Quản lý Space trong Space của mình.</summary>
+[Route("api/v1/admin/reports")]
+public class AccessReportsController : ApiControllerBase
+{
+    [HttpGet("items")]
+    public Task<IReadOnlyList<Application.Features.Access.ReportItemDto>> Items([FromQuery] Guid? workspaceId, [FromQuery] string? query) =>
+        Mediator.Send(new Application.Features.Access.SearchReportItemsQuery(workspaceId, query));
+
+    [HttpGet("{kind}")]
+    public Task<Application.Features.Access.AccessReportDto> Run(string kind, [FromQuery] Guid? workspaceId, [FromQuery] Guid? userId, [FromQuery] Guid? groupId,
+        [FromQuery] Guid? itemId, [FromQuery] int days = 30) =>
+        Mediator.Send(new Application.Features.Access.RunAccessReportQuery(kind, workspaceId, userId, groupId, itemId, days));
+
+    [HttpGet("{kind}/export")]
+    public async Task<IActionResult> Export(string kind, [FromQuery] Guid? workspaceId, [FromQuery] Guid? userId, [FromQuery] Guid? groupId, [FromQuery] Guid? itemId,
+        [FromQuery] int days = 30, [FromQuery] string format = "xlsx")
+    {
+        var file = await Mediator.Send(new Application.Features.Access.ExportAccessReportQuery(
+            new Application.Features.Access.RunAccessReportQuery(kind, workspaceId, userId, groupId, itemId, days), format));
+        return File(file.Content, file.ContentType, file.FileName);
+    }
+}
+
+/// <summary>Thao tác hàng loạt trên quyền (đặc tả 8.4).</summary>
+[Route("api/v1/admin/bulk")]
+public class BulkPermissionsController : ApiControllerBase
+{
+    [HttpPost("revoke-anyone-links")]
+    public Task<Application.Features.Access.BulkResultDto> RevokeAnyoneLinks(Application.Features.Access.BulkRevokeAnyoneLinksCommand cmd) => Mediator.Send(cmd);
+
+    [HttpPost("remove-user-permissions")]
+    public Task<Application.Features.Access.BulkResultDto> RemoveUser(Application.Features.Access.BulkRemovePrincipalCommand cmd) => Mediator.Send(cmd);
+
+    [HttpPost("delete-inactive-guests")]
+    public Task<Application.Features.Access.BulkResultDto> DeleteGuests(Application.Features.Access.BulkDeleteInactiveGuestsCommand cmd) => Mediator.Send(cmd);
 }

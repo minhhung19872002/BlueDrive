@@ -4,6 +4,9 @@ import { App, Drawer, type MenuProps } from 'antd'
 import {
   CommentOutlined,
   CopyOutlined,
+  UserSwitchOutlined,
+  KeyOutlined,
+  RollbackOutlined,
   DeleteOutlined,
   DownloadOutlined,
   EditOutlined,
@@ -22,7 +25,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { deleteItems, getDownloadUrl, getZipUrl, renameFile, setFavorite, startDownload, updateFolder } from '@/api/drive'
+import { createShortcut, deleteItems, deleteShortcut, getDownloadUrl, getZipUrl, renameFile, setFavorite, startDownload, updateFolder } from '@/api/drive'
 import { showApiError } from '@/api/errors'
 import { qk } from '@/api/queryKeys'
 import { editorUrl, isOfficeEditable, isOfficeFile, needsOfficeViewer } from '@/features/office/officeFiles'
@@ -36,6 +39,7 @@ import { getMessage } from '@/utils/antdStatic'
 import { copyText } from '@/utils/clipboard'
 import CopyMoveModal, { type CopyMoveRequest } from '../dialogs/CopyMoveModal'
 import NameModal from '../dialogs/NameModal'
+import TransferOwnershipModal from '../dialogs/TransferOwnershipModal'
 import FileDetailsTabs, { type DetailsTab } from '../info/FileDetailsTabs'
 import InfoPanel from '../info/InfoPanel'
 import { useClearClipboardIfContains } from '../useClipboard'
@@ -81,6 +85,10 @@ export type ItemAction =
   | 'discussion'
   | 'access'
   | 'delete'
+  | 'addShortcut'
+  | 'removeShortcut'
+  | 'requestAccess'
+  | 'transferOwnership'
 
 interface DriveActionsOptions {
   /** Open a folder in place (explorer). Default: navigate to the folder's explorer page. */
@@ -107,6 +115,7 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
   const clearClipboard = useClearClipboardIfContains()
   const { onOpenFolder, onShowInfo, siblingFileIds, hide } = options
 
+  const [transferring, setTransferring] = useState<DriveItem | null>(null)
   const [viewerId, setViewerId] = useState<string | null>(null)
   const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null)
   const [accessTarget, setAccessTarget] = useState<AccessTarget | null>(null)
@@ -127,6 +136,9 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
 
   const open = useCallback(
     (item: DriveItem) => {
+      // A shortcut whose target one may not open: "Bạn cần quyền truy cập"; a target gone: say so.
+      if (item.shortcutId && item.shortcutState === 'no_access') return navigate(`/request-access/${item.id}`)
+      if (item.shortcutId && item.shortcutState === 'deleted') return void getMessage().warning(t('shortcut.targetDeleted'))
       if (item.type === 'folder') {
         if (onOpenFolder) onOpenFolder(item)
         else navigate(folderUrl(item.workspaceId, item.id, personalWorkspaceId))
@@ -139,7 +151,22 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
       else if (needsOfficeViewer(item.extension)) navigate(editorUrl(item.id))
       else setViewerId(item.id)
     },
-    [navigate, onOpenFolder, personalWorkspaceId],
+    [navigate, onOpenFolder, personalWorkspaceId, t],
+  )
+
+  const addShortcut = useApiMutation((item: DriveItem) => createShortcut(item.id), {
+    successMessage: t('shortcut.added'),
+    invalidate: [qk.drive],
+  })
+  const removeShortcuts = useCallback(
+    (items: DriveItem[]) =>
+      void Promise.all(items.filter((i) => i.shortcutId).map((i) => deleteShortcut(i.shortcutId!)))
+        .then(() => {
+          void getMessage().success(t('shortcut.removed'))
+          return queryClient.invalidateQueries({ queryKey: qk.drive })
+        })
+        .catch(showApiError),
+    [queryClient, t],
   )
 
   const download = useCallback(
@@ -230,8 +257,20 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
 
   /** Context-menu / "..." menu model for a selection. */
   const menuItems = useCallback(
-    (items: DriveItem[], flags: ItemFlags = {}): NonNullable<MenuProps['items']> => {
-      if (items.length === 0) return []
+    (selection: DriveItem[], flags: ItemFlags = {}): NonNullable<MenuProps['items']> => {
+      if (selection.length === 0) return []
+      // Shortcuts (spec 1.2) carry no rights: they are opened or removed, never changed through the target.
+      const shown0 = (a: ItemAction) => !hide?.includes(a)
+      const shortcuts = selection.filter((i) => i.shortcutId)
+      if (shortcuts.length === selection.length) {
+        const one = shortcuts.length === 1 ? shortcuts[0] : null
+        return [
+          ...(one && one.shortcutState === 'ok' && shown0('open') ? [{ key: 'open', icon: one.type === 'folder' ? <FolderOpenOutlined /> : <EyeOutlined />, label: t('actions.open') }] : []),
+          ...(one && one.shortcutState === 'no_access' ? [{ key: 'requestAccess', icon: <KeyOutlined />, label: t('shortcut.requestAccess') }] : []),
+          { key: 'removeShortcut', icon: <DeleteOutlined />, label: t('shortcut.remove'), danger: true },
+        ]
+      }
+      const items = selection.filter((i) => !i.shortcutId)
       const single = items.length === 1 ? items[0] : null
       const canDownload = flags.canDownload !== false
       const canEdit = flags.canEdit !== false
@@ -269,17 +308,36 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
         list.push({ key: 'discussion', icon: <CommentOutlined />, label: t('collab.discussion.tab') })
       }
       if (single && canManage && shown('access')) list.push({ key: 'access', icon: <SafetyOutlined />, label: t('actions.manageAccess') })
+      if (single && personalWorkspaceId && shown('addShortcut'))
+        list.push({ key: 'addShortcut', icon: <RollbackOutlined rotate={180} />, label: t('shortcut.add') })
+      // Spec 1.1: only what is in my own drive can be given away (in a Space it belongs to the Space).
+      if (single && single.workspaceId === personalWorkspaceId && shown('transferOwnership'))
+        list.push({ key: 'transferOwnership', icon: <UserSwitchOutlined />, label: t('ownership.menu') })
       if (canEdit && can('doc.delete') && shown('delete'))
         list.push({ key: 'delete', icon: <DeleteOutlined />, label: t('actions.delete'), danger: true, extra: 'Del' })
       return compactDividers(list)
     },
-    [can, hide, t],
+    [can, hide, t, personalWorkspaceId],
   )
 
   const run = useCallback(
-    (action: string, items: DriveItem[]) => {
+    (action: string, selection: DriveItem[]) => {
+      if (action === 'removeShortcut') return removeShortcuts(selection)
+      if (action === 'requestAccess') return navigate(`/request-access/${selection[0].id}`)
+      // A shortcut is never deleted, moved or renamed through its target (Del key, menus on a mixed selection).
+      if (action === 'delete' && selection.some((i) => i.shortcutId)) {
+        removeShortcuts(selection)
+        selection = selection.filter((i) => !i.shortcutId)
+        if (selection.length === 0) return
+      }
+      const items = action === 'open' ? selection : selection.filter((i) => !i.shortcutId)
+      if (items.length === 0) return
       const single = items[0]
       switch (action as ItemAction) {
+        case 'addShortcut':
+          return addShortcut.mutate(single)
+        case 'transferOwnership':
+          return setTransferring(single)
         case 'open':
           return open(single)
         case 'openEditor':
@@ -312,11 +370,12 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
           return remove(items)
       }
     },
-    [copyLink, copyTo, details, download, info, manageAccess, moveTo, navigate, open, remove, setStar, share],
+    [addShortcut, copyLink, copyTo, details, download, info, manageAccess, moveTo, navigate, open, remove, removeShortcuts, setStar, share],
   )
 
   const dialogs: ReactNode = (
     <>
+      {transferring && <TransferOwnershipModal item={transferring} onClose={() => setTransferring(null)} />}
       {viewerId && <FileViewerModal fileId={viewerId} siblings={siblingFileIds} onClose={() => setViewerId(null)} />}
       {shareTarget && <ShareDialog target={shareTarget} onClose={() => setShareTarget(null)} />}
       {accessTarget && <AccessDialog target={accessTarget} onClose={() => setAccessTarget(null)} />}

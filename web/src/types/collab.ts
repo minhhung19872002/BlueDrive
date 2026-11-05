@@ -10,8 +10,10 @@ export interface OfficeEditorConfig {
   provider: string
   apiScriptUrl: string
   config: Record<string, unknown>
-  /** "edit" | "view" */
+  /** "edit" | "comment" | "view" */
   mode: string
+  /** Spec 11.9: lay the viewer's name, account and time over the editor. */
+  watermark?: boolean
 }
 
 export interface CreateDocumentRequest {
@@ -123,6 +125,23 @@ export type AuditAction =
   | 'export'
   | 'backup'
   | 'import'
+  | 'permission_granted'
+  | 'permission_revoked'
+  | 'permission_level_changed'
+  | 'inheritance_broken'
+  | 'inheritance_restored'
+  | 'link_created'
+  | 'link_used'
+  | 'link_revoked'
+  | 'access_requested'
+  | 'access_request_decided'
+  | 'ownership_transferred'
+  | 'label_changed'
+  | 'hold_applied'
+  | 'hold_removed'
+  | 'emergency_access'
+  | 'guest_invited'
+  | 'guest_login'
 
 /** Actions returned by GET /workspaces/{id}/activity (content changes only). */
 export const ACTIVITY_ACTIONS: AuditAction[] = [

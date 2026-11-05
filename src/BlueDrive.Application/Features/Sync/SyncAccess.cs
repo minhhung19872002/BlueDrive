@@ -7,124 +7,132 @@ using Microsoft.EntityFrameworkCore;
 namespace BlueDrive.Application.Features.Sync;
 
 /// <summary>
-/// Effective access of one user to every folder / file of a workspace, computed in memory from the ACL, shares, membership
-/// and break-inheritance flags with the same rules as <see cref="ResourceAuthorizationService"/>. Used by the sync snapshot
-/// and change feed so a 100,000-item tree is evaluated with a handful of queries instead of one per item.
+/// Effective access of one user to every folder / file of a workspace, on the new permission model: the workspace's nodes and the user's
+/// rights on each ACL scope are loaded once, then <see cref="Access.Restrictions"/> (the engine's rules) gives each item its rights. Used by
+/// the sync snapshot and change feed so a 100,000-item tree is evaluated with a handful of queries instead of one per item.
 /// </summary>
 public sealed class WorkspaceAccessMap
 {
-    public Guid WorkspaceId { get; private init; }
-    public WorkspaceType WorkspaceType { get; private init; }
-    public string WorkspaceName { get; private init; } = "";
-    public bool Locked { get; private init; }
-    /// <summary>Owner, member or workspace-level ACL: the workspace is one of the user's sync roots.</summary>
-    public bool IsRoot { get; private init; }
-    public bool CanApproveAll { get; private init; }
+    public Guid WorkspaceId { get; private set; }
+    public WorkspaceType WorkspaceType { get; private set; }
+    public string WorkspaceName { get; private set; } = "";
+    public bool Locked { get; private set; }
+    /// <summary>The user may see the workspace itself (owner, Space member, grant on the Space): it is one of their sync roots.</summary>
+    public bool IsRoot { get; private set; }
+    public bool CanApproveAll { get; private set; }
     /// <summary>Name of the folder grouping this workspace in "Được chia sẻ với tôi": the owner of a personal workspace, else the workspace.</summary>
-    public string SharerName { get; private init; } = "";
+    public string SharerName { get; private set; } = "";
 
-    private readonly Dictionary<Guid, (Guid? Parent, AccessLevel Level, AccessLevel Down)> _folders = [];
-    private readonly Dictionary<Guid, AccessLevel> _fileGrants = [];
-    /// <summary>Files with unique permissions: only their own grants (and owner / managers) apply.</summary>
-    private HashSet<Guid> _brokenFiles = [];
-    private AccessLevel _brokenLevel;
+    private readonly Dictionary<Guid, (Guid? Parent, AccessLevel Level)> _folders = [];
+    private readonly Dictionary<Guid, (Guid Scope, bool Owner)> _fileNodes = [];
+    private readonly Dictionary<Guid, (Domain.Permissions.AccessRight Direct, Domain.Permissions.AccessRight Membership)> _scopes = [];
+    /// <summary>"Chỉ mục này" grants: they count only for the scope's own node.</summary>
+    private readonly Dictionary<Guid, (Domain.Permissions.AccessRight Direct, Domain.Permissions.AccessRight Membership)> _selfOnly = [];
+    private Access.Restrictions.User _user = null!;
+    /// <summary>Effective sensitivity label of each node (own, nearest folder above, Space default) — spec 7.1.</summary>
+    private readonly Dictionary<Guid, SensitivityLabel?> _labels = [];
+    private bool _inSpace;
     private AccessLevel _rootLevel;
-    private Guid _userId;
 
     public static async Task<WorkspaceAccessMap?> LoadAsync(IAppDbContext db, PrincipalSet p, IReadOnlySet<string> perms, Guid workspaceId, DateTime now, CancellationToken ct)
     {
-        var ws = await db.Workspaces.AsNoTracking().Where(w => w.Id == workspaceId).Select(w => new { w.Id, w.OwnerId, w.IsLocked, w.Type, w.Name }).FirstOrDefaultAsync(ct);
-        if (ws is null || !p.CanViewDocs && !p.IsDocAdmin) return null;
-        var principals = p.GroupIds.Concat(p.OrganizationIds).Concat(p.RoleIds).Append(p.UserId).ToList();
+        var ws = await db.Workspaces.AsNoTracking().Where(w => w.Id == workspaceId).Select(w => new { w.Id, w.OwnerId, w.IsLocked, w.Type, w.Name, w.DefaultLabelId }).FirstOrDefaultAsync(ct);
+        if (ws is null) return null;
+        var principals = await db.PrincipalMemberships.Where(m => m.UserId == p.UserId).Select(m => m.PrincipalId).ToListAsync(ct);
+        var user = Access.Restrictions.User.From(p.UserId, perms, principals);
+        if (!user.CanViewDocs) return null;
 
-        var member = await db.WorkspaceMembers.AsNoTracking().Where(m => m.WorkspaceId == workspaceId && m.UserId == p.UserId)
-            .Select(m => (WorkspaceMemberRole?)m.MemberRole).FirstOrDefaultAsync(ct);
-        var acl = await db.ResourcePermissions.AsNoTracking()
-            .Where(a => (a.ExpiresAt == null || a.ExpiresAt > now) && principals.Contains(a.PrincipalId))
-            .Where(a => (a.ResourceType == ResourceType.Workspace && a.ResourceId == workspaceId)
-                        || (a.ResourceType == ResourceType.Folder && db.Folders.Any(f => f.Id == a.ResourceId && f.WorkspaceId == workspaceId))
-                        || (a.ResourceType == ResourceType.File && db.Files.Any(f => f.Id == a.ResourceId && f.WorkspaceId == workspaceId)))
-            .ToListAsync(ct);
-        acl = acl.Where(a => p.Matches(a.PrincipalType, a.PrincipalId)).ToList();
-        var shares = await db.Shares.AsNoTracking().Where(s => principals.Contains(s.SharedWithId))
-            .Where(s => (s.ResourceType == ResourceType.Folder && db.Folders.Any(f => f.Id == s.ResourceId && f.WorkspaceId == workspaceId))
-                        || (s.ResourceType == ResourceType.File && db.Files.Any(f => f.Id == s.ResourceId && f.WorkspaceId == workspaceId)))
-            .ToListAsync(ct);
-        shares = shares.Where(s => p.Matches(s.SharedWithType, s.SharedWithId)).ToList();
-
-        var owner = ws.OwnerId == p.UserId;
+        var nodes = await db.Securables.AsNoTracking().Where(n => (n.SpaceId ?? n.PersonalDriveId) == workspaceId && !n.IsDeleted)
+            .Select(n => new { n.Id, n.Kind, n.ParentId, n.AclScopeId, n.OwnerUserId }).ToListAsync(ct);
+        var scopeIds = nodes.Select(n => n.AclScopeId).Distinct().ToList();
+        var live = await db.AclEntries.AsNoTracking()
+            .Where(e => scopeIds.Contains(e.ScopeId) && principals.Contains(e.PrincipalId) && (e.ExpiresAt == null || e.ExpiresAt > now))
+            .Join(db.PermissionLevels, e => e.PermissionLevelId, l => l.Id, (e, l) => new { e.ScopeId, e.Source, e.AppliesToChildren, l.Permissions }).ToListAsync(ct);
         var sharer = ws.Type == WorkspaceType.Personal
             ? await db.Users.AsNoTracking().Where(u => u.Id == ws.OwnerId).Select(u => u.FullName).FirstOrDefaultAsync(ct)
             : null;
-        var wsAcl = acl.Where(a => a.ResourceType == ResourceType.Workspace).Select(a => a.AccessLevel).DefaultIfEmpty(AccessLevel.None).Max();
-        var isRoot = owner || member.HasValue || wsAcl > AccessLevel.None;
+
         var map = new WorkspaceAccessMap
         {
-            WorkspaceId = ws.Id, WorkspaceType = ws.Type, WorkspaceName = ws.Name, Locked = ws.IsLocked, IsRoot = isRoot, _userId = p.UserId,
+            WorkspaceId = ws.Id, WorkspaceType = ws.Type, WorkspaceName = ws.Name, Locked = ws.IsLocked, _user = user, _inSpace = ws.Type != WorkspaceType.Personal,
             SharerName = string.IsNullOrWhiteSpace(sharer) ? ws.Name : sharer.Trim(),
-            CanApproveAll = owner || p.IsDocAdmin && isRoot || member is WorkspaceMemberRole.Owner or WorkspaceMemberRole.Manager or WorkspaceMemberRole.Approver
-                            || perms.Contains(Perm.DocApprove),
         };
-        // Owner / member levels are capped by the role's doc.edit (PrincipalSet.CapByRole); ACL and shares are not.
-        var ownerLevel = owner || (p.IsDocAdmin && isRoot) ? p.CapByRole(AccessLevel.Manage) : AccessLevel.None;
-        var full = ownerLevel == AccessLevel.Manage;
-        var memberLevel = member is { } r ? p.CapByRole(ResourceAuthorizationService.LevelOf(r)) : AccessLevel.None;
-        var managerial = member is WorkspaceMemberRole.Manager or WorkspaceMemberRole.Owner;
-        var brokenLevel = Max(ownerLevel, managerial ? memberLevel : AccessLevel.None);
-        map._rootLevel = full ? AccessLevel.Manage : Max(ownerLevel, Max(memberLevel, wsAcl));
+        foreach (var g in live.Where(e => !e.AppliesToChildren).GroupBy(e => e.ScopeId))
+            map._selfOnly[g.Key] = (g.Where(e => e.Source != AclSource.SpaceDefault).Aggregate(Domain.Permissions.AccessRight.None, (m, e) => m | e.Permissions),
+                g.Where(e => e.Source == AclSource.SpaceDefault).Aggregate(Domain.Permissions.AccessRight.None, (m, e) => m | e.Permissions));
+        foreach (var g in live.Where(e => e.AppliesToChildren).GroupBy(e => e.ScopeId))
+            map._scopes[g.Key] = (g.Where(e => e.Source != AclSource.SpaceDefault).Aggregate(Domain.Permissions.AccessRight.None, (m, e) => m | e.Permissions),
+                g.Where(e => e.Source == AclSource.SpaceDefault).Aggregate(Domain.Permissions.AccessRight.None, (m, e) => m | e.Permissions));
 
-        var folderSelf = new Dictionary<Guid, AccessLevel>();
-        var folderDown = new Dictionary<Guid, AccessLevel>();
-        foreach (var a in acl.Where(a => a.ResourceType == ResourceType.Folder))
+        // Labels: own (file / folder), else the nearest folder's above, else the Space's default.
+        var labels = await db.SensitivityLabels.AsNoTracking().Where(l => l.IsActive).ToDictionaryAsync(l => l.Id, ct);
+        if (labels.Count > 0)
         {
-            folderSelf[a.ResourceId] = Max(folderSelf.GetValueOrDefault(a.ResourceId), a.AccessLevel);
-            if (a.Inherit) folderDown[a.ResourceId] = Max(folderDown.GetValueOrDefault(a.ResourceId), a.AccessLevel);
+            var own = (await db.Folders.AsNoTracking().Where(f => f.WorkspaceId == workspaceId && f.LabelId != null).Select(f => new { f.Id, f.LabelId }).ToListAsync(ct))
+                .Concat(await db.Files.AsNoTracking().Where(f => f.WorkspaceId == workspaceId && f.LabelId != null).Select(f => new { f.Id, f.LabelId }).ToListAsync(ct))
+                .ToDictionary(x => x.Id, x => labels.GetValueOrDefault(x.LabelId!.Value));
+            var parents = nodes.ToDictionary(n => n.Id, n => n.ParentId);
+            SensitivityLabel? Effective(Guid id)
+            {
+                if (map._labels.TryGetValue(id, out var known)) return known;
+                var l = own.GetValueOrDefault(id) ?? (parents.GetValueOrDefault(id) is { } parent ? Effective(parent) : ws.DefaultLabelId is { } d ? labels.GetValueOrDefault(d) : null);
+                return map._labels[id] = l;
+            }
+            foreach (var n in nodes) Effective(n.Id);
         }
-        foreach (var s in shares.Where(s => s.ResourceType == ResourceType.Folder))
-        {
-            folderSelf[s.ResourceId] = Max(folderSelf.GetValueOrDefault(s.ResourceId), s.AccessLevel);
-            folderDown[s.ResourceId] = Max(folderDown.GetValueOrDefault(s.ResourceId), s.AccessLevel);
-        }
-        foreach (var a in acl.Where(a => a.ResourceType == ResourceType.File)) map._fileGrants[a.ResourceId] = Max(map._fileGrants.GetValueOrDefault(a.ResourceId), a.AccessLevel);
-        foreach (var s in shares.Where(s => s.ResourceType == ResourceType.File)) map._fileGrants[s.ResourceId] = Max(map._fileGrants.GetValueOrDefault(s.ResourceId), s.AccessLevel);
 
-        map._brokenFiles = (await db.Files.AsNoTracking().Where(f => f.WorkspaceId == workspaceId && f.BreakInheritance && !f.IsDeleted).Select(f => f.Id).ToListAsync(ct)).ToHashSet();
-        map._brokenLevel = full ? AccessLevel.Manage : brokenLevel;
-
-        // Parents before children: materialized paths sort that way.
-        var folders = await db.Folders.AsNoTracking().Where(f => f.WorkspaceId == workspaceId && !f.IsDeleted)
-            .Select(f => new { f.Id, f.ParentId, f.Path, f.BreakInheritance }).OrderBy(f => f.Path).ToListAsync(ct);
-        foreach (var f in folders)
+        // A Library sits between the workspace and its top folders: for the features, a top folder's parent is the workspace (null).
+        var library = Access.PermissionProjection.LibraryOf(workspaceId);
+        var rootRights = Domain.Permissions.AccessRight.None;
+        foreach (var n in nodes)
         {
-            AccessLevel inherited;
-            if (full) inherited = AccessLevel.Manage;
-            else if (f.BreakInheritance) inherited = brokenLevel;
-            else inherited = f.ParentId is { } pid && map._folders.TryGetValue(pid, out var parent) ? parent.Down : map._rootLevel;
-            var level = Max(inherited, folderSelf.GetValueOrDefault(f.Id));
-            var down = Max(inherited, folderDown.GetValueOrDefault(f.Id));
-            map._folders[f.Id] = (f.ParentId, level, down);
+            var owner = n.OwnerUserId == p.UserId;
+            switch (n.Kind)
+            {
+                case SecurableKind.Space or SecurableKind.Drive:
+                    rootRights = map.Rights(n.Id, n.AclScopeId, owner, null);
+                    break;
+                case SecurableKind.Folder:
+                    map._folders[n.Id] = (n.ParentId == library ? null : n.ParentId, Access.ReferencePermissionEvaluator.ToLevel(map.Rights(n.Id, n.AclScopeId, owner, null)));
+                    break;
+                case SecurableKind.File:
+                    map._fileNodes[n.Id] = (n.AclScopeId, owner);
+                    break;
+            }
         }
+        map._rootLevel = Access.ReferencePermissionEvaluator.ToLevel(rootRights);
+        map.IsRoot = map._rootLevel > AccessLevel.None;
+        map.CanApproveAll = (rootRights & Domain.Permissions.AccessRight.ApproveItems) != 0;
         return map;
+    }
+
+    /// <summary>Rights before the lock restriction (callers check <see cref="Locked"/>), as the engine computes them.</summary>
+    private Domain.Permissions.AccessRight Rights(Guid node, Guid scope, bool owner, Access.Restrictions.FileFacts? file)
+    {
+        var (direct, membership) = _scopes.GetValueOrDefault(scope);
+        if (node == scope && _selfOnly.TryGetValue(scope, out var own)) { direct |= own.Direct; membership |= own.Membership; }
+        return Access.Labels.Apply(_labels.GetValueOrDefault(node), _inSpace, membership, Access.Restrictions.Apply(_user, owner, direct, membership, file, locked: false));
     }
 
     public AccessLevel FolderLevel(Guid folderId) => _folders.TryGetValue(folderId, out var f) ? f.Level : AccessLevel.None;
 
     public bool FolderExists(Guid folderId) => _folders.ContainsKey(folderId);
 
-    public AccessLevel FileLevel(Guid fileId, Guid? folderId, ApprovalStatus approval, Guid? createdBy)
+    /// <summary>
+    /// A file whose label forbids syncing to computers (spec 7.1), or that one may only view ("Chỉ xem": no download, spec 11), is not part of
+    /// the synced tree.
+    /// </summary>
+    public AccessLevel FileLevel(Guid fileId, Guid? folderId, ApprovalStatus approval, Guid? createdBy, Guid? checkedOutBy = null, bool published = true)
     {
-        var inherited = _brokenFiles.Contains(fileId) ? _brokenLevel
-            : folderId is { } fid ? (_folders.TryGetValue(fid, out var f) ? f.Down : AccessLevel.None) : _rootLevel;
-        var level = Max(inherited, _fileGrants.GetValueOrDefault(fileId));
-        // Approval workflow: plain viewers only see approved files (and their own uploads).
-        if (approval != ApprovalStatus.Approved && createdBy != _userId && level < AccessLevel.Edit && !CanApproveAll) return AccessLevel.None;
-        return level;
+        if (!_fileNodes.TryGetValue(fileId, out var n) || _labels.GetValueOrDefault(fileId) is { BlockSync: true }) return AccessLevel.None;
+        var level = Access.ReferencePermissionEvaluator.ToLevel(Rights(fileId, n.Scope, n.Owner,
+            new Access.Restrictions.FileFacts(createdBy, approval == ApprovalStatus.Approved, checkedOutBy, published)));
+        return level >= AccessLevel.Download ? level : AccessLevel.None;
     }
 
     /// <summary>Parent as seen by the user: a folder they cannot see is skipped (the item becomes top-level of the shared root).</summary>
     public Guid? VisibleParent(Guid? parentId) => parentId is { } id && FolderLevel(id) >= AccessLevel.View ? id : null;
 
-    public bool HasAnyAccess => _rootLevel > AccessLevel.None || _folders.Values.Any(f => f.Level > AccessLevel.None) || _fileGrants.Count > 0;
-
-    private static AccessLevel Max(AccessLevel a, AccessLevel b) => a > b ? a : b;
+    public bool HasAnyAccess => _rootLevel > AccessLevel.None || _folders.Values.Any(f => f.Level > AccessLevel.None)
+                                || _fileNodes.Any(n => Rights(n.Key, n.Value.Scope, n.Value.Owner, null) != Domain.Permissions.AccessRight.None);
 }

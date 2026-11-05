@@ -7,6 +7,7 @@ using BlueDrive.Application.Settings;
 using BlueDrive.Domain.Entities;
 using BlueDrive.Domain.Enums;
 using FluentValidation;
+using BlueDrive.Domain.Permissions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -17,7 +18,9 @@ namespace BlueDrive.Application.Features.Office;
 public sealed record GetOfficeConfigQuery(Guid FileId, bool ForceView = false, bool Mobile = false) : IRequest<OfficeEditorConfig>;
 
 public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth,
-    IOfficeEditorProvider office, IContentTicketService tickets, IAuditLogger audit, TimeProvider clock) : IRequestHandler<GetOfficeConfigQuery, OfficeEditorConfig>
+    IOfficeEditorProvider office, IContentTicketService tickets, IAuditLogger audit, TimeProvider clock, Access.IItemPermissionService engine, Libraries.Libraries libraries,
+    Storage.QuotaService quota, Access.Labels labels, IPermissionService perms)
+    : IRequestHandler<GetOfficeConfigQuery, OfficeEditorConfig>
 {
     public async Task<OfficeEditorConfig> Handle(GetOfficeConfigQuery q, CancellationToken ct)
     {
@@ -25,14 +28,28 @@ public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IR
         var access = await auth.EnsureAsync(uid, ResourceType.File, q.FileId, AccessLevel.View, ct);
         var f = await db.Files.AsNoTracking().FirstAsync(x => x.Id == q.FileId, ct);
         if (!office.CanView(f.Extension)) throw new AppException($"Định dạng .{f.Extension} không hỗ trợ mở bằng trình soạn thảo trực tuyến.");
-        await ScanGate.EnsureAsync(db, f, f.CurrentVersionId, uid, ct);
-        // The item's own rights decide (like rename / new version): a "Chỉ xem" role shared "Chỉnh sửa" edits that document.
-        var canEdit = !q.ForceView && access.CanEdit && office.CanEdit(f.Extension);
+        // People who may not see drafts read the latest published version (spec 1.4).
+        var rights = await engine.GetEffectiveAsync(uid, f.Id, ct);
+        var versionId = Libraries.Libraries.VersionFor(f, rights) ?? throw new NotFoundException("Không tìm thấy tài liệu.");
+        await ScanGate.EnsureAsync(db, f, versionId, uid, ct);
+        // The item's own rights decide (like rename / new version): a "Chỉ xem" role shared "Chỉnh sửa" edits that document. A library that
+        // requires a check-out opens for editing only to who checked it out.
+        var mayChange = true;
+        try { await libraries.EnsureMayChangeContentAsync(f, uid, ct); }
+        catch (AppException) { mayChange = false; }
+        var full = await quota.IsFullAsync(f.WorkspaceId, ct); // spec 8.2: no new versions when full
+        var canEdit = !q.ForceView && access.CanEdit && office.CanEdit(f.Extension) && mayChange && versionId == f.CurrentVersionId && !full;
+        // Comments are saved into the document (a new version): a role that may not change documents only views.
+        var canComment = !q.ForceView && !canEdit && rights.Has(Domain.Permissions.AccessRight.Comment) && versionId == f.CurrentVersionId && !full
+                         && await perms.HasAsync(uid, Perm.DocEdit, ct);
+        // Spec 11.9: "Chỉ xem" or a label asking for it — a watermark, and no download, print or copy.
+        var watermark = !access.CanDownload || (await labels.ForAsync(f.Id, ct))?.Label.Watermark == true;
         var name = await db.Users.Where(u => u.Id == uid).Select(u => u.FullName).FirstAsync(ct);
-        var docTicket = tickets.Issue(new ContentTicket(uid, "file", f.Id, f.CurrentVersionId, true, null, null), TimeSpan.FromHours(24));
-        var config = office.BuildConfig(new OfficeEditorRequest(f.Id, f.CurrentVersionId!.Value, f.Name, f.Extension,
+        var docTicket = tickets.Issue(new ContentTicket(uid, "file", f.Id, versionId, true, null, null), TimeSpan.FromHours(24));
+        var config = office.BuildConfig(new OfficeEditorRequest(f.Id, versionId, f.Name, f.Extension,
             $"{office.CallbackBaseUrl}/api/v1/content/{Uri.EscapeDataString(docTicket)}", $"{office.CallbackBaseUrl}/api/office/callback/{f.Id}",
-            canEdit, access.CanDownload, uid, name, false, q.Mobile));
+            canEdit, access.CanDownload && !watermark, uid, name, false, q.Mobile, null, canComment,
+            rights.Has(Domain.Permissions.AccessRight.Print) && !watermark, rights.Has(Domain.Permissions.AccessRight.CopyContent) && !watermark)) with { Watermark = watermark };
         await RecentTracker.TouchAsync(db, uid, f.Id, canEdit ? "edit" : "view", clock.GetUtcNow().UtcDateTime, ct);
         await audit.LogAsync(new AuditEntry(AuditAction.View, ResourceType.File, f.Id, f.Name, f.WorkspaceId, new { office = config.Mode }), ct);
         return config;
@@ -128,7 +145,8 @@ public interface IFileStorageTemp
 public sealed record OfficeCallbackCommand(Guid FileId, string Body, string? AuthorizationHeader) : IRequest<int>;
 
 public sealed class OfficeCallbackHandler(IAppDbContext db, IOfficeEditorProvider office, IFileContentService content, QuotaService quota, IBackgroundJobs jobs,
-    IFileStorageTemp temp, IAuditLogger audit, TimeProvider clock, ILogger<OfficeCallbackHandler> logger, OfficeEditingTracker editing) : IRequestHandler<OfficeCallbackCommand, int>
+    IFileStorageTemp temp, IAuditLogger audit, TimeProvider clock, ILogger<OfficeCallbackHandler> logger, OfficeEditingTracker editing, Libraries.Libraries libraries)
+    : IRequestHandler<OfficeCallbackCommand, int>
 {
     public async Task<int> Handle(OfficeCallbackCommand cmd, CancellationToken ct)
     {
@@ -164,7 +182,7 @@ public sealed class OfficeCallbackHandler(IAppDbContext db, IOfficeEditorProvide
                 ChangeNote = cb.Status == 6 ? "Lưu từ trình soạn thảo trực tuyến" : "Chỉnh sửa trực tuyến", IsEncrypted = stored.IsEncrypted, WrappedKey = stored.WrappedKey,
             };
             db.FileVersions.Add(version);
-            file.CurrentVersionId = version.Id;
+            await libraries.StampAsync(file, version, publish: false, ct);
             file.SizeBytes = stored.SizeBytes;
             file.ChecksumSha256 = stored.Sha256;
             file.UpdatedAt = now;
@@ -172,6 +190,7 @@ public sealed class OfficeCallbackHandler(IAppDbContext db, IOfficeEditorProvide
             file.ThumbnailKey = null;
             await db.SaveChangesAsync(ct);
             await quota.AddUsageAsync(file.WorkspaceId, stored.SizeBytes, ct);
+            await libraries.PruneAsync(file, ct);
             if (userId is { } uid) await RecentTracker.TouchAsync(db, uid, file.Id, "edit", now, ct);
             jobs.EnqueueFileProcessing(file.Id, version.Id);
             var username = userId is { } id ? await db.Users.Where(x => x.Id == id).Select(x => x.Username).FirstOrDefaultAsync(ct) : null;
@@ -199,14 +218,15 @@ public sealed class ListVersionsHandler(IAppDbContext db, ICurrentUser me, IReso
         var current = await db.Files.Where(f => f.Id == q.FileId).Select(f => f.CurrentVersionId).FirstAsync(ct);
         return await db.FileVersions.AsNoTracking().Where(v => v.FileId == q.FileId).OrderByDescending(v => v.VersionNo)
             .Select(v => new FileVersionDto(v.Id, v.VersionNo, v.SizeBytes, v.ChangeNote, v.CreatedBy, db.Users.Where(u => u.Id == v.CreatedBy).Select(u => u.FullName).FirstOrDefault(),
-                v.CreatedAt, v.Id == current)).ToListAsync(ct);
+                v.CreatedAt, v.Id == current, v.Major, v.Minor, v.IsPublished)).ToListAsync(ct);
     }
 }
 
 /// <summary>Restoring an old version creates a new version pointing to the same blob (history stays intact).</summary>
 public sealed record RestoreVersionCommand(Guid FileId, Guid VersionId) : IRequest<FileVersionDto>;
 
-public sealed class RestoreVersionHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, QuotaService quota, IBackgroundJobs jobs, IAuditLogger audit, TimeProvider clock)
+public sealed class RestoreVersionHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, QuotaService quota, IBackgroundJobs jobs, IAuditLogger audit, TimeProvider clock,
+    Libraries.Libraries libraries)
     : IRequestHandler<RestoreVersionCommand, FileVersionDto>
 {
     public async Task<FileVersionDto> Handle(RestoreVersionCommand cmd, CancellationToken ct)
@@ -216,6 +236,7 @@ public sealed class RestoreVersionHandler(IAppDbContext db, ICurrentUser me, IRe
         var file = await db.Files.FirstAsync(f => f.Id == cmd.FileId, ct);
         var old = await db.FileVersions.AsNoTracking().FirstOrDefaultAsync(v => v.Id == cmd.VersionId && v.FileId == file.Id, ct) ?? throw new NotFoundException("Không tìm thấy phiên bản.");
         if (old.Id == file.CurrentVersionId) throw new AppException("Đây đã là phiên bản hiện tại.");
+        await libraries.EnsureMayChangeContentAsync(file, uid, ct);
         await quota.EnsureAvailableAsync(file.WorkspaceId, old.SizeBytes, ct);
         var next = await db.FileVersions.Where(v => v.FileId == file.Id).MaxAsync(v => v.VersionNo, ct) + 1;
         var now = clock.GetUtcNow().UtcDateTime;
@@ -225,7 +246,7 @@ public sealed class RestoreVersionHandler(IAppDbContext db, ICurrentUser me, IRe
             ChangeNote = $"Khôi phục từ phiên bản {old.VersionNo}", IsEncrypted = old.IsEncrypted, WrappedKey = old.WrappedKey,
         };
         db.FileVersions.Add(v);
-        file.CurrentVersionId = v.Id;
+        await libraries.StampAsync(file, v, publish: false, ct);
         file.SizeBytes = v.SizeBytes;
         file.ChecksumSha256 = v.Checksum;
         file.ThumbnailKey = null;
@@ -234,6 +255,6 @@ public sealed class RestoreVersionHandler(IAppDbContext db, ICurrentUser me, IRe
         jobs.EnqueueFileProcessing(file.Id, v.Id);
         await audit.LogAsync(new AuditEntry(AuditAction.VersionRestore, ResourceType.File, file.Id, file.Name, file.WorkspaceId, new { from = old.VersionNo, to = next }), ct);
         var name = await db.Users.Where(u => u.Id == uid).Select(u => u.FullName).FirstAsync(ct);
-        return new FileVersionDto(v.Id, v.VersionNo, v.SizeBytes, v.ChangeNote, uid, name, now, true);
+        return new FileVersionDto(v.Id, v.VersionNo, v.SizeBytes, v.ChangeNote, uid, name, now, true, v.Major, v.Minor, v.IsPublished);
     }
 }

@@ -115,9 +115,10 @@ public sealed class DemoDataSeeder(
             SizeBytes = stored.SizeBytes, ChecksumSha256 = stored.Sha256, Tags = [.. tags], ApprovalStatus = ApprovalStatus.Approved, CreatedBy = owner.Id,
             UploaderOrganizationId = owner.OrganizationId, Title = Path.GetFileNameWithoutExtension(name),
         };
-        var v = new FileVersion { FileId = file.Id, VersionNo = 1, StorageKey = stored.StorageKey, SizeBytes = stored.SizeBytes, Checksum = stored.Sha256,
+        var v = new FileVersion { FileId = file.Id, VersionNo = 1, Major = 1, Minor = 0, IsPublished = true, StorageKey = stored.StorageKey, SizeBytes = stored.SizeBytes, Checksum = stored.Sha256,
             CreatedBy = owner.Id, CreatedAt = DateTime.UtcNow, ChangeNote = "Dữ liệu mẫu", IsEncrypted = stored.IsEncrypted, WrappedKey = stored.WrappedKey };
         file.CurrentVersionId = v.Id;
+        file.PublishedVersionId = v.Id;
         file.Versions.Add(v);
         foreach (var c in catalogItems) file.CatalogItems.Add(new FileCatalogItem { FileId = file.Id, CatalogItemId = c });
         db.Files.Add(file);

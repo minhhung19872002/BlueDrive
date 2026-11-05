@@ -20,6 +20,8 @@ public interface ITokenService
     Task<IssuedTokens> IssueAsync(User user, UserSession session, CancellationToken ct = default);
     string HashToken(string token);
     string GenerateOpaqueToken(int bytes = 32);
+    /// <summary>A 256-bit token bound to an id with a key derived from the server secret (so it can be shown again, yet only its hash is stored).</summary>
+    string DeriveToken(string purpose, Guid id);
 }
 
 /// <summary>Validates that the session behind an access token is still alive (revocation, idle timeout, security stamp).</summary>

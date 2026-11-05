@@ -14,6 +14,7 @@ const PrintStorageStatsPage = lazy(() => import('@/pages/print/PrintStorageStats
 const PrintAlertsPage = lazy(() => import('@/pages/print/PrintAlertsPage'))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
 const PublicSharePage = lazy(() => import('@/pages/public/PublicSharePage'))
+const GuestLoginPage = lazy(() => import('@/pages/GuestLoginPage'))
 const ConnectAuthorizePage = lazy(() => import('@/pages/ConnectAuthorizePage'))
 const OoDesktopEntryPage = lazy(() => import('@/pages/office/OoDesktopPages').then((m) => ({ default: m.OoDesktopEntryPage })))
 const OoDesktopOpenPage = lazy(() => import('@/pages/office/OoDesktopPages').then((m) => ({ default: m.OoDesktopOpenPage })))
@@ -30,6 +31,8 @@ interface AppRoute {
 const layoutRoutes: AppRoute[] = [
   { path: 'my-drive', Component: lazy(() => import('@/pages/drive/MyDrivePage')) },
   { path: 'shared', Component: lazy(() => import('@/pages/drive/SharedPage')) },
+  { path: 'shared-by-me', Component: lazy(() => import('@/pages/drive/SharedByMePage')) },
+  { path: 'storage', Component: lazy(() => import('@/pages/drive/StoragePage')) },
   { path: 'recent', Component: lazy(() => import('@/pages/drive/RecentPage')) },
   { path: 'starred', Component: lazy(() => import('@/pages/drive/StarredPage')) },
   { path: 'trash', Component: lazy(() => import('@/pages/drive/TrashPage')) },
@@ -37,6 +40,11 @@ const layoutRoutes: AppRoute[] = [
   { path: 'workspaces/:id', Component: lazy(() => import('@/pages/workspaces/WorkspaceDetailPage')) },
   { path: 'files/:id', Component: lazy(() => import('@/pages/drive/FileViewerPage')) },
   { path: 'files/:id/edit', Component: lazy(() => import('@/pages/drive/OfficeEditorPage')) },
+  { path: 'ownership', Component: lazy(() => import('@/pages/drive/OwnershipPage')) },
+  { path: 'ownership/:id', Component: lazy(() => import('@/pages/drive/OwnershipPage')) },
+  { path: 'request-access/:id', Component: lazy(() => import('@/pages/drive/RequestAccessPage')) },
+  { path: 'renew/:kind/:id', Component: lazy(() => import('@/pages/drive/RenewPage')) },
+  { path: 'access-requests', Component: lazy(() => import('@/pages/drive/AccessRequestsPage')) },
   { path: 'approvals', perm: 'doc.approve', Component: lazy(() => import('@/pages/drive/ApprovalsPage')) },
   { path: 'search', Component: lazy(() => import('@/pages/search/SearchPage')) },
   { path: 'profile', Component: lazy(() => import('@/pages/account/ProfilePage')) },
@@ -49,6 +57,14 @@ const layoutRoutes: AppRoute[] = [
 
   { path: 'admin/dashboard', perm: 'dashboard.view', Component: lazy(() => import('@/pages/admin/AdminDashboardPage')) },
   { path: 'admin/organizations', perm: 'org.view', Component: lazy(() => import('@/pages/admin/organizations/OrganizationsPage')) },
+  { path: 'admin/access-levels', perm: 'role.view', Component: lazy(() => import('@/pages/admin/AccessLevelsPage')) },
+  { path: 'admin/access-reports', Component: lazy(() => import('@/pages/admin/AccessReportsPage')) },
+  { path: 'admin/offboarding', perm: 'user.admin', Component: lazy(() => import('@/pages/admin/OffboardingPage')) },
+  { path: 'admin/emergency-access', perm: 'emergency.admin', Component: lazy(() => import('@/pages/admin/EmergencyAccessPage')) },
+  { path: 'admin/retention', perm: 'retention.view', Component: lazy(() => import('@/pages/admin/RetentionPage')) },
+  { path: 'admin/labels', perm: 'settings.view', Component: lazy(() => import('@/pages/admin/LabelsPage')) },
+  { path: 'admin/space-trash', perm: 'workspace.admin', Component: lazy(() => import('@/pages/admin/SpaceTrashPage')) },
+  { path: 'admin/guests', perm: 'user.view', Component: lazy(() => import('@/pages/admin/GuestsPage')) },
   { path: 'admin/users', perm: 'user.view', Component: lazy(() => import('@/pages/admin/users/UsersPage')) },
   { path: 'admin/user-groups', perm: 'usergroup.view', Component: lazy(() => import('@/pages/admin/userGroups/UserGroupsPage')) },
   { path: 'admin/roles', perm: 'role.view', Component: lazy(() => import('@/pages/admin/roles/RolesPage')) },
@@ -88,6 +104,7 @@ export default function AppRoutes() {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         {/* Public share links: anonymous, outside the authenticated layout. */}
         <Route path="/s/:token" element={<PublicSharePage />} />
+        <Route path="/guest-login" element={<GuestLoginPage />} />
         {/* ONLYOFFICE Desktop Editors provider: entry page (signed in), ticket sign-in from BlueDrive Desktop, logout. */}
         <Route
           path="/oo-desktop"

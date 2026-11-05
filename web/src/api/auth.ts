@@ -65,3 +65,13 @@ export async function revokeMyOtherSessions(): Promise<{ revoked: number }> {
   const { data } = await api.post<{ revoked: number }>('/sessions/mine/revoke-others')
   return data
 }
+
+/** Guest from outside: send a sign-in code to the email (always succeeds). */
+export async function requestGuestCode(email: string): Promise<void> {
+  await api.post('/auth/guest/code', { email })
+}
+
+export async function verifyGuestCode(email: string, code: string): Promise<LoginResponse> {
+  const { data } = await api.post<LoginResponse>('/auth/guest/verify', { email, code })
+  return data
+}

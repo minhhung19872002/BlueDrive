@@ -473,6 +473,16 @@ public class DesktopClientTests(ApiFactory factory)
             .Should().Be(HttpStatusCode.Unauthorized, "a ticket works once");
         (await stranger.PostAsJsonAsync("/api/v1/onlyoffice-desktop/tickets", new { fileId })).StatusCode
             .Should().Be(HttpStatusCode.NotFound, "no ticket for a document the user cannot see");
+
+        // Spec 13A: someone who may only view opens the document read-only in ONLYOFFICE Desktop Editors.
+        var (viewer, viewerId, _) = await factory.CreateUserClientAsync("bien_tap");
+        await (await user.PostAsJsonAsync("/api/v1/shares", new { resourceType = "file", resourceId = fileId, targets = new[] { new { type = "user", id = viewerId } }, accessLevel = 2 })).ReadJsonAsync();
+        var viewLink = await (await viewer.PostAsJsonAsync("/api/v1/onlyoffice-desktop/tickets", new { fileId })).ReadJsonAsync();
+        viewLink.GetProperty("canEdit").GetBoolean().Should().BeFalse();
+        var viewTicket = System.Web.HttpUtility.ParseQueryString(new Uri(factory.Server.BaseAddress, viewLink.GetProperty("url").GetString()!).Query)["ticket"]!;
+        var viewSession = await (await anon.PostAsJsonAsync("/api/v1/onlyoffice-desktop/tickets/redeem", new { ticket = viewTicket })).ReadJsonAsync();
+        var viewWeb = factory.CreateClient().WithToken(viewSession.GetProperty("auth").GetProperty("accessToken").GetString()!);
+        (await (await viewWeb.GetAsync($"/api/v1/office/config/{fileId}")).ReadJsonAsync()).GetProperty("mode").GetString().Should().Be("view");
     }
 
     [Fact]

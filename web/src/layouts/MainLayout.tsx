@@ -52,6 +52,7 @@ import {
   ADMIN_MENU_KEY,
   AdminGroupIcon,
   adminNav,
+  GUEST_NAV,
   mainNav,
   matchNavPath,
   routeLabels,
@@ -120,6 +121,7 @@ export default function MainLayout() {
     const groups = (workspaces.data ?? []).filter((w) => w.type !== 'personal')
     const items: NonNullable<MenuProps['items']> = mainNav
       .filter((n) => !n.perm || permissions.includes(n.perm))
+      .filter((n) => !user?.isGuest || GUEST_NAV.includes(n.path))
       .map((n) =>
         n.path === '/workspaces'
           ? {

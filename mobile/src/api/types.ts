@@ -169,6 +169,10 @@ export interface FileDetail {
   isDeleted: boolean;
   /** Content may not be opened by this user: malware found, or still being scanned and not the uploader. */
   contentBlocked: boolean;
+  /** Spec 7.1 / 11.9: the effective sensitivity label and whether the viewer sees a watermark ("Chỉ xem" or the label asks for one). */
+  labelName?: string | null;
+  labelColor?: string | null;
+  watermark?: boolean;
   thumbnailUrl?: string | null;
   previewUrl?: string | null;
 }

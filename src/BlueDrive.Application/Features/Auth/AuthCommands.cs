@@ -15,7 +15,7 @@ namespace BlueDrive.Application.Features.Auth;
 public sealed record UserProfileDto(
     Guid Id, string Username, string FullName, string? Email, string? Phone, Guid? OrganizationId, string? OrganizationName,
     string? Position, Guid? AvatarFileId, IReadOnlyList<string> Roles, IReadOnlyList<string> Permissions, bool MustChangePassword,
-    long QuotaBytes, long UsedBytes, DateTime? LastLoginAt, Guid? PersonalWorkspaceId);
+    long QuotaBytes, long UsedBytes, DateTime? LastLoginAt, Guid? PersonalWorkspaceId, bool IsGuest = false);
 
 public sealed record AuthResult(string AccessToken, DateTime AccessTokenExpiresAt, string RefreshToken, DateTime RefreshTokenExpiresAt, UserProfileDto User);
 
@@ -38,7 +38,7 @@ public static class AuthHelpers
         var permissions = await perms.GetPermissionsAsync(userId, ct);
         var personalWs = await db.Workspaces.Where(w => w.OwnerId == userId && w.Type == WorkspaceType.Personal).Select(w => (Guid?)w.Id).FirstOrDefaultAsync(ct);
         return new UserProfileDto(u.Id, u.Username, u.FullName, pii.Unprotect(u.Email), pii.Unprotect(u.Phone), u.OrganizationId, u.Organization?.Name,
-            u.Position, u.AvatarFileId, roles, permissions.OrderBy(p => p).ToList(), u.MustChangePassword, u.QuotaBytes, u.UsedBytes, u.LastLoginAt, personalWs);
+            u.Position, u.AvatarFileId, roles, permissions.OrderBy(p => p).ToList(), u.MustChangePassword, u.QuotaBytes, u.UsedBytes, u.LastLoginAt, personalWs, u.IsGuest);
     }
 }
 
@@ -80,6 +80,7 @@ public sealed class LoginHandler(
             throw new AppException(InvalidCredentials, 401);
         }
         if (!user.IsActive) await Fail(user, "Tài khoản đã bị vô hiệu hóa.", "inactive", ct);
+        if (user.IsGuest) await Fail(user, "Tài khoản khách đăng nhập bằng mã gửi qua email (chọn \"Khách bên ngoài\" ở trang đăng nhập).", "guest", ct);
         if (user.IsLocked) await Fail(user, "Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.", "locked", ct);
         if (user.LockoutEnd > now)
         {
@@ -280,7 +281,7 @@ public sealed class ForgotPasswordHandler(
     {
         var key = cmd.UsernameOrEmail.Trim();
         var emailHash = pii.Hash(key);
-        var user = await db.Users.FirstOrDefaultAsync(u => u.IsActive && (u.Username == key.ToLower() || u.EmailHash == emailHash), ct);
+        var user = await db.Users.FirstOrDefaultAsync(u => u.IsActive && !u.IsGuest && (u.Username == key.ToLower() || u.EmailHash == emailHash), ct);
         var to = pii.Unprotect(user?.Email);
         // Always succeed from the caller's point of view (no account enumeration).
         if (user is null || string.IsNullOrWhiteSpace(to)) return Unit.Value;

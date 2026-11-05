@@ -2,6 +2,7 @@ import { api } from './client'
 import { cleanParams } from './http'
 import type {
   AllWorkspacesFilter,
+  DriveItem,
   SaveWorkspaceRequest,
   SetPersonalQuotaRequest,
   Workspace,
@@ -69,5 +70,124 @@ export async function setWorkspaceQuota(id: string, quotaGb: number): Promise<vo
 
 export async function setPersonalQuota(body: SetPersonalQuotaRequest): Promise<{ updated: number }> {
   const { data } = await api.put<{ updated: number }>('/quotas/personal', body)
+  return data
+}
+
+export interface SpaceTemplate {
+  code: string
+  name: string
+  description: string
+  folders: string[]
+}
+
+export async function listSpaceTemplates(): Promise<SpaceTemplate[]> {
+  const { data } = await api.get<SpaceTemplate[]>('/workspaces/templates')
+  return data
+}
+
+export interface SpaceGroupMember {
+  principalKind: 'group' | 'org_unit_tree'
+  principalId: string
+  name: string
+  memberRole: WorkspaceMemberRole
+  addedAt: string
+}
+
+export async function listSpaceGroupMembers(id: string): Promise<SpaceGroupMember[]> {
+  const { data } = await api.get<SpaceGroupMember[]>(`/workspaces/${id}/group-members`)
+  return data
+}
+
+export async function addSpaceGroupMembers(id: string, principals: { kind: 'group' | 'org_unit_tree'; id: string }[], role: WorkspaceMemberRole): Promise<void> {
+  await api.post(`/workspaces/${id}/group-members`, { principals, role })
+}
+
+export async function removeSpaceGroupMember(id: string, principalId: string): Promise<void> {
+  await api.delete(`/workspaces/${id}/group-members/${principalId}`)
+}
+
+export async function setSpaceStatus(id: string, status: 'active' | 'archived'): Promise<void> {
+  await api.put(`/workspaces/${id}/status`, { status })
+}
+
+export interface SpaceSettings {
+  workspaceId: string
+  allowDownload: boolean
+  allowSync: boolean
+  trashRetentionDays: number | null
+  activityForMembers: boolean
+  coverFileId: string | null
+  status: 'active' | 'archived' | 'deleted'
+  template: string | null
+  canEdit: boolean
+  allowMoveOut: boolean
+}
+
+export async function getSpaceSettings(id: string): Promise<SpaceSettings> {
+  const { data } = await api.get<SpaceSettings>(`/workspaces/${id}/settings`)
+  return data
+}
+
+export async function setSpaceSettings(
+  id: string,
+  body: Pick<SpaceSettings, 'allowDownload' | 'allowSync' | 'trashRetentionDays' | 'activityForMembers' | 'coverFileId' | 'allowMoveOut'>,
+): Promise<void> {
+  await api.put(`/workspaces/${id}/settings`, body)
+}
+
+export interface DeletedSpace {
+  id: string
+  name: string
+  ownerName: string
+  usedBytes: number
+  deletedAt: string
+  purgeAt: string
+}
+
+export async function listDeletedSpaces(): Promise<DeletedSpace[]> {
+  const { data } = await api.get<DeletedSpace[]>('/workspaces/trash')
+  return data
+}
+
+export async function restoreSpace(id: string): Promise<void> {
+  await api.post(`/workspaces/trash/${id}/restore`)
+}
+
+export async function purgeSpace(id: string): Promise<void> {
+  await api.delete(`/workspaces/trash/${id}`)
+}
+
+export interface SpaceHome {
+  id: string
+  name: string
+  description: string | null
+  coverUrl: string | null
+  memberCount: number
+  members: { name: string; role: WorkspaceMemberRole; isGroup: boolean }[]
+  recentFiles: DriveItem[]
+  usedBytes: number
+  quotaBytes: number
+  libraries: { id: string; name: string; isDefault: boolean }[]
+  uniqueScopes: number
+  canManage: boolean
+}
+
+export async function getSpaceHome(id: string): Promise<SpaceHome> {
+  const { data } = await api.get<SpaceHome>(`/workspaces/${id}/home`)
+  return data
+}
+
+export interface UniqueScope {
+  id: string
+  name: string
+  kind: 'folder' | 'file'
+  location: string
+  entries: number
+  direct: string[]
+  links: number
+}
+
+export async function listUniqueScopes(id: string): Promise<UniqueScope[]> {
+  const { data } = await api.get<UniqueScope[]>(`/workspaces/${id}/unique-scopes`)
   return data
 }

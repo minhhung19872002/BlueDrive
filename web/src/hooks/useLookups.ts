@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { getBranding, getPasswordPolicy } from '@/api/auth'
+import { listCatalogItems } from '@/api/catalogs'
 import { getOrganizationTree } from '@/api/organizations'
 import { qk } from '@/api/queryKeys'
 import { listRoles } from '@/api/roles'
@@ -18,6 +19,11 @@ export function useOrgTree(includeInactive = true) {
     queryKey: [...qk.orgTree, includeInactive],
     queryFn: () => getOrganizationTree(includeInactive),
   })
+}
+
+/** Items of a shared catalog (library "Tra cứu danh mục" columns). */
+export function useCatalogItems(catalogId: string | null | undefined) {
+  return useQuery({ queryKey: ['catalog-items', catalogId], queryFn: () => listCatalogItems(catalogId!, { isActive: true }), enabled: !!catalogId, staleTime: 5 * 60_000 })
 }
 
 export function useRoles() {

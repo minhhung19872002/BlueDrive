@@ -67,5 +67,11 @@ public sealed class TokenService(IOptions<JwtOptions> options, IAppDbContext db,
 
     public string HashToken(string token) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
+    public string DeriveToken(string purpose, Guid id)
+    {
+        var key = SHA256.HashData(Encoding.UTF8.GetBytes($"bluedrive:{purpose}:{_opt.Secret}"));
+        return Base64UrlEncoder.Encode(HMACSHA256.HashData(key, id.ToByteArray()));
+    }
+
     public string GenerateOpaqueToken(int bytes = 32) => Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(bytes));
 }

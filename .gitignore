@@ -42,3 +42,6 @@ deploy/downloads/
 ## Load-test stack (scripts/perf-up.ps1)
 deploy/.env.perf
 tests/load/results/
+# BenchmarkDotNet output (tests/BlueDrive.Benchmarks)
+BenchmarkDotNet.Artifacts/
+artifacts/perf-permissions-results.md

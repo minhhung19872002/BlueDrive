@@ -53,8 +53,8 @@ export async function createFolder(workspaceId: string, parentId: string | null,
   return data
 }
 
-export async function updateFolder(id: string, body: { name?: string | null; requiresApproval?: boolean | null }): Promise<void> {
-  await api.put(`/folders/${id}`, { name: body.name ?? null, requiresApproval: body.requiresApproval ?? null })
+export async function updateFolder(id: string, body: { name?: string | null }): Promise<void> {
+  await api.put(`/folders/${id}`, { name: body.name ?? null })
 }
 
 /** `recordView` = the user actually opened the file (adds it to "Gần đây"); false for info panels. */
@@ -89,8 +89,8 @@ export async function deleteItems(items: ItemRef[]): Promise<{ deleted: number }
 }
 
 // ---------- Trash ----------
-export async function listTrash(workspaceId: string, params: PageParams): Promise<Paged<TrashItem>> {
-  const { data } = await api.get<Paged<TrashItem>>(`/workspaces/${workspaceId}/trash`, { params: cleanParams(params) })
+export async function listTrash(workspaceId: string, params: PageParams, stage: 1 | 2 = 1): Promise<Paged<TrashItem>> {
+  const { data } = await api.get<Paged<TrashItem>>(`/workspaces/${workspaceId}/trash`, { params: cleanParams({ ...params, stage }) })
   return data
 }
 
@@ -104,8 +104,8 @@ export async function purgeItems(items: ItemRef[]): Promise<{ purged: number }> 
   return data
 }
 
-export async function emptyTrash(workspaceId: string): Promise<{ purged: number }> {
-  const { data } = await api.post<{ purged: number }>(`/workspaces/${workspaceId}/trash/empty`)
+export async function emptyTrash(workspaceId: string, stage: 1 | 2 = 1): Promise<{ purged: number }> {
+  const { data } = await api.post<{ purged: number }>(`/workspaces/${workspaceId}/trash/empty`, null, { params: { stage } })
   return data
 }
 
@@ -137,4 +137,61 @@ export function startDownload(url: string): void {
 export async function completeUpload(tusId: string, meta: UploadMetadata): Promise<UploadResult> {
   const { data } = await api.post<UploadResult>(`/uploads/${encodeURIComponent(tusId)}/complete`, meta)
   return data
+}
+
+/** Spec 1.2: a shortcut to a file or folder (in Drive của tôi unless a place is given). */
+export async function createShortcut(targetId: string, workspaceId?: string, folderId?: string | null): Promise<{ id: string }> {
+  const { data } = await api.post<{ id: string }>('/shortcuts', { targetId, workspaceId, folderId })
+  return data
+}
+
+export async function deleteShortcut(id: string): Promise<void> {
+  await api.delete(`/shortcuts/${id}`)
+}
+
+export interface MovePreview {
+  lose: string[]
+  gain: string[]
+  ownershipToSpace: boolean
+  blocked: boolean
+  blockedReason: string | null
+}
+
+/** Spec 1.1: before moving, who will lose / get access from the place. */
+export async function previewMove(items: ItemRef[], targetWorkspaceId: string, targetFolderId: string | null): Promise<MovePreview> {
+  const { data } = await api.post<MovePreview>('/items/move-preview', { items, targetWorkspaceId, targetFolderId })
+  return data
+}
+
+export interface OwnershipTransfer {
+  id: string
+  itemId: string
+  itemType: 'file' | 'folder'
+  itemName: string
+  fromUserId: string
+  fromName: string
+  toUserId: string
+  toName: string
+  status: 'pending' | 'accepted' | 'declined' | 'cancelled'
+  createdAt: string
+  decidedAt: string | null
+}
+
+/** Spec 1.1: offer an item of my drive to someone (they accept or decline). */
+export async function offerOwnership(itemId: string, toUserId: string): Promise<void> {
+  await api.post('/ownership-transfers', { itemId, toUserId })
+}
+
+export async function listOwnershipTransfers(incoming: boolean): Promise<OwnershipTransfer[]> {
+  const { data } = await api.get<OwnershipTransfer[]>('/ownership-transfers', { params: { incoming } })
+  return data
+}
+
+export async function getOwnershipTransfer(id: string): Promise<OwnershipTransfer> {
+  const { data } = await api.get<OwnershipTransfer>(`/ownership-transfers/${id}`)
+  return data
+}
+
+export async function decideOwnership(id: string, action: 'accept' | 'decline' | 'cancel'): Promise<void> {
+  await api.post(`/ownership-transfers/${id}/${action}`)
 }
