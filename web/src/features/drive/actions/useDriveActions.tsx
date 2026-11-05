@@ -230,6 +230,11 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
   const info = useCallback((item: DriveItem) => (onShowInfo ? onShowInfo(item) : details(item, 'info')), [details, onShowInfo])
   const share = useCallback((item: DriveItem) => setShareTarget({ type: item.type, id: item.id, name: item.name, workspaceId: item.workspaceId }), [])
   // Files and folders: the one "Chia sẻ" dialog (people, general access, link).
+  // Spaces / Drives (no link) keep the people-only dialog; files and folders open "Chia sẻ".
+  const openAccess = (target: AccessTarget) =>
+    target.type === 'file' || target.type === 'folder'
+      ? setShareTarget({ type: target.type, id: target.id, name: target.name, workspaceId: target.workspaceId })
+      : setAccessTarget(target)
   const manageAccess = share
   const copyTo = useCallback(
     (items: DriveItem[]) => items.length && setCopyMove({ mode: 'copy', items: items.map(toRef), workspaceId: items[0].workspaceId, folderId: items[0].parentId }),
@@ -375,9 +380,9 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
       )}
       <Drawer open={!!infoItem} onClose={() => setInfoItem(null)} title={infoItem?.name ?? t('actions.info')} width="min(460px, 100vw)" destroyOnHidden>
         {infoItem?.type === 'file' ? (
-          <FileDetailsTabs fileId={infoItem.id} tab={infoTab} onTab={setInfoTab} onManageAccess={setAccessTarget} />
+          <FileDetailsTabs fileId={infoItem.id} tab={infoTab} onTab={setInfoTab} onManageAccess={openAccess} />
         ) : (
-          infoItem && <InfoPanel subject={{ kind: 'folder', item: infoItem }} onManageAccess={setAccessTarget} />
+          infoItem && <InfoPanel subject={{ kind: 'folder', item: infoItem }} onManageAccess={openAccess} />
         )}
       </Drawer>
     </>
@@ -395,11 +400,7 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
     manageAccess,
     remove,
     viewFile: setViewerId,
-    // Spaces / Drives (no link) keep the people-only dialog; files and folders open "Chia sẻ".
-    openAccess: (target: AccessTarget) =>
-      target.type === 'file' || target.type === 'folder'
-        ? setShareTarget({ type: target.type, id: target.id, name: target.name, workspaceId: target.workspaceId })
-        : setAccessTarget(target),
+    openAccess,
     menuItems,
     run,
     dialogs,

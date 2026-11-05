@@ -98,7 +98,7 @@ export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate
         {
           key: 'info',
           label: t('viewer.tabInfo'),
-          children: <InfoPanel subject={{ kind: 'file', id: fileId }} onManageAccess={setAccessTarget} />,
+          children: <InfoPanel subject={{ kind: 'file', id: fileId }} onManageAccess={(target) => (target.type === 'file' ? setSharing(true) : setAccessTarget(target))} />,
         },
         ...(extraTabs ?? []),
       ]}
