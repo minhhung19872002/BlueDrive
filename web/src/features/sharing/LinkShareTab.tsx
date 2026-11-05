@@ -10,7 +10,6 @@ import {
   InputNumber,
   Popconfirm,
   Row,
-  Select,
   Skeleton,
   Space,
   Switch,
@@ -32,7 +31,6 @@ import type { ResourceType, SaveShareLinkRequest, ShareLink, ShareLinkScope } fr
 import { copyText } from '@/utils/clipboard'
 import { formatDateTime } from '@/utils/format'
 import { LINK_STATUS_COLORS, type PrincipalValue } from './levels'
-import PrincipalSelect from './PrincipalSelect'
 import ShareLinkQrModal from './ShareLinkQrModal'
 
 interface LinkShareTabProps {
@@ -62,7 +60,7 @@ interface LinkForm {
  * general access like Google Drive (restricted: signed in and with access; or anyone with the link, as viewer or editor), download,
  * and for public links expiry and access limit. QR, revoke; older links still working are offered for revoking.
  */
-export default function LinkShareTab({ resourceType, resourceId, canDownload, canEdit }: LinkShareTabProps) {
+export default function LinkShareTab({ resourceType, resourceId, canDownload }: LinkShareTabProps) {
   const { t } = useTranslation()
   const can = useCan()
   const canShare = can('doc.share')
@@ -74,7 +72,6 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
   const editorId = linkLevels.find((l) => l.code === 'editor')?.id
   const viewerId = linkLevels.find((l) => l.code === 'viewer')?.id
   const policy = useQuery({ queryKey: ['item-sharing-policy', resourceId], queryFn: () => getItemSharingPolicy(resourceId) })
-  const anyoneAllowed = policy.data?.anyoneLinksAllowed ?? true
   const maxDays = audience === 'anyone' ? (policy.data?.anyoneLinkMaxDays ?? 0) : 0
   const autoCreated = useRef(false)
   const links = useQuery({
@@ -82,7 +79,11 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
     queryFn: () => listShareLinks(resourceType, resourceId),
   })
   const sorted = useMemo(() => [...(links.data ?? [])].sort((a, b) => b.createdAt.localeCompare(a.createdAt)), [links.data])
-  const current: ShareLink | undefined = sorted.find((l) => l.status === 'active')
+  // The link shown is the newest one that still works and whose address is known. A link made before BlueDrive kept only its hash
+  // (no address any more) is replaced at once by a new one with the same settings (below); it keeps working and is offered for revoking.
+  const usable: ShareLink | undefined = sorted.find((l) => l.status === 'active' && !!l.url)
+  const legacy: ShareLink | undefined = sorted.find((l) => l.status === 'active' && !l.url)
+  const current: ShareLink | undefined = usable ?? legacy
   // One link per item, like SharePoint: older links that still work are only offered for revoking (revoked / expired ones are hidden).
   const olderActive = sorted.filter((l) => l.id !== current?.id && l.status === 'active')
 
@@ -115,18 +116,25 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
   // No usable link yet: create one as soon as the tab opens (once). Signed-in users only by default,
   // like SharePoint's "people in your organization" link — making it public is an explicit choice below.
   useEffect(() => {
-    if (!canShare || !links.isSuccess || current || autoCreated.current) return
+    if (!canShare || !links.isSuccess || usable || autoCreated.current) return
     autoCreated.current = true
-    create.mutate({
-      resourceType,
-      resourceId,
-      allowDownload: canDownload,
-      allowEdit: false,
-      requireLogin: true,
-      expiresAt: null,
-      maxAccessCount: null,
-    })
-  }, [canShare, links.isSuccess, current, create, resourceType, resourceId, canDownload])
+    create.mutate(
+      legacy
+        ? {
+            resourceType,
+            resourceId,
+            allowDownload: legacy.allowDownload,
+            allowEdit: legacy.allowEdit,
+            requireLogin: legacy.requireLogin,
+            scope: legacy.scope,
+            levelId: legacy.levelId,
+            people: legacy.people.map((p) => p.id),
+            expiresAt: legacy.expiresAt,
+            maxAccessCount: legacy.maxAccessCount,
+          }
+        : { resourceType, resourceId, allowDownload: canDownload, allowEdit: false, requireLogin: true, expiresAt: null, maxAccessCount: null },
+    )
+  }, [canShare, links.isSuccess, usable, legacy, create, resourceType, resourceId, canDownload])
 
   // The settings form always shows the current link's values.
   useEffect(() => {
@@ -148,43 +156,10 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
       <Typography.Title level={5} style={{ marginTop: 0 }}>
         {t('sharing.currentLink')}
       </Typography.Title>
-      {links.isLoading || (create.isPending && !current) ? (
+      {links.isLoading || (create.isPending && !usable) ? (
         <Skeleton.Input active block />
       ) : current && !current.url ? (
-        <Alert
-          type="info"
-          showIcon
-          message={t('sharing.legacyLink')}
-          description={t('sharing.legacyLinkHint')}
-          action={
-            canShare && (
-              <Button
-                size="small"
-                type="primary"
-                loading={create.isPending}
-                onClick={() =>
-                  create.mutate(
-                    {
-                      resourceType,
-                      resourceId,
-                      allowDownload: current.allowDownload,
-                      allowEdit: current.allowEdit,
-                      requireLogin: current.requireLogin,
-                      scope: current.scope,
-                      levelId: current.levelId,
-                      people: current.people.map((p) => p.id),
-                      expiresAt: current.expiresAt,
-                      maxAccessCount: current.maxAccessCount,
-                    },
-                    { onSuccess: () => revoke.mutate(current.id) },
-                  )
-                }
-              >
-                {t('sharing.legacyLinkRenew')}
-              </Button>
-            )
-          }
-        />
+        <Alert type="info" showIcon message={t('sharing.legacyLink')} description={t('sharing.legacyLinkHint')} />
       ) : current ? (
         <>
           <Space.Compact style={{ width: '100%' }}>
@@ -234,47 +209,16 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload, ca
           </Divider>
           <Form<LinkForm> form={form} layout="vertical" onFinish={(v) => update.mutate({ id: current.id, body: toRequest(v) })}>
             <Row gutter={16}>
-              <Col xs={24} sm={audience === 'existing' ? 24 : 14}>
-                <Form.Item
-                  name="audience"
-                  label={t('sharing.generalAccess')}
-                  extra={
-                    !anyoneAllowed && policy.data
-                      ? t('sharing.anyoneBlocked', { source: policy.data.externalSource, level: t(`externalSharing.${policy.data.external}`) })
-                      : t(`sharing.audienceHint.${audience}`)
-                  }
-                >
-                  <Select
-                    options={(['existing', 'organization', 'specific', 'anyone'] as const).map((s) => ({
-                      value: s,
-                      label: t(`sharing.audience.${s}`),
-                      disabled: s === 'anyone' && !anyoneAllowed && current.scope !== 'anyone',
-                    }))}
-                  />
-                </Form.Item>
-              </Col>
-              {audience !== 'existing' && (
-                <Col xs={24} sm={10}>
-                  <Form.Item name="levelId" label={t('sharing.linkRole')} extra={!canEdit ? t('sharing.allowEditDenied') : undefined}>
-                    <Select
-                      placeholder={t('sharing.roleViewer')}
-                      options={linkLevels.map((l) => ({
-                        value: l.id,
-                        label: l.name,
-                        title: l.description,
-                        disabled: l.code === 'editor' && !canEdit && !current.allowEdit,
-                      }))}
-                    />
-                  </Form.Item>
-                </Col>
-              )}
-              {audience === 'specific' && (
-                <Col xs={24}>
-                  <Form.Item name="people" label={t('sharing.linkPeople')} rules={[{ required: true, message: t('sharing.linkPeopleRequired') }]}>
-                    <PrincipalSelect multiple types={['user']} placeholder={t('sharing.linkPeoplePlaceholder')} />
-                  </Form.Item>
-                </Col>
-              )}
+              {/* Who may use the link is the "Chia sẻ ra ngoài" switch of the first tab; the link's own settings stay here. */}
+              <Form.Item name="audience" hidden>
+                <Input />
+              </Form.Item>
+              <Form.Item name="levelId" hidden>
+                <Input />
+              </Form.Item>
+              <Form.Item name="people" hidden>
+                <Input />
+              </Form.Item>
               <Col xs={24} sm={8}>
                 <Form.Item
                   name="allowDownload"

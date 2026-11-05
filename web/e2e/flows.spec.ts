@@ -147,20 +147,7 @@ async function openLinkTab(page: Page) {
   return { dialog, linkBox }
 }
 
-/** Picks an option of an AntD select found by its form label. */
-async function choose(page: Page, label: string, option: string) {
-  await page.getByRole('dialog').locator('.ant-form-item', { hasText: label }).locator('.ant-select-selector').click()
-  await page.locator('.ant-select-dropdown:visible .ant-select-item-option', { hasText: option }).click()
-}
-
-async function saveLink(page: Page) {
-  await Promise.all([
-    page.waitForResponse((r) => r.url().includes('/api/v1/share-links/') && r.request().method() === 'PUT' && r.ok()),
-    page.getByRole('dialog').getByRole('button', { name: /Lưu cài đặt/ }).click(),
-  ])
-}
-
-test('chia sẻ qua liên kết: mặc định Hạn chế, chuyển sang Bất kỳ ai có liên kết', async ({ page, browser }) => {
+test('chia sẻ qua liên kết: mặc định Hạn chế, bật "cho phép người ngoài xem" thì ai có liên kết cũng mở được', async ({ page, browser }) => {
   // Like Google Drive the link is there right away, restricted (signed in and with access) by default.
   const { dialog, linkBox } = await openLinkTab(page)
   await expect(dialog.getByText('Hạn chế (người đã có quyền)').first()).toBeVisible()
@@ -173,33 +160,17 @@ test('chia sẻ qua liên kết: mặc định Hạn chế, chuyển sang Bất 
   await pub.goto(path)
   await expect(pub.getByText('Yêu cầu đăng nhập').first()).toBeVisible({ timeout: 15_000 })
 
-  // Anyone with the link: the same link opens without signing in.
-  await choose(page, 'Quyền truy cập chung', 'Bất kỳ ai có liên kết')
-  await saveLink(page)
+  // "Cho phép người ngoài xem qua liên kết" on the first tab: the same link opens without signing in.
+  await dialog.getByRole('tab', { name: /Người có quyền truy cập/ }).click()
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes('/api/v1/share-links') && ['PUT', 'POST'].includes(r.request().method()) && r.ok()),
+    dialog.getByRole('switch', { name: 'Cho phép người ngoài xem qua liên kết' }).click(),
+  ])
+  await dialog.getByRole('tab', { name: /liên kết/i }).click()
+  await expect(dialog.getByText('Bất kỳ ai có liên kết').first()).toBeVisible()
   await expect(linkBox).toHaveValue(link)
   await pub.reload()
   await expect(pub.getByText(/Chia sẻ bởi|được chia sẻ/i).first()).toBeVisible({ timeout: 15_000 })
-  await anon.close()
-})
-
-test('liên kết Bất kỳ ai có liên kết, cấp quyền Biên tập: người không đăng nhập mở là sửa được ngay', async ({ page, browser }) => {
-  const { linkBox } = await openLinkTab(page)
-  await choose(page, 'Quyền truy cập chung', 'Bất kỳ ai có liên kết')
-  await choose(page, 'Cấp quyền', 'Biên tập')
-  await saveLink(page)
-  await expect(page.getByRole('dialog').getByText('Cho phép chỉnh sửa', { exact: true })).toBeVisible()
-  const path = new URL((await linkBox.inputValue()).trim(), 'http://x').pathname
-
-  const anon = await browser.newContext({ storageState: { cookies: [], origins: [] } })
-  const pub = await anon.newPage()
-  // No button to press: the editor opens straight away (as "Khách" for someone not signed in), with its toolbars.
-  const configResponse = pub.waitForResponse((r) => r.url().includes('/office/public-config/') && r.ok())
-  await pub.goto(path)
-  const body = await (await configResponse).json()
-  expect(body.mode).toBe('edit')
-  expect(body.config.type).toBe('desktop')
-  expect(body.config.editorConfig.user.name).toBe('Khách')
-  await expect(pub.locator('iframe[name="frameEditor"], iframe[src*="/office/"]').first()).toBeAttached({ timeout: 45_000 })
   await anon.close()
 })
 

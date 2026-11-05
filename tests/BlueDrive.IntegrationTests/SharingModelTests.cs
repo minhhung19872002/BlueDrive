@@ -406,4 +406,24 @@ public class SharingModelTests(ApiFactory factory)
         await anon.PostAsJsonAsync("/api/v1/auth/guest/code", new { email = address });
         mail.Sent.Count.Should().Be(before);
     }
+
+    [Fact]
+    public async Task Access_list_leaves_out_Space_groups_nobody_is_in()
+    {
+        var (owner, ownerId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (member, memberId, _) = await factory.CreateUserClientAsync("bien_tap");
+        // Drive của tôi: only its owner's group, not the empty "Thành viên / Đóng góp / Khách xem / Duyệt nội dung".
+        var drive = await StorageTests.PersonalWorkspaceAsync(owner);
+        var file = (await StorageTests.UploadAsync(owner, drive, null, "rieng.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var groups = (await (await owner.GetAsync($"/api/v1/items/{file}/permissions")).ReadJsonAsync()).GetProperty("entries").EnumerateArray()
+            .Where(e => e.GetProperty("principalKind").GetString() == "space_group").Select(e => e.GetProperty("levelName").GetString()).ToList();
+        groups.Should().ContainSingle().Which.Should().Be("Chủ sở hữu / Quản lý");
+        // A Space shows the groups that have people.
+        var ws = (await (await owner.PostAsJsonAsync("/api/v1/workspaces", new { name = "Space nhóm có người", type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        await (await owner.PostAsJsonAsync($"/api/v1/workspaces/{ws}/members", new { userIds = new[] { memberId }, role = "editor" })).ReadJsonAsync();
+        var inSpace = (await StorageTests.UploadAsync(owner, ws, null, "chung.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var spaceGroups = (await (await owner.GetAsync($"/api/v1/items/{inSpace}/permissions")).ReadJsonAsync()).GetProperty("entries").EnumerateArray()
+            .Where(e => e.GetProperty("principalKind").GetString() == "space_group").Select(e => e.GetProperty("levelName").GetString()).ToList();
+        spaceGroups.Should().BeEquivalentTo(["Chủ sở hữu / Quản lý", "Biên tập"]);
+    }
 }

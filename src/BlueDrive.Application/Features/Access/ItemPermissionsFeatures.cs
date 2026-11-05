@@ -57,7 +57,10 @@ public sealed class GetItemPermissionsHandler(IAppDbContext db, ICurrentUser me,
         var canManage = rights.Has(AccessRight.ManagePermissions);
         var everyone = entries.Where(x => x.e.PrincipalKind == PrincipalKind.Everyone).OrderBy(x => x.SortOrder).FirstOrDefault();
         var owner = node.OwnerUserId is { } o ? await db.Users.AsNoTracking().Where(u => u.Id == o).Select(u => u.FullName).FirstOrDefaultAsync(ct) : null;
-        var list = entries.Where(x => x.e.PrincipalKind != PrincipalKind.Everyone).OrderBy(x => x.e.Source == AclSource.SpaceDefault ? 0 : 1).ThenBy(x => x.SortOrder)
+        // A Space group nobody is in (a Drive's "Thành viên", a Space without visitors…) gives nobody anything: not listed.
+        var groupIds = entries.Where(x => x.e.PrincipalKind == PrincipalKind.SpaceGroup).Select(x => x.e.PrincipalId).Distinct().ToList();
+        var peopled = (await db.SpaceGroupMembers.AsNoTracking().Where(m => groupIds.Contains(m.SpaceGroupId)).Select(m => m.SpaceGroupId).Distinct().ToListAsync(ct)).ToHashSet();
+        var list = entries.Where(x => x.e.PrincipalKind != PrincipalKind.Everyone && (x.e.PrincipalKind != PrincipalKind.SpaceGroup || peopled.Contains(x.e.PrincipalId))).OrderBy(x => x.e.Source == AclSource.SpaceDefault ? 0 : 1).ThenBy(x => x.SortOrder)
             .Select(x =>
             {
                 var (name, detail) = names.GetValueOrDefault(x.e.PrincipalId, ("(không xác định)", null));
