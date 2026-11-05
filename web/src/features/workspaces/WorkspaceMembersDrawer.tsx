@@ -146,7 +146,7 @@ export default function WorkspaceMembersDrawer({ workspace, open, onClose }: { w
                       <Button type="text" size="small" icon={<CrownOutlined />} onClick={() => confirmTransfer(m)} />
                     </Tooltip>
                   )}
-                  {(canManage || m.userId === me) && (
+                  {canManage && (
                     <Popconfirm
                       title={m.userId === me ? t('workspace.leaveConfirm') : t('workspace.removeConfirm', { name: m.fullName })}
                       okText={t('common.confirm')}

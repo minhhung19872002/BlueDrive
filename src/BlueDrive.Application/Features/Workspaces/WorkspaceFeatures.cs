@@ -48,12 +48,23 @@ public static class WorkspaceManagement
     public static async Task EnsureCanChangeAsync(IAppDbContext db, IResourceAuthorizationService auth, IPermissionService perms, Guid userId, Workspace ws, CancellationToken ct)
     {
         if (ws.OwnerId == userId || await perms.HasAsync(userId, Perm.WorkspaceAdmin, ct)) return;
-        var manager = await db.WorkspaceMembers.AnyAsync(m => m.WorkspaceId == ws.Id && m.UserId == userId
-                                                              && (m.MemberRole == WorkspaceMemberRole.Manager || m.MemberRole == WorkspaceMemberRole.Owner), ct)
-                      || (await auth.GetAccessAsync(userId, ResourceType.Workspace, ws.Id, ct)).Level >= AccessLevel.Manage;
-        if (!manager) throw new ForbiddenException("Chỉ trưởng nhóm, quản lý nhóm hoặc quản trị viên được thay đổi nhóm tài nguyên.");
+        if (!await IsManagerAsync(db, auth, userId, ws, ct)) throw new ForbiddenException("Chỉ trưởng nhóm, quản lý nhóm hoặc quản trị viên được thay đổi nhóm tài nguyên.");
         if (!await perms.HasAsync(userId, Perm.WorkspaceEdit, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền chỉnh sửa nhóm tài nguyên.");
     }
+
+    /// <summary>
+    /// Who administers the group (same rule as changing it): only they see its members and handle people's access; the other
+    /// members work with the documents.
+    /// </summary>
+    public static async Task<bool> CanAdministerAsync(IAppDbContext db, IResourceAuthorizationService auth, IPermissionService perms, Guid userId, Workspace ws,
+        CancellationToken ct) =>
+        ws.OwnerId == userId || await perms.HasAsync(userId, Perm.WorkspaceAdmin, ct)
+        || (await IsManagerAsync(db, auth, userId, ws, ct) && await perms.HasAsync(userId, Perm.WorkspaceEdit, ct));
+
+    private static async Task<bool> IsManagerAsync(IAppDbContext db, IResourceAuthorizationService auth, Guid userId, Workspace ws, CancellationToken ct) =>
+        await db.WorkspaceMembers.AnyAsync(m => m.WorkspaceId == ws.Id && m.UserId == userId
+                                                && (m.MemberRole == WorkspaceMemberRole.Manager || m.MemberRole == WorkspaceMemberRole.Owner), ct)
+        || (await auth.GetAccessAsync(userId, ResourceType.Workspace, ws.Id, ct)).Level >= AccessLevel.Manage;
 
     public static void EnsureNotLocked(Workspace ws)
     {
@@ -232,6 +243,9 @@ public sealed class ListWorkspaceMembersHandler(IAppDbContext db, ICurrentUser m
         var uid = me.RequireUserId();
         if (!await perms.HasAsync(uid, Perm.WorkspaceView, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền xem nhóm tài nguyên.");
         await auth.EnsureAsync(uid, ResourceType.Workspace, q.WorkspaceId, AccessLevel.View, ct);
+        var ws = await db.Workspaces.AsNoTracking().FirstAsync(w => w.Id == q.WorkspaceId, ct);
+        if (!await WorkspaceManagement.CanAdministerAsync(db, auth, perms, uid, ws, ct))
+            throw new ForbiddenException("Chỉ người quản trị nhóm được xem danh sách thành viên.");
         return await db.WorkspaceMembers.AsNoTracking().Where(m => m.WorkspaceId == q.WorkspaceId).OrderBy(m => m.MemberRole).ThenBy(m => m.User!.FullName)
             .Select(m => new WorkspaceMemberDto(m.UserId, m.User!.Username, m.User.FullName, m.User.Organization != null ? m.User.Organization.Name : null, m.MemberRole, m.AddedAt))
             .ToListAsync(ct);
@@ -276,12 +290,9 @@ public sealed class RemoveWorkspaceMemberHandler(IAppDbContext db, ICurrentUser 
     {
         var ws = await db.Workspaces.FirstOrDefaultAsync(w => w.Id == cmd.WorkspaceId, ct) ?? throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
         var uid = me.RequireUserId();
-        // Members may leave on their own; otherwise managers only.
-        if (cmd.UserId != uid)
-        {
-            await WorkspaceManagement.EnsureCanChangeAsync(db, auth, perms, uid, ws, ct);
-            WorkspaceManagement.EnsureNotLocked(ws);
-        }
+        // Only who administers the group adds or removes people, themselves included: a member does not leave on their own.
+        await WorkspaceManagement.EnsureCanChangeAsync(db, auth, perms, uid, ws, ct);
+        WorkspaceManagement.EnsureNotLocked(ws);
         if (cmd.UserId == ws.OwnerId) throw new AppException("Không thể xóa trưởng nhóm khỏi nhóm. Hãy chuyển trưởng nhóm trước.");
         var removed = await db.WorkspaceMembers.Where(m => m.WorkspaceId == ws.Id && m.UserId == cmd.UserId).ExecuteDeleteAsync(ct);
         if (removed == 0) throw new NotFoundException("Người dùng không phải thành viên nhóm.");

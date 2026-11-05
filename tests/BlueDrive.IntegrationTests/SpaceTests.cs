@@ -210,7 +210,9 @@ public class SpaceTests(ApiFactory factory)
 
         var home = await (await member.GetAsync($"/api/v1/workspaces/{ws}/home")).ReadJsonAsync();
         home.GetProperty("description").GetString().Should().Be("Không gian thử");
-        home.GetProperty("memberCount").GetInt32().Should().Be(2);
+        home.GetProperty("memberCount").GetInt32().Should().Be(0, "who is in the group is for who administers it");
+        home.GetProperty("members").GetArrayLength().Should().Be(0);
+        (await (await owner.GetAsync($"/api/v1/workspaces/{ws}/home")).ReadJsonAsync()).GetProperty("memberCount").GetInt32().Should().Be(2);
         home.GetProperty("recentFiles").EnumerateArray().Should().Contain(f => f.GetProperty("id").GetGuid() == file);
         home.GetProperty("libraries").EnumerateArray().Should().ContainSingle(l => l.GetProperty("isDefault").GetBoolean());
         home.GetProperty("uniqueScopes").GetInt32().Should().Be(1);

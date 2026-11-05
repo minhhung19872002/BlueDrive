@@ -34,9 +34,11 @@ public sealed class SpaceHomeHandlers(IAppDbContext db, ICurrentUser me, IItemPe
         var rights = await engine.DemandAsync(uid, q.WorkspaceId, AccessRight.ViewItems, ct);
         var ws = await db.Workspaces.AsNoTracking().FirstOrDefaultAsync(w => w.Id == q.WorkspaceId && w.Status != SpaceStatus.Deleted, ct)
                  ?? throw new NotFoundException("Không tìm thấy không gian.");
-        var users = await db.WorkspaceMembers.AsNoTracking().Where(m => m.WorkspaceId == ws.Id).OrderBy(m => m.MemberRole).ThenBy(m => m.User!.FullName)
+        // Members are shown to who manages the Space only.
+        var showsMembers = rights.Has(AccessRight.ManagePermissions);
+        var users = !showsMembers ? [] : await db.WorkspaceMembers.AsNoTracking().Where(m => m.WorkspaceId == ws.Id).OrderBy(m => m.MemberRole).ThenBy(m => m.User!.FullName)
             .Select(m => new SpaceHomeMemberDto(m.User!.FullName, m.MemberRole, false)).ToListAsync(ct);
-        var groupRows = await db.WorkspaceGroupMembers.AsNoTracking().Where(m => m.WorkspaceId == ws.Id).ToListAsync(ct);
+        var groupRows = !showsMembers ? [] : await db.WorkspaceGroupMembers.AsNoTracking().Where(m => m.WorkspaceId == ws.Id).ToListAsync(ct);
         var groupNames = await PrincipalDisplay.ResolveAsync(db, groupRows.Select(g => g.PrincipalId), ct);
         var members = groupRows.Select(g => new SpaceHomeMemberDto(groupNames.GetValueOrDefault(g.PrincipalId, ("", null)).Name, g.MemberRole, true)).Concat(users).ToList();
         // Recent documents the viewer may see (security trimming in SQL).

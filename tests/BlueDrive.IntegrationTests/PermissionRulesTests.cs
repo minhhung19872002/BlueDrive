@@ -91,7 +91,9 @@ public class PermissionRulesTests(ApiFactory factory)
         listed.Should().NotContain(w => w.GetProperty("id").GetGuid() == ws);
         listed.Should().Contain(w => w.GetProperty("id").GetGuid() == personal);
         (await hidden.GetAsync($"/api/v1/workspaces/{ws}/members")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        (await approverManager.GetAsync($"/api/v1/workspaces/{ws}/members")).StatusCode.Should().Be(HttpStatusCode.OK);
+        // A manager whose role cannot change the group does not administer it: no member list either.
+        (await approverManager.GetAsync($"/api/v1/workspaces/{ws}/members")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await editorManager.GetAsync($"/api/v1/workspaces/{ws}/members")).StatusCode.Should().Be(HttpStatusCode.OK);
 
         // workspace.edit: a manager whose role lacks it cannot change the workspace.
         var rename = new { name = "Nhóm đã đổi tên", type = "group" };

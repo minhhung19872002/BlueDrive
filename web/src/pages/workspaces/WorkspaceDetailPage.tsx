@@ -84,9 +84,12 @@ export default function WorkspaceDetailPage() {
         w &&
         w.type !== 'personal' && (
           <Space wrap>
-            <Button icon={<TeamOutlined />} onClick={() => setMembersOpen(true)}>
-              {t('workspace.members', { count: w.memberCount })}
-            </Button>
+            {/* Members and people's access: only who administers the group. */}
+            {isManager && (
+              <Button icon={<TeamOutlined />} onClick={() => setMembersOpen(true)}>
+                {t('workspace.members', { count: w.memberCount })}
+              </Button>
+            )}
             {isManager && (
               <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>
                 {t('common.edit')}
@@ -137,8 +140,12 @@ export default function WorkspaceDetailPage() {
               { key: 'library', label: <span><TableOutlined /> {t('library.tab')}</span> },
               { key: 'summary', label: <span><BarChartOutlined /> {t('collab.workspaceTabs.summary')}</span> },
               { key: 'activity', label: <span><HistoryOutlined /> {t('collab.workspaceTabs.activity')}</span> },
-              { key: 'sharing', label: <span><ShareAltOutlined /> {t('spaceSettings.tab')}</span> },
-              ...(isManager ? [{ key: 'permissions', label: <span><SafetyOutlined /> {t('spacePermissions.tab')}</span> }] : []),
+              ...(isManager
+                ? [
+                    { key: 'sharing', label: <span><ShareAltOutlined /> {t('spaceSettings.tab')}</span> },
+                    { key: 'permissions', label: <span><SafetyOutlined /> {t('spacePermissions.tab')}</span> },
+                  ]
+                : []),
             ]}
           />
           {tab === 'files' && explorer}
@@ -146,13 +153,13 @@ export default function WorkspaceDetailPage() {
           {tab === 'activity' && <WorkspaceActivityTab workspaceId={id} />}
           {tab === 'home' && <WorkspaceHomeTab workspaceId={id} />}
           {tab === 'library' && <LibraryViewTab workspaceId={id} />}
-          {tab === 'permissions' && <WorkspacePermissionsTab workspaceId={id} />}
-          {tab === 'sharing' && w && <WorkspaceSettingsTab workspaceId={id} name={w.name} />}
+          {tab === 'permissions' && isManager && <WorkspacePermissionsTab workspaceId={id} />}
+          {tab === 'sharing' && isManager && w && <WorkspaceSettingsTab workspaceId={id} name={w.name} />}
         </>
       ) : (
         explorer
       )}
-      {w && <WorkspaceMembersDrawer workspace={w} open={membersOpen} onClose={() => setMembersOpen(false)} />}
+      {w && isManager && <WorkspaceMembersDrawer workspace={w} open={membersOpen} onClose={() => setMembersOpen(false)} />}
       {editing && w && <WorkspaceFormModal workspace={w} onClose={() => setEditing(false)} />}
     </>
   )

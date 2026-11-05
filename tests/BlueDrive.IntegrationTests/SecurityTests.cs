@@ -12,6 +12,31 @@ namespace BlueDrive.IntegrationTests;
 public class SecurityTests(ApiFactory factory)
 {
     [Fact]
+    public async Task Only_who_administers_a_group_sees_its_members_and_changes_who_is_in_it()
+    {
+        var (lead, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (member, memberId, _) = await factory.CreateUserClientAsync("chi_xem");
+        var (other, otherId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = (await (await lead.PostAsJsonAsync("/api/v1/workspaces", new { name = "Nhóm kín", type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        await (await lead.PostAsJsonAsync($"/api/v1/workspaces/{ws}/members", new { userIds = new[] { memberId, otherId }, role = "editor" })).ReadJsonAsync();
+
+        // The leader: members, the Space's member groups, members on the Space home.
+        (await lead.GetAsync($"/api/v1/workspaces/{ws}/members")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await lead.GetAsync($"/api/v1/workspaces/{ws}/group-members")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await (await lead.GetAsync($"/api/v1/workspaces/{ws}/home")).ReadJsonAsync()).GetProperty("members").GetArrayLength().Should().BeGreaterThan(0);
+
+        // A member works with the documents, but does not see who is in the group, does not leave on their own, removes nobody.
+        (await member.GetAsync($"/api/v1/workspaces/{ws}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await member.GetAsync($"/api/v1/workspaces/{ws}/members")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await member.GetAsync($"/api/v1/workspaces/{ws}/group-members")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await (await member.GetAsync($"/api/v1/workspaces/{ws}/home")).ReadJsonAsync()).GetProperty("members").GetArrayLength().Should().Be(0);
+        (await member.DeleteAsync($"/api/v1/workspaces/{ws}/members/{memberId}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await member.DeleteAsync($"/api/v1/workspaces/{ws}/members/{otherId}")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await member.PostAsJsonAsync($"/api/v1/workspaces/{ws}/members", new { userIds = new[] { otherId }, role = "manager" })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await member.GetAsync("/api/v1/workspaces?type=group")).ReadJsonAsync().Result.EnumerateArray().Should().Contain(w => w.GetProperty("id").GetGuid() == ws, "still in it");
+    }
+
+    [Fact]
     public async Task Someone_removed_from_a_group_no_longer_sees_it_or_its_files()
     {
         var (lead, _, _) = await factory.CreateUserClientAsync("bien_tap");

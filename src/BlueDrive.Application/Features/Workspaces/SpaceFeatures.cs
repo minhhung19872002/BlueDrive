@@ -112,7 +112,8 @@ public sealed class SpaceHandlers(IAppDbContext db, ICurrentUser me, IItemPermis
 
     public async Task<IReadOnlyList<SpaceGroupMemberDto>> Handle(ListSpaceGroupMembersQuery q, CancellationToken ct)
     {
-        await engine.DemandAsync(me.RequireUserId(), q.WorkspaceId, AccessRight.ViewItems, ct);
+        // Who is in the Space is for who manages it (as the member list).
+        await EnsureManagesAsync(await SpaceAsync(q.WorkspaceId, ct), ct);
         var rows = await db.WorkspaceGroupMembers.AsNoTracking().Where(m => m.WorkspaceId == q.WorkspaceId).ToListAsync(ct);
         var names = await PrincipalDisplay.ResolveAsync(db, rows.Select(r => r.PrincipalId), ct);
         return rows.Select(r => new SpaceGroupMemberDto(r.PrincipalKind, r.PrincipalId, names.GetValueOrDefault(r.PrincipalId, ("(không xác định)", null)).Name, r.MemberRole, r.AddedAt))

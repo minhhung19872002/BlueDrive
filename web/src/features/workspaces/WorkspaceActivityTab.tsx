@@ -81,17 +81,20 @@ export default function WorkspaceActivityTab({ workspaceId }: { workspaceId: str
   return (
     <Card size="small" styles={{ body: { padding: isMobile ? 12 : 16 } }}>
       <Space wrap style={{ marginBottom: 16 }}>
-        <Select
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          placeholder={t('collab.activity.allMembers')}
-          value={userId}
-          onChange={reset(setUserId)}
-          loading={members.isLoading}
-          options={(members.data ?? []).map((m) => ({ value: m.userId, label: `${m.fullName} (${m.username})` }))}
-          style={{ width: isMobile ? '100%' : 240 }}
-        />
+        {/* The member list is for who administers the group: others get no member filter. */}
+        {!members.isError && (
+          <Select
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder={t('collab.activity.allMembers')}
+            value={userId}
+            onChange={reset(setUserId)}
+            loading={members.isLoading}
+            options={(members.data ?? []).map((m) => ({ value: m.userId, label: `${m.fullName} (${m.username})` }))}
+            style={{ width: isMobile ? '100%' : 240 }}
+          />
+        )}
         <Select<AuditAction | undefined>
           allowClear
           placeholder={t('collab.activity.allActions')}

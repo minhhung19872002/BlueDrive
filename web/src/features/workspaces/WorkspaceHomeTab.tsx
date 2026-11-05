@@ -59,16 +59,19 @@ export default function WorkspaceHomeTab({ workspaceId }: { workspaceId: string 
                 {formatBytes(h.usedBytes)} / {h.quotaBytes > 0 ? formatBytes(h.quotaBytes) : t('storagePage.unlimited')}
               </Typography.Text>
             </Card>
-            <Card size="small" title={<span><TeamOutlined /> {t('spaceHome.members', { count: h.memberCount })}</span>}>
-              <Space wrap size={[4, 8]}>
-                {h.members.map((m, i) => (
-                  <Tag key={`${m.name}-${i}`} color={m.isGroup ? 'blue' : undefined}>
-                    {m.name} · {t(`workspace.roles.${m.role}`)}
-                  </Tag>
-                ))}
-                {h.memberCount > h.members.length && <Tag>+{h.memberCount - h.members.length}</Tag>}
-              </Space>
-            </Card>
+            {/* Only who manages the group gets its members (the API sends none to others). */}
+            {h.members.length > 0 && (
+              <Card size="small" title={<span><TeamOutlined /> {t('spaceHome.members', { count: h.memberCount })}</span>}>
+                <Space wrap size={[4, 8]}>
+                  {h.members.map((m, i) => (
+                    <Tag key={`${m.name}-${i}`} color={m.isGroup ? 'blue' : undefined}>
+                      {m.name} · {t(`workspace.roles.${m.role}`)}
+                    </Tag>
+                  ))}
+                  {h.memberCount > h.members.length && <Tag>+{h.memberCount - h.members.length}</Tag>}
+                </Space>
+              </Card>
+            )}
             <Card size="small" title={<span><BookOutlined /> {t('spaceHome.libraries')}</span>}>
               <List size="small" dataSource={h.libraries} renderItem={(l) => <List.Item>{l.name}</List.Item>} />
             </Card>
