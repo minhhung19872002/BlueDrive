@@ -42,7 +42,9 @@ $layout = Join-Path $root 'artifacts/desktop-build/msix-layout'
 if (Test-Path $layout) { Remove-Item $layout -Recurse -Force }
 New-Item -ItemType Directory -Force $layout | Out-Null
 Copy-Item (Join-Path $PublishDir '*') $layout -Recurse -Force
-Copy-Item (Join-Path $PSScriptRoot 'Assets') (Join-Path $layout 'Assets') -Recurse -Force
+# The publish folder already has Assets\ (Status UI icons): copy the contents, or the logos land in Assets\Assets\.
+$assets = New-Item -ItemType Directory -Force (Join-Path $layout 'Assets')
+Copy-Item (Join-Path $PSScriptRoot 'Assets\*') $assets -Recurse -Force
 if ($ShellDll) { Copy-Item $ShellDll (Join-Path $layout 'BlueDrive.Shell.dll') -Force }
 elseif (-not (Test-Path (Join-Path $layout 'BlueDrive.Shell.dll'))) { throw 'Thiếu BlueDrive.Shell.dll (menu chuột phải Windows 11): truyền -ShellDll.' }
 $manifest = (Get-Content (Join-Path $PSScriptRoot 'AppxManifest.template.xml') -Raw -Encoding UTF8).
