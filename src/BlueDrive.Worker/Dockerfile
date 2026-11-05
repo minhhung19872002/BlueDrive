@@ -13,7 +13,9 @@ RUN dotnet publish src/BlueDrive.Worker/BlueDrive.Worker.csproj -c Release -o /a
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 # ffmpeg/ffprobe: video & audio thumbnails/metadata; poppler-utils: pdftoppm; postgresql-client: pg_dump/pg_restore for backups.
+# upgrade: security fixes released after the base image was built (Trivy blocks High/Critical, HSMT 3.4).
 RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends ffmpeg poppler-utils postgresql-client fonts-noto-core libfontconfig1 curl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app

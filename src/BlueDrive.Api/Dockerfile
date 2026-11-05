@@ -12,7 +12,9 @@ ARG GIT_SHA=dev
 RUN dotnet publish src/BlueDrive.Api/BlueDrive.Api.csproj -c Release -o /app --no-restore /p:UseAppHost=false /p:GIT_SHA=${GIT_SHA}
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
+# upgrade: security fixes released after the base image was built (Trivy blocks High/Critical, HSMT 3.4).
 RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends curl fonts-noto-core \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
