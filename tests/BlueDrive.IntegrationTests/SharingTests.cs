@@ -264,6 +264,9 @@ public class SharingTests(ApiFactory factory)
         await (await owner.PostAsJsonAsync($"/api/v1/workspaces/{ws}/members", new { userIds = new[] { viewerId }, role = "viewer" })).ReadJsonAsync();
         await (await owner.PostAsJsonAsync($"/api/v1/workspaces/{ws}/members", new { userIds = new[] { approverId }, role = "approver" })).ReadJsonAsync();
         var folder = (await (await owner.PostAsJsonAsync("/api/v1/folders", new { workspaceId = ws, name = "Cần duyệt" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        // The Share dialog offers "Duyệt nội dung" only where the library approves content.
+        async Task<bool> ApprovalShown() => (await (await owner.GetAsync($"/api/v1/items/{folder}/permissions")).ReadJsonAsync()).GetProperty("approvalEnabled").GetBoolean();
+        (await ApprovalShown()).Should().BeFalse();
         // Approval is the library's setting ("Phê duyệt nội dung"); it reaches every folder of the library.
         var library = (await (await owner.GetAsync($"/api/v1/workspaces/{ws}/libraries")).ReadJsonAsync()).EnumerateArray().Single(l => l.GetProperty("isDefault").GetBoolean());
         (await owner.PutAsJsonAsync($"/api/v1/workspaces/{ws}/libraries/{library.GetProperty("id").GetGuid()}", new
@@ -273,6 +276,7 @@ public class SharingTests(ApiFactory factory)
             allowedExtensions = Array.Empty<string>(), maxFileSizeMb = (int?)null,
         })).StatusCode.Should().Be(HttpStatusCode.NoContent);
         (await owner.PutAsJsonAsync($"/api/v1/folders/{folder}", new { requiresApproval = false })).StatusCode.Should().Be(HttpStatusCode.NoContent, "the folder cannot opt out on its own");
+        (await ApprovalShown()).Should().BeTrue();
 
         var up = await StorageTests.UploadAsync(uploader, ws, folder, "tin.png", StorageTests.Png);
         up.GetProperty("approvalStatus").GetString().Should().Be("pending");

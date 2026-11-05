@@ -149,7 +149,7 @@ async function openLinkTab(page: Page) {
 test('chia sẻ qua liên kết: mặc định Hạn chế, chọn "Bất kỳ ai có liên kết" thì ai có liên kết cũng mở được', async ({ page, browser }) => {
   // Like Google Drive the link is there right away, restricted (signed in and with access) by default.
   const { dialog, linkBox } = await openLinkTab(page)
-  await expect(dialog.getByText('Hạn chế (người đã có quyền)').first()).toBeVisible()
+  await expect(dialog.locator('.ant-select-selection-item', { hasText: /^Hạn chế$/ })).toBeVisible()
   await expect(dialog.getByPlaceholder(/mật khẩu/i)).toHaveCount(0)
   const link = await linkBox.inputValue()
   const path = new URL(link.trim(), 'http://x').pathname

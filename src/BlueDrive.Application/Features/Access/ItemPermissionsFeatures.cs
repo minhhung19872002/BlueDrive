@@ -25,8 +25,10 @@ public sealed record ItemPermissionDto(Guid Id, PrincipalKind PrincipalKind, Gui
     DateTime? ExpiresAt, string Origin, string OriginLabel, bool Editable, bool AppliesToChildren);
 
 /// <param name="GeneralAccess">restricted, organization (everyone in the unit using the system).</param>
+/// <param name="ApprovalEnabled">The item's library approves content (#43): only then is "Duyệt nội dung" worth offering.</param>
 public sealed record ItemPermissionsDto(Guid ItemId, string Name, SecurableKind Kind, bool HasUniqueAcl, string? InheritsFrom, Guid? InheritsFromId,
-    bool CanManage, bool CanShare, string GeneralAccess, Guid? GeneralAccessLevelId, Guid? OwnerId, string? OwnerName, IReadOnlyList<ItemPermissionDto> Entries);
+    bool CanManage, bool CanShare, string GeneralAccess, Guid? GeneralAccessLevelId, Guid? OwnerId, string? OwnerName, IReadOnlyList<ItemPermissionDto> Entries,
+    bool ApprovalEnabled = false);
 
 public sealed record ListPermissionLevelsQuery : IRequest<IReadOnlyList<PermissionLevelDto>>;
 
@@ -83,7 +85,25 @@ public sealed class GetItemPermissionsHandler(IAppDbContext db, ICurrentUser me,
             }).ToList();
         return new ItemPermissionsDto(node.Id, node.Name, node.Kind, node.HasUniqueAcl, scope.Id != node.Id ? scope.Name : null, scope.Id != node.Id ? scope.Id : null,
             canManage, rights.Has(AccessRight.ShareInternal) || canManage, everyone is null ? "restricted" : "organization", everyone?.e.PermissionLevelId,
-            node.OwnerUserId, owner, list);
+            node.OwnerUserId, owner, list, await ApprovalEnabledAsync(node, ct));
+    }
+
+    /// <summary>Same rule as uploads: a folder carries its library's setting; a file at the root of a Space follows the default library.</summary>
+    private async Task<bool> ApprovalEnabledAsync(Securable node, CancellationToken ct)
+    {
+        var workspaceId = node.SpaceId ?? node.PersonalDriveId;
+        switch (node.Kind)
+        {
+            case SecurableKind.Folder:
+                return await db.Folders.AsNoTracking().AnyAsync(f => f.Id == node.Id && f.RequiresApproval, ct);
+            case SecurableKind.File:
+                var inFolder = await db.Files.AsNoTracking().Where(f => f.Id == node.Id).Select(f => f.Folder != null ? (bool?)f.Folder.RequiresApproval : null).FirstOrDefaultAsync(ct);
+                if (inFolder is { } v) return v;
+                var lib = workspaceId is { } w ? PermissionProjection.LibraryOf(w) : Guid.Empty;
+                return await db.LibrarySettings.AsNoTracking().AnyAsync(l => l.Id == lib && l.ContentApproval, ct);
+            default:
+                return workspaceId is { } ws && await db.LibrarySettings.AsNoTracking().AnyAsync(l => l.WorkspaceId == ws && l.ContentApproval, ct);
+        }
     }
 }
 

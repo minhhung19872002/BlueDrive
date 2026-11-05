@@ -66,6 +66,8 @@ export interface ItemPermissions {
   canShare: boolean
   generalAccess: 'restricted' | 'organization'
   generalAccessLevelId: string | null
+  /** The item's library approves content: "Duyệt nội dung" is offered only then. */
+  approvalEnabled: boolean
   ownerId: string | null
   ownerName: string | null
   entries: ItemPermission[]

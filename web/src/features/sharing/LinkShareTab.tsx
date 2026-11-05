@@ -13,7 +13,6 @@ import {
   Skeleton,
   Space,
   Switch,
-  Tag,
   Tooltip,
   Typography,
 } from 'antd'
@@ -29,8 +28,7 @@ import { useApiMutation } from '@/hooks/useApiMutation'
 import { useCan } from '@/hooks/usePermissions'
 import type { ResourceType, SaveShareLinkRequest, ShareLink, ShareLinkScope } from '@/types/sharing'
 import { copyText } from '@/utils/clipboard'
-import { formatDateTime } from '@/utils/format'
-import { LINK_STATUS_COLORS, type PrincipalValue } from './levels'
+import { type PrincipalValue } from './levels'
 import ShareLinkQrModal from './ShareLinkQrModal'
 
 interface LinkShareTabProps {
@@ -184,10 +182,6 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload }: 
               </Popconfirm>
             )}
           </Space.Compact>
-          <LinkTags link={current} />
-          <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 6, marginBottom: 0 }}>
-            {t('sharing.currentLinkHint')}
-          </Typography.Paragraph>
         </>
       ) : canShare ? (
         <Button
@@ -285,25 +279,5 @@ export default function LinkShareTab({ resourceType, resourceId, canDownload }: 
       )}
       {qrId && <ShareLinkQrModal linkId={qrId} onClose={() => setQrId(null)} />}
     </>
-  )
-}
-
-function LinkTags({ link }: { link: ShareLink }) {
-  const { t } = useTranslation()
-  return (
-    <Space wrap size={[4, 4]} style={{ marginTop: 6 }}>
-      <Tag color={LINK_STATUS_COLORS[link.status]}>{t(`sharing.linkStatus.${link.status}`)}</Tag>
-      <Tag>{link.allowDownload ? t('sharing.tagDownload') : t('sharing.tagViewOnly')}</Tag>
-      {link.allowEdit && <Tag color="blue">{t('sharing.tagEdit')}</Tag>}
-      <Tag>{t(`sharing.audience.${link.scope}`)}</Tag>
-      {link.levelName && <Tag color="purple">{link.levelName}</Tag>}
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-        {t('sharing.accessCount', { count: link.accessCount, max: link.maxAccessCount ?? t('sharing.unlimitedShort') })}
-        {' · '}
-        {link.expiresAt ? t('sharing.expiresOn', { date: formatDateTime(link.expiresAt) }) : t('sharing.noExpiry')}
-        {' · '}
-        {t('sharing.createdOn', { date: formatDateTime(link.createdAt) })}
-      </Typography.Text>
-    </Space>
   )
 }

@@ -126,7 +126,13 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
   if (access.isLoading || levels.isLoading) return <Skeleton active />
   if (!access.data) return <Empty />
   const a = access.data
-  const levelOptions = offered.map((l) => ({ value: l.id, label: l.name, title: l.description }))
+  // "Duyệt nội dung" only where the library approves content; a level someone already has stays selectable on their row.
+  const toOption = (l: (typeof offered)[number]) => ({ value: l.id, label: l.name, title: l.description })
+  const levelOptions = offered.filter((l) => a.approvalEnabled || l.code !== 'approver').map(toOption)
+  const optionsWith = (current?: string | null) => {
+    const extra = offered.find((l) => l.id === current && !levelOptions.some((o) => o.value === l.id))
+    return extra ? [...levelOptions, toOption(extra)] : levelOptions
+  }
   const isRoot = a.kind === 'space' || a.kind === 'drive'
   const mode: GeneralMode = publicLink.on ? 'anyone' : a.generalAccess
 
@@ -201,7 +207,8 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
               title={
                 <Space size={4} wrap>
                   <span>{e.principalName}</span>
-                  <Tag color={ORIGIN_COLORS[e.origin]}>{e.originLabel}</Tag>
+                  {/* Space membership needs no badge: the row already reads "Nhóm của Space". */}
+                  {e.origin !== 'space' && <Tag color={ORIGIN_COLORS[e.origin]}>{e.originLabel}</Tag>}
                   {!e.appliesToChildren && <Tag>{t('sharing.people.thisItemOnly')}</Tag>}
                 </Space>
               }
@@ -214,7 +221,7 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
                         size="small"
                         style={{ minWidth: 180 }}
                         value={e.levelId}
-                        options={levelOptions}
+                        options={optionsWith(e.levelId)}
                         onChange={(v) => change.mutate({ entryId: e.id, levelId: v })}
                         aria-label={t('sharing.people.level')}
                       />
@@ -285,7 +292,7 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
             style={{ minWidth: 200 }}
             disabled={!a.canManage}
             value={a.generalAccessLevelId ?? undefined}
-            options={levelOptions}
+            options={optionsWith(a.generalAccessLevelId)}
             onChange={(v) => general.mutate({ mode: 'organization', levelId: v })}
             aria-label={t('sharing.people.level')}
           />
