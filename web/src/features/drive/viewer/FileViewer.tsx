@@ -13,8 +13,9 @@ import {
   StarOutlined,
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { getDownloadUrl, setFavorite, startDownload } from '@/api/drive'
+import { getDownloadUrl, getFile, setFavorite, startDownload } from '@/api/drive'
 import { getErrorMessage } from '@/api/errors'
 import { qk } from '@/api/queryKeys'
 import { editorUrl, isOfficeEditable, isOfficeFile } from '@/features/office/officeFiles'
@@ -23,10 +24,12 @@ import ShareDialog from '@/features/sharing/ShareDialog'
 import { useApiMutation } from '@/hooks/useApiMutation'
 import { formatBytes } from '@/utils/format'
 import FileTypeIcon from '../components/FileTypeIcon'
+import type { FileDetail } from '@/types/drive'
 import { useFileDetail, useInlineUrl } from '../hooks'
 import InfoPanel from '../info/InfoPanel'
 import { previewKind } from '../utils'
 import MediaPreview from './MediaPreview'
+import { preloadImage, stablePreviewUrl } from './stablePreview'
 
 export interface FileViewerProps {
   fileId: string
@@ -64,10 +67,26 @@ export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate
   const f = detail.data
   const kind = f ? previewKind(f.mimeType, f.mediaType, f.extension) : 'none'
   // Images use the server-generated preview JPEG when available; the original is loaded on demand.
-  const usePreviewImage = kind === 'image' && !!f?.previewUrl && !original
+  const previewUrl = f ? stablePreviewUrl(f) : null
+  const usePreviewImage = kind === 'image' && !!previewUrl && !original
   const needsInline = !!f && kind !== 'none' && !usePreviewImage && !f.contentBlocked
   const currentVersionId = f?.versions.find((v) => v.isCurrent)?.id
   const inline = useInlineUrl(fileId, needsInline, currentVersionId)
+
+  // Fetch the neighbours' details and preview images ahead, so moving to them shows the image at once.
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    for (const id of [prevId, nextId]) {
+      if (!id) continue
+      void queryClient
+        .prefetchQuery({ queryKey: qk.file(id), queryFn: () => getFile(id), staleTime: 60_000 })
+        .then(() => {
+          const d = queryClient.getQueryData<FileDetail>(qk.file(id))
+          const url = d && stablePreviewUrl(d)
+          if (url) preloadImage(url)
+        })
+    }
+  }, [queryClient, prevId, nextId])
 
   // Left / right arrow keys move between files, like Google Drive (not while typing or seeking media).
   const busy = sharing || !!accessTarget
@@ -159,7 +178,7 @@ export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate
   let stage = <Spin />
   if (detail.isError) stage = <Result status="warning" title={t('viewer.loadFailed')} subTitle={getErrorMessage(detail.error)} />
   else if (f) {
-    const src = usePreviewImage ? f.previewUrl! : inline.data?.url
+    const src = usePreviewImage ? previewUrl! : inline.data?.url
     if (kind === 'none' || f.contentBlocked) stage = <>{fallback}</>
     else if (inline.isError) stage = <Result status="warning" subTitle={getErrorMessage(inline.error)} />
     else if (src)

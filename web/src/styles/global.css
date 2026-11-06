@@ -693,7 +693,7 @@ body {
 }
 
 .bd-image-stage img {
-  transition: transform 0.2s;
+  transition: transform 0.2s, opacity 0.18s ease-out;
   transform-origin: center center;
 }
 

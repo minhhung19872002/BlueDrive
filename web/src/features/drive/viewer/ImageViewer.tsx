@@ -16,6 +16,8 @@ export default function ImageViewer({ src, alt, extra }: { src: string; alt: str
   const { t } = useTranslation()
   const [scale, setScale] = useState(1)
   const [rotate, setRotate] = useState(0)
+  // Fade the image in once decoded instead of painting it line by line.
+  const [loaded, setLoaded] = useState(false)
   const zoom = (dir: 1 | -1) =>
     setScale((s) => {
       const i = STEPS.findIndex((x) => x >= s)
@@ -29,10 +31,14 @@ export default function ImageViewer({ src, alt, extra }: { src: string; alt: str
           src={src}
           alt={alt}
           draggable={false}
+          decoding="async"
+          onLoad={() => setLoaded(true)}
+          onError={() => setLoaded(true)}
           style={{
             transform: `scale(${scale}) rotate(${rotate}deg)`,
             maxWidth: scale <= 1 ? '100%' : 'none',
             maxHeight: scale <= 1 ? '100%' : 'none',
+            opacity: loaded ? 1 : 0,
           }}
         />
       </div>
