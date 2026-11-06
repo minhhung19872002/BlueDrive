@@ -83,6 +83,7 @@ public sealed class GetItemPermissionsHandler(IAppDbContext db, ICurrentUser me,
                 return new ItemPermissionDto(x.e.Id, x.e.PrincipalKind, x.e.PrincipalId, name, detail, x.e.PermissionLevelId, x.Name, x.e.ExpiresAt, origin, label,
                     canManage && !inheritedHere && x.e.Source is not (AclSource.SpaceDefault or AclSource.Link), x.e.AppliesToChildren);
             }).ToList();
+        list = await SpaceShares.CollapseAsync(db, list, ct);
         return new ItemPermissionsDto(node.Id, node.Name, node.Kind, node.HasUniqueAcl, scope.Id != node.Id ? scope.Name : null, scope.Id != node.Id ? scope.Id : null,
             canManage, rights.Has(AccessRight.ShareInternal) || canManage, everyone is null ? "restricted" : "organization", everyone?.e.PermissionLevelId,
             node.OwnerUserId, owner, list, await ApprovalEnabledAsync(node, ct));
@@ -104,6 +105,52 @@ public sealed class GetItemPermissionsHandler(IAppDbContext db, ICurrentUser me,
             default:
                 return workspaceId is { } ws && await db.LibrarySettings.AsNoTracking().AnyAsync(l => l.WorkspaceId == ws && l.ContentApproval, ct);
         }
+    }
+}
+
+/// <summary>
+/// Sharing with a whole group Space (e.g. "DEV") grants the level to each of its groups (Chủ sở hữu, Thành viên…). People see and change
+/// that as one grant: the list shows one row per Space, and changing or removing it applies to all of the Space's matching entries.
+/// </summary>
+public static class SpaceShares
+{
+    public const string Detail = "Nhóm (mọi thành viên)";
+
+    public static async Task<List<ItemPermissionDto>> CollapseAsync(IAppDbContext db, List<ItemPermissionDto> list, CancellationToken ct)
+    {
+        // Space membership rows (a Drive's own owner, "Thành viên Space") stay as they are: only grants made on items are merged.
+        var groupIds = list.Where(e => e.PrincipalKind == PrincipalKind.SpaceGroup && e.Origin != "space").Select(e => e.PrincipalId).Distinct().ToList();
+        if (groupIds.Count == 0) return list;
+        var spaceOf = await db.Principals.AsNoTracking().Where(p => groupIds.Contains(p.Id) && p.RefId != null).ToDictionaryAsync(p => p.Id, p => p.RefId!.Value, ct);
+        var spaceIds = spaceOf.Values.Distinct().ToList();
+        var names = await db.Workspaces.AsNoTracking().Where(w => spaceIds.Contains(w.Id)).ToDictionaryAsync(w => w.Id, w => w.Name, ct);
+        var seen = new HashSet<(Guid, Guid, DateTime?, string, bool, bool)>();
+        var result = new List<ItemPermissionDto>(list.Count);
+        foreach (var e in list)
+        {
+            if (e.PrincipalKind != PrincipalKind.SpaceGroup || e.Origin == "space" || !spaceOf.TryGetValue(e.PrincipalId, out var space) || !names.TryGetValue(space, out var name))
+            {
+                result.Add(e);
+                continue;
+            }
+            if (seen.Add((space, e.LevelId, e.ExpiresAt, e.Origin, e.AppliesToChildren, e.Editable)))
+                result.Add(e with { PrincipalId = space, PrincipalName = name, Detail = Detail });
+        }
+        return result;
+    }
+
+    /// <summary>The direct entries on the same scope that together make one Space grant with <paramref name="entry"/> (itself included).</summary>
+    public static async Task<List<AclEntry>> SiblingsAsync(IAppDbContext db, AclEntry entry, bool tracked, CancellationToken ct)
+    {
+        if (entry.PrincipalKind != PrincipalKind.SpaceGroup) return [entry];
+        var space = await db.Principals.AsNoTracking().Where(p => p.Id == entry.PrincipalId).Select(p => p.RefId).FirstOrDefaultAsync(ct);
+        if (space is null) return [entry];
+        var groups = db.Principals.Where(p => p.Kind == PrincipalKind.SpaceGroup && p.RefId == space).Select(p => p.Id);
+        var query = db.AclEntries.Where(e => e.ScopeId == entry.ScopeId && e.PrincipalKind == PrincipalKind.SpaceGroup && groups.Contains(e.PrincipalId)
+                                             && e.Source != AclSource.SpaceDefault && e.PermissionLevelId == entry.PermissionLevelId
+                                             && e.ExpiresAt == entry.ExpiresAt && e.AppliesToChildren == entry.AppliesToChildren);
+        var list = await (tracked ? query : query.AsNoTracking()).ToListAsync(ct);
+        return list.Count == 0 ? [entry] : list;
     }
 }
 
@@ -263,18 +310,16 @@ public sealed class UpdateItemPermissionHandler(IAppDbContext db, ICurrentUser m
         var entry = await db.AclEntries.FirstOrDefaultAsync(e => e.Id == cmd.EntryId && e.ScopeId == cmd.ItemId && e.Source != AclSource.SpaceDefault, ct)
                     ?? throw new NotFoundException("Không tìm thấy quyền này trên mục (quyền kế thừa được quản lý ở thư mục cha).");
         var before = new { entry.PermissionLevelId, entry.ExpiresAt };
-        if (cmd.LevelId is { } levelId)
+        if (cmd.LevelId is { } levelId && !await db.PermissionLevels.AnyAsync(l => l.Id == levelId, ct)) throw new NotFoundException("Không tìm thấy cấp quyền.");
+        if (!cmd.ClearExpiry && cmd.ExpiresAt is { } until && until <= clock.GetUtcNow().UtcDateTime) throw new AppException("Ngày hết hạn phải ở tương lai.");
+        // A grant to a whole Space is one row on screen but one entry per group of the Space: change them together.
+        foreach (var e in await SpaceShares.SiblingsAsync(db, entry, tracked: true, ct))
         {
-            if (!await db.PermissionLevels.AnyAsync(l => l.Id == levelId, ct)) throw new NotFoundException("Không tìm thấy cấp quyền.");
-            entry.PermissionLevelId = levelId;
+            if (cmd.LevelId is { } level) e.PermissionLevelId = level;
+            if (cmd.ClearExpiry) e.ExpiresAt = null;
+            else if (cmd.ExpiresAt is { } date) e.ExpiresAt = date;
+            e.Source = AclSource.Direct;
         }
-        if (cmd.ClearExpiry) entry.ExpiresAt = null;
-        else if (cmd.ExpiresAt is { } until)
-        {
-            if (until <= clock.GetUtcNow().UtcDateTime) throw new AppException("Ngày hết hạn phải ở tương lai.");
-            entry.ExpiresAt = until;
-        }
-        entry.Source = AclSource.Direct;
         await db.SaveChangesAsync(ct);
         await editor.TouchAsync(cmd.ItemId, ct);
         var name = await db.Securables.Where(s => s.Id == cmd.ItemId).Select(s => new { s.Name, s.Kind }).FirstAsync(ct);
@@ -297,7 +342,7 @@ public sealed class RevokeItemPermissionHandler(IAppDbContext db, ICurrentUser m
                     ?? throw new NotFoundException("Không tìm thấy quyền này trên mục (quyền kế thừa được quản lý ở thư mục cha).");
         if (!(entry.PrincipalKind == PrincipalKind.User && entry.PrincipalId == uid))
             await engine.DemandAsync(uid, cmd.ItemId, AccessRight.ManagePermissions, ct);
-        await editor.RevokeAsync(entry.Id, ct);
+        foreach (var e in await SpaceShares.SiblingsAsync(db, entry, tracked: false, ct)) await editor.RevokeAsync(e.Id, ct);
         // The same person's rows in the old tables (old sharing screens, mobile) go too, so that nothing still reads them as shared.
         var legacyId = entry.PrincipalKind is PrincipalKind.OrgUnitTree or PrincipalKind.OrgUnit
             ? await db.Principals.Where(p => p.Id == entry.PrincipalId).Select(p => p.RefId).FirstOrDefaultAsync(ct) ?? entry.PrincipalId

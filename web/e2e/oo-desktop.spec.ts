@@ -63,25 +63,35 @@ test('ONLYOFFICE Desktop Editors: vào BlueDrive, mở tài liệu bằng vé t�
     fileId = docx.id
   }
 
-  // "Cùng soạn thảo bằng ONLYOFFICE": the desktop app gets a one-time link…
-  const link = await (await request.post('/api/v1/onlyoffice-desktop/tickets', { headers: auth, data: { fileId } })).json()
-  const openPath = new URL(link.url, 'http://x').pathname + new URL(link.url, 'http://x').search
+  // The uploaded file is a 2-byte stub, not a real Word document: remove it afterwards so it does not
+  // linger in the admin's drive (opening it in ONLYOFFICE shows the TXT encoding dialog).
+  try {
+    // "Cùng soạn thảo bằng ONLYOFFICE": the desktop app gets a one-time link…
+    const link = await (await request.post('/api/v1/onlyoffice-desktop/tickets', { headers: auth, data: { fileId } })).json()
+    const openPath = new URL(link.url, 'http://x').pathname + new URL(link.url, 'http://x').search
 
-  // …which ONLYOFFICE opens in a fresh browser profile (not signed in to BlueDrive).
-  const context = await browser.newContext({ storageState: { cookies: [], origins: [] } })
-  const oo = await context.newPage()
-  await fakeDesktopEditors(oo)
-  await oo.goto(openPath)
-  await expect(oo).toHaveURL(new RegExp(`/files/${fileId}/edit`), { timeout: 15_000 })
-  const login = (await calls(oo)).find((c) => c.command === 'portal:login')
-  expect(login?.params.provider).toBe('bluedrive')
-  expect(login?.params.userId).toBe(me.id)
-  expect(await oo.evaluate(() => document.documentElement.classList.contains('bd-oo-desktop'))).toBe(true)
+    // …which ONLYOFFICE opens in a fresh browser profile (not signed in to BlueDrive).
+    const context = await browser.newContext({ storageState: { cookies: [], origins: [] } })
+    const oo = await context.newPage()
+    await fakeDesktopEditors(oo)
+    await oo.goto(openPath)
+    await expect(oo).toHaveURL(new RegExp(`/files/${fileId}/edit`), { timeout: 15_000 })
+    const login = (await calls(oo)).find((c) => c.command === 'portal:login')
+    expect(login?.params.provider).toBe('bluedrive')
+    expect(login?.params.userId).toBe(me.id)
+    expect(await oo.evaluate(() => document.documentElement.classList.contains('bd-oo-desktop'))).toBe(true)
 
-  // The link works once.
-  await oo.goto(openPath)
-  await expect(oo.getByText('Không mở được tài liệu')).toBeVisible()
-  await context.close()
+    // The link works once.
+    await oo.goto(openPath)
+    await expect(oo.getByText('Không mở được tài liệu')).toBeVisible()
+    await context.close()
+  } finally {
+    if (upload.ok()) {
+      await request.post('/api/v1/items/delete', { headers: auth, data: { items: [{ type: 'file', id: fileId }] } })
+      // Out of the trash, then out of the second stage (spec 8.1).
+      for (let i = 0; i < 2; i++) await request.post('/api/v1/trash/purge', { headers: auth, data: [{ type: 'file', id: fileId }] })
+    }
+  }
 })
 
 test('ONLYOFFICE Desktop Editors: trang kết nối đăng ký BlueDrive vào "Đám mây đã kết nối"', async ({ page }) => {

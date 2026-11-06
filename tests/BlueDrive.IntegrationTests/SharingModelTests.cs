@@ -36,14 +36,26 @@ public class SharingModelTests(ApiFactory factory)
         (await member.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
         (await lead.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK, "the group's leader is in it too");
         (await outsider.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
-        var entries = (await (await owner.GetAsync($"/api/v1/items/{file}/permissions")).ReadJsonAsync()).GetProperty("entries").EnumerateArray()
-            .Where(e => e.GetProperty("principalKind").GetString() == "space_group" && e.GetProperty("origin").GetString() == "direct").Select(e => e.GetProperty("principalName").GetString()).ToList();
-        entries.Should().NotBeEmpty().And.OnlyContain(n => n!.EndsWith("— DEV"));
+        // One row for DEV (not one per group of the Space: "Chủ sở hữu — DEV", "Thành viên — DEV").
+        async Task<List<JsonElement>> DevRows() => (await (await owner.GetAsync($"/api/v1/items/{file}/permissions")).ReadJsonAsync()).GetProperty("entries").EnumerateArray()
+            .Where(e => e.GetProperty("principalKind").GetString() == "space_group" && e.GetProperty("origin").GetString() == "direct").ToList();
+        var rows = await DevRows();
+        rows.Should().ContainSingle().Which.GetProperty("principalName").GetString().Should().Be("DEV");
+        rows[0].GetProperty("principalId").GetGuid().Should().Be(dev);
 
         // Someone added to DEV afterwards gets it without sharing again.
         (await late.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
         await (await lead.PostAsJsonAsync($"/api/v1/workspaces/{dev}/members", new { userIds = new[] { lateId }, role = "editor" })).ReadJsonAsync();
         (await late.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
+
+        // Changing the row changes it for the whole Space (the leader too), and removing it takes it back from everyone in DEV.
+        (await owner.PatchAsJsonAsync($"/api/v1/items/{file}/permissions/{rows[0].GetProperty("id").GetGuid()}", new { levelId = levels["editor"] })).EnsureSuccessStatusCode();
+        rows = await DevRows();
+        rows.Should().ContainSingle().Which.GetProperty("levelId").GetGuid().Should().Be(levels["editor"]);
+        (await owner.DeleteAsync($"/api/v1/items/{file}/permissions/{rows[0].GetProperty("id").GetGuid()}")).EnsureSuccessStatusCode();
+        (await DevRows()).Should().BeEmpty();
+        (await member.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await lead.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
