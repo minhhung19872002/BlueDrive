@@ -94,6 +94,12 @@ export async function listTrash(workspaceId: string, params: PageParams, stage: 
   return data
 }
 
+/** "Thùng rác của tôi": what is mine and was deleted, everywhere (my drive; elsewhere what I made or deleted). */
+export async function listMyTrash(params: PageParams): Promise<Paged<TrashItem>> {
+  const { data } = await api.get<Paged<TrashItem>>('/trash/mine', { params: cleanParams(params) })
+  return data
+}
+
 export async function restoreItems(items: ItemRef[]): Promise<{ restored: number }> {
   const { data } = await api.post<{ restored: number }>('/trash/restore', { items })
   return data

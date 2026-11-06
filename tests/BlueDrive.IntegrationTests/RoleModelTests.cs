@@ -115,4 +115,40 @@ public class RoleModelTests(ApiFactory factory)
         (await editor.PutAsJsonAsync($"/api/v1/files/{file}/name", new { name = "doi-ten.png" })).IsSuccessStatusCode.Should().BeTrue();
         (await UploadRawAsync(editor, space, null, "moi.png")).IsSuccessStatusCode.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task My_trash_holds_what_is_mine_wherever_it_was_deleted_and_whoever_deleted_it()
+    {
+        var (lead, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (author, authorId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (other, otherId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var space = (await (await lead.PostAsJsonAsync("/api/v1/workspaces", new { name = "Nhóm thùng rác", type = "group" })).ReadJsonAsync()).GetProperty("id").GetGuid();
+        await (await lead.PostAsJsonAsync($"/api/v1/workspaces/{space}/members", new { userIds = new[] { authorId }, role = "uploader" })).ReadJsonAsync();
+        await (await lead.PostAsJsonAsync($"/api/v1/workspaces/{space}/members", new { userIds = new[] { otherId }, role = "editor" })).ReadJsonAsync();
+        var mine = (await StorageTests.UploadAsync(author, space, null, "anh-cua-toi.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var theirs = (await StorageTests.UploadAsync(other, space, null, "anh-nguoi-khac.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+
+        // Someone else deletes both: the author finds theirs in "Thùng rác của tôi", not the other one.
+        (await other.PostAsJsonAsync("/api/v1/items/delete", new { items = new[] { new { type = "file", id = mine }, new { type = "file", id = theirs } } })).IsSuccessStatusCode.Should().BeTrue();
+        async Task<List<Guid>> MyTrash(HttpClient c) => (await (await c.GetAsync("/api/v1/trash/mine")).ReadJsonAsync()).GetProperty("items").EnumerateArray()
+            .Select(i => i.GetProperty("id").GetGuid()).ToList();
+        (await MyTrash(author)).Should().Contain(mine).And.NotContain(theirs);
+        (await MyTrash(other)).Should().Contain(new[] { mine, theirs }, "who deleted them sees them too");
+
+        // The author ("Tải lên" in the group: no rights on the group's trash) gets it back.
+        (await author.PostAsJsonAsync("/api/v1/trash/restore", new { items = new[] { new { type = "file", id = mine } } })).IsSuccessStatusCode.Should().BeTrue();
+        (await author.GetAsync($"/api/v1/files/{mine}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await author.PostAsJsonAsync("/api/v1/trash/restore", new { items = new[] { new { type = "file", id = theirs } } }))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden, "not theirs");
+
+        // In my own drive, what someone I shared with deletes is mine too.
+        var (owner, _, _) = await factory.CreateUserClientAsync("chi_xem");
+        var drive = await StorageTests.PersonalWorkspaceAsync(owner);
+        var doc = (await (await UploadRawAsync(owner, drive, null, "cua-chu.png")).ReadJsonAsync()).GetProperty("fileId").GetGuid();
+        var levels = await LevelsAsync(owner);
+        (await owner.PostAsJsonAsync($"/api/v1/items/{doc}/permissions", new { targets = new[] { new { kind = "user", id = otherId } }, levelId = levels["editor"], notify = false }))
+            .IsSuccessStatusCode.Should().BeTrue();
+        (await other.PostAsJsonAsync("/api/v1/items/delete", new { items = new[] { new { type = "file", id = doc } } })).IsSuccessStatusCode.Should().BeTrue();
+        (await MyTrash(owner)).Should().Contain(doc);
+    }
 }

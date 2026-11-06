@@ -46,6 +46,58 @@ public static class TrashAccess
     }
 }
 
+/// <summary>
+/// "Thùng rác của tôi" (like Google Drive): everything deleted in my own drive, and anywhere else what I uploaded / made or deleted myself —
+/// whoever deleted it. First stage only (the second is the managers'); I may restore it or send it on to the second stage.
+/// </summary>
+public sealed record ListMyTrashQuery : PageQuery, IRequest<PagedResult<TrashItemDto>>;
+
+public sealed class ListMyTrashHandler(IAppDbContext db, ICurrentUser me, ISettingsService settings) : IRequestHandler<ListMyTrashQuery, PagedResult<TrashItemDto>>
+{
+    public async Task<PagedResult<TrashItemDto>> Handle(ListMyTrashQuery q, CancellationToken ct)
+    {
+        var uid = me.RequireUserId();
+        var myDrives = db.Workspaces.Where(w => w.Type == WorkspaceType.Personal && w.OwnerId == uid).Select(w => w.Id);
+        var folders = db.Folders.AsNoTracking().Where(f => f.IsTrashRoot && f.IsDeleted && f.PreservedAt == null && f.SecondStageAt == null
+            && (myDrives.Contains(f.WorkspaceId) || f.CreatedBy == uid || f.DeletedBy == uid));
+        var files = db.Files.AsNoTracking().Where(f => f.IsTrashRoot && f.IsDeleted && f.PreservedAt == null && f.SecondStageAt == null
+            && (myDrives.Contains(f.WorkspaceId) || f.CreatedBy == uid || f.DeletedBy == uid));
+        if (!string.IsNullOrWhiteSpace(q.Q))
+        {
+            var term = TextUtil.Unaccent(q.Q.Trim());
+            folders = folders.Where(f => DbFn.Unaccent(f.Name).Contains(term));
+            files = files.Where(f => DbFn.Unaccent(f.Name).Contains(term));
+        }
+        // Two queries merged in memory (see ListTrashHandler).
+        var folderRows = await folders.Select(f => new { f.Id, Type = "folder", f.Name, f.WorkspaceId, Size = db.Files.Where(x => x.Folder != null && x.Folder.Path.StartsWith(f.Path) && x.IsDeleted).Sum(x => (long?)x.SizeBytes) ?? 0, MediaType = (MediaType?)null, DeletedAt = f.DeletedAt!.Value, f.DeletedBy, ParentId = f.OriginalParentId, f.OriginalPath })
+            .ToListAsync(ct);
+        var fileRows = await files.Select(f => new { f.Id, Type = "file", f.Name, f.WorkspaceId, Size = f.SizeBytes, MediaType = (MediaType?)f.MediaType, DeletedAt = f.DeletedAt!.Value, f.DeletedBy, ParentId = f.OriginalFolderId, f.OriginalPath })
+            .ToListAsync(ct);
+        var rows = folderRows.Concat(fileRows).OrderByDescending(x => x.DeletedAt).ToList();
+        var total = rows.Count;
+        var page = rows.Skip((q.SafePage - 1) * q.SafePageSize).Take(q.SafePageSize).ToList();
+        var wsIds = page.Select(r => r.WorkspaceId).Distinct().ToList();
+        var workspaces = await db.Workspaces.AsNoTracking().Where(w => wsIds.Contains(w.Id)).ToDictionaryAsync(w => w.Id, ct);
+        var parentIds = page.Where(r => r.ParentId.HasValue).Select(r => r.ParentId!.Value).Distinct().ToList();
+        var parents = await db.Folders.AsNoTracking().Where(f => parentIds.Contains(f.Id)).ToDictionaryAsync(f => f.Id, ct);
+        var userIds = page.Where(r => r.DeletedBy.HasValue).Select(r => r.DeletedBy!.Value).Distinct().ToList();
+        var users = await db.Users.AsNoTracking().Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName, ct);
+        var defaultDays = await settings.GetAsync(SettingKeys.TrashRetentionDays, SettingKeys.DefaultTrashDays, ct);
+        var items = new List<TrashItemDto>();
+        foreach (var r in page)
+        {
+            var ws = workspaces[r.WorkspaceId];
+            Folder? parent = r.ParentId is { } pid ? parents.GetValueOrDefault(pid) : null;
+            var loc = await FileLocation.BuildAsync(db, ws, parent, uid, ct);
+            var exists = r.ParentId is null || (parent is not null && !parent.IsDeleted);
+            var text = parent is null && r.OriginalPath is { } path ? $"{loc[0].Name}/{path}" : FileLocation.ToText(loc);
+            items.Add(new TrashItemDto(r.Id, r.Type, r.Name, ws.Id, loc[0].Name, r.Size, r.MediaType, r.DeletedAt, r.DeletedBy,
+                r.DeletedBy is { } d ? users.GetValueOrDefault(d) : null, text, exists, r.DeletedAt.AddDays(ws.TrashRetentionDays ?? defaultDays), 1));
+        }
+        return new PagedResult<TrashItemDto>(items, total, q.SafePage, q.SafePageSize);
+    }
+}
+
 /// <summary>#61: trash per workspace (personal and group): who deleted, when, original location. Stage 2 (spec 8.1) is the managers' one.</summary>
 public sealed record ListTrashQuery(Guid WorkspaceId, int Stage = 1) : PageQuery, IRequest<PagedResult<TrashItemDto>>;
 
@@ -121,7 +173,7 @@ public sealed class RestoreItemsHandler(IAppDbContext db, ICurrentUser me, IReso
             if (item.IsFile)
             {
                 var f = await db.Files.FirstOrDefaultAsync(x => x.Id == item.Id && x.IsDeleted && x.IsTrashRoot && x.PreservedAt == null, ct) ?? throw new NotFoundException("Không tìm thấy mục trong thùng rác.");
-                await EnsureTrashRight(uid, f.WorkspaceId, f.DeletedBy, f.SecondStageAt is not null, ct);
+                await EnsureTrashRight(uid, f.WorkspaceId, f.DeletedBy, f.CreatedBy, f.SecondStageAt is not null, ct);
                 var parentOk = f.OriginalFolderId is null || await db.Folders.AnyAsync(x => x.Id == f.OriginalFolderId && !x.IsDeleted, ct);
                 var remade = !parentOk;
                 f.FolderId = parentOk ? f.OriginalFolderId : (await RemakeParentsAsync(f.WorkspaceId, f.OriginalPath, ct))?.Id;
@@ -133,7 +185,7 @@ public sealed class RestoreItemsHandler(IAppDbContext db, ICurrentUser me, IReso
             else
             {
                 var folder = await db.Folders.FirstOrDefaultAsync(x => x.Id == item.Id && x.IsDeleted && x.IsTrashRoot && x.PreservedAt == null, ct) ?? throw new NotFoundException("Không tìm thấy mục trong thùng rác.");
-                await EnsureTrashRight(uid, folder.WorkspaceId, folder.DeletedBy, folder.SecondStageAt is not null, ct);
+                await EnsureTrashRight(uid, folder.WorkspaceId, folder.DeletedBy, folder.CreatedBy, folder.SecondStageAt is not null, ct);
                 var deletedAt = folder.DeletedAt;
                 var parent = folder.OriginalParentId is { } op ? await db.Folders.FirstOrDefaultAsync(x => x.Id == op && !x.IsDeleted, ct) : null;
                 var remade = parent is null && folder.OriginalParentId is not null;
@@ -179,8 +231,10 @@ public sealed class RestoreItemsHandler(IAppDbContext db, ICurrentUser me, IReso
         return parent;
     }
 
-    private async Task EnsureTrashRight(Guid uid, Guid workspaceId, Guid? deletedBy, bool secondStage, CancellationToken ct)
+    private async Task EnsureTrashRight(Guid uid, Guid workspaceId, Guid? deletedBy, Guid? createdBy, bool secondStage, CancellationToken ct)
     {
+        // "Thùng rác của tôi": what one made or deleted comes back to them, whatever their role (like Google Drive).
+        if (!secondStage && (deletedBy == uid || createdBy == uid)) return;
         await TrashAccess.EnsureRoleAsync(db, perms, uid, workspaceId, Perm.TrashRestore, "Vai trò của bạn không có quyền khôi phục từ thùng rác.", ct);
         if (secondStage)
         {
@@ -225,13 +279,14 @@ public sealed class PurgeItemsHandler(IAppDbContext db, ICurrentUser me, IResour
         foreach (var item in items)
         {
             var row = item.IsFile
-                ? await db.Files.Where(f => f.Id == item.Id && f.IsDeleted && f.IsTrashRoot && f.PreservedAt == null).Select(f => new { f.WorkspaceId, f.DeletedBy, f.SecondStageAt, f.Name }).FirstOrDefaultAsync(ct)
-                : await db.Folders.Where(f => f.Id == item.Id && f.IsDeleted && f.IsTrashRoot && f.PreservedAt == null).Select(f => new { f.WorkspaceId, f.DeletedBy, f.SecondStageAt, f.Name }).FirstOrDefaultAsync(ct);
+                ? await db.Files.Where(f => f.Id == item.Id && f.IsDeleted && f.IsTrashRoot && f.PreservedAt == null).Select(f => new { f.WorkspaceId, f.DeletedBy, f.CreatedBy, f.SecondStageAt, f.Name }).FirstOrDefaultAsync(ct)
+                : await db.Folders.Where(f => f.Id == item.Id && f.IsDeleted && f.IsTrashRoot && f.PreservedAt == null).Select(f => new { f.WorkspaceId, f.DeletedBy, f.CreatedBy, f.SecondStageAt, f.Name }).FirstOrDefaultAsync(ct);
             if (row is null) throw new NotFoundException("Không tìm thấy mục trong thùng rác.");
-            await TrashAccess.EnsureRoleAsync(db, perms, uid, row.WorkspaceId, Perm.TrashPurge, noPurge, ct);
+            var mine = row.DeletedBy == uid || row.CreatedBy == uid;
+            if (!(mine && row.SecondStageAt is null)) await TrashAccess.EnsureRoleAsync(db, perms, uid, row.WorkspaceId, Perm.TrashPurge, noPurge, ct);
             if (row.SecondStageAt is null)
             {
-                if (row.DeletedBy != uid && !await TrashAccess.CanManageTrashAsync(auth, uid, row.WorkspaceId, ct)) throw new ForbiddenException("Bạn không có quyền với thùng rác của nhóm này.");
+                if (!mine && !await TrashAccess.CanManageTrashAsync(auth, uid, row.WorkspaceId, ct)) throw new ForbiddenException("Bạn không có quyền với thùng rác của nhóm này.");
                 if (item.IsFile) await db.Files.Where(f => f.Id == item.Id).ExecuteUpdateAsync(u => u.SetProperty(f => f.SecondStageAt, now), ct);
                 else await db.Folders.Where(f => f.Id == item.Id).ExecuteUpdateAsync(u => u.SetProperty(f => f.SecondStageAt, now), ct);
                 await audit.LogAsync(new AuditEntry(AuditAction.Purge, item.IsFile ? ResourceType.File : ResourceType.Folder, item.Id, row.Name, row.WorkspaceId,

@@ -3,7 +3,7 @@ import { App, Button, Card, Empty, Input, Result, Segmented, Select, Space, Tabl
 import { ClearOutlined, DeleteOutlined, UndoOutlined } from '@ant-design/icons'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { emptyTrash, listTrash, purgeItems, restoreItems } from '@/api/drive'
+import { emptyTrash, listMyTrash, listTrash, purgeItems, restoreItems } from '@/api/drive'
 import { qk } from '@/api/queryKeys'
 import PageHeader from '@/components/PageHeader'
 import FileTypeIcon from '@/features/drive/components/FileTypeIcon'
@@ -19,6 +19,8 @@ import { extensionOf, formatBytes, formatDateTime } from '@/utils/format'
 const MANAGING_ROLES = ['owner', 'manager', 'editor']
 /** Spec 8.1: who sees the second stage of a Space's trash (and the owner of a Drive). */
 const SECOND_STAGE_ROLES = ['owner', 'manager']
+/** "Thùng rác của tôi" (default, like Google Drive): mine, everywhere — not one workspace. */
+const MINE = 'mine'
 
 /** Thùng rác (#61–62): per workspace, who deleted / when / original location; restore, purge, empty. */
 export default function TrashPage() {
@@ -27,7 +29,9 @@ export default function TrashPage() {
   const can = useCan()
   const personalId = useAuthStore((s) => s.user?.personalWorkspaceId ?? null)
   const workspaces = useMyWorkspaces()
-  const [workspaceId, setWorkspaceId] = useState<string | null>(personalId)
+  const [view, setView] = useState<string>(MINE)
+  const mine = view === MINE
+  const workspaceId = mine ? null : view
   const [selected, setSelected] = useState<string[]>([])
   const [stage, setStage] = useState<1 | 2>(1)
   const table = useServerTable<{ q?: string }>({})
@@ -36,21 +40,21 @@ export default function TrashPage() {
     () =>
       (workspaces.data ?? [])
         .filter((w) => w.type === 'personal' || (w.myRole && MANAGING_ROLES.includes(w.myRole)))
-        .map((w) => ({ value: w.id, label: w.type === 'personal' ? t('menu.myDrive') : w.name })),
+        .map((w) => ({ value: w.id, label: w.type === 'personal' ? t('trash.myDriveFull') : t('trash.groupFull', { name: w.name }) })),
     [workspaces.data, t],
   )
 
   const current = workspaces.data?.find((w) => w.id === workspaceId)
   // "Tài liệu của tôi": its owner uses its trash whatever the system role (like Google Drive); a group's trash needs the role's functions.
-  const may = (perm: string) => (!!workspaceId && workspaceId === personalId) || can(perm)
+  const may = (perm: string) => mine || (!!workspaceId && workspaceId === personalId) || can(perm)
   const secondStage =
     can('workspace.admin') || current?.type === 'personal' || (!!current?.myRole && SECOND_STAGE_ROLES.includes(current.myRole))
-  const shownStage = secondStage ? stage : 1
+  const shownStage = secondStage && !mine ? stage : 1
 
   const trash = useQuery({
-    queryKey: [...qk.trash(workspaceId ?? ''), table.params, shownStage],
-    queryFn: () => listTrash(workspaceId!, table.params, shownStage),
-    enabled: !!workspaceId && may('trash.view'),
+    queryKey: [...qk.trash(workspaceId ?? MINE), table.params, shownStage],
+    queryFn: () => (mine ? listMyTrash(table.params) : listTrash(workspaceId!, table.params, shownStage)),
+    enabled: mine || (!!workspaceId && may('trash.view')),
     placeholderData: keepPreviousData,
   })
 
@@ -97,8 +101,9 @@ export default function TrashPage() {
     <>
       <PageHeader
         title={t('menu.trash')}
-        description={t('trash.hint')}
+        description={mine ? t('trash.mineHint') : t('trash.hint')}
         extra={
+          !mine &&
           may('trash.delete') && (
             <Button danger icon={<ClearOutlined />} onClick={confirmEmpty} disabled={!workspaceId || total === 0} loading={empty.isPending}>
               {t('trash.empty')}
@@ -109,19 +114,19 @@ export default function TrashPage() {
       <Card styles={{ body: { padding: 0 } }}>
         <Space wrap style={{ padding: 16 }}>
           <Select
-            value={workspaceId}
+            value={view}
             onChange={(v: string) => {
-              setWorkspaceId(v)
+              setView(v)
               setSelected([])
               setStage(1)
               table.resetFilter()
             }}
-            options={options}
+            options={[{ value: MINE, label: t('trash.mine') }, ...options]}
             loading={workspaces.isLoading}
-            style={{ minWidth: 220 }}
+            style={{ minWidth: 260 }}
             aria-label={t('trash.workspace')}
           />
-          {secondStage && (
+          {secondStage && !mine && (
             <Segmented
               value={shownStage}
               onChange={(v) => {

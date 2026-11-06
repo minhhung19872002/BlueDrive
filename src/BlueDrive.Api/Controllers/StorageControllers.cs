@@ -363,6 +363,10 @@ public class DriveController : ApiControllerBase
     [HttpPost("items/delete"), SyncIfMatch]
     public async Task<IActionResult> Delete(DeleteItemsCommand cmd) => Ok(new { deleted = await Mediator.Send(cmd) });
 
+    /// <summary>Thùng rác của tôi: những gì của tôi bị xóa, ở mọi nơi.</summary>
+    [HttpGet("trash/mine")]
+    public Task<PagedResult<TrashItemDto>> MyTrash([FromQuery] ListMyTrashQuery query) => Mediator.Send(query);
+
     [HttpPost("trash/restore")]
     public async Task<IActionResult> Restore(RestoreItemsCommand cmd) => Ok(new { restored = await Mediator.Send(cmd) });
 
