@@ -62,7 +62,9 @@ public sealed class GetItemPermissionsHandler(IAppDbContext db, ICurrentUser me,
         // A Space group nobody is in (a Drive's "Thành viên", a Space without visitors…) gives nobody anything: not listed.
         var groupIds = entries.Where(x => x.e.PrincipalKind == PrincipalKind.SpaceGroup).Select(x => x.e.PrincipalId).Distinct().ToList();
         var peopled = (await db.SpaceGroupMembers.AsNoTracking().Where(m => groupIds.Contains(m.SpaceGroupId)).Select(m => m.SpaceGroupId).Distinct().ToListAsync(ct)).ToHashSet();
-        var list = entries.Where(x => x.e.PrincipalKind != PrincipalKind.Everyone && (x.e.PrincipalKind != PrincipalKind.SpaceGroup || peopled.Contains(x.e.PrincipalId))).OrderBy(x => x.e.Source == AclSource.SpaceDefault ? 0 : 1).ThenBy(x => x.SortOrder)
+        var list = entries.Where(x => x.e.PrincipalKind != PrincipalKind.Everyone && (x.e.PrincipalKind != PrincipalKind.SpaceGroup || peopled.Contains(x.e.PrincipalId)))
+            // Space membership first (by level); grants in the order they were given, so changing a level does not move the row.
+            .OrderBy(x => x.e.Source == AclSource.SpaceDefault ? 0 : 1).ThenBy(x => x.e.Source == AclSource.SpaceDefault ? x.SortOrder : 0).ThenBy(x => x.e.GrantedAt).ThenBy(x => x.e.Id)
             .Select(x =>
             {
                 var (name, detail) = names.GetValueOrDefault(x.e.PrincipalId, ("(không xác định)", null));

@@ -59,6 +59,29 @@ public class SharingModelTests(ApiFactory factory)
     }
 
     [Fact]
+    public async Task Changing_a_level_keeps_the_row_where_it_is()
+    {
+        // "Người có quyền truy cập" lists grants in the order they were given: picking another level must not move the row.
+        var (owner, _, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (_, firstId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var (_, secondId, _) = await factory.CreateUserClientAsync("bien_tap");
+        var ws = await StorageTests.PersonalWorkspaceAsync(owner);
+        var file = (await StorageTests.UploadAsync(owner, ws, null, "thu-tu.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
+        var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
+        foreach (var (who, level) in new[] { (firstId, "viewer"), (secondId, "editor") })
+            (await owner.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { User(who) }, levelId = levels[level], notify = false })).EnsureSuccessStatusCode();
+        async Task<List<JsonElement>> Rows() => (await (await owner.GetAsync($"/api/v1/items/{file}/permissions")).ReadJsonAsync()).GetProperty("entries").EnumerateArray()
+            .Where(e => e.GetProperty("origin").GetString() == "direct").ToList();
+        var rows = await Rows();
+        rows.Select(r => r.GetProperty("principalId").GetGuid()).Should().Equal(firstId, secondId);
+
+        // Swap the levels: the first stays first, the second stays second.
+        (await owner.PatchAsJsonAsync($"/api/v1/items/{file}/permissions/{rows[0].GetProperty("id").GetGuid()}", new { levelId = levels["owner"] })).EnsureSuccessStatusCode();
+        (await owner.PatchAsJsonAsync($"/api/v1/items/{file}/permissions/{rows[1].GetProperty("id").GetGuid()}", new { levelId = levels["view_only"] })).EnsureSuccessStatusCode();
+        (await Rows()).Select(r => r.GetProperty("principalId").GetGuid()).Should().Equal(firstId, secondId);
+    }
+
+    [Fact]
     public async Task Share_with_levels_list_sources_change_and_take_back()
     {
         var (owner, ownerId, _) = await factory.CreateUserClientAsync("bien_tap");
