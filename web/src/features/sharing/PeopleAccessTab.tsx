@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Alert,
   Button,
@@ -9,7 +9,6 @@ import {
   Empty,
   Input,
   List,
-  Popconfirm,
   Select,
   Skeleton,
   Space,
@@ -17,8 +16,8 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import { ApartmentOutlined, DeleteOutlined, GlobalOutlined, LockOutlined, ShareAltOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons'
-import { useQuery } from '@tanstack/react-query'
+import { ApartmentOutlined, DeleteOutlined, GlobalOutlined, LockOutlined, SaveOutlined, ShareAltOutlined, TeamOutlined, UndoOutlined, UserOutlined } from '@ant-design/icons'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useTranslation } from 'react-i18next'
 import {
@@ -70,7 +69,15 @@ function toTarget(value: PrincipalValue): PrincipalTarget {
  * Spec 5.1 (Google Drive / SharePoint): add people, groups or units with a permission level, an optional end date and a note;
  * "Người có quyền truy cập" with where each access comes from; "Quyền truy cập chung"; stop / restore inheritance.
  */
-export default function PeopleAccessTab({ itemId }: { itemId: string }) {
+/** An unsaved change of a row: a new level, a new expiry (null = no expiry), or removal. */
+interface Draft {
+  levelId?: string
+  expiresAt?: string | null
+  remove?: boolean
+}
+
+/** @param onDirtyChange Told whether rows have unsaved changes, so the dialog can ask before closing. */
+export default function PeopleAccessTab({ itemId, onDirtyChange }: { itemId: string; onDirtyChange?: (dirty: boolean) => void }) {
   const { t } = useTranslation()
   const key = ['item-permissions', itemId]
   const access = useQuery({ queryKey: key, queryFn: () => getItemPermissions(itemId) })
@@ -107,12 +114,36 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
       },
     },
   )
-  const change = useApiMutation(
-    (v: { entryId: string; levelId?: string; expiresAt?: string | null; clearExpiry?: boolean }) =>
-      updateItemPermission(itemId, v.entryId, { levelId: v.levelId, expiresAt: v.expiresAt, clearExpiry: v.clearExpiry }),
-    { ...opts, successMessage: t('sharing.people.changed') },
+  // Level, expiry and removal of the rows are kept here and sent together with "Lưu" (like Google Drive), not on every pick.
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({})
+  const edit = (entryId: string, d: Draft) => setDrafts((p) => ({ ...p, [entryId]: { ...p[entryId], ...d } }))
+  const queryClient = useQueryClient()
+  const save = useApiMutation(
+    async (list: { id: string; draft: Draft }[]) => {
+      // One by one: what was applied leaves the drafts at once, so a failure part way keeps only what is still to do.
+      for (const { id, draft } of list) {
+        if (draft.remove) await revokeItemPermission(itemId, id)
+        else
+          await updateItemPermission(itemId, id, {
+            levelId: draft.levelId,
+            expiresAt: draft.expiresAt ?? undefined,
+            clearExpiry: draft.expiresAt === null,
+          })
+        setDrafts((p) => {
+          const next = { ...p }
+          delete next[id]
+          return next
+        })
+      }
+    },
+    {
+      ...opts,
+      successMessage: t('sharing.people.saved'),
+      onError: () => {
+        void queryClient.invalidateQueries({ queryKey: key })
+      },
+    },
   )
-  const revoke = useApiMutation((entryId: string) => revokeItemPermission(itemId, entryId), { ...opts, successMessage: t('sharing.people.removed') })
   const general = useApiMutation((v: { mode: 'restricted' | 'organization'; levelId: string | null }) => setGeneralAccess(itemId, v.mode, v.levelId), {
     ...opts,
     successMessage: t('sharing.people.generalSaved'),
@@ -122,6 +153,21 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
   const policy = useQuery({ queryKey: ['item-sharing-policy', itemId], queryFn: () => getItemSharingPolicy(itemId) })
   const kind = access.data?.kind
   const publicLink = usePublicLink(kind === 'file' || kind === 'folder' ? kind : null, itemId)
+
+  // Only what differs from the server counts (picking the old level again is no change).
+  const changes = (access.data?.entries ?? []).flatMap((e) => {
+    const d = drafts[e.id]
+    if (!d || !e.editable) return []
+    const draft: Draft = d.remove
+      ? { remove: true }
+      : {
+          ...(d.levelId !== undefined && d.levelId !== e.levelId ? { levelId: d.levelId } : {}),
+          ...(d.expiresAt !== undefined && d.expiresAt !== (e.expiresAt ?? null) ? { expiresAt: d.expiresAt } : {}),
+        }
+    return Object.keys(draft).length ? [{ id: e.id, draft }] : []
+  })
+  const dirty = changes.length > 0
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange])
 
   if (access.isLoading || levels.isLoading) return <Skeleton active />
   if (!access.data) return <Empty />
@@ -188,16 +234,26 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
         size="small"
         dataSource={a.entries.filter((e) => e.principalKind !== 'link') /* the link is shown below, not as a person */}
         locale={{ emptyText: t('sharing.people.nobody') }}
-        renderItem={(e) => (
+        renderItem={(e) => {
+          const d = drafts[e.id] ?? {}
+          const removing = !!d.remove
+          const shownLevel = d.levelId ?? e.levelId
+          const shownExpiry = d.expiresAt !== undefined ? d.expiresAt : e.expiresAt
+          return (
           <List.Item
+            style={removing ? { opacity: 0.55 } : undefined}
             actions={
               e.editable
                 ? [
-                    <Popconfirm key="del" title={t('sharing.people.removeConfirm', { name: e.principalName })} onConfirm={() => revoke.mutate(e.id)} okButtonProps={{ danger: true }}>
-                      <Tooltip title={t('sharing.people.remove')}>
-                        <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={t('sharing.people.remove')} />
+                    removing ? (
+                      <Tooltip key="undo" title={t('sharing.people.undoRemove')}>
+                        <Button size="small" type="text" icon={<UndoOutlined />} aria-label={t('sharing.people.undoRemove')} onClick={() => edit(e.id, { remove: false })} />
                       </Tooltip>
-                    </Popconfirm>,
+                    ) : (
+                      <Tooltip key="del" title={t('sharing.people.remove')}>
+                        <Button size="small" type="text" danger icon={<DeleteOutlined />} aria-label={t('sharing.people.remove')} onClick={() => edit(e.id, { remove: true })} />
+                      </Tooltip>
+                    ),
                   ]
                 : []
             }
@@ -206,7 +262,8 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
               avatar={<KindIcon kind={e.principalKind} />}
               title={
                 <Space size={4} wrap>
-                  <span>{e.principalName}</span>
+                  <span style={removing ? { textDecoration: 'line-through' } : undefined}>{e.principalName}</span>
+                  {removing && <Tag color="red">{t('sharing.people.willRemove')}</Tag>}
                   {/* Space membership needs no badge: the row already reads "Nhóm của Space". */}
                   {e.origin !== 'space' && <Tag color={ORIGIN_COLORS[e.origin]}>{e.originLabel}</Tag>}
                   {!e.appliesToChildren && <Tag>{t('sharing.people.thisItemOnly')}</Tag>}
@@ -220,20 +277,20 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
                       <Select
                         size="small"
                         style={{ minWidth: 180 }}
-                        value={e.levelId}
+                        value={shownLevel}
                         options={optionsWith(e.levelId)}
-                        onChange={(v) => change.mutate({ entryId: e.id, levelId: v })}
+                        disabled={removing}
+                        onChange={(v) => edit(e.id, { levelId: v })}
                         aria-label={t('sharing.people.level')}
                       />
                       <DatePicker
                         size="small"
-                        value={e.expiresAt ? dayjs(e.expiresAt) : null}
+                        value={shownExpiry ? dayjs(shownExpiry) : null}
+                        disabled={removing}
                         format="DD/MM/YYYY"
                         placeholder={t('sharing.people.noExpiry')}
                         disabledDate={(d) => d.isBefore(dayjs(), 'day')}
-                        onChange={(d) =>
-                          change.mutate(d ? { entryId: e.id, expiresAt: d.endOf('day').toISOString() } : { entryId: e.id, clearExpiry: true })
-                        }
+                        onChange={(day) => edit(e.id, { expiresAt: day ? day.endOf('day').toISOString() : null })}
                         aria-label={t('sharing.people.expiresAt')}
                       />
                     </>
@@ -247,8 +304,27 @@ export default function PeopleAccessTab({ itemId }: { itemId: string }) {
               }
             />
           </List.Item>
-        )}
+          )
+        }}
       />
+      {dirty && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginTop: 8 }}
+          message={t('sharing.people.unsaved', { count: changes.length })}
+          action={
+            <Space>
+              <Button size="small" disabled={save.isPending} onClick={() => setDrafts({})}>
+                {t('sharing.people.discard')}
+              </Button>
+              <Button size="small" type="primary" icon={<SaveOutlined />} loading={save.isPending} onClick={() => save.mutate(changes)}>
+                {t('sharing.people.save')}
+              </Button>
+            </Space>
+          }
+        />
+      )}
 
       <Divider orientation="left" orientationMargin={0}>
         {t('sharing.people.generalAccess')}

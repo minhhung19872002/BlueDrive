@@ -225,3 +225,53 @@ test('hai người dùng chia sẻ tài liệu qua lại', async ({ browser }) =
   await pageA.context().close()
   await pageB.context().close()
 })
+
+test('đổi hoặc gỡ quyền trong hộp thoại chỉ lưu khi bấm "Lưu"', async ({ browser }) => {
+  const [a, b] = users
+  const name = `luu-sau-${stamp}.txt`
+  const fileId = await upload(a, name, 'Đổi quyền rồi mới lưu')
+  const levels: { id: string; code: string }[] = await (await api.get('/api/v1/permission-levels', { headers: bearer(a) })).json()
+  const level = (code: string) => levels.find((l) => l.code === code)!.id
+  const granted = await api.post(`/api/v1/items/${fileId}/permissions`, {
+    headers: bearer(a),
+    data: { targets: [{ kind: 'user', id: b.id }], levelId: level('viewer'), notify: false },
+  })
+  expect(granted.ok(), await granted.text()).toBeTruthy()
+  const levelOfB = async () =>
+    ((await (await api.get(`/api/v1/items/${fileId}/permissions`, { headers: bearer(a) })).json()).entries as { principalId: string; levelId: string }[])
+      .find((e) => e.principalId === b.id)?.levelId
+
+  const page = await loginPage(browser, a)
+  await page.goto('/my-drive')
+  const writes: string[] = []
+  page.on('request', (r) => {
+    if (r.url().includes(`/items/${fileId}/permissions/`) && ['PATCH', 'DELETE'].includes(r.method())) writes.push(r.method())
+  })
+  await contextMenu(page, name)
+  await page.getByRole('menuitem', { name: /Chia sẻ$/ }).click()
+  const dlg = page.getByRole('dialog')
+  const row = dlg.getByRole('listitem').filter({ hasText: b.fullName })
+  await row.locator('.ant-select').first().click()
+  const options = page.locator('.ant-select-dropdown:visible')
+  await options.getByTitle(/^Chỉnh sửa$/).or(options.getByText(/^Chỉnh sửa$/)).first().click()
+
+  // Picked, not saved: nothing sent, the server still says "Người xem", the dialog says there is something to save.
+  await expect(dlg.getByText(/thay đổi quyền chưa lưu/)).toBeVisible()
+  expect(writes).toEqual([])
+  expect(await levelOfB()).toBe(level('viewer'))
+
+  await Promise.all([
+    page.waitForResponse((r) => r.url().includes(`/items/${fileId}/permissions/`) && r.request().method() === 'PATCH' && r.ok()),
+    dlg.getByRole('button', { name: 'Lưu thay đổi' }).click(),
+  ])
+  await expect(dlg.getByText(/thay đổi quyền chưa lưu/)).toHaveCount(0)
+  expect(await levelOfB()).toBe(level('editor'))
+
+  // Removing is a pending change too: closing without saving asks, and dropping it keeps the access.
+  await row.getByRole('button', { name: 'Gỡ quyền' }).click()
+  await expect(row.getByText('Sẽ gỡ khi lưu')).toBeVisible()
+  await dlg.getByRole('button', { name: /Close|Đóng/ }).first().click()
+  await page.getByRole('button', { name: 'Bỏ thay đổi và đóng' }).click()
+  expect(writes).toEqual(['PATCH'])
+  expect(await levelOfB()).toBe(level('editor'))
+})
