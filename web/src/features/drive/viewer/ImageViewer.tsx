@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { Button, Space, Tooltip } from 'antd'
+import { Button, ConfigProvider, Space, Tooltip, theme as antdTheme } from 'antd'
 import {
   ExpandOutlined,
   RotateLeftOutlined,
@@ -36,22 +36,24 @@ export default function ImageViewer({ src, alt, extra }: { src: string; alt: str
           }}
         />
       </div>
+      <ConfigProvider theme={{ algorithm: antdTheme.darkAlgorithm }}>
       <Space className="bd-image-tools" size={4} wrap>
         <Tooltip title={t('viewer.zoomOut')}>
-          <Button shape="circle" icon={<ZoomOutOutlined />} onClick={() => zoom(-1)} disabled={scale <= STEPS[0]} />
+          <Button type="text" shape="circle" icon={<ZoomOutOutlined />} onClick={() => zoom(-1)} disabled={scale <= STEPS[0]} />
         </Tooltip>
         <span className="bd-image-scale">{Math.round(scale * 100)}%</span>
         <Tooltip title={t('viewer.zoomIn')}>
-          <Button shape="circle" icon={<ZoomInOutlined />} onClick={() => zoom(1)} disabled={scale >= STEPS[STEPS.length - 1]} />
+          <Button type="text" shape="circle" icon={<ZoomInOutlined />} onClick={() => zoom(1)} disabled={scale >= STEPS[STEPS.length - 1]} />
         </Tooltip>
         <Tooltip title={t('viewer.rotateLeft')}>
-          <Button shape="circle" icon={<RotateLeftOutlined />} onClick={() => setRotate((r) => r - 90)} />
+          <Button type="text" shape="circle" icon={<RotateLeftOutlined />} onClick={() => setRotate((r) => r - 90)} />
         </Tooltip>
         <Tooltip title={t('viewer.rotateRight')}>
-          <Button shape="circle" icon={<RotateRightOutlined />} onClick={() => setRotate((r) => r + 90)} />
+          <Button type="text" shape="circle" icon={<RotateRightOutlined />} onClick={() => setRotate((r) => r + 90)} />
         </Tooltip>
         <Tooltip title={t('viewer.reset')}>
           <Button
+            type="text"
             shape="circle"
             icon={<ExpandOutlined />}
             onClick={() => {
@@ -62,6 +64,7 @@ export default function ImageViewer({ src, alt, extra }: { src: string; alt: str
         </Tooltip>
         {extra}
       </Space>
+      </ConfigProvider>
     </div>
   )
 }

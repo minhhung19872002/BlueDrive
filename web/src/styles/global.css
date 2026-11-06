@@ -562,7 +562,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background: #1f1f1f;
+  background: #1b1b1d;
 }
 
 .bd-viewer-page .bd-viewer {
@@ -577,13 +577,58 @@ body {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: #fff;
-  border-bottom: 1px solid var(--bd-border);
+  background: #1b1b1d;
+  color: #e8eaed;
 }
 
 .bd-viewer-title {
   flex: 1;
   min-width: 0;
+  font-size: 16px;
+}
+
+.bd-viewer-main {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Floating previous / next buttons on the sides of the stage (Google Drive style). */
+.bd-viewer-nav {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin-top: -28px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 50%;
+  background: rgba(32, 33, 36, 0.6);
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.bd-viewer-nav:hover {
+  background: rgba(60, 64, 67, 0.9);
+}
+
+.bd-viewer-nav:focus-visible {
+  outline: 2px solid #8ab4f8;
+  outline-offset: 2px;
+}
+
+.bd-viewer-nav-prev {
+  left: 24px;
+}
+
+.bd-viewer-nav-next {
+  right: 24px;
 }
 
 .bd-viewer-actions {
@@ -644,7 +689,7 @@ body {
   align-items: center;
   justify-content: center;
   overflow: auto;
-  padding: 16px;
+  padding: 72px 104px 24px;
 }
 
 .bd-image-stage img {
@@ -652,10 +697,23 @@ body {
   transform-origin: center center;
 }
 
+.bd-image-stage img {
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* Zoom / rotate pill floating at the top of the image, like Google Drive. */
 .bd-image-tools {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
   justify-content: center;
-  padding: 8px;
-  background: rgba(0, 0, 0, 0.45);
+  max-width: calc(100% - 24px);
+  padding: 4px 12px;
+  border-radius: 28px;
+  background: rgba(48, 49, 52, 0.92);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 }
 
 .bd-image-scale {
@@ -841,6 +899,25 @@ body {
 
   .bd-viewer-page .bd-viewer {
     height: calc(100vh - var(--bd-header-height) - 56px);
+  }
+
+  .bd-viewer-nav {
+    width: 40px;
+    height: 40px;
+    margin-top: -20px;
+    font-size: 16px;
+  }
+
+  .bd-viewer-nav-prev {
+    left: 8px;
+  }
+
+  .bd-viewer-nav-next {
+    right: 8px;
+  }
+
+  .bd-image-stage {
+    padding: 64px 8px 16px;
   }
 
   .bd-public-header {

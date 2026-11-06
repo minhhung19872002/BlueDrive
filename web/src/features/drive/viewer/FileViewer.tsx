@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Watermark from './Watermark'
-import { App, Button, Drawer, Grid, Result, Space, Spin, Tabs, Tooltip, Typography, type TabsProps } from 'antd'
+import { App, Button, ConfigProvider, Drawer, Grid, Result, Space, Spin, Tabs, Tooltip, Typography, theme as antdTheme, type TabsProps } from 'antd'
 import {
   CloseOutlined,
   DownloadOutlined,
@@ -68,6 +68,23 @@ export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate
   const needsInline = !!f && kind !== 'none' && !usePreviewImage && !f.contentBlocked
   const currentVersionId = f?.versions.find((v) => v.isCurrent)?.id
   const inline = useInlineUrl(fileId, needsInline, currentVersionId)
+
+  // Left / right arrow keys move between files, like Google Drive (not while typing or seeking media).
+  const busy = sharing || !!accessTarget
+  useEffect(() => {
+    if (!onNavigate || busy) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+      const el = e.target as HTMLElement | null
+      if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT|VIDEO|AUDIO)$/.test(el.tagName))) return
+      if (e.key === 'ArrowLeft' && prevId) onNavigate(prevId)
+      else if (e.key === 'ArrowRight' && nextId) onNavigate(nextId)
+      else return
+      e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onNavigate, prevId, nextId, busy])
 
   const star = useApiMutation((starred: boolean) => setFavorite({ type: 'file', id: fileId }, starred), {
     successMessage: (_, starred) => (starred ? t('actions.starred') : t('actions.unstarred')),
@@ -167,22 +184,13 @@ export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate
 
   return (
     <div className="bd-viewer">
+      <ConfigProvider theme={{ algorithm: antdTheme.darkAlgorithm }}>
       <div className="bd-viewer-bar">
         {f &&<FileTypeIcon type="file" mediaType={f.mediaType} extension={f.extension} size={20} />}
         <Typography.Text strong ellipsis className="bd-viewer-title" title={f?.name}>
           {f?.name ?? ''}
         </Typography.Text>
         <Space size={4} className="bd-viewer-actions">
-          {onNavigate && (
-            <>
-              <Tooltip title={t('viewer.prev')}>
-                <Button type="text" icon={<LeftOutlined />} disabled={!prevId} onClick={() => prevId && onNavigate(prevId)} />
-              </Tooltip>
-              <Tooltip title={t('viewer.next')}>
-                <Button type="text" icon={<RightOutlined />} disabled={!nextId} onClick={() => nextId && onNavigate(nextId)} />
-              </Tooltip>
-            </>
-          )}
           {office && (
             <Tooltip title={officeLabel}>
               <Button type="primary" icon={<FormOutlined />} onClick={openEditor}>
@@ -222,8 +230,10 @@ export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate
           </Tooltip>
         </Space>
       </div>
+      </ConfigProvider>
       <div className="bd-viewer-body">
-        <div
+        <div className="bd-viewer-main">
+          <div
             className="bd-viewer-stage"
             style={f?.watermark ? { position: 'relative' } : undefined}
             onContextMenu={f?.watermark ? (e) => e.preventDefault() : undefined}
@@ -231,6 +241,21 @@ export default function FileViewer({ fileId, onClose, prevId, nextId, onNavigate
             {stage}
             {f?.watermark && <Watermark />}
           </div>
+          {onNavigate && prevId && (
+            <Tooltip title={t('viewer.prev')} placement="right">
+              <button type="button" className="bd-viewer-nav bd-viewer-nav-prev" aria-label={t('viewer.prev')} onClick={() => onNavigate(prevId)}>
+                <LeftOutlined />
+              </button>
+            </Tooltip>
+          )}
+          {onNavigate && nextId && (
+            <Tooltip title={t('viewer.next')} placement="left">
+              <button type="button" className="bd-viewer-nav bd-viewer-nav-next" aria-label={t('viewer.next')} onClick={() => onNavigate(nextId)}>
+                <RightOutlined />
+              </button>
+            </Tooltip>
+          )}
+        </div>
         {!isMobile && sideOpen && <aside className="bd-viewer-side">{side}</aside>}
       </div>
       {isMobile && (
