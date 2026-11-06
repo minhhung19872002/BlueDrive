@@ -280,6 +280,8 @@ export interface WorkspaceMember {
   organizationName: string | null
   memberRole: WorkspaceMemberRole
   addedAt: string
+  /** The member's system role lets them see documents at all (false: being in the group shows them nothing). */
+  canViewDocs: boolean
 }
 
 export interface SaveWorkspaceRequest {

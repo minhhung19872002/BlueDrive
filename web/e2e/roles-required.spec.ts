@@ -1,0 +1,71 @@
+import { expect, test, type APIRequestContext } from '@playwright/test'
+
+/**
+ * An account without a role signs in but sees no documents, even in its groups: the user form requires a role, and the group's
+ * member list warns about members whose role cannot see documents. Test data is created through the API and removed afterwards.
+ */
+const stamp = Date.now().toString().slice(-6)
+let api: APIRequestContext
+let admin: Record<string, string>
+let roleId = ''
+let userId = ''
+let spaceId = ''
+
+test.beforeAll(async ({ playwright, baseURL }) => {
+  api = await playwright.request.newContext({ baseURL })
+  const login = await (await api.post('/api/v1/auth/login', {
+    data: { username: process.env.E2E_USERNAME ?? 'admin', password: process.env.E2E_PASSWORD ?? 'Admin@Smoke2026' },
+  })).json()
+  admin = { Authorization: `Bearer ${login.accessToken}` }
+  // A role granting nothing: the account has a role, but it cannot see documents.
+  roleId = (await (await api.post('/api/v1/roles', { headers: admin, data: { code: `e2e_rong_${stamp}`, name: `E2E vai trò trống ${stamp}` } })).json()).id
+  const created = await api.post('/api/v1/users', {
+    headers: admin,
+    data: { username: `e2eblind${stamp}`, fullName: `Người Chưa Xem ${stamp}`, isActive: true, password: 'Khoi@Tao12345', roleIds: [roleId] },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+  userId = (await created.json()).id
+  const space = await api.post('/api/v1/workspaces', { headers: admin, data: { name: `E2E Nhóm ${stamp}`, type: 'group' } })
+  expect(space.ok(), await space.text()).toBeTruthy()
+  spaceId = (await space.json()).id
+})
+
+test.afterAll(async () => {
+  if (spaceId) {
+    await api.put(`/api/v1/workspaces/${spaceId}/status`, { headers: admin, data: { status: 'deleted' } })
+    await api.delete(`/api/v1/workspaces/trash/${spaceId}`, { headers: admin })
+  }
+  if (userId) await api.delete(`/api/v1/users/${userId}`, { headers: admin })
+  if (roleId) await api.delete(`/api/v1/roles/${roleId}`, { headers: admin })
+  await api.dispose()
+})
+
+test('tạo người dùng phải chọn vai trò', async ({ page }) => {
+  await page.goto('/admin/users')
+  await page.getByRole('main').getByRole('button', { name: /Thêm/ }).first().click()
+  const drawer = page.locator('.ant-drawer-content')
+  await drawer.getByLabel('Tên đăng nhập').fill(`e2ekhongvaitro${stamp}`)
+  await drawer.getByLabel('Họ và tên').fill('Không Vai Trò')
+  await drawer.getByRole('button', { name: 'Lưu' }).click()
+  await expect(drawer.getByText(/Vui lòng chọn ít nhất một vai trò/)).toBeVisible()
+  // Nothing was created.
+  const found = await (await api.get(`/api/v1/users?q=e2ekhongvaitro${stamp}`, { headers: admin })).json()
+  expect(found.total).toBe(0)
+})
+
+test('thêm vào nhóm người không xem được tài liệu thì cảnh báo', async ({ page }) => {
+  await page.goto(`/workspaces/${spaceId}`)
+  await page.getByRole('button', { name: /Thành viên/ }).first().click()
+  const drawer = page.locator('.ant-drawer-content')
+  await drawer.locator('.ant-select').first().click()
+  await page.keyboard.type(`Người Chưa Xem ${stamp}`)
+  await page.locator('.ant-select-dropdown:visible').getByText(`Người Chưa Xem ${stamp}`).first().click()
+  await page.keyboard.press('Escape')
+  await drawer.getByRole('button', { name: /Thêm/ }).click()
+  await expect(page.locator('.ant-modal-confirm-title').filter({ hasText: 'Thành viên chưa xem được tư liệu' })).toBeVisible()
+  await page.getByRole('button', { name: /OK|Đồng ý|Đã hiểu/ }).last().click()
+  // The member list keeps flagging them.
+  const row = drawer.getByRole('row').filter({ hasText: `Người Chưa Xem ${stamp}` })
+  await expect(row.getByText('Chưa có vai trò')).toBeVisible()
+  await expect(drawer.getByText(/1 thành viên chưa có vai trò được xem tài liệu/)).toBeVisible()
+})

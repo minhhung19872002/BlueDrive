@@ -203,9 +203,11 @@ public class AdvancedAdminTests(ApiFactory factory)
             .ReadJsonAsync()).GetProperty("id").GetGuid();
         (await admin.PutAsJsonAsync("/api/v1/quotas/personal", new { organizationId = org, includeSubOrganizations = true, quotaGb = 3, setAsDefault = true })).EnsureSuccessStatusCode();
         var username = "q" + Guid.NewGuid().ToString("N")[..10];
+        var roleIds = (await (await admin.GetAsync("/api/v1/roles")).ReadJsonAsync()).EnumerateArray().Where(r => r.GetProperty("code").GetString() == "bien_tap")
+            .Select(r => r.GetProperty("id").GetGuid()).ToArray();
         var created = await (await admin.PostAsJsonAsync("/api/v1/users", new
         {
-            username, fullName = "Người dùng " + username, email = $"{username}@example.gov.vn", isActive = true, organizationId = org, password = "Init@Pass123",
+            username, fullName = "Người dùng " + username, email = $"{username}@example.gov.vn", isActive = true, organizationId = org, password = "Init@Pass123", roleIds,
         })).ReadJsonAsync();
         (await (await admin.GetAsync($"/api/v1/users/{created.GetProperty("id").GetGuid()}")).ReadJsonAsync()).GetProperty("quotaBytes").GetInt64().Should().Be((long)(3 * Gb));
 

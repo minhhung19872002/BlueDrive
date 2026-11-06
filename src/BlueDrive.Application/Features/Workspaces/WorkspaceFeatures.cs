@@ -15,7 +15,9 @@ public sealed record WorkspaceDto(Guid Id, string Name, string? Description, Wor
     Guid OwnerId, string OwnerName, long QuotaBytes, long UsedBytes, bool IsLocked, WorkspaceMemberRole? MyRole, int MemberCount, DateTime CreatedAt,
     SpaceStatus Status = SpaceStatus.Active, Guid? CoverFileId = null);
 
-public sealed record WorkspaceMemberDto(Guid UserId, string Username, string FullName, string? OrganizationName, WorkspaceMemberRole MemberRole, DateTime AddedAt);
+/// <param name="CanViewDocs">The member's system role lets them see documents at all (without it, being in the group shows them nothing).</param>
+public sealed record WorkspaceMemberDto(Guid UserId, string Username, string FullName, string? OrganizationName, WorkspaceMemberRole MemberRole, DateTime AddedAt,
+    bool CanViewDocs = true);
 
 public static class WorkspaceQueries
 {
@@ -255,9 +257,16 @@ public sealed class ListWorkspaceMembersHandler(IAppDbContext db, ICurrentUser m
         var ws = await db.Workspaces.AsNoTracking().FirstAsync(w => w.Id == q.WorkspaceId, ct);
         if (!await WorkspaceManagement.CanAdministerAsync(db, auth, perms, uid, ws, ct))
             throw new ForbiddenException("Chỉ người quản trị nhóm được xem danh sách thành viên.");
-        return await db.WorkspaceMembers.AsNoTracking().Where(m => m.WorkspaceId == q.WorkspaceId).OrderBy(m => m.MemberRole).ThenBy(m => m.User!.FullName)
+        var members = await db.WorkspaceMembers.AsNoTracking().Where(m => m.WorkspaceId == q.WorkspaceId).OrderBy(m => m.MemberRole).ThenBy(m => m.User!.FullName)
             .Select(m => new WorkspaceMemberDto(m.UserId, m.User!.Username, m.User.FullName, m.User.Organization != null ? m.User.Organization.Name : null, m.MemberRole, m.AddedAt))
             .ToListAsync(ct);
+        var result = new List<WorkspaceMemberDto>(members.Count);
+        foreach (var m in members)
+        {
+            var codes = await perms.GetPermissionsAsync(m.UserId, ct); // cached per user by the RBAC service
+            result.Add(m with { CanViewDocs = codes.Contains(Perm.DocView) || codes.Contains(Perm.DocAdmin) });
+        }
+        return result;
     }
 }
 

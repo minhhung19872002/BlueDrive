@@ -19,7 +19,12 @@ public class AuthTests(ApiFactory factory)
     {
         var admin = await factory.AdminClientAsync();
         var username = "pwd" + Guid.NewGuid().ToString("N")[..8];
-        await (await admin.PostAsJsonAsync("/api/v1/users", new { username, fullName = "Kiểm thử đổi mật khẩu", isActive = true, password = "Init@Pass123" })).ReadJsonAsync();
+        var roleIds = (await (await admin.GetAsync("/api/v1/roles")).ReadJsonAsync()).EnumerateArray().Where(r => r.GetProperty("code").GetString() == "chi_xem")
+            .Select(r => r.GetProperty("id").GetGuid()).ToArray();
+        // An account needs at least one role: without one it would sign in and see no documents at all.
+        (await admin.PostAsJsonAsync("/api/v1/users", new { username, fullName = "Kiểm thử đổi mật khẩu", isActive = true, password = "Init@Pass123" }))
+            .StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        await (await admin.PostAsJsonAsync("/api/v1/users", new { username, fullName = "Kiểm thử đổi mật khẩu", isActive = true, password = "Init@Pass123", roleIds })).ReadJsonAsync();
 
         var client = factory.CreateClient();
         var tokens = await TestHelpers.LoginAsync(client, username, "Init@Pass123");

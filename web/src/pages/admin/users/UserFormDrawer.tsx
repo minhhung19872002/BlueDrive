@@ -174,7 +174,7 @@ function UserForm({ editing, onClose, onCreated }: Omit<UserFormDrawerProps, 'op
             </Form.Item>
           </Col>
           <Col xs={24}>
-            <Form.Item name="roleIds" label={t('user.roles')}>
+            <Form.Item name="roleIds" label={t('user.roles')} rules={[{ required: true, type: 'array', min: 1, message: t('user.rolesRequired') }]}>
               <Select
                 mode="multiple"
                 allowClear
@@ -186,13 +186,14 @@ function UserForm({ editing, onClose, onCreated }: Omit<UserFormDrawerProps, 'op
             </Form.Item>
           </Col>
           <Col xs={24}>
-            <Form.Item name="groupIds" label={t('user.groups')}>
+            <Form.Item name="groupIds" label={t('user.groups')} extra={t('user.groupsHint')}>
               <Select
                 mode="multiple"
                 allowClear
                 optionFilterProp="label"
                 loading={groups.isLoading}
                 placeholder={t('user.groupsPlaceholder')}
+                notFoundContent={t('user.groupsEmpty')}
                 options={groups.data?.map((g) => ({ value: g.id, label: g.name }))}
               />
             </Form.Item>

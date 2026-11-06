@@ -73,6 +73,7 @@ public static class TestHelpers
         var admin = await factory.AdminClientAsync();
         var roles = await (await admin.GetAsync("/api/v1/roles")).ReadJsonAsync();
         var roleIds = roles.EnumerateArray().Where(r => roleCodes.Contains(r.GetProperty("code").GetString())).Select(r => r.GetProperty("id").GetGuid()).ToList();
+        roleIds.Should().HaveCount(roleCodes.Length, "every role code passed must exist ({0})", string.Join(", ", roleCodes));
         var username = "u" + Guid.NewGuid().ToString("N")[..10];
         const string initial = "Init@Pass123";
         var created = await (await admin.PostAsJsonAsync("/api/v1/users", new

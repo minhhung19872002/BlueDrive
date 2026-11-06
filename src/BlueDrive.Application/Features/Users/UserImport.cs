@@ -99,6 +99,7 @@ public sealed class ImportUsersHandler(
             var roleIds = new List<Guid>();
             foreach (var code in Split(row.Get(UserImportTemplate.Roles)))
                 if (roles.TryGetValue(code.ToLowerInvariant(), out var rid)) roleIds.Add(rid); else rowErrors.Add($"Mã vai trò '{code}' không tồn tại.");
+            if (roleIds.Count == 0 && !Split(row.Get(UserImportTemplate.Roles)).Any()) rowErrors.Add("Thiếu vai trò: mỗi tài khoản cần ít nhất một mã vai trò.");
             var groupIds = new List<Guid>();
             foreach (var name in Split(row.Get(UserImportTemplate.Groups)))
             {

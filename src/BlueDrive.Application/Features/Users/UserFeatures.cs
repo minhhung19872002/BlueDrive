@@ -164,6 +164,9 @@ public sealed class SaveUserValidator : AbstractValidator<SaveUserCommand>
         RuleFor(x => x.Phone).Matches(@"^[0-9+()\s.-]{6,20}$").When(x => !string.IsNullOrWhiteSpace(x.Phone)).WithMessage("Số điện thoại không hợp lệ.");
         RuleFor(x => x.QuotaGb).InclusiveBetween(0, 100_000).When(x => x.QuotaGb.HasValue).WithMessage("Dung lượng cấp phát không hợp lệ.");
         RuleFor(x => x.Position).MaximumLength(255);
+        // Without a role an account signs in but sees no documents at all, even in the groups it belongs to.
+        RuleFor(x => x.RoleIds).Must(r => r is { Count: > 0 }).When(x => x.Id is null || x.RoleIds is not null)
+            .WithMessage("Vui lòng chọn ít nhất một vai trò.");
     }
 }
 

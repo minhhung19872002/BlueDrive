@@ -43,10 +43,18 @@ public class SharingModelTests(ApiFactory factory)
         rows.Should().ContainSingle().Which.GetProperty("principalName").GetString().Should().Be("DEV");
         rows[0].GetProperty("principalId").GetGuid().Should().Be(dev);
 
-        // Someone added to DEV afterwards gets it without sharing again.
+        // The member list tells who can see documents at all (a member whose system role cannot is flagged).
+        (await (await lead.GetAsync($"/api/v1/workspaces/{dev}/members")).ReadJsonAsync()).EnumerateArray().Should().OnlyContain(m => m.GetProperty("canViewDocs").GetBoolean());
+
+        // Someone added to DEV afterwards gets it without sharing again, and finds it in "Được chia sẻ".
         (await late.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await (await late.GetAsync("/api/v1/shares/with-me")).ReadJsonAsync()).GetProperty("total").GetInt32().Should().Be(0);
         await (await lead.PostAsJsonAsync($"/api/v1/workspaces/{dev}/members", new { userIds = new[] { lateId }, role = "editor" })).ReadJsonAsync();
         (await late.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
+        (await (await late.GetAsync("/api/v1/shares/with-me")).ReadJsonAsync()).GetProperty("items").EnumerateArray()
+            .Select(i => i.GetProperty("item").GetProperty("id").GetGuid()).Should().Contain(file);
+        (await (await member.GetAsync("/api/v1/shares/with-me")).ReadJsonAsync()).GetProperty("items").EnumerateArray()
+            .Select(i => i.GetProperty("item").GetProperty("id").GetGuid()).Should().Contain(file, "a member from the start sees it too");
 
         // Changing the row changes it for the whole Space (the leader too), and removing it takes it back from everyone in DEV.
         (await owner.PatchAsJsonAsync($"/api/v1/items/{file}/permissions/{rows[0].GetProperty("id").GetGuid()}", new { levelId = levels["editor"] })).EnsureSuccessStatusCode();

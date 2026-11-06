@@ -22,7 +22,7 @@ public class MonitoringTests(ApiFactory factory)
         var admin = await factory.AdminClientAsync();
         var (c, userId, username) = await factory.CreateUserClientAsync("bien_tap");
         var ws = await StorageTests.PersonalWorkspaceAsync(c);
-        var (_, otherId, _) = await factory.CreateUserClientAsync("xem");
+        var (_, otherId, _) = await factory.CreateUserClientAsync("chi_xem");
         var fileId = (await StorageTests.UploadAsync(c, ws, null, "nhat-ky.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
         var item = new[] { new { type = "file", id = fileId } };
         await (await c.GetAsync($"/api/v1/files/{fileId}/download-url")).ReadJsonAsync();

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { App, Button, Drawer, Grid, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from 'antd'
+import { Alert, App, Button, Drawer, Grid, Popconfirm, Select, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import { CrownOutlined, DeleteOutlined, LogoutOutlined, UserAddOutlined } from '@ant-design/icons'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -37,11 +37,27 @@ export default function WorkspaceMembersDrawer({ workspace, open, onClose }: { w
   })
   const invalidate = [qk.workspaceMembers(workspace.id), qk.workspaces, qk.drive]
 
-  const add = useApiMutation(() => setWorkspaceMembers(workspace.id, newUsers, newRole), {
-    successMessage: (r) => t('workspace.membersAdded', { count: r.updated }),
-    invalidate,
-    onSuccess: () => setNewUsers([]),
-  })
+  const add = useApiMutation(
+    async () => {
+      const r = await setWorkspaceMembers(workspace.id, newUsers, newRole)
+      // Who was just added but whose system role cannot see documents: they would find the group empty.
+      const blind = (await listWorkspaceMembers(workspace.id)).filter((m) => newUsers.includes(m.userId) && !m.canViewDocs)
+      return { ...r, blind }
+    },
+    {
+      successMessage: (r) => t('workspace.membersAdded', { count: r.updated }),
+      invalidate,
+      onSuccess: (r) => {
+        setNewUsers([])
+        if (r.blind.length)
+          modal.warning({
+            title: t('workspace.noRoleTitle'),
+            content: t('workspace.noRoleAdded', { names: r.blind.map((m) => m.fullName).join(', ') }),
+          })
+      },
+    },
+  )
+  const blindMembers = (members.data ?? []).filter((m) => !m.canViewDocs)
   const changeRole = useApiMutation(
     ({ userId, role }: { userId: string; role: WorkspaceMemberRole }) => setWorkspaceMembers(workspace.id, [userId], role),
     { successMessage: t('workspace.roleChanged'), invalidate },
@@ -95,6 +111,15 @@ export default function WorkspaceMembersDrawer({ workspace, open, onClose }: { w
         </Space.Compact>
       )}
       <Typography.Paragraph type="secondary">{t('workspace.rolesHint')}</Typography.Paragraph>
+      {blindMembers.length > 0 && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={t('workspace.noRoleMembers', { count: blindMembers.length, names: blindMembers.map((m) => m.fullName).join(', ') })}
+          description={t('workspace.noRoleHint')}
+        />
+      )}
       <Table<WorkspaceMember>
         rowKey="userId"
         size="small"
@@ -109,6 +134,11 @@ export default function WorkspaceMembersDrawer({ workspace, open, onClose }: { w
             render: (_, m) => (
               <div>
                 <Typography.Text strong>{m.fullName}</Typography.Text>
+                {!m.canViewDocs && (
+                  <Tag color="warning" style={{ marginLeft: 8 }}>
+                    {t('workspace.noRoleTag')}
+                  </Tag>
+                )}
                 <br />
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                   {m.username}

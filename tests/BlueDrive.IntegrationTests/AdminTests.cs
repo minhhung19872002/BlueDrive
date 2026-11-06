@@ -136,7 +136,10 @@ public class AdminTests(ApiFactory factory)
         matrix.GetProperty("actions").GetArrayLength().Should().Be(7);
         (await admin.PutAsJsonAsync($"/api/v1/roles/{roleId}/permissions", new[] { "org.view", "catalog.view" })).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-        var (client, userId, _) = await factory.CreateUserClientAsync();
+        // Every account needs a role: start from one granting nothing.
+        var emptyCode = "kt_rong_" + Random.Shared.Next(1000, 9999);
+        (await admin.PostAsJsonAsync("/api/v1/roles", new { code = emptyCode, name = "Vai trò trống " + emptyCode })).EnsureSuccessStatusCode();
+        var (client, userId, _) = await factory.CreateUserClientAsync(emptyCode);
         (await client.GetAsync("/api/v1/organizations")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         await (await admin.PutAsJsonAsync($"/api/v1/users/{userId}", new { username = (await (await admin.GetAsync($"/api/v1/users/{userId}")).ReadJsonAsync()).GetProperty("username").GetString(), fullName = "Có vai trò", isActive = true, roleIds = new[] { roleId } })).ReadJsonAsync();
         var orgRes = await client.GetAsync("/api/v1/organizations");
