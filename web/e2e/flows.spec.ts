@@ -6,6 +6,31 @@ const stamp = Date.now().toString().slice(-6)
 /** Word document created by the ONLYOFFICE test and reused by the link sharing test (never a user's file). */
 const docName = `Kế hoạch E2E ${stamp}`
 
+/**
+ * The flows create real data (folder, Word document, organization unit): remove what this run created, so that a server
+ * tested again and again (production included) does not fill up with "E2E …" folders and "Phòng Kiểm thử Tự động …" units.
+ */
+test.afterAll(async ({ playwright, baseURL }) => {
+  const api = await playwright.request.newContext({ baseURL })
+  const login = await (await api.post('/api/v1/auth/login', {
+    data: { username: process.env.E2E_USERNAME ?? 'admin', password: process.env.E2E_PASSWORD ?? 'Admin@Smoke2026' },
+  })).json()
+  const headers = { Authorization: `Bearer ${login.accessToken}` }
+  const ws = (await (await api.get('/api/v1/auth/me', { headers })).json()).personalWorkspaceId
+  const listed = await (await api.get(`/api/v1/workspaces/${ws}/items`, { headers, params: { q: stamp, pageSize: 100 } })).json()
+  const items = ((listed.items ?? []) as { type: 'file' | 'folder'; id: string; name: string }[])
+    .filter((i) => i.name.includes(stamp))
+    .map((i) => ({ type: i.type, id: i.id }))
+  if (items.length) {
+    await api.post('/api/v1/items/delete', { headers, data: { items } })
+    // Out of the trash, then out of the second stage (spec 8.1).
+    for (let i = 0; i < 2; i++) await api.post('/api/v1/trash/purge', { headers, data: items })
+  }
+  const units = await (await api.get('/api/v1/organizations', { headers, params: { q: `E2E${stamp}`, pageSize: 20 } })).json()
+  for (const u of (units.items ?? []) as { id: string; code: string }[]) if (u.code === `E2E${stamp}`) await api.delete(`/api/v1/organizations/${u.id}`, { headers })
+  await api.dispose()
+})
+
 async function openMyDrive(page: Page) {
   await page.goto('/my-drive')
   await page.waitForLoadState('networkidle')
@@ -180,7 +205,8 @@ test('quản trị: thêm đơn vị và tìm không dấu', async ({ page }) =>
   await dlg.getByLabel(/^Mã/).fill(`E2E${stamp}`)
   await dlg.getByLabel(/^Tên/).fill(`Phòng Kiểm thử Tự động ${stamp}`)
   await dlg.getByRole('button', { name: /Lưu|Đồng ý|OK/ }).click()
-  await page.getByPlaceholder(/Tìm|mã|tên/i).first().fill(`kiem thu tu dong ${stamp}`)
+  // The table's own box ("Tìm theo mã, tên…"), not the header's document search.
+  await page.getByRole('main').getByPlaceholder(/mã, tên/i).first().fill(`kiem thu tu dong ${stamp}`)
   await page.keyboard.press('Enter')
   await expect(page.getByText(`Phòng Kiểm thử Tự động ${stamp}`)).toBeVisible({ timeout: 10_000 })
 })
