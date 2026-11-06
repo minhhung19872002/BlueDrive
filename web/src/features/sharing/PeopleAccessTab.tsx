@@ -120,29 +120,30 @@ export default function PeopleAccessTab({ itemId, onDirtyChange }: { itemId: str
   const queryClient = useQueryClient()
   const save = useApiMutation(
     async (list: { id: string; draft: Draft }[]) => {
-      // One by one: what was applied leaves the drafts at once, so a failure part way keeps only what is still to do.
-      for (const { id, draft } of list) {
-        if (draft.remove) await revokeItemPermission(itemId, id)
-        else
-          await updateItemPermission(itemId, id, {
-            levelId: draft.levelId,
-            expiresAt: draft.expiresAt ?? undefined,
-            clearExpiry: draft.expiresAt === null,
-          })
+      // One by one; a failure part way keeps only what is still to do.
+      const applied: string[] = []
+      try {
+        for (const { id, draft } of list) {
+          if (draft.remove) await revokeItemPermission(itemId, id)
+          else
+            await updateItemPermission(itemId, id, {
+              levelId: draft.levelId,
+              expiresAt: draft.expiresAt ?? undefined,
+              clearExpiry: draft.expiresAt === null,
+            })
+          applied.push(id)
+        }
+      } finally {
+        // Drafts go only once the list shows the saved values: dropping them first briefly showed the old level again.
+        await queryClient.invalidateQueries({ queryKey: key })
         setDrafts((p) => {
           const next = { ...p }
-          delete next[id]
+          for (const id of applied) delete next[id]
           return next
         })
       }
     },
-    {
-      ...opts,
-      successMessage: t('sharing.people.saved'),
-      onError: () => {
-        void queryClient.invalidateQueries({ queryKey: key })
-      },
-    },
+    { invalidate: [['shares']], successMessage: t('sharing.people.saved') },
   )
   const general = useApiMutation((v: { mode: 'restricted' | 'organization'; levelId: string | null }) => setGeneralAccess(itemId, v.mode, v.levelId), {
     ...opts,
@@ -279,14 +280,14 @@ export default function PeopleAccessTab({ itemId, onDirtyChange }: { itemId: str
                         style={{ minWidth: 180 }}
                         value={shownLevel}
                         options={optionsWith(e.levelId)}
-                        disabled={removing}
+                        disabled={removing || save.isPending}
                         onChange={(v) => edit(e.id, { levelId: v })}
                         aria-label={t('sharing.people.level')}
                       />
                       <DatePicker
                         size="small"
                         value={shownExpiry ? dayjs(shownExpiry) : null}
-                        disabled={removing}
+                        disabled={removing || save.isPending}
                         format="DD/MM/YYYY"
                         placeholder={t('sharing.people.noExpiry')}
                         disabledDate={(d) => d.isBefore(dayjs(), 'day')}
