@@ -1372,7 +1372,7 @@
     "emptyConfirm2": "Xóa vĩnh viễn toàn bộ thùng rác tầng 2 của không gian này? Thao tác này không thể hoàn tác (trừ mục đang lưu giữ hoặc giữ pháp lý).",
     "stageLabel": "Tầng thùng rác",
     "stage1": "Thùng rác",
-    "stage2": "Tầng 2 (quản trị)",
+    "stage2": "Tầng 2",
     "emptied": "Đã dọn sạch thùng rác ({{count}} mục).",
     "originalLocation": "Vị trí gốc",
     "locationGone": "Vị trí gốc không còn",

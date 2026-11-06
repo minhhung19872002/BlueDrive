@@ -47,14 +47,18 @@ export default function TrashPage() {
   const current = workspaces.data?.find((w) => w.id === workspaceId)
   // "Tài liệu của tôi": its owner uses its trash whatever the system role (like Google Drive); a group's trash needs the role's functions.
   const may = (perm: string) => mine || (!!workspaceId && workspaceId === personalId) || can(perm)
+  // Everyone owns a drive: "Thùng rác của tôi" offers its second stage too (the owner manages it, spec 8.1).
   const secondStage =
-    can('workspace.admin') || current?.type === 'personal' || (!!current?.myRole && SECOND_STAGE_ROLES.includes(current.myRole))
-  const shownStage = secondStage && !mine ? stage : 1
+    mine || can('workspace.admin') || current?.type === 'personal' || (!!current?.myRole && SECOND_STAGE_ROLES.includes(current.myRole))
+  const shownStage = secondStage ? stage : 1
+  // The second stage of "Thùng rác của tôi" is my drive's.
+  const stageTwoOfMine = mine && shownStage === 2
 
   const trash = useQuery({
     queryKey: [...qk.trash(workspaceId ?? MINE), table.params, shownStage],
-    queryFn: () => (mine ? listMyTrash(table.params) : listTrash(workspaceId!, table.params, shownStage)),
-    enabled: mine || (!!workspaceId && may('trash.view')),
+    queryFn: () =>
+      mine && !stageTwoOfMine ? listMyTrash(table.params) : listTrash(stageTwoOfMine ? personalId! : workspaceId!, table.params, shownStage),
+    enabled: mine ? !stageTwoOfMine || !!personalId : !!workspaceId && may('trash.view'),
     placeholderData: keepPreviousData,
   })
 
@@ -126,7 +130,7 @@ export default function TrashPage() {
             style={{ minWidth: 260 }}
             aria-label={t('trash.workspace')}
           />
-          {secondStage && !mine && (
+          {secondStage && (
             <Segmented
               value={shownStage}
               onChange={(v) => {
