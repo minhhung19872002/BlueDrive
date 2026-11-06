@@ -41,6 +41,8 @@ export default function TrashPage() {
   )
 
   const current = workspaces.data?.find((w) => w.id === workspaceId)
+  // "Tài liệu của tôi": its owner uses its trash whatever the system role (like Google Drive); a group's trash needs the role's functions.
+  const may = (perm: string) => (!!workspaceId && workspaceId === personalId) || can(perm)
   const secondStage =
     can('workspace.admin') || current?.type === 'personal' || (!!current?.myRole && SECOND_STAGE_ROLES.includes(current.myRole))
   const shownStage = secondStage ? stage : 1
@@ -48,7 +50,7 @@ export default function TrashPage() {
   const trash = useQuery({
     queryKey: [...qk.trash(workspaceId ?? ''), table.params, shownStage],
     queryFn: () => listTrash(workspaceId!, table.params, shownStage),
-    enabled: !!workspaceId && can('trash.view'),
+    enabled: !!workspaceId && may('trash.view'),
     placeholderData: keepPreviousData,
   })
 
@@ -66,7 +68,7 @@ export default function TrashPage() {
     successMessage: (r) => t('trash.emptied', { count: r.purged }),
   })
 
-  if (!can('trash.view')) {
+  if (!may('trash.view')) {
     return <Result status="403" title={t('auth.forbiddenTitle')} subTitle={t('trash.noPermission')} />
   }
 
@@ -97,7 +99,7 @@ export default function TrashPage() {
         title={t('menu.trash')}
         description={t('trash.hint')}
         extra={
-          can('trash.delete') && (
+          may('trash.delete') && (
             <Button danger icon={<ClearOutlined />} onClick={confirmEmpty} disabled={!workspaceId || total === 0} loading={empty.isPending}>
               {t('trash.empty')}
             </Button>
@@ -142,12 +144,12 @@ export default function TrashPage() {
           {selected.length > 0 && (
             <>
               <Typography.Text>{t('trash.selected', { count: selected.length })}</Typography.Text>
-              {can('trash.edit') && (
+              {may('trash.edit') && (
                 <Button type="primary" icon={<UndoOutlined />} onClick={() => restore.mutate()} loading={restore.isPending}>
                   {t('trash.restore')}
                 </Button>
               )}
-              {can('trash.delete') && (
+              {may('trash.delete') && (
                 <Button danger icon={<DeleteOutlined />} onClick={confirmPurge} loading={purge.isPending}>
                   {t('trash.purge')}
                 </Button>

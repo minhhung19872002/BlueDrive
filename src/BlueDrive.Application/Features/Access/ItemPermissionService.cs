@@ -122,7 +122,11 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
                 AccessRights.All, scope.Name, AclSource.Direct, null));
         var restrictions = new List<string>();
         if (!user.CanViewDocs) restrictions.Add("Vai trò hệ thống không có quyền xem tư liệu.");
-        if (!user.CanEditDocs) restrictions.Add("Vai trò hệ thống không có quyền sửa tư liệu: quyền ghi có được qua thành viên Space bị bỏ (trừ thêm mới, phê duyệt).");
+        var capped = AccessRights.All & ~user.RoleCap;
+        if (user.CanViewDocs && capped != AccessRight.None)
+            restrictions.Add("Vai trò hệ thống giới hạn quyền có được nhờ là thành viên Space/nhóm (không gồm: "
+                             + string.Join(", ", AccessRights.Descriptions.Where(d => capped.Has(d.Key)).Select(d => d.Value.ToLowerInvariant()))
+                             + "). Quyền được chia sẻ trực tiếp và Tài liệu của tôi không bị giới hạn.");
         var space = await SpaceState.LoadAsync(db, node.SpaceId ?? node.PersonalDriveId, ct);
         if (space.Deleted) restrictions.Add("Không gian đã bị xóa (đang trong thùng rác hệ thống): không ai truy cập được.");
         else if (space.Locked) restrictions.Add("Không gian đang bị khóa hoặc đã lưu trữ: chỉ còn quyền đọc.");
@@ -204,19 +208,40 @@ public sealed class ItemPermissionService(IAppDbContext db, IPermissionService r
 }
 
 /// <summary>
-/// Restrictions applied after the OR (spec 3.4), shared by the engine and the reference evaluator. Rules carried over from the current
-/// model (docs/migration-permissions.md, section 4a): no "doc.view" → nothing; no "doc.edit" → Space membership and ownership give no
-/// writes (adding and approving stay); "Đóng góp" edits its own files; a file not approved yet is seen only by its uploader, editors and
-/// approvers; a locked Space keeps reading only.
+/// Restrictions applied after the OR (spec 3.4), shared by the engine, the sync tree and the reference evaluator. Like Google Drive:
+/// <list type="bullet">
+/// <item>no "doc.view" → nothing;</item>
+/// <item>"Tài liệu của tôi": its owner may do everything there, whatever their system role (only the quota limits them);</item>
+/// <item>access given on the item itself (shared with the person, their group, unit or a whole Space) is what it says, whatever the role:
+/// a "Chỉ xem" account shared "Chỉnh sửa" edits that document;</item>
+/// <item>access that comes from being a member of a group or unit's Space is capped by the system role, right by right
+/// (<see cref="User.RoleCap"/>): a "Chỉ xem" member only views and downloads the group's documents;</item>
+/// <item>"Đóng góp" edits its own files; a file not approved yet is seen only by its uploader, editors and approvers; a locked Space keeps
+/// reading only.</item>
+/// </list>
 /// </summary>
 public static class Restrictions
 {
-    public sealed record User(Guid UserId, bool CanViewDocs, bool CanEditDocs, IReadOnlyList<Guid> Principals)
+    /// <param name="RoleCap">What Space membership may give this account, from its system role's functions.</param>
+    public sealed record User(Guid UserId, bool CanViewDocs, AccessRight RoleCap, IReadOnlyList<Guid> Principals)
     {
+        /// <summary>Reading, drafts, activity and comments come with seeing documents at all; each write needs its function.</summary>
+        private const AccessRight Always = AccessRights.Read | AccessRight.ViewDrafts | AccessRight.ViewActivity | AccessRight.Comment;
+
+        public bool CanEditDocs => RoleCap.Has(AccessRight.EditItems);
+
         public static User From(Guid userId, IReadOnlySet<string> codes, IReadOnlyList<Guid> principals)
         {
-            var admin = codes.Contains(Perm.DocAdmin);
-            return new User(userId, admin || codes.Contains(Perm.DocView), admin || codes.Contains(Perm.DocEdit), principals);
+            if (codes.Contains(Perm.DocAdmin)) return new User(userId, true, AccessRights.All, principals);
+            var cap = Always;
+            if (codes.Contains(Perm.DocUpload)) cap |= AccessRight.AddItems | AccessRight.CreateFolders;
+            if (codes.Contains(Perm.DocEdit))
+                cap |= AccessRight.EditItems | AccessRight.EditOwnItemsOnly | AccessRight.RenameMove | AccessRight.CheckOutOverride | AccessRight.RestoreVersions
+                       | AccessRight.ManageLibrarySettings | AccessRight.ManageSpace | AccessRight.ManageRetention;
+            if (codes.Contains(Perm.DocDelete)) cap |= AccessRight.DeleteItems;
+            if (codes.Contains(Perm.DocShare)) cap |= AccessRight.ShareInternal | AccessRight.ShareExternal | AccessRight.CreateLinks | AccessRight.ManagePermissions;
+            if (codes.Contains(Perm.DocApprove)) cap |= AccessRight.ApproveItems;
+            return new User(userId, codes.Contains(Perm.DocView), cap, principals);
         }
     }
 
@@ -224,17 +249,14 @@ public static class Restrictions
     /// <param name="Published">Spec 1.4: a file with only drafts (minor versions) is seen by its author and by who may edit, approve or see drafts.</param>
     public sealed record FileFacts(Guid? CreatedBy, bool Approved, Guid? CheckedOutBy = null, bool Published = true);
 
-    private const AccessRight KeptWithoutDocEdit = AccessRight.AddItems | AccessRight.ApproveItems;
-
     public static AccessRight Apply(User user, bool owner, AccessRight direct, AccessRight membership, FileFacts? file, bool locked)
     {
         if (!user.CanViewDocs) return AccessRight.None;
-        AccessRight Cap(AccessRight r) => user.CanEditDocs ? r : r & ~AccessRights.Writes | (r & KeptWithoutDocEdit);
-        var rights = direct | Cap(membership);
-        if (owner) rights |= Cap(AccessRights.All);
+        var rights = direct | (membership & user.RoleCap);
+        if (owner) rights |= AccessRights.All;
         if (file is not null)
         {
-            if (rights.Has(AccessRight.EditOwnItemsOnly) && file.CreatedBy == user.UserId && user.CanEditDocs)
+            if (rights.Has(AccessRight.EditOwnItemsOnly) && file.CreatedBy == user.UserId)
                 rights |= AccessRight.EditItems | AccessRight.DeleteItems | AccessRight.RenameMove;
             if ((!file.Approved || !file.Published) && file.CreatedBy != user.UserId && !owner
                 && !rights.Has(AccessRight.EditItems) && !rights.Has(AccessRight.ApproveItems) && !rights.Has(AccessRight.ViewDrafts))

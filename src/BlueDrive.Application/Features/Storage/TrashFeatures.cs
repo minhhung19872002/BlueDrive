@@ -16,6 +16,17 @@ public sealed record TrashItemDto(Guid Id, string Type, string Name, Guid Worksp
 
 public static class TrashAccess
 {
+    /// <summary>
+    /// The trash functions of the system role (trash.view / trash.edit / trash.delete) — except in one's own "Tài liệu của tôi", where
+    /// the owner may do everything whatever the role (like Google Drive).
+    /// </summary>
+    public static async Task EnsureRoleAsync(IAppDbContext db, IPermissionService perms, Guid userId, Guid workspaceId, string permission, string message, CancellationToken ct)
+    {
+        if (await perms.HasAsync(userId, permission, ct)) return;
+        if (await db.Workspaces.AnyAsync(w => w.Id == workspaceId && w.Type == WorkspaceType.Personal && w.OwnerId == userId, ct)) return;
+        throw new ForbiddenException(message);
+    }
+
     /// <summary>Trash of a workspace: members with edit rights (and the owner) — plus everyone for items they deleted themselves.</summary>
     public static async Task<bool> CanManageTrashAsync(IResourceAuthorizationService auth, Guid userId, Guid workspaceId, CancellationToken ct)
         => (await auth.GetAccessAsync(userId, ResourceType.Workspace, workspaceId, ct)).Level >= AccessLevel.Edit;
@@ -45,6 +56,7 @@ public sealed class ListTrashHandler(IAppDbContext db, ICurrentUser me, IResourc
     {
         var uid = me.RequireUserId();
         var ws = await db.Workspaces.AsNoTracking().FirstOrDefaultAsync(w => w.Id == q.WorkspaceId, ct) ?? throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
+        await TrashAccess.EnsureRoleAsync(db, perms, uid, ws.Id, Perm.TrashView, "Vai trò của bạn không có quyền xem thùng rác.", ct);
         var second = q.Stage == 2;
         if (second && !await TrashAccess.CanManageSecondStageAsync(perms, engine, uid, ws.Id, ct))
             throw new ForbiddenException("Chỉ Quản lý Space và quản trị xem được thùng rác tầng 2.");
@@ -103,7 +115,6 @@ public sealed class RestoreItemsHandler(IAppDbContext db, ICurrentUser me, IReso
     public async Task<int> Handle(RestoreItemsCommand cmd, CancellationToken ct)
     {
         var uid = me.RequireUserId();
-        if (!await perms.HasAsync(uid, Perm.TrashRestore, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền khôi phục từ thùng rác.");
         var count = 0;
         foreach (var item in cmd.Items)
         {
@@ -170,6 +181,7 @@ public sealed class RestoreItemsHandler(IAppDbContext db, ICurrentUser me, IReso
 
     private async Task EnsureTrashRight(Guid uid, Guid workspaceId, Guid? deletedBy, bool secondStage, CancellationToken ct)
     {
+        await TrashAccess.EnsureRoleAsync(db, perms, uid, workspaceId, Perm.TrashRestore, "Vai trò của bạn không có quyền khôi phục từ thùng rác.", ct);
         if (secondStage)
         {
             if (!await TrashAccess.CanManageSecondStageAsync(perms, engine, uid, workspaceId, ct)) throw new ForbiddenException("Chỉ Quản lý Space và quản trị khôi phục được từ thùng rác tầng 2.");
@@ -193,11 +205,12 @@ public sealed class PurgeItemsHandler(IAppDbContext db, ICurrentUser me, IResour
     public async Task<int> Handle(PurgeItemsCommand cmd, CancellationToken ct)
     {
         var uid = me.RequireUserId();
-        if (!await perms.HasAsync(uid, Perm.TrashPurge, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền xóa vĩnh viễn.");
+        const string noPurge = "Vai trò của bạn không có quyền xóa vĩnh viễn.";
         var items = cmd.Items?.ToList() ?? [];
         var mode = PurgeMode.Manual;
         if (cmd.EmptyWorkspaceId is { } wsId)
         {
+            await TrashAccess.EnsureRoleAsync(db, perms, uid, wsId, Perm.TrashPurge, noPurge, ct);
             var second = cmd.EmptyStage == 2;
             if (second && !await TrashAccess.CanManageSecondStageAsync(perms, engine, uid, wsId, ct)) throw new ForbiddenException("Chỉ Quản lý Space và quản trị dọn được thùng rác tầng 2.");
             var full = second || await TrashAccess.CanManageTrashAsync(auth, uid, wsId, ct);
@@ -215,6 +228,7 @@ public sealed class PurgeItemsHandler(IAppDbContext db, ICurrentUser me, IResour
                 ? await db.Files.Where(f => f.Id == item.Id && f.IsDeleted && f.IsTrashRoot && f.PreservedAt == null).Select(f => new { f.WorkspaceId, f.DeletedBy, f.SecondStageAt, f.Name }).FirstOrDefaultAsync(ct)
                 : await db.Folders.Where(f => f.Id == item.Id && f.IsDeleted && f.IsTrashRoot && f.PreservedAt == null).Select(f => new { f.WorkspaceId, f.DeletedBy, f.SecondStageAt, f.Name }).FirstOrDefaultAsync(ct);
             if (row is null) throw new NotFoundException("Không tìm thấy mục trong thùng rác.");
+            await TrashAccess.EnsureRoleAsync(db, perms, uid, row.WorkspaceId, Perm.TrashPurge, noPurge, ct);
             if (row.SecondStageAt is null)
             {
                 if (row.DeletedBy != uid && !await TrashAccess.CanManageTrashAsync(auth, uid, row.WorkspaceId, ct)) throw new ForbiddenException("Bạn không có quyền với thùng rác của nhóm này.");

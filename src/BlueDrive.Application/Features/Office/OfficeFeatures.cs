@@ -18,9 +18,9 @@ namespace BlueDrive.Application.Features.Office;
 /// <param name="VersionId">An older version to read in the editor ("Phiên bản" → Xem): read-only, needs the right to see versions.</param>
 public sealed record GetOfficeConfigQuery(Guid FileId, bool ForceView = false, bool Mobile = false, Guid? VersionId = null) : IRequest<OfficeEditorConfig>;
 
-public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth,
+public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms,
     IOfficeEditorProvider office, IContentTicketService tickets, IAuditLogger audit, TimeProvider clock, Access.IItemPermissionService engine, Libraries.Libraries libraries,
-    Storage.QuotaService quota, Access.Labels labels, IPermissionService perms)
+    Storage.QuotaService quota, Access.Labels labels)
     : IRequestHandler<GetOfficeConfigQuery, OfficeEditorConfig>
 {
     public async Task<OfficeEditorConfig> Handle(GetOfficeConfigQuery q, CancellationToken ct)
@@ -48,9 +48,12 @@ public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IR
         catch (AppException) { mayChange = false; }
         var full = await quota.IsFullAsync(f.WorkspaceId, ct); // spec 8.2: no new versions when full
         var canEdit = !q.ForceView && access.CanEdit && office.CanEdit(f.Extension) && mayChange && versionId == f.CurrentVersionId && !full;
-        // Comments are saved into the document (a new version): a role that may not change documents only views.
+        // Comments are saved into the document (a new version), so they change it: who was given "Người nhận xét" (or more) on the document
+        // itself, or whose role may change documents. Only being a member of the group (capped by a "Chỉ xem" role) views.
         var canComment = !q.ForceView && !canEdit && rights.Has(Domain.Permissions.AccessRight.Comment) && versionId == f.CurrentVersionId && !full
-                         && await perms.HasAsync(uid, Perm.DocEdit, ct);
+                         && (await perms.HasAsync(uid, Perm.DocEdit, ct)
+                             || (await engine.ExplainAsync(uid, f.Id, ct)).Sources.Any(s => s.Origin != Domain.Enums.AclSource.SpaceDefault
+                                                                                          && s.Rights.Has(Domain.Permissions.AccessRight.Comment)));
         // Spec 11.9: "Chỉ xem" or a label asking for it — a watermark, and no download, print or copy.
         var watermark = !access.CanDownload || (await labels.ForAsync(f.Id, ct))?.Label.Watermark == true;
         var name = await db.Users.Where(u => u.Id == uid).Select(u => u.FullName).FirstAsync(ct);

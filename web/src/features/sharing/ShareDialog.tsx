@@ -1,6 +1,7 @@
 import { Alert, Divider, Modal } from 'antd'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useCan } from '@/hooks/usePermissions'
+import { getItemPermissions } from '@/api/permissions'
 import type { ItemType } from '@/types/drive'
 import LinkShareTab from './LinkShareTab'
 import PeopleAccessTab from './PeopleAccessTab'
@@ -21,7 +22,7 @@ export interface ShareTarget {
 /** #49 share dialog: internal sharing + public links. */
 export default function ShareDialog({ target, onClose }: { target: ShareTarget; onClose: () => void }) {
   const { t } = useTranslation()
-  const can = useCan()
+  const access = useQuery({ queryKey: ['item-permissions', target.id], queryFn: () => getItemPermissions(target.id) })
   const confirmClose = useConfirmClose(onClose)
   return (
     <Modal
@@ -32,7 +33,7 @@ export default function ShareDialog({ target, onClose }: { target: ShareTarget; 
       width={640}
       destroyOnHidden
     >
-      {!can('doc.share') && <Alert type="warning" showIcon message={t('sharing.noPermission')} style={{ marginBottom: 12 }} />}
+      {access.data && !access.data.canShare && <Alert type="warning" showIcon message={t('sharing.noPermission')} style={{ marginBottom: 12 }} />}
       {/* One page, no tabs: who has access (and the "Chia sẻ ra ngoài" switch) first, the item's link below. */}
       <PeopleAccessTab itemId={target.id} onDirtyChange={confirmClose.setDirty} />
       <Divider style={{ margin: '20px 0 12px' }} />

@@ -31,13 +31,13 @@ public sealed class CreateFolderValidator : AbstractValidator<CreateFolderComman
     public CreateFolderValidator() => RuleFor(x => x.Name).ValidItemName();
 }
 
-public sealed class CreateFolderHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IAuditLogger audit)
+public sealed class CreateFolderHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IAuditLogger audit)
     : IRequestHandler<CreateFolderCommand, DriveItemDto>
 {
     public async Task<DriveItemDto> Handle(CreateFolderCommand cmd, CancellationToken ct)
     {
         var uid = me.RequireUserId();
-        if (!await perms.HasAsync(uid, Perm.DocUpload, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền tạo mới tư liệu.");
+        // The place's rights decide (in "Tài liệu của tôi" everything; elsewhere what was given, membership capped by the role).
         await auth.EnsureCanUploadAsync(uid, cmd.WorkspaceId, cmd.ParentId, ct);
         Folder? parent = null;
         if (cmd.ParentId.HasValue)
@@ -196,8 +196,7 @@ public sealed class MoveItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
     public async Task<int> MoveAsync(Guid uid, MoveItemsCommand cmd, bool trusted, CancellationToken ct)
     {
         if (cmd.Items.Count == 0) throw new AppException("Vui lòng chọn mục cần di chuyển.");
-        // Moving puts items into the target like an upload does (#24, #46): same role right as copy.
-        if (!trusted && !await perms.HasAsync(uid, Perm.DocUpload, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền đưa tư liệu vào vị trí khác.");
+        // Moving puts items into the target like an upload does (#24, #46): the target must let the person add.
         if (!trusted) await auth.EnsureCanUploadAsync(uid, cmd.TargetWorkspaceId, cmd.TargetFolderId, ct);
         Folder? target = cmd.TargetFolderId is { } tid
             ? await db.Folders.FirstOrDefaultAsync(f => f.Id == tid && f.WorkspaceId == cmd.TargetWorkspaceId && !f.IsDeleted, ct) ?? throw new NotFoundException("Không tìm thấy thư mục đích.")
@@ -331,14 +330,13 @@ public sealed class MovePreviewHandler(IAppDbContext db, ICurrentUser me, Access
 
 public sealed record CopyItemsCommand(IReadOnlyList<ItemRef> Items, Guid TargetWorkspaceId, Guid? TargetFolderId) : IRequest<int>;
 
-public sealed class CopyItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, QuotaService quota, IPermissionService perms, IAuditLogger audit, TimeProvider clock)
+public sealed class CopyItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, QuotaService quota, IAuditLogger audit, TimeProvider clock)
     : IRequestHandler<CopyItemsCommand, int>
 {
     public async Task<int> Handle(CopyItemsCommand cmd, CancellationToken ct)
     {
         var uid = me.RequireUserId();
         if (cmd.Items.Count == 0) throw new AppException("Vui lòng chọn mục cần sao chép.");
-        if (!await perms.HasAsync(uid, Perm.DocUpload, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền tạo mới tư liệu.");
         await auth.EnsureCanUploadAsync(uid, cmd.TargetWorkspaceId, cmd.TargetFolderId, ct);
         var target = cmd.TargetFolderId is { } tid ? await db.Folders.FirstAsync(f => f.Id == tid, ct) : null;
 
@@ -426,7 +424,7 @@ public sealed class CopyItemsHandler(IAppDbContext db, ICurrentUser me, IResourc
 /// <summary>Moves items to the trash (soft delete). Space is released only on permanent deletion.</summary>
 public sealed record DeleteItemsCommand(IReadOnlyList<ItemRef> Items) : IRequest<int>;
 
-public sealed class DeleteItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IAuditLogger audit, TimeProvider clock,
+public sealed class DeleteItemsHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IAuditLogger audit, TimeProvider clock,
     Access.IItemPermissionService engine)
     : IRequestHandler<DeleteItemsCommand, int>
 {
@@ -440,7 +438,6 @@ public sealed class DeleteItemsHandler(IAppDbContext db, ICurrentUser me, IResou
     public async Task<int> Handle(DeleteItemsCommand cmd, CancellationToken ct)
     {
         var uid = me.RequireUserId();
-        if (!await perms.HasAsync(uid, Perm.DocDelete, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền xóa tư liệu.");
         var now = clock.GetUtcNow().UtcDateTime;
         var count = 0;
         foreach (var item in cmd.Items)

@@ -20,12 +20,11 @@ import { CopyOutlined, LinkOutlined, QrcodeOutlined, SaveOutlined, StopOutlined 
 import { useQuery } from '@tanstack/react-query'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useTranslation } from 'react-i18next'
-import { getItemSharingPolicy, listPermissionLevels } from '@/api/permissions'
+import { getItemPermissions, getItemSharingPolicy, listPermissionLevels } from '@/api/permissions'
 import { qk } from '@/api/queryKeys'
 import { absoluteShareUrl, createShareLink, listShareLinks, revokeShareLink, updateShareLink } from '@/api/sharing'
 import { applyFieldErrors } from '@/api/formErrors'
 import { useApiMutation } from '@/hooks/useApiMutation'
-import { useCan } from '@/hooks/usePermissions'
 import type { ResourceType, SaveShareLinkRequest, ShareLink, ShareLinkScope } from '@/types/sharing'
 import { copyText } from '@/utils/clipboard'
 import { type PrincipalValue } from './levels'
@@ -60,8 +59,9 @@ interface LinkForm {
  */
 export default function LinkShareTab({ resourceType, resourceId, canDownload }: LinkShareTabProps) {
   const { t } = useTranslation()
-  const can = useCan()
-  const canShare = can('doc.share')
+  // The item's own rights decide (a "Chỉ xem" account given "Chỉnh sửa" may share it); same query as "Người có quyền truy cập".
+  const itemAccess = useQuery({ queryKey: ['item-permissions', resourceId], queryFn: () => getItemPermissions(resourceId) })
+  const canShare = !!itemAccess.data?.canShare
   const [form] = Form.useForm<LinkForm>()
   const [qrId, setQrId] = useState<string | null>(null)
   const audience: ShareLinkScope = Form.useWatch('audience', form) ?? 'existing'

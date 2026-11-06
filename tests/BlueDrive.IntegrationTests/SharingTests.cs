@@ -164,17 +164,21 @@ public class SharingTests(ApiFactory factory)
         var fileId = (await StorageTests.UploadAsync(owner, ws, null, "chi-xem.png", StorageTests.Png)).GetProperty("fileId").GetGuid();
         await (await owner.PostAsJsonAsync("/api/v1/shares", new { resourceType = "file", resourceId = fileId, targets = new[] { new { type = "user", id = friendId } }, accessLevel = 1 })).ReadJsonAsync();
 
-        // The view-only friend may share a view-only link and edit its settings...
+        // The view-only friend may get the item's link for people who already have access (it gives nothing new)...
         var link = await (await friend.PostAsJsonAsync("/api/v1/share-links", new { resourceType = "file", resourceId = fileId, allowDownload = false, requireLogin = true })).ReadJsonAsync();
         var id = link.GetProperty("id").GetGuid();
-        var token = link.GetProperty("token").GetString();
-        var edited = await (await friend.PutAsJsonAsync($"/api/v1/share-links/{id}", new { resourceType = "file", resourceId = fileId, allowDownload = false, requireLogin = false })).ReadJsonAsync();
-        edited.GetProperty("token").GetString().Should().Be(token, "editing keeps the same URL");
-        edited.GetProperty("requireLogin").GetBoolean().Should().BeFalse();
 
-        // ...but cannot turn downloads on afterwards.
+        // ...but cannot open it to anyone (that needs a sharing right on the item, like sharing with people), nor turn downloads on.
+        (await friend.PutAsJsonAsync($"/api/v1/share-links/{id}", new { resourceType = "file", resourceId = fileId, allowDownload = false, requireLogin = false }))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
         var res = await friend.PutAsJsonAsync($"/api/v1/share-links/{id}", new { resourceType = "file", resourceId = fileId, allowDownload = true, requireLogin = false });
         res.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        // The owner opens it to anyone, view only: the same URL.
+        var token = link.GetProperty("token").GetString();
+        var edited = await (await owner.PutAsJsonAsync($"/api/v1/share-links/{id}", new { resourceType = "file", resourceId = fileId, allowDownload = false, requireLogin = false })).ReadJsonAsync();
+        edited.GetProperty("token").GetString().Should().Be(token, "editing keeps the same URL");
+        edited.GetProperty("requireLogin").GetBoolean().Should().BeFalse();
     }
 
     [Fact]

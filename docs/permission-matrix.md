@@ -39,13 +39,23 @@ bảng này và đối chiếu từng ô với mã: sửa cấp quyền mà khô
 
 ## Vai trò hệ thống (RBAC) giới hạn thêm
 
-| Vai trò | Ảnh hưởng lên quyền trên tư liệu |
+Giống Google Drive, vai trò hệ thống **không** giới hạn mọi thứ:
+
+| Quyền đến từ | Vai trò hệ thống có giới hạn không? |
 |---|---|
-| Quản trị hệ thống | Không tự thấy nội dung người khác (chỉ qua *Truy cập khẩn cấp*). |
-| Chỉnh sửa / Tải lên | Như cấp quyền được cấp. |
-| Phê duyệt | Không tải lên / sửa được dù được cấp "Chỉnh sửa". |
-| Chỉ xem | Chỉ các quyền xem (`Read`), không bình luận trong ONLYOFFICE, không chia sẻ. |
+| **Tài liệu của tôi** (chủ Drive) | **Không**: chủ Drive toàn quyền trong Drive của mình (tải lên, tạo, sửa, xóa, chia sẻ, thùng rác), chỉ giới hạn dung lượng. |
+| **Chia sẻ trên tư liệu** (cho người, nhóm người dùng, đơn vị, cả một Space) | **Không**: được chia sẻ cấp nào làm được cấp đó. Ví dụ tài khoản "Chỉ xem" được chia sẻ "Chỉnh sửa" thì sửa được tư liệu đó. |
+| **Thành viên Space / nhóm** (vai trò trong nhóm) | **Có**, theo từng chức năng của vai trò: `doc.upload` → thêm mới, tạo thư mục; `doc.edit` → sửa, đổi tên/di chuyển, khôi phục phiên bản, quản lý Space; `doc.delete` → xóa; `doc.share` → chia sẻ, liên kết, quản lý quyền; `doc.approve` → phê duyệt. Xem, tải xuống, bình luận luôn còn. |
+
+| Vai trò | Với tư liệu dùng chung của nhóm/đơn vị (qua thành viên) |
+|---|---|
+| Quản trị hệ thống | Như vai trò trong nhóm. Không tự thấy nội dung người khác (chỉ qua *Truy cập khẩn cấp*). |
+| Chỉnh sửa | Như vai trò trong nhóm. |
+| Phê duyệt | Xem, phê duyệt, chia sẻ; không thêm / sửa / xóa. |
+| Chỉ xem | Chỉ xem, tải xuống, bình luận. |
 | Khách | Chỉ thấy mục được chia sẻ trực tiếp; không chia sẻ tiếp, không tìm người dùng. |
+
+Thùng rác (`trash.*`): thùng rác của *Tài liệu của tôi* luôn dùng được; thùng rác của nhóm cần chức năng tương ứng của vai trò.
 
 ## Hạn chế thường gặp
 

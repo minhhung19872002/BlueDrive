@@ -28,14 +28,14 @@ public sealed class CreateShareValidator : AbstractValidator<CreateShareCommand>
     }
 }
 
-public sealed class CreateShareHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IUserNotifier notify,
+public sealed class CreateShareHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IUserNotifier notify,
     IAuditLogger audit, TimeProvider clock, Access.LegacyAclSync sync, Access.SharingPolicy policy) : IRequestHandler<CreateShareCommand, int>
 {
     public async Task<int> Handle(CreateShareCommand cmd, CancellationToken ct)
     {
         var uid = me.RequireUserId();
-        if (!await perms.HasAsync(uid, Perm.DocShare, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền chia sẻ tư liệu.");
         var access = await auth.EnsureAsync(uid, cmd.ResourceType, cmd.ResourceId, AccessLevel.View, ct);
+        if (!access.CanShare) throw new ForbiddenException("Bạn không có quyền chia sẻ mục này.");
         // You can grant at most what you have (editors may share for editing; managers anything).
         if (cmd.AccessLevel > access.Level) throw new ForbiddenException("Bạn không thể chia sẻ với quyền cao hơn quyền bạn đang có.");
         if (access.WorkspaceLocked && cmd.AccessLevel >= AccessLevel.Edit) throw new AppException("Nhóm tài nguyên đang bị khóa, chỉ có thể chia sẻ quyền xem/tải xuống.", 423);

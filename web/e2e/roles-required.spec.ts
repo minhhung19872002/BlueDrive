@@ -69,3 +69,39 @@ test('thêm vào nhóm người không xem được tài liệu thì cảnh báo
   await expect(row.getByText('Chưa có vai trò')).toBeVisible()
   await expect(drawer.getByText(/1 thành viên chưa có vai trò được xem tài liệu/)).toBeVisible()
 })
+
+test('tài khoản Chỉ xem toàn quyền trong Tài liệu của tôi (như Google Drive)', async ({ browser }) => {
+  const roles: { id: string; code: string }[] = await (await api.get('/api/v1/roles', { headers: admin })).json()
+  const viewerRole = roles.find((r) => r.code === 'chi_xem')!.id
+  const username = `e2echixem${stamp}`
+  const created = await api.post('/api/v1/users', {
+    headers: admin,
+    data: { username, fullName: `Chỉ Xem ${stamp}`, isActive: true, password: 'Khoi@Tao12345', roleIds: [viewerRole] },
+  })
+  expect(created.ok(), await created.text()).toBeTruthy()
+  const id = (await created.json()).id
+  try {
+    const first = await (await api.post('/api/v1/auth/login', { data: { username, password: 'Khoi@Tao12345' } })).json()
+    await api.post('/api/v1/auth/change-password', {
+      headers: { Authorization: `Bearer ${first.accessToken}` },
+      data: { currentPassword: 'Khoi@Tao12345', newPassword: 'Chi@Xem2026x' },
+    })
+    const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } })
+    const page = await ctx.newPage()
+    await page.goto('/login')
+    await page.getByLabel(/tên đăng nhập/i).fill(username)
+    await page.getByLabel(/mật khẩu/i).fill('Chi@Xem2026x')
+    await page.getByRole('button', { name: /đăng nhập/i }).click()
+    await page.waitForURL((u) => !u.pathname.startsWith('/login'))
+    await page.goto('/my-drive')
+    await page.waitForLoadState('networkidle')
+    await page.getByRole('main').getByRole('button', { name: /Mới$/ }).first().click()
+    await page.getByRole('menuitem', { name: /Thư mục/ }).click()
+    await page.getByRole('dialog').getByRole('textbox').fill(`Của Chỉ Xem ${stamp}`)
+    await page.getByRole('dialog').getByRole('button', { name: /Tạo|Đồng ý|OK/ }).click()
+    await expect(page.getByRole('row', { name: new RegExp(`Của Chỉ Xem ${stamp}`) })).toBeVisible()
+    await ctx.close()
+  } finally {
+    await api.delete(`/api/v1/users/${id}`, { headers: admin })
+  }
+})

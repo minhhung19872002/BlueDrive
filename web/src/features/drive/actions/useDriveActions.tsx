@@ -59,10 +59,16 @@ function compactDividers(list: MenuItems): MenuItems {
 }
 
 /** What the current user may do on the selected items (from folder-info / share level). Unknown = allowed (server validates). */
+/**
+ * Rights on the items shown (from the folder they are in). Pages that do not know them (recent, search…) leave them out: the menu then
+ * falls back on the system role, and the server decides anyway.
+ */
 export interface ItemFlags {
   canDownload?: boolean
   canEdit?: boolean
   canManage?: boolean
+  canShare?: boolean
+  canDelete?: boolean
 }
 
 export type ItemAction =
@@ -265,6 +271,11 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
       const canDownload = flags.canDownload !== false
       const canEdit = flags.canEdit !== false
       const canManage = flags.canManage !== false
+      const canShare = flags.canShare ?? can('doc.share')
+      const canDelete = flags.canDelete ?? (canEdit && can('doc.delete'))
+      // Known folder rights decide copy/move; otherwise the role (a "Chỉ xem" account copies only from where it was given rights).
+      const canCopy = canDownload && (flags.canEdit !== undefined || can('doc.upload'))
+      const canMove = canEdit && (flags.canEdit !== undefined || can('doc.upload'))
       const allStarred = items.every((i) => i.isStarred)
       const shown = (a: ItemAction) => !hide?.includes(a)
       const list: NonNullable<MenuProps['items']> = []
@@ -280,12 +291,12 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
       }
       if (canDownload && shown('download')) list.push({ key: 'download', icon: <DownloadOutlined />, label: t('actions.download') })
       // One "Chia sẻ" for files and folders: who has access, general access (incl. "Bất kỳ ai có liên kết") and the link, in one dialog.
-      if (single && (can('doc.share') || canManage) && (shown('share') || shown('access')))
+      if (single && (canShare || canManage) && (shown('share') || shown('access')))
         list.push({ key: 'share', icon: <ShareAltOutlined />, label: t('actions.share') })
       list.push({ type: 'divider' })
       if (single && canEdit && shown('rename')) list.push({ key: 'rename', icon: <EditOutlined />, label: t('actions.rename'), extra: 'F2' })
-      if (can('doc.upload') && shown('copyTo')) list.push({ key: 'copyTo', icon: <CopyOutlined />, label: t('actions.copyTo') })
-      if (canEdit && can('doc.upload') && shown('moveTo')) list.push({ key: 'moveTo', icon: <ScissorOutlined />, label: t('actions.moveTo') })
+      if (canCopy && shown('copyTo')) list.push({ key: 'copyTo', icon: <CopyOutlined />, label: t('actions.copyTo') })
+      if (canMove && shown('moveTo')) list.push({ key: 'moveTo', icon: <ScissorOutlined />, label: t('actions.moveTo') })
       if (shown('star'))
         list.push(
           allStarred
@@ -303,7 +314,7 @@ export function useDriveActions(options: DriveActionsOptions = {}) {
       // Spec 1.1: only what is in my own drive can be given away (in a Space it belongs to the Space).
       if (single && single.workspaceId === personalWorkspaceId && shown('transferOwnership'))
         list.push({ key: 'transferOwnership', icon: <UserSwitchOutlined />, label: t('ownership.menu') })
-      if (canEdit && can('doc.delete') && shown('delete'))
+      if (canDelete && shown('delete'))
         list.push({ key: 'delete', icon: <DeleteOutlined />, label: t('actions.delete'), danger: true, extra: 'Del' })
       return compactDividers(list)
     },

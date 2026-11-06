@@ -17,7 +17,6 @@ import { getErrorMessage } from '@/api/errors'
 import { qk } from '@/api/queryKeys'
 import ScopedSearchResults from '@/features/search/ScopedSearchResults'
 import { useApiMutation } from '@/hooks/useApiMutation'
-import { useCan } from '@/hooks/usePermissions'
 import { usePersistentState } from '@/hooks/usePersistentState'
 import { useDriveUi } from '@/stores/driveUi'
 import type { DriveItem, ItemRef, MediaType } from '@/types/drive'
@@ -72,7 +71,6 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
   const { t } = useTranslation()
   const screens = Grid.useBreakpoint()
   const isMobile = screens.md === false
-  const can = useCan()
 
   const [view, setView] = usePersistentState<ViewMode>('bd.explorer.view', 'list')
   const [infoPref, setInfoPref] = usePersistentState<boolean>('bd.explorer.info', false)
@@ -115,15 +113,18 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
   const folderInfo = useFolderInfo(workspaceId, folderId)
   const access = folderInfo.data?.access
   const locked = access?.workspaceLocked ?? false
-  // Copy, move and paste put items somewhere: the role needs doc.upload besides the folder rights.
-  const canTransfer = can('doc.upload')
-  const canUpload = !!access?.canUpload && !locked && canTransfer
+  // The folder's own rights decide (like Google Drive): in "Tài liệu của tôi" everything; elsewhere what the person was given,
+  // the system role capping only what Space membership gives (the server works it out).
+  const canUpload = !!access?.canUpload && !locked
   const canEdit = !!access?.canEdit && !locked
-  const canMove = canEdit && canTransfer
+  const canMove = canEdit
   const canDownload = access?.canDownload ?? true
+  // Copying takes a readable item somewhere the person may add to (checked when they pick the place).
+  const canTransfer = canDownload
   const canManage = !!access?.canManage
-  const canDelete = canEdit && can('doc.delete')
-  const flags: ItemFlags = { canDownload, canEdit, canManage }
+  const canShare = !!access?.canShare || canManage
+  const canDelete = !!access?.canDelete && !locked
+  const flags: ItemFlags = { canDownload, canEdit, canManage, canShare, canDelete }
 
   const params = { folderId, q: q || undefined, mediaType, sort, page, pageSize: PAGE_SIZE }
   const listing = useQuery({
@@ -547,7 +548,7 @@ function ExplorerInner({ workspaceId, folderId, onFolderChange, header, extraNew
         extraNewMenuItems={extraNewMenuItems}
         onExtra={(ext) => ext.onClick({ workspaceId, folderId })}
         onDownload={() => void actions.download(selectedItems)}
-        onShare={selectedItems.length === 1 && can('doc.share') ? () => actions.share(selectedItems[0]) : undefined}
+        onShare={selectedItems.length === 1 && canShare ? () => actions.share(selectedItems[0]) : undefined}
         onCopyTo={() => actions.copyTo(selectedItems)}
         onMoveTo={() => actions.moveTo(selectedItems)}
         onDelete={() => actions.remove(selectedItems)}

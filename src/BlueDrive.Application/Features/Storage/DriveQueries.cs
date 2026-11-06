@@ -27,9 +27,11 @@ public static class ThumbnailUrls
 /// <param name="Shared">The "Được chia sẻ với tôi" entry standing for the levels above that the user may not see.</param>
 public sealed record BreadcrumbItem(Guid? Id, string Name, bool Shared = false);
 
-public sealed record AccessFlags(bool CanView, bool CanDownload, bool CanEdit, bool CanUpload, bool CanManage, bool CanApprove, bool WorkspaceLocked)
+public sealed record AccessFlags(bool CanView, bool CanDownload, bool CanEdit, bool CanUpload, bool CanManage, bool CanApprove, bool WorkspaceLocked,
+    bool CanShare = false, bool CanDelete = false)
 {
-    public static AccessFlags From(ResourceAccess a) => new(a.CanView, a.CanDownload, a.CanEdit, a.CanUpload && !a.WorkspaceLocked, a.CanManage, a.CanApprove, a.WorkspaceLocked);
+    public static AccessFlags From(ResourceAccess a) => new(a.CanView, a.CanDownload, a.CanEdit, a.CanUpload && !a.WorkspaceLocked, a.CanManage, a.CanApprove, a.WorkspaceLocked,
+        a.CanShare, a.CanDelete);
 }
 
 public sealed record FolderInfoDto(Guid? Id, string Name, Guid WorkspaceId, string WorkspaceName, WorkspaceType WorkspaceType, Guid? ParentId,

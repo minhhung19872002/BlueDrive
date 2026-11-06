@@ -199,7 +199,7 @@ internal static class GrantRules
     public static async Task<(AccessRight Rights, PermissionLevel Level)> CheckAsync(IAppDbContext db, IItemPermissionService engine, IPermissionService rbac,
         Guid uid, Guid itemId, Guid levelId, CancellationToken ct)
     {
-        if (!await rbac.HasAsync(uid, Perm.DocShare, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền chia sẻ tư liệu.");
+        // The item's rights decide (ShareInternal / ManagePermissions below), the role capping only what Space membership gives.
         var rights = await engine.DemandAsync(uid, itemId, AccessRight.ViewItems, ct);
         var level = await db.PermissionLevels.AsNoTracking().FirstOrDefaultAsync(l => l.Id == levelId, ct) ?? throw new NotFoundException("Không tìm thấy cấp quyền.");
         if (!rights.Has(AccessRight.ManagePermissions))

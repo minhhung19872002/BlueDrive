@@ -8,13 +8,18 @@ namespace BlueDrive.Application.Security;
 
 /// <summary>Effective access of a user on one resource, with the reason (for the "who has access" panel and tests).</summary>
 /// <param name="NoDownload">Rights at this level but without downloading (a Space with downloads off, spec 6).</param>
-public sealed record ResourceAccess(AccessLevel Level, bool CanUpload, bool CanApprove, bool WorkspaceLocked, string Source, bool NoDownload = false)
+/// <param name="Share">Rights to share the item (set by the permission engine; the old model derives it from the level).</param>
+/// <param name="Delete">Right to put the item in the trash (same).</param>
+public sealed record ResourceAccess(AccessLevel Level, bool CanUpload, bool CanApprove, bool WorkspaceLocked, string Source, bool NoDownload = false,
+    bool? Share = null, bool? Delete = null)
 {
     public static readonly ResourceAccess None = new(AccessLevel.None, false, false, false, "none");
     public bool CanView => Level >= AccessLevel.View;
     public bool CanDownload => Level >= AccessLevel.Download && !NoDownload;
     public bool CanEdit => Level >= AccessLevel.Edit && !WorkspaceLocked;
     public bool CanManage => Level >= AccessLevel.Manage && !WorkspaceLocked;
+    public bool CanShare => Share ?? Level >= AccessLevel.Edit;
+    public bool CanDelete => (Delete ?? Level >= AccessLevel.Edit) && !WorkspaceLocked;
 }
 
 public interface IResourceAuthorizationService
@@ -283,7 +288,9 @@ public sealed class ModelResourceAuthorizationService(Features.Access.IItemPermi
         var level = Features.Access.ReferencePermissionEvaluator.ToLevel(rights);
         if (level == AccessLevel.None) return ResourceAccess.None;
         return new ResourceAccess(level, !locked && (rights & Domain.Permissions.AccessRight.AddItems) != 0,
-            (rights & Domain.Permissions.AccessRight.ApproveItems) != 0, locked, "model", NoDownload: (rights & Domain.Permissions.AccessRight.Download) == 0);
+            (rights & Domain.Permissions.AccessRight.ApproveItems) != 0, locked, "model", NoDownload: (rights & Domain.Permissions.AccessRight.Download) == 0,
+            Share: (rights & (Domain.Permissions.AccessRight.ShareInternal | Domain.Permissions.AccessRight.ManagePermissions)) != 0,
+            Delete: (rights & Domain.Permissions.AccessRight.DeleteItems) != 0);
     }
 
     public async Task<bool> CanAsync(Guid userId, ResourceType type, Guid resourceId, AccessLevel level, CancellationToken ct = default)

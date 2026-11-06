@@ -67,7 +67,7 @@ public class PermissionRulesTests(ApiFactory factory)
         (await editor.PutAsJsonAsync($"/api/v1/files/{file}/name", new { name = "bang-tin-moi.png" })).StatusCode.Should().Be(HttpStatusCode.NoContent, "doc.edit allows renaming");
         var move = await editor.PostAsJsonAsync("/api/v1/items/move", new { items = new[] { new { type = "file", id = file } }, targetWorkspaceId = ws, targetFolderId = folder });
         move.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        (await move.Content.ReadAsStringAsync()).Should().Contain("đưa tư liệu vào vị trí khác");
+        (await move.Content.ReadAsStringAsync()).Should().Contain("tải lên/tạo mới tại vị trí này", "membership gives no adding without doc.upload");
 
         await (await owner.PostAsJsonAsync("/api/v1/items/move", new { items = new[] { new { type = "file", id = file } }, targetWorkspaceId = ws, targetFolderId = folder })).ReadJsonAsync();
     }

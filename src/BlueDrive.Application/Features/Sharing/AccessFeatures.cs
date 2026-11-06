@@ -169,14 +169,14 @@ public sealed class SetResourceAccessValidator : AbstractValidator<SetResourceAc
     }
 }
 
-public sealed class SetResourceAccessHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IMediator mediator, IAuditLogger audit,
+public sealed class SetResourceAccessHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IMediator mediator, IAuditLogger audit,
     Access.LegacyAclSync sync)
     : IRequestHandler<SetResourceAccessCommand, Unit>
 {
     public async Task<Unit> Handle(SetResourceAccessCommand cmd, CancellationToken ct)
     {
         var uid = me.RequireUserId();
-        if (!await perms.HasAsync(uid, Perm.DocShare, ct) && !await perms.HasAsync(uid, Perm.DocAdmin, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền phân quyền/chia sẻ tư liệu.");
+        // Managing the item's access (below) is what decides, like on the new sharing screens.
         await auth.EnsureAsync(uid, cmd.Type, cmd.Id, AccessLevel.Manage, ct);
         foreach (var e in cmd.Entries) await PrincipalNames.EnsureExistsAsync(db, new PrincipalRef(e.PrincipalType, e.PrincipalId), ct);
 

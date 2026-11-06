@@ -66,14 +66,17 @@ public sealed class ReferenceDataSeeder(
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>System roles seeded under another name before: renamed on servers that still use the old one.</summary>
+    private static readonly Dictionary<string, string> RenamedFrom = new() { [Perm.Roles.Editor] = "Biên tập/Tải lên" };
+
     private async Task SeedRolesAsync(CancellationToken ct)
     {
         (string Code, string Name, string Desc)[] roles =
         [
             (Perm.Roles.Admin, "Quản trị hệ thống", "Toàn quyền quản trị hệ thống"),
-            (Perm.Roles.Editor, "Biên tập/Tải lên", "Tải lên, biên tập, chia sẻ tư liệu"),
+            (Perm.Roles.Editor, "Chỉnh sửa", "Tải lên, chỉnh sửa, xóa, chia sẻ tư liệu dùng chung của nhóm/đơn vị"),
             (Perm.Roles.Approver, "Phê duyệt", "Phê duyệt tư liệu trước khi công bố"),
-            (Perm.Roles.Viewer, "Chỉ xem", "Chỉ xem và tìm kiếm tư liệu đã được phê duyệt"),
+            (Perm.Roles.Viewer, "Chỉ xem", "Chỉ xem, tải xuống tư liệu dùng chung của nhóm/đơn vị (Tài liệu của tôi và tư liệu được chia sẻ trực tiếp theo mức đã cấp)"),
             (Perm.Roles.Guest, "Khách bên ngoài", "Khách được mời qua email; chỉ làm việc trên tư liệu được chia sẻ trực tiếp"),
         ];
         foreach (var (code, name, desc) in roles)
@@ -85,7 +88,13 @@ public sealed class ReferenceDataSeeder(
                 db.Roles.Add(role);
                 foreach (var p in Perm.DefaultRolePermissions[code]) role.Permissions.Add(new RolePermission { RoleId = role.Id, PermissionCode = p });
             }
-            else if (code == Perm.Roles.Admin)
+            else if (RenamedFrom.TryGetValue(code, out var old) && role.Name == old)
+            {
+                // A role still named as it was seeded before gets the current name (a name an administrator chose is kept).
+                role.Name = name;
+                role.Description = desc;
+            }
+            if (code == Perm.Roles.Admin)
             {
                 // The administrator role always holds every permission (new permissions included).
                 var missing = Perm.All.Select(p => p.Code).Except(role.Permissions.Select(p => p.PermissionCode));

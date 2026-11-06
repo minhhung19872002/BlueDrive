@@ -20,7 +20,8 @@ Dành cho cán bộ quản trị hệ thống (vai trò **Quản trị hệ th�
 - *Quản trị > Nhóm người dùng*: tạo nhóm, thêm thành viên (dùng để phân quyền, chia sẻ cho cả nhóm).
 
 ## 3. Vai trò và phân quyền chức năng (#7–9, #54)
-- 4 vai trò hệ thống (không xóa được): **Quản trị hệ thống**, **Biên tập/Tải lên**, **Phê duyệt**, **Chỉ xem**.
+- 4 vai trò hệ thống (không xóa được): **Quản trị hệ thống**, **Chỉnh sửa**, **Phê duyệt**, **Chỉ xem** (cùng *Khách bên ngoài* cho khách mời). Mỗi tài khoản phải có ít nhất một vai trò.
+- Vai trò hệ thống quyết định quyền với **tư liệu dùng chung của nhóm/đơn vị** (qua thành viên nhóm): ví dụ *Chỉ xem* thì chỉ xem, tải xuống tư liệu của nhóm dù vai trò trong nhóm là Chỉnh sửa. Vai trò **không** giới hạn *Tài liệu của tôi* (ai cũng toàn quyền trong kho riêng, chỉ giới hạn dung lượng) và **không** giới hạn quyền được chia sẻ trực tiếp trên tư liệu (tài khoản *Chỉ xem* được chia sẻ *Chỉnh sửa* thì sửa được tư liệu đó). Chi tiết: `docs/permission-matrix.md`.
 - *Vai trò & phân quyền*: tạo vai trò mới (có thể sao chép quyền từ vai trò khác). Ma trận: dòng là chức năng theo phân hệ, cột là hành động (Xem, Tải lên/Thêm mới, Chỉnh sửa, Xóa, Chia sẻ, Phê duyệt, Quản trị); chọn cả dòng/cột. Mỗi lần lưu được ghi nhật ký *Đổi quyền*.
 - *Bảng đối chiếu quyền*: toàn bộ chức năng × vai trò để rà soát, lọc theo phân hệ/từ khóa, xuất Excel/PDF.
 - *Nhãn phân loại* (quyền *Cấu hình hệ thống*): thêm / sửa nhãn, màu, mức độ (số lớn hơn là nhạy cảm hơn) và quy tắc của nhãn. Thay đổi quy tắc áp dụng ngay cho mọi tệp mang nhãn. Không đặt các tên "Mật", "Tối mật", "Tuyệt mật" — hệ thống không phục vụ lưu trữ bí mật nhà nước.

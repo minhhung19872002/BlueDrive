@@ -306,11 +306,12 @@ public class WorkspacesController : ApiControllerBase
     public Task<IReadOnlyList<FolderTreeNode>> FolderTree(Guid id) => Mediator.Send(new GetFolderTreeQuery(id));
 
     /// <summary>Thùng rác của không gian (#61).</summary>
-    [HttpGet("{id:guid}/trash"), HasPermission(Perm.TrashView)]
+    // The role's trash functions are checked inside: the owner of a "Tài liệu của tôi" uses its trash whatever the role.
+    [HttpGet("{id:guid}/trash")]
     public Task<PagedResult<TrashItemDto>> Trash(Guid id, [FromQuery] ListTrashQuery query) => Mediator.Send(query with { WorkspaceId = id });
 
     /// <summary>Dọn sạch thùng rác.</summary>
-    [HttpPost("{id:guid}/trash/empty"), HasPermission(Perm.TrashPurge)]
+    [HttpPost("{id:guid}/trash/empty")]
     public async Task<IActionResult> EmptyTrash(Guid id, [FromQuery] int stage = 1) => Ok(new { purged = await Mediator.Send(new PurgeItemsCommand(null, id, stage)) });
 
     public sealed record QuotaBody(double QuotaGb);
@@ -362,11 +363,11 @@ public class DriveController : ApiControllerBase
     [HttpPost("items/delete"), SyncIfMatch]
     public async Task<IActionResult> Delete(DeleteItemsCommand cmd) => Ok(new { deleted = await Mediator.Send(cmd) });
 
-    [HttpPost("trash/restore"), HasPermission(Perm.TrashRestore)]
+    [HttpPost("trash/restore")]
     public async Task<IActionResult> Restore(RestoreItemsCommand cmd) => Ok(new { restored = await Mediator.Send(cmd) });
 
     /// <summary>Xóa vĩnh viễn các mục được chọn.</summary>
-    [HttpPost("trash/purge"), HasPermission(Perm.TrashPurge)]
+    [HttpPost("trash/purge")]
     public async Task<IActionResult> Purge([FromBody] IReadOnlyList<ItemRef> items) => Ok(new { purged = await Mediator.Send(new PurgeItemsCommand(items, null)) });
 
     [HttpGet("recent")]

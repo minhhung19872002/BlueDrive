@@ -1444,7 +1444,7 @@
     "noRoleTitle": "Thành viên chưa xem được tư liệu",
     "noRoleAdded": "Đã thêm {{names}} vào nhóm, nhưng tài khoản chưa có vai trò hệ thống được xem tài liệu nên sẽ không thấy tư liệu của nhóm. Gán vai trò tại Quản trị → Người dùng.",
     "noRoleMembers": "{{count}} thành viên chưa có vai trò được xem tài liệu: {{names}}.",
-    "noRoleHint": "Những người này vẫn trong nhóm nhưng không thấy tư liệu nào. Gán vai trò (ví dụ Biên tập/Tải lên, Chỉ xem) tại Quản trị → Người dùng.",
+    "noRoleHint": "Những người này vẫn trong nhóm nhưng không thấy tư liệu nào. Gán vai trò (ví dụ Chỉnh sửa, Chỉ xem) tại Quản trị → Người dùng.",
     "noRoleTag": "Chưa có vai trò",
     "rolesHint": "Trưởng nhóm: người phụ trách nhóm (một người, chuyển bằng nút vương miện) · Quản lý: toàn quyền nhóm như trưởng nhóm · Chỉnh sửa: tải lên, sửa, xóa · Tải lên: chỉ tải lên · Phê duyệt: duyệt tư liệu · Chỉ xem: xem và tải xuống tư liệu đã duyệt.",
     "addMembers": "Thêm",

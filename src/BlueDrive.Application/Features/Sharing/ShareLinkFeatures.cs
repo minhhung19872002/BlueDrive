@@ -90,7 +90,7 @@ public sealed class SaveShareLinkValidator : AbstractValidator<SaveShareLinkComm
     }
 }
 
-public sealed class SaveShareLinkHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IPermissionService perms, IItemPermissionService engine,
+public sealed class SaveShareLinkHandler(IAppDbContext db, ICurrentUser me, IResourceAuthorizationService auth, IItemPermissionService engine,
     ITokenService tokens, IConfiguration config, IAuditLogger audit, TimeProvider clock, ISettingsService settings, LinkModel model, IUserNotifier notify,
     SharingPolicy policy) : IRequestHandler<SaveShareLinkCommand, ShareLinkDto>
 {
@@ -100,7 +100,6 @@ public sealed class SaveShareLinkHandler(IAppDbContext db, ICurrentUser me, IRes
     public async Task<ShareLinkDto> Handle(SaveShareLinkCommand cmd, CancellationToken ct)
     {
         var uid = me.RequireUserId();
-        if (!await perms.HasAsync(uid, Perm.DocShare, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền chia sẻ tư liệu.");
         ShareLink link;
         var created = cmd.Id is null;
         if (cmd.Id is { } id)
@@ -125,6 +124,10 @@ public sealed class SaveShareLinkHandler(IAppDbContext db, ICurrentUser me, IRes
 
         // You can give through a link at most what you have (like sharing with people); downloads and editing need your own right.
         var (rights, locked) = await engine.GetWithLockAsync(uid, link.ResourceId, ct);
+        // A link that gives access ("Bất kỳ ai", people, unit) needs a sharing right on the item itself, like sharing with people; a link for
+        // "Người đã có quyền" gives nothing new, so whoever sees the item may get it (Google Drive: "Sao chép liên kết").
+        if (level is not null && (rights & (AccessRight.ShareInternal | AccessRight.CreateLinks | AccessRight.ManagePermissions)) == 0)
+            throw new ForbiddenException("Bạn không có quyền chia sẻ mục này.");
         if (level is not null && !rights.Has(AccessRight.ManagePermissions) && !rights.Has(level.Permissions & ~AccessRight.Download))
             throw new ForbiddenException("Bạn không thể tạo liên kết với quyền cao hơn quyền bạn đang có.");
         if (allowDownload && !link.AllowDownload && !rights.Has(AccessRight.Download))

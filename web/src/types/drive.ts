@@ -86,6 +86,10 @@ export interface AccessFlags {
   canManage: boolean
   canApprove: boolean
   workspaceLocked: boolean
+  /** May share the item / the folder's items (the item's own rights, whatever the system role). */
+  canShare: boolean
+  /** May put the item / the folder's items in the trash. */
+  canDelete: boolean
 }
 
 export interface FolderInfo {

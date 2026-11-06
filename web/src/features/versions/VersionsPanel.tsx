@@ -13,7 +13,6 @@ import { listVersions, restoreVersion } from '@/api/versions'
 import { useFileDetail } from '@/features/drive/hooks'
 import { pickFiles, type PickedFile } from '@/features/drive/upload/filePicker'
 import { useApiMutation } from '@/hooks/useApiMutation'
-import { useCan } from '@/hooks/usePermissions'
 import { useUploadStore } from '@/stores/uploads'
 import type { FileVersion } from '@/types/drive'
 import { formatBytes, formatDateTime } from '@/utils/format'
@@ -89,7 +88,6 @@ function NewVersionModal({ fileId, onClose }: { fileId: string; onClose: () => v
 export default function VersionsPanel({ fileId }: VersionsPanelProps) {
   const { t } = useTranslation()
   const { modal } = App.useApp()
-  const can = useCan()
   const [uploading, setUploading] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const detail = useFileDetail(fileId)
@@ -136,7 +134,7 @@ export default function VersionsPanel({ fileId }: VersionsPanelProps) {
 
   return (
     <div>
-      {canEdit && can('doc.upload') && (
+      {canEdit && (
         <Button icon={<CloudUploadOutlined />} block onClick={() => setUploading(true)} style={{ marginBottom: 8 }}>
           {t('collab.versions.uploadNew')}
         </Button>

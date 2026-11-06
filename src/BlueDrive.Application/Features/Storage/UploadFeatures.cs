@@ -38,7 +38,7 @@ public static class UploadRules
     public static async Task CheckAsync(IAppDbContext db, Guid uid, UploadMetadata meta, long length, IResourceAuthorizationService auth, IPermissionService perms,
         IFileTypeInspector types, ISettingsService settings, QuotaService quota, Libraries.Libraries libraries, CancellationToken ct)
     {
-        if (!await perms.HasAsync(uid, Perm.DocUpload, ct)) throw new ForbiddenException("Vai trò của bạn không có quyền tải lên tư liệu.");
+        // Where it goes decides (EnsureCanUploadAsync / the file's edit right below), not the role alone: like Google Drive.
         var name = FileNameSanitizer.Sanitize(meta.FileName);
         var ext = Path.GetExtension(name).TrimStart('.').ToLowerInvariant();
         if (types.IsBlockedExtension(ext)) throw new AppException($"Không cho phép tải lên tệp thực thi/kịch bản (.{ext}).", 415);
