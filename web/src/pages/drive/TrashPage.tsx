@@ -47,9 +47,9 @@ export default function TrashPage() {
   const current = workspaces.data?.find((w) => w.id === workspaceId)
   // "Tài liệu của tôi": its owner uses its trash whatever the system role (like Google Drive); a group's trash needs the role's functions.
   const may = (perm: string) => mine || (!!workspaceId && workspaceId === personalId) || can(perm)
-  // Everyone owns a drive: "Thùng rác của tôi" offers its second stage too (the owner manages it, spec 8.1).
+  // The second stage (spec 8.1) is for who manages a group and for administrators; a user has one trash for their own drive.
   const secondStage =
-    mine || can('workspace.admin') || current?.type === 'personal' || (!!current?.myRole && SECOND_STAGE_ROLES.includes(current.myRole))
+    can('workspace.admin') || (current?.type !== 'personal' && !!current?.myRole && SECOND_STAGE_ROLES.includes(current.myRole))
   const shownStage = secondStage ? stage : 1
   // The second stage of "Thùng rác của tôi" is my drive's.
   const stageTwoOfMine = mine && shownStage === 2

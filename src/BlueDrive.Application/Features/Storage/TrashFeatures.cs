@@ -31,10 +31,17 @@ public static class TrashAccess
     public static async Task<bool> CanManageTrashAsync(IResourceAuthorizationService auth, Guid userId, Guid workspaceId, CancellationToken ct)
         => (await auth.GetAccessAsync(userId, ResourceType.Workspace, workspaceId, ct)).Level >= AccessLevel.Edit;
 
-    /// <summary>Spec 8.1: the second stage is seen by who manages the Space (the owner of a Drive) and by administrators.</summary>
-    public static async Task<bool> CanManageSecondStageAsync(IPermissionService perms, Access.IItemPermissionService engine, Guid userId, Guid workspaceId, CancellationToken ct)
-        => await perms.HasAsync(userId, Perm.WorkspaceAdmin, ct)
-           || Domain.Permissions.AccessRights.Has(await engine.GetEffectiveAsync(userId, workspaceId, ct), Domain.Permissions.AccessRight.ManageSpace);
+    /// <summary>
+    /// Spec 8.1, like SharePoint: the second stage is the safety net of who manages a group's Space, and of administrators. A user's own
+    /// "Tài liệu của tôi" has one trash for them; what they purge from it only an administrator can still bring back.
+    /// </summary>
+    public static async Task<bool> CanManageSecondStageAsync(IAppDbContext db, IPermissionService perms, Access.IItemPermissionService engine, Guid userId, Guid workspaceId,
+        CancellationToken ct)
+    {
+        if (await perms.HasAsync(userId, Perm.WorkspaceAdmin, ct)) return true;
+        if (await db.Workspaces.AnyAsync(w => w.Id == workspaceId && w.Type == WorkspaceType.Personal, ct)) return false;
+        return Domain.Permissions.AccessRights.Has(await engine.GetEffectiveAsync(userId, workspaceId, ct), Domain.Permissions.AccessRight.ManageSpace);
+    }
 
     /// <summary>Names of the folders above an item ("Hồ sơ/2025"), kept with what is deleted so that a missing parent can be made again.</summary>
     public static async Task<string?> OriginalPathAsync(IAppDbContext db, string? folderPath, CancellationToken ct)
@@ -110,7 +117,7 @@ public sealed class ListTrashHandler(IAppDbContext db, ICurrentUser me, IResourc
         var ws = await db.Workspaces.AsNoTracking().FirstOrDefaultAsync(w => w.Id == q.WorkspaceId, ct) ?? throw new NotFoundException("Không tìm thấy nhóm tài nguyên.");
         await TrashAccess.EnsureRoleAsync(db, perms, uid, ws.Id, Perm.TrashView, "Vai trò của bạn không có quyền xem thùng rác.", ct);
         var second = q.Stage == 2;
-        if (second && !await TrashAccess.CanManageSecondStageAsync(perms, engine, uid, ws.Id, ct))
+        if (second && !await TrashAccess.CanManageSecondStageAsync(db, perms, engine, uid, ws.Id, ct))
             throw new ForbiddenException("Chỉ Quản lý Space và quản trị xem được thùng rác tầng 2.");
         var full = second || await TrashAccess.CanManageTrashAsync(auth, uid, ws.Id, ct);
         // Not even an empty list for a Space / Drive one has nothing to do with (its existence stays hidden).
@@ -238,7 +245,7 @@ public sealed class RestoreItemsHandler(IAppDbContext db, ICurrentUser me, IReso
         await TrashAccess.EnsureRoleAsync(db, perms, uid, workspaceId, Perm.TrashRestore, "Vai trò của bạn không có quyền khôi phục từ thùng rác.", ct);
         if (secondStage)
         {
-            if (!await TrashAccess.CanManageSecondStageAsync(perms, engine, uid, workspaceId, ct)) throw new ForbiddenException("Chỉ Quản lý Space và quản trị khôi phục được từ thùng rác tầng 2.");
+            if (!await TrashAccess.CanManageSecondStageAsync(db, perms, engine, uid, workspaceId, ct)) throw new ForbiddenException("Chỉ Quản lý Space và quản trị khôi phục được từ thùng rác tầng 2.");
             return;
         }
         if (deletedBy == uid) return;
@@ -266,7 +273,7 @@ public sealed class PurgeItemsHandler(IAppDbContext db, ICurrentUser me, IResour
         {
             await TrashAccess.EnsureRoleAsync(db, perms, uid, wsId, Perm.TrashPurge, noPurge, ct);
             var second = cmd.EmptyStage == 2;
-            if (second && !await TrashAccess.CanManageSecondStageAsync(perms, engine, uid, wsId, ct)) throw new ForbiddenException("Chỉ Quản lý Space và quản trị dọn được thùng rác tầng 2.");
+            if (second && !await TrashAccess.CanManageSecondStageAsync(db, perms, engine, uid, wsId, ct)) throw new ForbiddenException("Chỉ Quản lý Space và quản trị dọn được thùng rác tầng 2.");
             var full = second || await TrashAccess.CanManageTrashAsync(auth, uid, wsId, ct);
             items.AddRange(await db.Files.Where(f => f.WorkspaceId == wsId && f.IsTrashRoot && f.IsDeleted && f.PreservedAt == null && (f.SecondStageAt != null) == second
                 && (full || f.DeletedBy == uid)).Select(f => new ItemRef("file", f.Id)).ToListAsync(ct));
@@ -294,7 +301,7 @@ public sealed class PurgeItemsHandler(IAppDbContext db, ICurrentUser me, IResour
                 count++;
                 continue;
             }
-            if (!await TrashAccess.CanManageSecondStageAsync(perms, engine, uid, row.WorkspaceId, ct)) throw new ForbiddenException("Chỉ Quản lý Space và quản trị xóa được khỏi thùng rác tầng 2.");
+            if (!await TrashAccess.CanManageSecondStageAsync(db, perms, engine, uid, row.WorkspaceId, ct)) throw new ForbiddenException("Chỉ Quản lý Space và quản trị xóa được khỏi thùng rác tầng 2.");
             if (await purger.PurgeAsync(item, "manual", ct, mode) != PurgeOutcome.Held) count++;
         }
         return count;

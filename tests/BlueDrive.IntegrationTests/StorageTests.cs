@@ -184,11 +184,13 @@ public class StorageTests(ApiFactory factory)
         (await (await c.GetAsync($"/api/v1/workspaces/{ws}/folder-info?folderId={remade}")).ReadJsonAsync()).GetProperty("name").GetString().Should().Be("Tạm");
 
         await (await c.PostAsJsonAsync("/api/v1/items/delete", new { items = new object[] { new { type = "file", id = fileId }, new { type = "folder", id = remade } } })).ReadJsonAsync();
-        // Emptying the trash moves it to the second stage (the Drive's owner sees it); emptying that deletes for good.
+        // Emptying the trash moves it to the second stage, which only an administrator sees for a user's own drive; emptying that deletes for good.
         await (await c.PostAsync($"/api/v1/workspaces/{ws}/trash/empty", null)).ReadJsonAsync();
         (await Used()).Should().Be(Png.Length, "the second stage still holds it");
-        (await (await c.GetAsync($"/api/v1/workspaces/{ws}/trash?stage=2")).ReadJsonAsync()).GetProperty("items").EnumerateArray().Should().Contain(i => i.GetProperty("id").GetGuid() == fileId);
-        await (await c.PostAsync($"/api/v1/workspaces/{ws}/trash/empty?stage=2", null)).ReadJsonAsync();
+        (await c.GetAsync($"/api/v1/workspaces/{ws}/trash?stage=2")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var admin = await factory.AdminClientAsync();
+        (await (await admin.GetAsync($"/api/v1/workspaces/{ws}/trash?stage=2")).ReadJsonAsync()).GetProperty("items").EnumerateArray().Should().Contain(i => i.GetProperty("id").GetGuid() == fileId);
+        await (await admin.PostAsync($"/api/v1/workspaces/{ws}/trash/empty?stage=2", null)).ReadJsonAsync();
         (await Used()).Should().Be(0);
         using var scope = factory.Services.CreateScope();
         (await scope.ServiceProvider.GetRequiredService<AppDbContext>().AuditLogs.AnyAsync(a => a.UserId == userId && a.Action == Domain.Enums.AuditAction.Purge)).Should().BeTrue();

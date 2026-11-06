@@ -57,6 +57,14 @@ public class RoleModelTests(ApiFactory factory)
         (await viewer.PostAsJsonAsync("/api/v1/trash/restore", new { items = item })).IsSuccessStatusCode.Should().BeTrue();
         (await viewer.PostAsJsonAsync("/api/v1/items/delete", new { items = item })).IsSuccessStatusCode.Should().BeTrue();
         (await viewer.PostAsJsonAsync("/api/v1/trash/purge", item)).IsSuccessStatusCode.Should().BeTrue();
+
+        // A user has one trash: what they purged is in the second stage, which only an administrator sees and restores.
+        (await viewer.GetAsync($"/api/v1/workspaces/{ws}/trash?stage=2")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await viewer.PostAsJsonAsync("/api/v1/trash/restore", new { items = item })).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        var admin = await factory.AdminClientAsync();
+        (await (await admin.GetAsync($"/api/v1/workspaces/{ws}/trash?stage=2")).ReadJsonAsync()).GetProperty("total").GetInt32().Should().Be(1);
+        (await admin.PostAsJsonAsync("/api/v1/trash/restore", new { items = item })).IsSuccessStatusCode.Should().BeTrue();
+        (await viewer.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
