@@ -51,7 +51,7 @@ public class AdvancedAdminTests(ApiFactory factory)
         after.GetProperty("rightNames").EnumerateArray().Select(r => r.GetString()).Should().NotContain("Download");
         (await admin.PostAsync($"/api/v1/admin/permission-levels/{commenter}/reset", null)).StatusCode.Should().Be(HttpStatusCode.NoContent);
         (await (await admin.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().Single(l => l.GetProperty("id").GetGuid() == commenter)
-            .GetProperty("name").GetString().Should().Be("Người nhận xét");
+            .GetProperty("name").GetString().Should().Be("Bình luận");
     }
 
     [Fact]

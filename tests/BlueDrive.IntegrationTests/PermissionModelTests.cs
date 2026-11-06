@@ -191,7 +191,7 @@ public class PermissionModelTests(ApiFactory factory)
         var why = await (await admin.GetAsync($"/api/v1/items/{inC}/explain?user={inGroupId}")).ReadJsonAsync();
         why.GetProperty("inherited").GetBoolean().Should().BeFalse("the file was shared on its own: it has its own ACL");
         why.GetProperty("sources").EnumerateArray().Should().Contain(x => x.GetProperty("kind").GetString() == "Qua nhóm"
-            && x.GetProperty("level").GetString() == "Người xem" && x.GetProperty("origin").GetString() == "inherited", "the group's grant was copied from A");
+            && x.GetProperty("level").GetString() == "Chỉ xem" && x.GetProperty("origin").GetString() == "inherited", "the group's grant was copied from A");
         var whyFolder = await (await admin.GetAsync($"/api/v1/items/{b}/explain?user={ownerId}")).ReadJsonAsync();
         whyFolder.GetProperty("sources").EnumerateArray().Should().Contain(x => x.GetProperty("kind").GetString() == "Thành viên Space");
         (await owner.GetAsync($"/api/v1/items/{inC}/explain?user={inGroupId}")).StatusCode.Should().Be(System.Net.HttpStatusCode.OK, "the owner manages the item");

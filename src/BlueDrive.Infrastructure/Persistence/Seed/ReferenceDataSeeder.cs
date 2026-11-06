@@ -21,6 +21,7 @@ public sealed class ReferenceDataSeeder(
     {
         await SeedPermissionsAsync(ct);
         await SeedRolesAsync(ct);
+        await SeedPermissionLevelNamesAsync(ct);
         await SeedLabelsAsync(ct);
         await SeedCatalogsAsync(ct);
         var root = await SeedRootOrganizationAsync(ct);
@@ -63,6 +64,23 @@ public sealed class ReferenceDataSeeder(
                 Name = "Hạn chế", Color = "#fa541c", Priority = 20, BlockExternal = true, BlockAnyoneLinks = true, ViewOnlyOutsideSpace = true, Watermark = true, BlockSync = true,
                 Description = "Chỉ những người cần biết; không chia sẻ ra ngoài, người ngoài Space chỉ xem, có hình mờ, không đồng bộ xuống máy." + note,
             });
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Names and descriptions of the built-in permission levels follow the code on every start (e.g. "Người xem" became "Chỉ xem"); a level
+    /// an administrator customized keeps their version. Levels not created yet are made by the permission model itself.
+    /// </summary>
+    private async Task SeedPermissionLevelNamesAsync(CancellationToken ct)
+    {
+        var rows = await db.PermissionLevels.Where(l => l.IsSystem && !l.IsCustomized).ToListAsync(ct);
+        foreach (var row in rows)
+        {
+            var def = Domain.Permissions.SystemLevels.All.FirstOrDefault(l => l.Id == row.Id);
+            if (def is null) continue;
+            row.Name = def.Name;
+            row.Description = def.Description;
+        }
         await db.SaveChangesAsync(ct);
     }
 

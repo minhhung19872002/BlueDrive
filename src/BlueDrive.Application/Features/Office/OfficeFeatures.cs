@@ -48,7 +48,7 @@ public sealed class GetOfficeConfigHandler(IAppDbContext db, ICurrentUser me, IR
         catch (AppException) { mayChange = false; }
         var full = await quota.IsFullAsync(f.WorkspaceId, ct); // spec 8.2: no new versions when full
         var canEdit = !q.ForceView && access.CanEdit && office.CanEdit(f.Extension) && mayChange && versionId == f.CurrentVersionId && !full;
-        // Comments are saved into the document (a new version), so they change it: who was given "Người nhận xét" (or more) on the document
+        // Comments are saved into the document (a new version), so they change it: who was given "Bình luận" (or more) on the document
         // itself, or whose role may change documents. Only being a member of the group (capped by a "Chỉ xem" role) views.
         var canComment = !q.ForceView && !canEdit && rights.Has(Domain.Permissions.AccessRight.Comment) && versionId == f.CurrentVersionId && !full
                          && (await perms.HasAsync(uid, Perm.DocEdit, ct)

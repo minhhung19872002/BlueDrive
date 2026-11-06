@@ -8,7 +8,7 @@ import type { ResourceType, SaveShareLinkRequest } from '@/types/sharing'
 
 /**
  * #49 "Bất kỳ ai có liên kết" as one choice of "Quyền truy cập chung": on, the item's link opens for anyone who has it (no sign-in) with
- * the level chosen beside it (Người xem / Chỉ xem (không tải) / Người nhận xét / Chỉnh sửa); off, only for people who already have access. A tier above (system, Space, folder, label) that forbids it blocks the
+ * the level chosen beside it (Chỉ xem / Chỉ xem (không tải) / Bình luận / Chỉnh sửa); off, only for people who already have access. A tier above (system, Space, folder, label) that forbids it blocks the
  * choice, and says which.
  */
 const LINK_LEVEL_CODES = ['viewer', 'view_only', 'commenter', 'editor']

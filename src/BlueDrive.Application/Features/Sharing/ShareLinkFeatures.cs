@@ -71,7 +71,7 @@ public static class ShareLinkMapping
 
 /// <summary>
 /// Spec 5.3. <c>Scope</c> null = the earlier form (RequireLogin: people with access; otherwise anyone, AllowEdit as editor).
-/// <c>LevelId</c>: Người xem / Người nhận xét / Chỉnh sửa / Chỉ xem (không tải); <c>AllowDownload</c> false blocks downloads.
+/// <c>LevelId</c>: Chỉ xem / Bình luận / Chỉnh sửa / Chỉ xem (không tải); <c>AllowDownload</c> false blocks downloads.
 /// <c>People</c>: who a "Người cụ thể" link works for.
 /// </summary>
 public sealed record SaveShareLinkCommand(Guid? Id, ResourceType ResourceType, Guid ResourceId, bool AllowDownload,
@@ -117,7 +117,7 @@ public sealed class SaveShareLinkHandler(IAppDbContext db, ICurrentUser me, IRes
         var scope = cmd.Scope ?? (cmd.RequireLogin ? ShareLinkScope.Existing : ShareLinkScope.Anyone);
         Guid? levelId = scope == ShareLinkScope.Existing ? null
             : cmd.LevelId ?? (cmd.AllowEdit ? SystemLevels.Editor : cmd.AllowDownload ? SystemLevels.Viewer : SystemLevels.ViewOnly);
-        if (levelId is { } lv && !LinkLevels.Contains(lv)) throw new AppException("Liên kết chỉ cấp được quyền Người xem, Người nhận xét, Chỉnh sửa hoặc Chỉ xem.");
+        if (levelId is { } lv && !LinkLevels.Contains(lv)) throw new AppException("Liên kết chỉ cấp được quyền Chỉ xem, Bình luận, Chỉnh sửa hoặc Chỉ xem.");
         var level = levelId is { } l2 ? SystemLevels.All.First(x => x.Id == l2) : null;
         var allowDownload = cmd.AllowDownload && (level is null || level.Permissions.Has(AccessRight.Download));
         var allowEdit = level?.Id == SystemLevels.Editor;

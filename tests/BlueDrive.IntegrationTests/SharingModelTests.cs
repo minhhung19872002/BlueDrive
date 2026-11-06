@@ -104,7 +104,7 @@ public class SharingModelTests(ApiFactory factory)
         var levels = (await (await owner.GetAsync("/api/v1/permission-levels")).ReadJsonAsync()).EnumerateArray().ToDictionary(l => l.GetProperty("code").GetString()!, l => l.GetProperty("id").GetGuid());
         levels.Keys.Should().Contain(["owner", "content_manager", "editor", "contributor", "commenter", "viewer", "view_only", "approver"]);
 
-        // The owner shares the file "Người nhận xét" with someone outside the Space, until a date; they are told.
+        // The owner shares the file "Bình luận" with someone outside the Space, until a date; they are told.
         var until = DateTime.UtcNow.AddDays(10);
         var granted = await (await owner.PostAsJsonAsync($"/api/v1/items/{file}/permissions",
             new { targets = new[] { User(commenterId) }, levelId = levels["commenter"], expiresAt = until, notify = true, message = "Nhờ góp ý" })).ReadJsonAsync();
@@ -113,14 +113,14 @@ public class SharingModelTests(ApiFactory factory)
         (await commenter.GetAsync($"/api/v1/workspaces/{ws}/items?folderId={folder}")).StatusCode.Should().Be(HttpStatusCode.OK, "the shared file shows in its folder");
         (await commenter.GetAsync($"/api/v1/items/{folder}/permissions")).StatusCode.Should().Be(HttpStatusCode.NotFound, "nothing on the folder above");
         var notes = await (await commenter.GetAsync("/api/v1/notifications")).ReadJsonAsync();
-        notes.GetProperty("items").EnumerateArray().Should().Contain(n => n.GetProperty("title").GetString()!.Contains("ke-hoach.png") && n.GetProperty("title").GetString()!.Contains("Người nhận xét"));
+        notes.GetProperty("items").EnumerateArray().Should().Contain(n => n.GetProperty("title").GetString()!.Contains("ke-hoach.png") && n.GetProperty("title").GetString()!.Contains("Bình luận"));
 
         var list = await (await owner.GetAsync($"/api/v1/items/{file}/permissions")).ReadJsonAsync();
         list.GetProperty("hasUniqueAcl").GetBoolean().Should().BeTrue("sharing one item gives it its own permissions, like SharePoint");
         list.GetProperty("canManage").GetBoolean().Should().BeTrue();
         var entries = list.GetProperty("entries").EnumerateArray().ToList();
         var mine = entries.Single(e => e.GetProperty("principalId").GetGuid() == commenterId);
-        mine.GetProperty("levelName").GetString().Should().Be("Người nhận xét");
+        mine.GetProperty("levelName").GetString().Should().Be("Bình luận");
         mine.GetProperty("origin").GetString().Should().Be("direct");
         mine.GetProperty("editable").GetBoolean().Should().BeTrue();
         mine.GetProperty("expiresAt").GetDateTime().Should().BeCloseTo(until, TimeSpan.FromSeconds(2));
@@ -132,7 +132,7 @@ public class SharingModelTests(ApiFactory factory)
         (await (await editor.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { User(strangerId) }, levelId = levels["viewer"], notify = false })).ReadJsonAsync())
             .GetProperty("granted").GetInt32().Should().Be(1);
         (await commenter.PostAsJsonAsync($"/api/v1/items/{file}/permissions", new { targets = new[] { User(ownerId) }, levelId = levels["viewer"] }))
-            .StatusCode.Should().Be(HttpStatusCode.Forbidden, "Người nhận xét cannot share");
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden, "Bình luận cannot share");
         (await editor.GetAsync($"/api/v1/items/{file}/permissions")).StatusCode.Should().Be(HttpStatusCode.OK);
         var strangerEntry = (await (await owner.GetAsync($"/api/v1/items/{file}/permissions")).ReadJsonAsync()).GetProperty("entries").EnumerateArray()
             .Single(e => e.GetProperty("principalId").GetGuid() == strangerId).GetProperty("id").GetGuid();
@@ -237,7 +237,7 @@ public class SharingModelTests(ApiFactory factory)
         (await legacy.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await newModel.GetAsync($"/api/v1/files/{file}")).StatusCode.Should().Be(HttpStatusCode.OK);
         var entries = (await (await owner.GetAsync($"/api/v1/items/{file}/permissions")).ReadJsonAsync()).GetProperty("entries").EnumerateArray().ToList();
-        entries.Should().ContainSingle(e => e.GetProperty("principalId").GetGuid() == newModelId).Which.GetProperty("levelName").GetString().Should().Be("Người nhận xét");
+        entries.Should().ContainSingle(e => e.GetProperty("principalId").GetGuid() == newModelId).Which.GetProperty("levelName").GetString().Should().Be("Bình luận");
     }
 
     [Fact]
@@ -255,7 +255,7 @@ public class SharingModelTests(ApiFactory factory)
             : await (await owner.PostAsJsonAsync("/api/v1/share-links", body)).ReadJsonAsync();
         string Token(JsonElement link) => link.GetProperty("token").GetString()!;
 
-        // "Người cụ thể": only the listed person, who gets "Người nhận xét" through the link (also in their own drive views).
+        // "Người cụ thể": only the listed person, who gets "Bình luận" through the link (also in their own drive views).
         var specific = await Save(new { resourceType = "file", resourceId = file, scope = "specific", levelId = levels["commenter"], allowDownload = true, people = new[] { listedId } });
         specific.GetProperty("people").EnumerateArray().Single().GetProperty("id").GetGuid().Should().Be(listedId);
         Token(specific).Should().NotBeNullOrEmpty();

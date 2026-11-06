@@ -52,7 +52,7 @@ public sealed class OnlyOfficeProvider(IOptions<OnlyOfficeOptions> options, IHtt
     public OfficeEditorConfig BuildConfig(OfficeEditorRequest r)
     {
         var edit = r.CanEdit && CanEdit(r.Extension);
-        // Spec 11.8: "Người nhận xét" opens the document to comment only (no changes to the content).
+        // Spec 11.8: "Bình luận" opens the document to comment only (no changes to the content).
         var comment = !edit && r.CanComment && CanEdit(r.Extension);
         var config = new JsonObject
         {

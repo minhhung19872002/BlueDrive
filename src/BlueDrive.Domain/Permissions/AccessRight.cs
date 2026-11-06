@@ -136,12 +136,12 @@ public static class SystemLevels
             | AccessRight.CreateFolders | AccessRight.Comment | AccessRight.RestoreVersions | AccessRight.ShareInternal, 30),
         new(Contributor, "contributor", "Đóng góp", "Xem, thêm mới, chỉ sửa và xóa tệp do mình tạo, bình luận.",
             AccessRights.Read | AccessRight.AddItems | AccessRight.EditOwnItemsOnly | AccessRight.Comment, 40),
-        new(Commenter, "commenter", "Người nhận xét", "Xem, tải xuống và bình luận.", AccessRights.Read | AccessRight.Comment, 50),
-        new(Viewer, "viewer", "Người xem", "Xem, tải xuống, in, sao chép nội dung, xem phiên bản.", AccessRights.Read, 60),
+        new(Commenter, "commenter", "Bình luận", "Xem, tải xuống và bình luận.", AccessRights.Read | AccessRight.Comment, 50),
+        new(Viewer, "viewer", "Chỉ xem", "Xem, tải xuống, in, sao chép nội dung, xem phiên bản; không sửa, không bình luận.", AccessRights.Read, 60),
         new(ViewOnly, "view_only", "Chỉ xem (không tải)",
             "Chỉ xem trong trình xem có hình mờ; không tải xuống, không in, không sao chép, không đồng bộ xuống máy.",
             AccessRight.ViewItems | AccessRight.OpenItems, 70),
-        new(Approver, "approver", "Duyệt nội dung", "Người xem, thấy bản chưa duyệt và phê duyệt.",
+        new(Approver, "approver", "Duyệt nội dung", "Chỉ xem, thấy bản chưa duyệt và phê duyệt.",
             AccessRights.Read | AccessRight.ViewDrafts | AccessRight.ApproveItems, 80),
     ];
 }

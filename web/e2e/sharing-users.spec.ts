@@ -147,7 +147,7 @@ test('hai người dùng chia sẻ tài liệu qua lại', async ({ browser }) =
 
   // B → A view only.
   await pageB.goto('/my-drive')
-  await shareWith(pageB, fileB, a, /^Người xem$/)
+  await shareWith(pageB, fileB, a, /^Chỉ xem$/)
   await pageA.goto('/shared')
   const rowA = pageA.getByRole('row', { name: new RegExp(fileB) })
   await expect(rowA).toBeVisible({ timeout: 15_000 })
@@ -175,7 +175,7 @@ test('hai người dùng chia sẻ tài liệu qua lại', async ({ browser }) =
   })
   expect(deep.ok()).toBeTruthy()
   await pageA.goto('/my-drive')
-  await shareWith(pageA, folderName, b, /^Người xem$/)
+  await shareWith(pageA, folderName, b, /^Chỉ xem$/)
   await pageB.goto('/shared')
   await pageB.getByRole('row', { name: new RegExp(folderName) }).getByText(folderName).click()
   await expect(pageB).toHaveURL(new RegExp(`folder=${top}`))
