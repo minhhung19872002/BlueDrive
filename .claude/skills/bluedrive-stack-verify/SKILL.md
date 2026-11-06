@@ -17,7 +17,7 @@ description: Use this skill when verifying the BlueDrive system end-to-end on Do
 5. **Tải lớn / hiệu năng** (khi đụng upload/storage): `scripts/test-large-upload.ps1`, `k6 run tests/load/k6-list-search.js`.
 6. **Sao lưu/phục hồi** (khi đụng Operations): `scripts/backup-now.ps1` → xóa thử một tệp → `scripts/restore.ps1 <id>` → kiểm chuỗi audit hợp lệ.
 7. **Mobile** (khi đụng `mobile/`): `pwsh -File scripts/build-apk.ps1` (Docker, cần ≥ 8 GB RAM trống — dừng stack BlueDrive trong lúc build nếu thiếu) → khởi động emulator (`emulator -avd Pixel_9a`) → `adb install -r mobile/build-output/bluedrive-<ver>.apk` → đăng nhập máy chủ `http://10.0.2.2:8088` → chụp màn hình `adb exec-out screencap -p`.
-8. **Ảnh tài liệu**: cập nhật `docs/images/` nếu giao diện đổi.
+8. **Ảnh tài liệu**: chỉ khi giao diện đổi — chạy E2E với `$env:E2E_DOC_SCREENSHOTS='1'` (mặc định E2E không ghi đè `docs/images/`), trên dữ liệu sạch, không có thư mục/tệp "E2E …" lẫn vào ảnh.
 
 ## Lưu ý / Pitfalls
 - `adb devices` báo `unauthorized` → `adb kill-server; adb start-server`.

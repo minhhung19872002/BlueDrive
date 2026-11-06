@@ -1,6 +1,14 @@
 import { expect, type Locator, type Page } from '@playwright/test'
 
 /**
+ * Screenshot for the user guide (docs/images/<name>.png). Only with E2E_DOC_SCREENSHOTS=1: a normal run (test data, any server)
+ * must not overwrite the documentation images.
+ */
+export async function docScreenshot(page: Page, name: string) {
+  if (process.env.E2E_DOC_SCREENSHOTS === '1') await page.screenshot({ path: `../docs/images/${name}.png` })
+}
+
+/**
  * Right-click `target` and wait until its context menu can be used. The menu may re-align (flip above
  * the cursor) right after opening, which made a direct click land outside and close it: retry, then settle.
  * `firstItem` is an entry the menu must show (an item menu has "Thông tin"); `position` clicks a point inside `target`.

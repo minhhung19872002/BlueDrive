@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { docScreenshot } from './helpers'
 
 /** DoD: 5 wrong passwords lock the account and the administrator sees a realtime alert (SignalR). */
 test('đăng nhập sai 5 lần → tài khoản bị khóa và quản trị nhận cảnh báo thời gian thực', async ({ page, request, baseURL }) => {
@@ -27,5 +28,5 @@ test('đăng nhập sai 5 lần → tài khoản bị khóa và quản trị nh�
 
   // The alert arrives over SignalR without reloading the page.
   await expect(page.getByText(/Đăng nhập sai nhiều lần/).first()).toBeVisible({ timeout: 15_000 })
-  await page.screenshot({ path: '../docs/images/canh-bao-thoi-gian-thuc.png' })
+  await docScreenshot(page, 'canh-bao-thoi-gian-thuc')
 })

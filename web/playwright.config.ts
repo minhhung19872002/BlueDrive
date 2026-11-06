@@ -4,6 +4,7 @@ import { defineConfig, devices } from '@playwright/test'
  * E2E tests run against a running stack (docker compose or dev servers).
  *   E2E_BASE_URL   default http://localhost:8088
  *   E2E_USERNAME / E2E_PASSWORD   an administrator whose password is already changed
+ *   E2E_DOC_SCREENSHOTS=1   refresh the user guide screenshots in docs/images (off by default: test data must not end up in the docs)
  *   E2E_EDGE=1   also run the cross-browser suite in Microsoft Edge (must be installed on the machine)
  *
  * Quality 4.1 (browsers): the full suite runs in Chromium; the screens and core flows also run in Firefox and WebKit (Safari):

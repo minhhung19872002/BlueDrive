@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { docScreenshot } from './helpers'
 
 /** Every screen renders without uncaught errors; screenshots feed docs/huong-dan-su-dung.md. */
 const pages: { path: string; name: string; heading?: RegExp }[] = [
@@ -49,7 +50,7 @@ for (const p of pages) {
     await expect(page.locator('body')).not.toContainText(/Something went wrong|Unexpected Application Error|Đã xảy ra lỗi hệ thống/)
     await expect(page.getByText('404', { exact: true })).toHaveCount(0)
     // Only the Chromium run refreshes the documentation screenshots.
-    if (testInfo.project.name === 'desktop') await page.screenshot({ path: `../docs/images/${p.name}.png`, fullPage: false })
+    if (testInfo.project.name === 'desktop') await docScreenshot(page, p.name)
     expect(errors, errors.join('\n')).toEqual([])
   })
 }

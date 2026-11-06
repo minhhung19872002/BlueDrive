@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { docScreenshot } from './helpers'
 
 /** HSMT #52: the web app works on phones (375–412 px) — drawer menu, explorer, search. */
 test('giao diện điện thoại: menu dạng ngăn kéo và danh sách tài liệu', async ({ page }) => {
@@ -9,7 +10,7 @@ test('giao diện điện thoại: menu dạng ngăn kéo và danh sách tài li
   expect(scrollWidth, 'no horizontal page scroll').toBeLessThanOrEqual(width + 1)
   await page.getByRole('button', { name: /menu/i }).first().click()
   await expect(page.getByRole('menuitem', { name: /Được chia sẻ/ }).first()).toBeVisible()
-  await page.screenshot({ path: '../docs/images/mobile-menu.png' })
+  await docScreenshot(page, 'mobile-menu')
   await page.getByRole('menuitem', { name: /Tài liệu của tôi/ }).first().click()
-  await page.screenshot({ path: '../docs/images/mobile-tai-lieu.png' })
+  await docScreenshot(page, 'mobile-tai-lieu')
 })
