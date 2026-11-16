@@ -1,5 +1,5 @@
 # Build context: repository root. docker build -f src/BlueDrive.Api/Dockerfile .
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 COPY Directory.Build.props BlueDrive.slnx ./
 COPY src/BlueDrive.Domain/BlueDrive.Domain.csproj src/BlueDrive.Domain/
